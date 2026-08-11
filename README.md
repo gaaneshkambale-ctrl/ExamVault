@@ -50,8 +50,9 @@ ExamVault
 | Gateway (ApiGateway)       | http://localhost:5000  | https://localhost:7000     |
 | User API                  | http://localhost:5010  | https://localhost:7010 (Swagger UI at `/swagger`) |
 
-Until Phase 2 (YARP Gateway) is wired up, the frontend calls User API directly.
-After Phase 2, all frontend calls go through the Gateway only.
+As of Phase 2, all frontend calls go through the Gateway only — it proxies
+`/api/users/**` to the User API. The frontend no longer calls User API
+directly.
 
 ### Backend
 
@@ -59,6 +60,7 @@ After Phase 2, all frontend calls go through the Gateway only.
 dotnet restore
 dotnet build
 dotnet run --project Backend/Services/UserService/OnlineExamSystem.User.API
+dotnet run --project Backend/Gateway/OnlineExamSystem.ApiGateway
 ```
 
 Backend secrets (connection strings, JWT signing keys, etc., once they exist)
@@ -118,7 +120,7 @@ UI reference: `wireframe.png`.
 - [x] Day 6 — User Service foundation
 - [x] Day 7 — Registration API
 - [x] Day 8 — Profile and User APIs
-- [ ] Day 9 — User Service gate
+- [x] Day 9 — User Service gate
 
 ### Day 6 Notes
 
@@ -173,3 +175,87 @@ UI reference: `wireframe.png`.
 - Register's success screen now links to the new profile
 - Verified end-to-end in the browser: register → "view your profile" →
   real data renders on the Profile page
+
+### Day 9 Notes
+
+- Added `ILogger<UsersController>` logging: register success, register
+  conflict, register validation failure, profile-not-found — verified all
+  four lines appear in the console during manual testing
+- Verified the full flow end-to-end against the running API: register
+  (201 + `Location` header), duplicate email (409), invalid payload (400
+  with field errors), profile lookup (200), unknown id (404) — an EF Core
+  insert confirmed the row was written to the `Users` table
+- Documented both endpoints' request/response shapes per status code in
+  `Documentation/api-contracts.md`
+- Register form inputs now have proper `autoComplete` attributes
+  (name/email/new-password) for browser autofill and password managers
+- Rebuilt the Profile page to match `wireframe.png` item 10 more closely:
+  page heading above the card, avatar + "Change Photo" as a left column,
+  Full Name/Email/Role as horizontal label/value rows (Bootstrap
+  `Form.Control readOnly`) in a right column, "Update Profile" bottom-right.
+  New `ProfileAvatarIllustration` component replaces the initials circle,
+  matching the flat-shape illustration style used on Login/Register.
+  No `Phone` field yet — `UserProfileResponse` doesn't return one.
+- Added frontend test infra: Vitest + React Testing Library
+  (`npm run test`), jsdom environment, `threads` pool (the default `forks`
+  pool hung in this environment)
+- Extracted Register's inline `validate()` into `src/utils/validation.ts`
+  so it's unit-testable; added `validation.test.ts` (9 cases) and
+  `Register.test.tsx` (empty-form and password-mismatch cases) — 12
+  frontend tests total, all passing
+- Full verification green: `dotnet build`, `dotnet test` (12/12),
+  `npm run build`, `npm run lint`, `npm run test` (12/12)
+
+**Phase 1 (User Service MVP) is complete. Phase 2 (YARP Gateway) is unlocked.**
+
+### Out-of-order: basic Login
+
+Before starting Phase 2, a basic (non-JWT) login was added since the Login
+page had been visual-only since Day 3: `POST /api/users/login`
+(`LoginUserCommand`/`Handler`/`Validator` in `User.Application`, mirroring
+the Register pattern) verifies email+password against the `Users` table and
+returns the same `UserProfileResponse` shape as the profile endpoint. Both
+unknown-email and wrong-password return the same generic 401 to avoid user
+enumeration. The Login page calls it and navigates to `/profile/:id` on
+success. This is not the Phase 3 JWT/session work — no token, no persisted
+session, no protected routes yet; Phase 3 replaces this properly.
+
+## Phase 2 Progress
+
+- [x] Day 10 — API Gateway setup
+- [x] Day 11 — Frontend cutover and Gateway gate
+
+### Day 10 Notes
+
+- Added `Yarp.ReverseProxy` to `OnlineExamSystem.ApiGateway` via
+  `dotnet add package` (resolved to 2.3.0)
+- `appsettings.json` `ReverseProxy` section: one route/cluster forwarding
+  `/api/users/{**catch-all}` to the User API (`http://localhost:5010`)
+- `Program.cs`: `AddReverseProxy().LoadFromConfig(...)`, `MapReverseProxy()`
+- Moved the dev-only `FrontendDev` CORS policy from User API to the Gateway
+  — the browser now only ever talks to the Gateway
+- Route has a `RequestHeaderOriginalHost` transform: without it, `Location`
+  headers built by `CreatedAtAction` on the backend (e.g. after register)
+  leaked the backend's real address (`:5010`) instead of the Gateway's
+  (`:5000`) — found and fixed during verification
+- Verified via curl directly against the Gateway: register (201, correct
+  `Location: http://localhost:5000/...`), duplicate (409), profile (200),
+  unknown id (404), login (200/401) — all identical to calling User API
+  directly
+
+### Day 11 Notes
+
+- `VITE_API_BASE_URL` now points at the Gateway (`http://localhost:5000`)
+  in `.env.development` and `.env.example`; no frontend code changes needed
+  (`axiosClient.ts` already reads the env var, `userApi.ts` already uses
+  relative paths)
+- Removed the now-stale `FrontendDev` CORS policy from User API's
+  `Program.cs`
+- Verified end-to-end in the browser through the Gateway: Login →
+  `/api/users/login` (`:5000`) → redirected to Profile →
+  `/api/users/{id}` (`:5000`), confirmed via the browser's network log that
+  requests hit `:5000`, never `:5010`
+- `npm run build`, `npm run lint`, `npm run test` (12/12) all green after
+  the cutover
+
+**Phase 2 (API Gateway) is complete. Phase 3 (JWT Authentication) is unlocked.**

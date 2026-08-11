@@ -16,3 +16,8 @@ export interface UserProfile {
   email: string;
   role: 'Student' | 'Admin';
 }
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}

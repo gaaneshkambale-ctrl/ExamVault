@@ -33,7 +33,8 @@ GIT / CI-CD PUSH RULE
 CURRENT STATUS
 --------------
 Phase 0 is COMPLETE (Days 1-5 all done, gate passed). Phase 1 (User Service
-MVP, Days 6-9) is unlocked and is where I go next.
+MVP, Days 6-9) is COMPLETE (gate passed). Phase 2 (API Gateway, Days 10-11)
+is unlocked and is where I go next.
 
 DAY 1 — PHASE 0: REPOSITORY & TOOLING SETUP  (TODAY)
 ------------------------------------------------------
@@ -154,10 +155,55 @@ Frontend:
 Day complete when: full Register -> API -> DB -> Profile flow works
 end-to-end and is verified. -> User Service MVP complete, Phase 2 unlocked.
 
+NOTE (out of order, before Day 10) — BASIC LOGIN
+------------------------------------------------------
+- The Login page was visual-only since Day 3 (real auth was scheduled for
+  Phase 3, Days 12-15). I needed it working sooner, so I added a basic
+  (non-JWT) login now: POST /api/users/login verifies email+password
+  against the existing Users table (LoginUserCommand/Handler/Validator in
+  User.Application, mirroring the Register pattern) and returns the same
+  UserProfileResponse shape used by GET /api/users/{id}. Both wrong-email
+  and wrong-password return the same generic 401 to avoid user enumeration.
+  The Login page now calls it and navigates to /profile/:id on success.
+- This is NOT the Phase 3 JWT/session work - there's still no token, no
+  persisted session, no protected routes. Phase 3 replaces this with real
+  auth (JWT + refresh token + logout + role-based protected routes) and
+  will very likely replace this endpoint's internals once that lands.
+
+DAY 10 — PHASE 2: API GATEWAY SETUP
+---------------------------------------
+Backend:
+- I am adding the Yarp.ReverseProxy package to OnlineExamSystem.ApiGateway
+  (the project has existed since Day 2 with no packages/routes yet, on
+  purpose, until this day).
+- I am configuring a ReverseProxy section in appsettings.json: one route +
+  cluster forwarding /api/users/{**catch-all} to the User API (:5010).
+- I am wiring Program.cs: AddReverseProxy().LoadFromConfig(...) and
+  MapReverseProxy().
+- I am moving the dev-only CORS policy (FrontendDev, localhost:5173) from
+  User API to the Gateway, since the browser will call the Gateway only.
+Day complete when: curling the Gateway's /api/users/* routes returns the
+same responses as calling User API directly on :5010.
+
+DAY 11 — PHASE 2: FRONTEND CUTOVER AND GATEWAY GATE
+---------------------------------------------------------
+Frontend:
+- I am pointing VITE_API_BASE_URL at the Gateway (:5000) instead of User
+  API (:5010) in .env.development and .env.example.
+Backend:
+- I am removing the now-stale FrontendDev CORS policy from User API's
+  Program.cs (the Gateway owns CORS now).
+Verification:
+- I am re-running the full Register -> Login -> Profile flow in the browser
+  through the Gateway and confirming it still works end-to-end.
+- I am updating README (Phase 2 Progress section) and api-contracts.md
+  (base URL now the Gateway) to reflect the new entry point.
+Day complete when: the frontend never talks to User API directly anymore -
+every request goes through the Gateway. -> Phase 2 complete, Phase 3
+unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-Phase 2 (Days 10-11)  I install and configure YARP so React reaches all APIs
-                       only through the Gateway.
 Phase 3 (Days 12-15)  I add JWT authentication, login, refresh token, logout,
                        and role-based protected routes in React.
 Phase 4 (Days 16-18)  I set up RabbitMQ locally, publish UserRegisteredEvent,

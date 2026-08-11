@@ -6,11 +6,10 @@ import { isAxiosError } from 'axios';
 import AuthLayout from '../layouts/AuthLayout';
 import RegisterIllustration from '../components/illustrations/RegisterIllustration';
 import { registerUser } from '../api/userApi';
-import type { RegisterRequest } from '../types/user';
+import { validate } from '../utils/validation';
+import type { RegisterFormState } from '../utils/validation';
 
-interface FormState extends RegisterRequest {
-  confirmPassword: string;
-}
+type FormState = RegisterFormState;
 
 const initialFormState: FormState = {
   fullName: '',
@@ -18,38 +17,6 @@ const initialFormState: FormState = {
   password: '',
   confirmPassword: '',
 };
-
-function validate(form: FormState): Partial<Record<keyof FormState, string>> {
-  const errors: Partial<Record<keyof FormState, string>> = {};
-
-  if (!form.fullName.trim()) {
-    errors.fullName = 'Full name is required.';
-  }
-
-  if (!form.email.trim()) {
-    errors.email = 'Email is required.';
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = 'Enter a valid email address.';
-  }
-
-  if (!form.password) {
-    errors.password = 'Password is required.';
-  } else if (form.password.length < 8) {
-    errors.password = 'Password must be at least 8 characters.';
-  } else if (
-    !/[A-Z]/.test(form.password) ||
-    !/[a-z]/.test(form.password) ||
-    !/[0-9]/.test(form.password)
-  ) {
-    errors.password = 'Password needs an uppercase letter, a lowercase letter, and a digit.';
-  }
-
-  if (form.confirmPassword !== form.password) {
-    errors.confirmPassword = 'Passwords do not match.';
-  }
-
-  return errors;
-}
 
 function extractServerError(error: unknown): string {
   if (isAxiosError(error)) {
@@ -134,6 +101,7 @@ export default function Register() {
           <Form.Control
             type="text"
             placeholder="Enter your full name"
+            autoComplete="name"
             value={form.fullName}
             onChange={handleChange('fullName')}
             isInvalid={!!fieldErrors.fullName}
@@ -146,6 +114,7 @@ export default function Register() {
           <Form.Control
             type="email"
             placeholder="Enter your email"
+            autoComplete="email"
             value={form.email}
             onChange={handleChange('email')}
             isInvalid={!!fieldErrors.email}
@@ -158,6 +127,7 @@ export default function Register() {
           <Form.Control
             type="password"
             placeholder="Create password"
+            autoComplete="new-password"
             value={form.password}
             onChange={handleChange('password')}
             isInvalid={!!fieldErrors.password}
@@ -170,6 +140,7 @@ export default function Register() {
           <Form.Control
             type="password"
             placeholder="Confirm password"
+            autoComplete="new-password"
             value={form.confirmPassword}
             onChange={handleChange('confirmPassword')}
             isInvalid={!!fieldErrors.confirmPassword}

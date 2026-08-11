@@ -1,8 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { Button, Card, Spinner } from 'react-bootstrap';
+import { Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import DashboardSidebar from '../components/DashboardSidebar';
+import ProfileAvatarIllustration from '../components/illustrations/ProfileAvatarIllustration';
 import { getUserProfile } from '../api/userApi';
+
+function ProfileField({ label, value }: { label: string; value: string }) {
+  return (
+    <Form.Group as={Row} className="mb-3 align-items-center">
+      <Form.Label column sm={3} className="text-muted">
+        {label}
+      </Form.Label>
+      <Col sm={9}>
+        <Form.Control value={value} readOnly />
+      </Col>
+    </Form.Group>
+  );
+}
 
 export default function Profile() {
   const { id } = useParams<{ id: string }>();
@@ -22,7 +36,9 @@ export default function Profile() {
       <DashboardSidebar active="Profile" />
 
       <main className="flex-grow-1 bg-light">
-        <div className="container-fluid py-5 px-4 px-md-5" style={{ maxWidth: 640 }}>
+        <div className="container-fluid py-5 px-4 px-md-5" style={{ maxWidth: 880 }}>
+          <h1 className="h4 fw-bold mb-4">Profile</h1>
+
           {isLoading && (
             <div className="d-flex align-items-center gap-2 text-muted">
               <Spinner animation="border" size="sm" />
@@ -35,43 +51,31 @@ export default function Profile() {
           {profile && (
             <Card className="border-0 shadow-sm">
               <Card.Body className="p-4">
-                <div className="d-flex align-items-center gap-3 mb-4">
-                  <div
-                    className="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold flex-shrink-0"
-                    style={{
-                      width: 72,
-                      height: 72,
-                      background: 'linear-gradient(160deg, #6366f1, #4338ca)',
-                      fontSize: 26,
-                    }}
+                <Row>
+                  <Col
+                    xs={12}
+                    sm={4}
+                    md={3}
+                    className="d-flex flex-column align-items-center text-center mb-4 mb-sm-0"
                   >
-                    {profile.fullName.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <Button variant="outline-secondary" size="sm">
+                    <ProfileAvatarIllustration />
+                    <Button variant="outline-primary" size="sm" className="mt-3">
                       Change Photo
                     </Button>
-                  </div>
-                </div>
+                  </Col>
 
-                <div className="mb-3">
-                  <div className="text-muted small">Full Name</div>
-                  <div className="fw-medium">{profile.fullName}</div>
-                </div>
-                <div className="mb-3">
-                  <div className="text-muted small">Email</div>
-                  <div className="fw-medium">{profile.email}</div>
-                </div>
-                <div className="mb-4">
-                  <div className="text-muted small">Role</div>
-                  <div className="fw-medium">{profile.role}</div>
-                </div>
+                  <Col xs={12} sm={8} md={9}>
+                    <ProfileField label="Full Name" value={profile.fullName} />
+                    <ProfileField label="Email" value={profile.email} />
+                    <ProfileField label="Role" value={profile.role} />
 
-                <div className="text-end">
-                  <Button variant="primary" disabled>
-                    Update Profile
-                  </Button>
-                </div>
+                    <div className="text-end">
+                      <Button variant="primary" disabled>
+                        Update Profile
+                      </Button>
+                    </div>
+                  </Col>
+                </Row>
               </Card.Body>
             </Card>
           )}

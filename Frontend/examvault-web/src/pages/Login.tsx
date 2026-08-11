@@ -1,17 +1,44 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Button, Form } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Alert, Button, Form, Spinner } from 'react-bootstrap';
+import { Link, useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import AuthLayout from '../layouts/AuthLayout';
 import LoginIllustration from '../components/illustrations/LoginIllustration';
+import { loginUser } from '../api/userApi';
+
+function extractServerError(error: unknown): string {
+  if (isAxiosError(error) && error.response?.status === 401) {
+    return 'Invalid email or password.';
+  }
+  return 'Something went wrong. Please try again.';
+}
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e: FormEvent) => {
-    // Visual only for now - real authentication lands in Phase 3 (JWT + Refresh Token).
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    if (!email.trim() || !password) {
+      setStatus('error');
+      setErrorMessage('Email and password are required.');
+      return;
+    }
+
+    setStatus('loading');
+    setErrorMessage('');
+    try {
+      const profile = await loginUser({ email, password });
+      navigate(`/profile/${profile.id}`);
+    } catch (error) {
+      setStatus('error');
+      setErrorMessage(extractServerError(error));
+    }
   };
 
   return (
@@ -25,12 +52,14 @@ export default function Login() {
         </span>
       }
     >
+      {status === 'error' && <Alert variant="danger">{errorMessage}</Alert>}
       <Form noValidate onSubmit={handleSubmit}>
         <Form.Group className="mb-3" controlId="loginEmail">
           <Form.Label>Email</Form.Label>
           <Form.Control
             type="email"
             placeholder="Enter your email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -44,13 +73,21 @@ export default function Login() {
           <Form.Control
             type="password"
             placeholder="Enter your password"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
         </Form.Group>
 
-        <Button type="submit" variant="primary" className="w-100">
-          Login
+        <Button type="submit" variant="primary" className="w-100" disabled={status === 'loading'}>
+          {status === 'loading' ? (
+            <>
+              <Spinner animation="border" size="sm" className="me-2" />
+              Logging in...
+            </>
+          ) : (
+            'Login'
+          )}
         </Button>
       </Form>
     </AuthLayout>
