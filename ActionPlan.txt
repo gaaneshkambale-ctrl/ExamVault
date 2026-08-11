@@ -8,20 +8,25 @@ Verification) before moving to the next day. No skipping ahead.
 
 GIT / CI-CD PUSH RULE
 ------------------------
-- Branch strategy: "dev" is the daily working branch, "main" stays stable.
-  All day-to-day commits go to dev. dev is merged into main via Pull Request
-  only after that day's work is confirmed complete and CI is green.
-- Once each day's work is fully discussed/confirmed as complete: commit ->
-  push to dev -> CI/CD pipeline runs build + tests on dev -> open PR
-  dev -> main -> merge into main only if the pipeline is green.
+- Branch strategy (3-tier): dev -> QA -> main.
+    dev  = daily working branch. Every day's commits are pushed here first.
+    QA   = staging/testing branch. Receives verified work from dev.
+    main = stable/production branch. Receives verified work from QA.
+- Daily flow: commit -> push to dev -> CI/CD runs build + tests on dev ->
+  once that day's work is confirmed/verified -> merge dev -> QA (PR, CI
+  runs again on QA) -> QA stays the tested staging state.
+- Promotion flow: QA -> main happens at phase gates / release points, once
+  QA has been confirmed stable, via PR QA -> main -> CI runs on main ->
+  merge only if green.
 - I do not move to the next day until that day's push to dev + CI/CD run
-  has succeeded (and, at day/phase boundaries, the PR into main is merged).
+  has succeeded. QA and main promotions happen once a day's or phase's
+  work is verified, not on every single commit.
 - UPDATE: a basic CI workflow (.github/workflows/ci.yml) was set up early,
   right after Day 1, instead of waiting for Phase 10. It builds the backend
   (dotnet restore/build/test) and the frontend (npm ci/build/test) on every
-  push and pull request to BOTH main and dev. Full CI/CD (container publish,
-  Azure deploy, health checks) is still completed in Phase 10 (Day 42) on
-  top of this early workflow.
+  push and pull request to main, QA, and dev. Full CI/CD (container
+  publish, Azure deploy, health checks) is still completed in Phase 10
+  (Day 42) on top of this early workflow.
 
 CURRENT STATUS
 --------------
