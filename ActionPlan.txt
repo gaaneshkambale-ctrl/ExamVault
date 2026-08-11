@@ -15,10 +15,12 @@ GIT / CI-CD PUSH RULE
   is green.
 - I do not move to the next day until that day's push + CI/CD run has
   succeeded.
-- CI/CD pipeline itself (GitHub Actions: build, test, container publish,
-  deploy) is formally set up in Phase 10 (Day 42), but from Day 1 onward
-  every completed day still gets committed and pushed to GitHub so history
-  stays clean and CI can be wired in early once the pipeline exists.
+- UPDATE: a basic CI workflow (.github/workflows/ci.yml) was set up early,
+  right after Day 1, instead of waiting for Phase 10. It builds the backend
+  (dotnet restore/build/test) and the frontend (npm ci/build/test) on every
+  push and pull request to main. Full CI/CD (container publish, Azure
+  deploy, health checks) is still completed in Phase 10 (Day 42) on top of
+  this early workflow.
 
 CURRENT STATUS
 --------------

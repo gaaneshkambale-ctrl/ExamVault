@@ -1,5 +1,7 @@
 # ExamVault
 
+[![CI](https://github.com/gaaneshkambale-ctrl/ExamVault/actions/workflows/ci.yml/badge.svg)](https://github.com/gaaneshkambale-ctrl/ExamVault/actions/workflows/ci.yml)
+
 Smart Online Examination System — React + TypeScript frontend, ASP.NET Core (.NET 8)
 microservices backend, SQL Server, RabbitMQ / Azure Service Bus, AI-assisted
 question generation.
