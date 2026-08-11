@@ -198,9 +198,8 @@ UI reference: `wireframe.png`.
   New `ProfileAvatarIllustration` component replaces the initials circle,
   matching the flat-shape illustration style used on Login/Register.
   No `Phone` field yet — `UserProfileResponse` doesn't return one.
-- Added frontend test infra: Vitest + React Testing Library
-  (`npm run test`), jsdom environment, `threads` pool (the default `forks`
-  pool hung in this environment)
+- Added frontend test infra: Vitest + React Testing Library (`npm run
+  test`), jsdom environment, default `forks` pool
 - Extracted Register's inline `validate()` into `src/utils/validation.ts`
   so it's unit-testable; added `validation.test.ts` (9 cases) and
   `Register.test.tsx` (empty-form and password-mismatch cases) — 12
