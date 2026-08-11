@@ -4,6 +4,12 @@ export interface RegisterRequest {
   password: string;
 }
 
+export interface RegisterResponse {
+  id: string;
+  fullName: string;
+  email: string;
+}
+
 export interface UserProfile {
   id: string;
   fullName: string;

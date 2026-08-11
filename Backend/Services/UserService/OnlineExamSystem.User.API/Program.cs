@@ -1,5 +1,9 @@
+using FluentValidation;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Application.Users.Register;
+using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Infrastructure.Persistence;
 using OnlineExamSystem.User.Infrastructure.Repositories;
 
@@ -22,6 +26,20 @@ public class Program
             options.UseSqlServer(builder.Configuration.GetConnectionString("UserDb")));
         builder.Services.AddScoped<IUserRepository, UserRepository>();
 
+        builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
+        builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
+        builder.Services.AddScoped<RegisterUserHandler>();
+
+        // Dev-only: React calls User API directly until Phase 2 puts the Gateway in front of it.
+        const string frontendDevCorsPolicy = "FrontendDev";
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy(frontendDevCorsPolicy, policy =>
+                policy.WithOrigins("http://localhost:5173")
+                    .AllowAnyHeader()
+                    .AllowAnyMethod());
+        });
+
         var app = builder.Build();
 
         // Configure the HTTP request pipeline.
@@ -32,6 +50,8 @@ public class Program
         }
 
         app.UseHttpsRedirection();
+
+        app.UseCors(frontendDevCorsPolicy);
 
         app.UseAuthorization();
 

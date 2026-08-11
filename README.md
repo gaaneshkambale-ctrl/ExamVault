@@ -116,7 +116,7 @@ UI reference: `wireframe.png`.
 ## Phase 1 Progress
 
 - [x] Day 6 — User Service foundation
-- [ ] Day 7 — Registration API
+- [x] Day 7 — Registration API
 - [ ] Day 8 — Profile and User APIs
 - [ ] Day 9 — User Service gate
 
@@ -131,3 +131,23 @@ UI reference: `wireframe.png`.
   with Windows Auth — not a secret, so it lives in `appsettings.Development.json`
 - Initial migration applied: `ExamVault.UserDb` database created, `Users`
   table verified via `sqlcmd`
+
+### Day 7 Notes
+
+- `RegisterUserCommand`/`RegisterUserValidator` (FluentValidation)/
+  `RegisterUserHandler` in `User.Application`, `RegisterUserRequest`/
+  `RegisterUserResponse` contracts in `Shared.Contracts`
+- Password hashing via `PasswordHasher<AppUser>` (Microsoft.Extensions.Identity.Core)
+- `POST /api/users/register` on `UsersController` — 201 on success, 409 on
+  duplicate email, 400 with field errors on validation failure
+- Added dev-only CORS policy on User API so the React dev server
+  (`localhost:5173`) can call it directly until the Gateway is wired up in Phase 2
+- Unit tests: `Tests/UserService/OnlineExamSystem.User.Application.Tests`
+  (validator + handler, 10 tests, using an in-memory fake repository)
+- CI now runs these tests for real (`continue-on-error` removed from the
+  workflow's test step now that real tests exist)
+- Register page redesigned to match `wireframe.png`: two-panel layout
+  (`AuthLayout`, reusable for Login later) with indigo brand panel, client-side
+  validation, loading/error/success states, wired to the live API
+- Verified end-to-end in the browser: successful registration, duplicate-email
+  conflict, and validation-error paths all render and persist correctly
