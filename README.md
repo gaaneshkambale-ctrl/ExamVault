@@ -201,13 +201,15 @@ UI reference: `wireframe.png`.
 - Added frontend test infra: Vitest + React Testing Library (`npm run
   test`), jsdom environment
 - CI note (found after this day, fixed post-Phase-3): the Frontend CI job
-  failed intermittently with `[vitest-pool]: Failed to start forks worker`
-  / `Timeout waiting for worker to respond`. This is a known Vitest bug on
-  constrained/containerized Linux runners — a forked worker's event loop
-  stops polling for IPC after module load, so the parent times out waiting
-  for the handshake; it hits an arbitrary test file each time. Fixed with
-  `fileParallelism: false` in `vite.config.ts` (runs all test files in a
-  single worker, avoiding the multi-process race entirely)
+  failed with `[vitest-pool]: Failed to start forks worker` / `Timeout
+  waiting for worker to respond`, no matter which pool/parallelism setting
+  was tried. The real error, buried under that generic timeout, was
+  `TypeError: webidl.util.markAsUncloneable is not a function` — jsdom 30
+  pulls in `undici` 8.0.3+, which calls
+  `node:worker_threads.markAsUncloneable`, a function Node only added in
+  v21.0.0. CI's workflow pinned Node 20. Fixed by bumping
+  `.github/workflows/ci.yml`'s `node-version` to `'22'` — no application
+  code was ever at fault
 - Extracted Register's inline `validate()` into `src/utils/validation.ts`
   so it's unit-testable; added `validation.test.ts` (9 cases) and
   `Register.test.tsx` (empty-form and password-mismatch cases) — 12
