@@ -94,4 +94,21 @@ UI reference: `wireframe.png`.
 - [x] Day 2 — .NET solution skeleton
 - [x] Day 3 — React frontend
 - [x] Day 4 — Configuration and local ports
-- [ ] Day 5 — Phase 0 gate
+- [x] Day 5 — Phase 0 gate
+
+### Phase 0 Completion Checklist
+
+- [x] Solution structure matches the target architecture (Frontend / Backend
+      Gateway+Services+Shared / Tests / Docker / Documentation)
+- [x] React frontend is completely separate from the .NET projects (no
+      cross-references either direction)
+- [x] Gateway has no direct service database dependency (no packages, no
+      project references at all yet — YARP added in Phase 2)
+- [x] Backend project reference graph is a clean DAG, no circular references
+      (Shared.Common → Domain/Contracts/Events → Application → Infrastructure → API)
+- [x] Startup instructions documented in this README (Local Ports/URLs, Backend, Frontend sections above)
+- [x] `dotnet build` passes (0 warnings, 0 errors)
+- [x] `npm run build` passes
+- [x] All three apps (React, Gateway, User API) start and respond over HTTP
+
+**Phase 0 is signed off. Phase 1 (User Service MVP) is unlocked.**
