@@ -1,19 +1,6 @@
 import { Container, Nav, Navbar } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-
-function BrandMark() {
-  return (
-    <span
-      className="d-inline-flex align-items-center justify-content-center rounded-2 text-white"
-      style={{ width: 32, height: 32, background: 'linear-gradient(160deg, #6366f1, #4338ca)' }}
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="3" y="2" width="18" height="20" rx="2.5" fill="rgba(255,255,255,0.2)" />
-        <path d="M8 7h8M8 11h8M8 15h5" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    </span>
-  );
-}
+import BrandMark from './BrandMark';
 
 export default function NavBar() {
   return (

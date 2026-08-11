@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Button, Form } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AuthLayout from '../layouts/AuthLayout';
+import LoginIllustration from '../components/illustrations/LoginIllustration';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ export default function Login() {
     <AuthLayout
       title="Welcome Back!"
       subtitle="Login to your account"
+      illustration={<LoginIllustration />}
       footer={
         <span className="text-muted">
           Don't have an account? <Link to="/register">Register</Link>

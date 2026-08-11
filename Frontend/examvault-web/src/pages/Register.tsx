@@ -4,6 +4,7 @@ import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import AuthLayout from '../layouts/AuthLayout';
+import RegisterIllustration from '../components/illustrations/RegisterIllustration';
 import { registerUser } from '../api/userApi';
 import type { RegisterRequest } from '../types/user';
 
@@ -96,7 +97,11 @@ export default function Register() {
 
   if (status === 'success') {
     return (
-      <AuthLayout title="Create Account" subtitle="Register a new account">
+      <AuthLayout
+        title="Create Account"
+        subtitle="Register a new account"
+        illustration={<RegisterIllustration />}
+      >
         <Alert variant="success">
           Account created successfully. You can now <Link to="/login">log in</Link>.
         </Alert>
@@ -108,6 +113,7 @@ export default function Register() {
     <AuthLayout
       title="Create Account"
       subtitle="Register a new account"
+      illustration={<RegisterIllustration />}
       footer={
         <span className="text-muted">
           Already have an account? <Link to="/login">Login</Link>
