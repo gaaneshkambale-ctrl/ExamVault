@@ -1,0 +1,47 @@
+Development Roadmap
+Phase 0: Solution & Project Structure          ✅ Completed
+Phase 1: User Service MVP                      ← START HERE
+Phase 2: API Gateway (YARP)
+Phase 3: JWT Authentication & Refresh Token
+Phase 4: RabbitMQ / Azure Service Bus
+Phase 5: Exam Service
+Phase 6: Question Service
+Phase 7: Submission Service
+Phase 8: Result Service
+Phase 9: Notification Service
+Phase 10: Docker & Azure Deployment
+
+Starting Point : 0 Phase complete first then and then move forword
+
+Final Shared Structure (Recommended)
+ExamVault
+│
+├── Gateway
+│   └── OnlineExamSystem.ApiGateway
+│
+├── Services
+│   └── UserService
+│       ├── OnlineExamSystem.User.API
+│       ├── OnlineExamSystem.User.Application
+│       ├── OnlineExamSystem.User.Domain
+│       └── OnlineExamSystem.User.Infrastructure
+│
+└── Shared
+    │
+    ├── OnlineExamSystem.Shared.Contracts
+    │   ├── Requests
+    │   ├── Responses
+    │   └── Common
+    │
+    ├── OnlineExamSystem.Shared.Events
+    │   ├── Base
+    │   ├── User
+    │   ├── Exam
+    │   └── Submission
+    │
+    └── OnlineExamSystem.Shared.Common
+        ├── Entities
+        ├── Models
+        ├── Constants
+        ├── Exceptions
+        └── Helpers

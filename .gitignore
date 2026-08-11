@@ -1,0 +1,33 @@
+# ---- .NET ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ---- Node / React ----
+node_modules/
+dist/
+build/
+.vite/
+*.local
+
+# ---- Environment / Secrets ----
+.env
+.env.*
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+
+# ---- IDE ----
+.vscode/
+.idea/
+*.swp
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Logs ----
+*.log
+npm-debug.log*

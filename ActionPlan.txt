@@ -1,0 +1,127 @@
+ExamVault — Action Plan (My Log)
+==================================
+Source: Readmap.txt, ExamVault_Day_By_Day_Implementation_Hierarchy.docx,
+        ExamVault_Daily_Frontend_Backend_Parallel_Roadmap.docx, wireframe.png
+
+Rule I am following: finish each day fully (Frontend + Backend + Integration +
+Verification) before moving to the next day. No skipping ahead.
+
+GIT / CI-CD PUSH RULE
+------------------------
+- Once each day's work is fully discussed/confirmed as complete, I push the
+  code to GitHub.
+- Push goes through CI/CD (not a raw push straight to main): commit -> push
+  -> CI/CD pipeline runs build + tests -> merge/deploy only if the pipeline
+  is green.
+- I do not move to the next day until that day's push + CI/CD run has
+  succeeded.
+- CI/CD pipeline itself (GitHub Actions: build, test, container publish,
+  deploy) is formally set up in Phase 10 (Day 42), but from Day 1 onward
+  every completed day still gets committed and pushed to GitHub so history
+  stays clean and CI can be wired in early once the pipeline exists.
+
+CURRENT STATUS
+--------------
+Phase 0 is not started yet. This is where I begin.
+
+DAY 1 — PHASE 0: REPOSITORY & TOOLING SETUP  (TODAY)
+------------------------------------------------------
+- I am starting by creating the ExamVault root folder and initializing a Git repository.
+- I am verifying my tools are installed: .NET 8 SDK, Node.js LTS, npm, Git, SQL Server.
+- I am creating the ExamVault.sln solution file.
+- I am creating the root folders: Frontend, Gateway, Services, Shared, Tests, Docker, Documentation.
+- I am creating a README.md and a .gitignore for .NET, Node, IDE files, build output and secrets.
+- I am starting creating the React project: Frontend/examvault-web using React + TypeScript + Vite.
+- I am adding a basic App.tsx/main.tsx and a placeholder route.
+
+Day complete when:
+- git status is clean except intended files
+- dotnet --version, node --version, npm --version all work
+- React dev server starts and dotnet restore succeeds
+
+DAY 2 — PHASE 0: SKELETON PROJECTS
+-------------------------------------
+- I am creating OnlineExamSystem.ApiGateway.
+- I am creating the UserService API/Application/Domain/Infrastructure projects.
+- I am creating Shared.Contracts, Shared.Events and Shared.Common.
+- I am adding all projects to ExamVault.sln and applying project-reference rules.
+- I am NOT creating business entities yet.
+- I am creating the frontend folders: api, components, context, hooks, layouts, pages, routes, types, utils.
+
+DAY 3 — PHASE 0: BUILD AND RUN
+----------------------------------
+- I am configuring Vite, TypeScript, ESLint/Prettier.
+- I am adding React Router, Axios, TanStack Query and Bootstrap/React-Bootstrap.
+- I am creating a basic Home/Login/Register placeholder structure.
+- I am configuring ASP.NET Core startup and adding Swagger/OpenAPI.
+
+DAY 4 — PHASE 0: CONFIGURATION
+----------------------------------
+- I am defining local ports for React, Gateway and User API.
+- I am creating appsettings.Development.json files.
+- I am creating the frontend environment configuration for the API base URL.
+- I am making sure no secrets are committed to source control.
+
+DAY 5 — PHASE 0: GATE CHECK
+--------------------------------
+- I am reviewing the solution structure against the master architecture.
+- I am verifying React is completely separate from .NET projects.
+- I am verifying the Gateway has no direct service database dependency.
+- I am documenting startup instructions in the README.
+- I am confirming: dotnet build passes, React build passes, all three apps start.
+  -> Phase 0 is now unlocked to move into Phase 1.
+
+WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
+--------------------------------------------------
+Phase 1 (Days 6-9)    I build the User Service: entity, DbContext, migration,
+                       registration API, profile API, unit tests.
+Phase 2 (Days 10-11)  I install and configure YARP so React reaches all APIs
+                       only through the Gateway.
+Phase 3 (Days 12-15)  I add JWT authentication, login, refresh token, logout,
+                       and role-based protected routes in React.
+Phase 4 (Days 16-18)  I set up RabbitMQ locally, publish UserRegisteredEvent,
+                       and design the Azure Service Bus boundary.
+Phase 5 (Days 19-22)  I build the Exam Service and the Admin exam UI.
+Phase 6 (Days 23-26)  I build the Question Service and the question/option UI.
+AI Milestone (27-30)  I build the AI Service, the AI question generator UI,
+                       and the human approval flow before questions reach the DB.
+Phase 7 (Days 31-33)  I build the Submission Service and the Take Exam UI.
+Phase 8 (Days 34-36)  I build the Result Service and the Result UI.
+Phase 9 (Days 37-38)  I build the Notification Service.
+Phase 10 (Days 39-42) I containerize everything with Docker, deploy to Azure,
+                       and set up CI/CD.
+
+PRINCIPLES I AM KEEPING IN MIND THE WHOLE PROJECT
+------------------------------------------------------
+- React is the only frontend; it never talks to SQL Server directly.
+- YARP Gateway is the single public entry point after Phase 2.
+- Each microservice owns its own domain and database.
+- Shared projects only hold genuinely cross-service code.
+- AI Service never owns the Question DB; AI questions need my approval first.
+- Deterministic things (auth, timers, MCQ scoring) never depend on AI.
+- RabbitMQ locally, Azure Service Bus in the cloud.
+- I never commit secrets to Git.
+
+UI REFERENCE (wireframe.png)
+---------------------------------
+A wireframe has already been provided (wireframe.png) covering 12 screens:
+Landing, Login, Register, Admin Dashboard, Manage Exams, Manage Questions,
+Student Dashboard, Take Exam, Exam Result, Profile, Notifications, and
+AI Question Generation (Admin).
+
+I am treating this wireframe as the layout reference only (structure, flow,
+component placement), and building the final UI to a professional standard
+on top of it:
+- Consistent design system: one color palette, spacing scale, and typography
+  set applied across every screen (not just copied per-page).
+- Reusable component library (buttons, cards, tables, form inputs, badges,
+  modals) instead of one-off styled elements per screen.
+- Responsive layouts for desktop, tablet and mobile, not just the desktop
+  frame shown in the wireframe.
+- Real interaction states: loading, empty, error and success states for
+  every data-driven screen (dashboards, lists, forms).
+- Accessibility basics: proper labels, keyboard navigation, sufficient
+  color contrast.
+- Polish pass at the end of each phase's UI work (Day "Question UI",
+  "Exam UI completion", etc.) to bring screens up to production quality,
+  not just functional quality.
