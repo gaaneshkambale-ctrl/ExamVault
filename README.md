@@ -67,7 +67,7 @@ UI reference: `wireframe.png`.
 ## Phase 0 Progress
 
 - [x] Day 1 — Repository and tooling setup
-- [ ] Day 2 — .NET solution skeleton
+- [x] Day 2 — .NET solution skeleton
 - [ ] Day 3 — React frontend
 - [ ] Day 4 — Configuration and local ports
 - [ ] Day 5 — Phase 0 gate
