@@ -69,6 +69,7 @@ export default function Register() {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
+  const [newUserId, setNewUserId] = useState('');
 
   const handleChange = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -86,7 +87,12 @@ export default function Register() {
     setStatus('loading');
     setServerError('');
     try {
-      await registerUser({ fullName: form.fullName, email: form.email, password: form.password });
+      const response = await registerUser({
+        fullName: form.fullName,
+        email: form.email,
+        password: form.password,
+      });
+      setNewUserId(response.id);
       setStatus('success');
       setForm(initialFormState);
     } catch (error) {
@@ -103,7 +109,8 @@ export default function Register() {
         illustration={<RegisterIllustration />}
       >
         <Alert variant="success">
-          Account created successfully. You can now <Link to="/login">log in</Link>.
+          Account created successfully. You can now <Link to="/login">log in</Link> or{' '}
+          <Link to={`/profile/${newUserId}`}>view your profile</Link>.
         </Alert>
       </AuthLayout>
     );

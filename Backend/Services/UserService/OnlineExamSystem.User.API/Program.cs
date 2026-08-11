@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Application.Users.GetProfile;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Infrastructure.Persistence;
@@ -29,6 +30,7 @@ public class Program
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
         builder.Services.AddScoped<RegisterUserHandler>();
+        builder.Services.AddScoped<GetUserProfileHandler>();
 
         // Dev-only: React calls User API directly until Phase 2 puts the Gateway in front of it.
         const string frontendDevCorsPolicy = "FrontendDev";

@@ -117,7 +117,7 @@ UI reference: `wireframe.png`.
 
 - [x] Day 6 — User Service foundation
 - [x] Day 7 — Registration API
-- [ ] Day 8 — Profile and User APIs
+- [x] Day 8 — Profile and User APIs
 - [ ] Day 9 — User Service gate
 
 ### Day 6 Notes
@@ -151,3 +151,25 @@ UI reference: `wireframe.png`.
   validation, loading/error/success states, wired to the live API
 - Verified end-to-end in the browser: successful registration, duplicate-email
   conflict, and validation-error paths all render and persist correctly
+
+### Day 8 Notes
+
+- `GetUserProfileQuery`/`GetUserProfileHandler` in `User.Application`,
+  `UserProfileResponse` contract in `Shared.Contracts`
+- `GET /api/users/{id}` on `UsersController` — 200 with profile, 404 if not
+  found. Unauthenticated/stubbed foundation for now: takes the user id as a
+  route parameter since there's no session yet; Phase 3 replaces this with a
+  real `GET /api/users/me` derived from the JWT
+- `RegisterUserResponse`'s `Location` header now correctly points at the new
+  `GetById` action (was pointing at `Register` itself)
+- Unit tests added for the handler (found/not-found), 12 tests total now
+- Frontend: `Profile` page at `/profile/:id`, fetched via TanStack Query
+  (`getUserProfile` in `userApi.ts`)
+- Rebuilt Profile to match `wireframe.png`'s actual Profile page: dark
+  `DashboardSidebar` (Dashboard/My Exams/My Results/Profile, Profile
+  highlighted — the other items are placeholders, not built yet) + card with
+  avatar initial, Change Photo button, Full Name/Email/Role, Update Profile
+  button (both buttons are visual-only for now, no backend for them yet)
+- Register's success screen now links to the new profile
+- Verified end-to-end in the browser: register → "view your profile" →
+  real data renders on the Profile page
