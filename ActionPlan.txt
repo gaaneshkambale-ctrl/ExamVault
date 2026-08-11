@@ -8,19 +8,20 @@ Verification) before moving to the next day. No skipping ahead.
 
 GIT / CI-CD PUSH RULE
 ------------------------
-- Once each day's work is fully discussed/confirmed as complete, I push the
-  code to GitHub.
-- Push goes through CI/CD (not a raw push straight to main): commit -> push
-  -> CI/CD pipeline runs build + tests -> merge/deploy only if the pipeline
-  is green.
-- I do not move to the next day until that day's push + CI/CD run has
-  succeeded.
+- Branch strategy: "dev" is the daily working branch, "main" stays stable.
+  All day-to-day commits go to dev. dev is merged into main via Pull Request
+  only after that day's work is confirmed complete and CI is green.
+- Once each day's work is fully discussed/confirmed as complete: commit ->
+  push to dev -> CI/CD pipeline runs build + tests on dev -> open PR
+  dev -> main -> merge into main only if the pipeline is green.
+- I do not move to the next day until that day's push to dev + CI/CD run
+  has succeeded (and, at day/phase boundaries, the PR into main is merged).
 - UPDATE: a basic CI workflow (.github/workflows/ci.yml) was set up early,
   right after Day 1, instead of waiting for Phase 10. It builds the backend
   (dotnet restore/build/test) and the frontend (npm ci/build/test) on every
-  push and pull request to main. Full CI/CD (container publish, Azure
-  deploy, health checks) is still completed in Phase 10 (Day 42) on top of
-  this early workflow.
+  push and pull request to BOTH main and dev. Full CI/CD (container publish,
+  Azure deploy, health checks) is still completed in Phase 10 (Day 42) on
+  top of this early workflow.
 
 CURRENT STATUS
 --------------
