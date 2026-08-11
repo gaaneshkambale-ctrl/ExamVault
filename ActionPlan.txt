@@ -82,10 +82,80 @@ DAY 5 — PHASE 0: GATE CHECK
 - I am confirming: dotnet build passes, React build passes, all three apps start.
   -> Phase 0 is now unlocked to move into Phase 1.
 
+DECISIONS LOCKED IN FOR PHASE 1
+------------------------------------
+- Password hashing: ASP.NET Core Identity's PasswordHasher<T>, used standalone
+  (not the full Identity membership/UI system).
+- DB connection: local MSSQLSERVER instance, Windows Auth, no password to
+  manage. Connection string: "Server=localhost;Database=ExamVault.UserDb;
+  Trusted_Connection=True;TrustServerCertificate=True;"
+- Connection string itself is not a secret here (Windows Auth, no
+  credentials in it), so it can live in appsettings.Development.json.
+
+DAY 6 — PHASE 1: USER SERVICE FOUNDATION
+---------------------------------------------
+Backend:
+- I am creating/verifying the User entity in User.Domain.
+- I am creating UserDbContext in User.Infrastructure.
+- I am configuring SQL Server (local MSSQLSERVER, Windows Auth).
+- I am creating the initial EF Core migration.
+- I am creating the repository abstraction (User.Application) and its
+  implementation (User.Infrastructure).
+- I am keeping Domain independent from Infrastructure.
+Frontend:
+- I am creating the Register page UI fields (no submit logic yet).
+- I am creating the TypeScript type/interface for the Register request.
+Day complete when: backend builds, EF Core migration applies successfully,
+SQL Server connection is verified (table created in ExamVault.UserDb).
+
+DAY 7 — PHASE 1: REGISTRATION API
+--------------------------------------
+Backend:
+- I am creating the RegisterUser request/command.
+- I am creating the validator and handler.
+- I am hashing the password with ASP.NET Core Identity's PasswordHasher<T>.
+- I am saving the user via the repository.
+- I am creating POST /api/users/register.
+- I am writing unit tests for validation success/failure and the handler.
+Frontend:
+- I am wiring Register form validation (required fields, email format,
+  password rules).
+- I am adding loading/error/success states to the Register page.
+- I am wiring the Axios POST call to /api/users/register via axiosClient.
+Day complete when: registering a user from the React form actually creates
+a row in the database, success and validation-failure paths both tested.
+
+DAY 8 — PHASE 1: PROFILE AND USER APIs
+-------------------------------------------
+Backend:
+- I am creating the authenticated profile endpoint foundation (auth itself
+  lands in Phase 3 - for now this is unauthenticated/stubbed).
+- I am adding GET /api/users/me (or equivalent) returning the current user.
+- I am adding DTOs/contracts for the profile response.
+- I am adding service-level error handling (not found, etc.).
+- I am writing unit tests and API tests for the profile endpoint.
+Frontend:
+- I am creating the Profile page.
+- I am creating the user model/type on the frontend.
+- I am creating a Profile API hook (TanStack Query) to fetch and display it.
+Day complete when: Profile page renders real data returned by the API.
+
+DAY 9 — PHASE 1: USER SERVICE GATE
+---------------------------------------
+Backend:
+- I am verifying the database migration end-to-end.
+- I am verifying registration end-to-end.
+- I am verifying profile end-to-end.
+- I am reviewing logs and error handling across both endpoints.
+- I am documenting the API contracts (request/response shapes) in the repo.
+Frontend:
+- I am polishing the Register/Profile UI.
+- I am adding frontend validation tests.
+Day complete when: full Register -> API -> DB -> Profile flow works
+end-to-end and is verified. -> User Service MVP complete, Phase 2 unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-Phase 1 (Days 6-9)    I build the User Service: entity, DbContext, migration,
-                       registration API, profile API, unit tests.
 Phase 2 (Days 10-11)  I install and configure YARP so React reaches all APIs
                        only through the Gateway.
 Phase 3 (Days 12-15)  I add JWT authentication, login, refresh token, logout,
