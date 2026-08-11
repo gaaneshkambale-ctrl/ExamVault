@@ -112,3 +112,22 @@ UI reference: `wireframe.png`.
 - [x] All three apps (React, Gateway, User API) start and respond over HTTP
 
 **Phase 0 is signed off. Phase 1 (User Service MVP) is unlocked.**
+
+## Phase 1 Progress
+
+- [x] Day 6 — User Service foundation
+- [ ] Day 7 — Registration API
+- [ ] Day 8 — Profile and User APIs
+- [ ] Day 9 — User Service gate
+
+### Day 6 Notes
+
+- `AppUser` entity in `User.Domain` (named `AppUser`, not `User`, to avoid a
+  namespace collision with the `OnlineExamSystem.User.*` root namespace)
+- `UserDbContext` in `User.Infrastructure`, EF Core 8 + SQL Server provider
+- `IUserRepository` abstraction in `User.Application`, `UserRepository`
+  implementation in `User.Infrastructure`
+- Connection string (`ConnectionStrings:UserDb`) uses local `MSSQLSERVER`
+  with Windows Auth — not a secret, so it lives in `appsettings.Development.json`
+- Initial migration applied: `ExamVault.UserDb` database created, `Users`
+  table verified via `sqlcmd`

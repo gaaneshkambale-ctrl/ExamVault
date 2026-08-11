@@ -1,3 +1,7 @@
+using Microsoft.EntityFrameworkCore;
+using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Infrastructure.Persistence;
+using OnlineExamSystem.User.Infrastructure.Repositories;
 
 namespace OnlineExamSystem.User.API;
 
@@ -13,6 +17,10 @@ public class Program
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
+
+        builder.Services.AddDbContext<UserDbContext>(options =>
+            options.UseSqlServer(builder.Configuration.GetConnectionString("UserDb")));
+        builder.Services.AddScoped<IUserRepository, UserRepository>();
 
         var app = builder.Build();
 
