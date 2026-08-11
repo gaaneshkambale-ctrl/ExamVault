@@ -1,30 +1,30 @@
 # User Service API Contracts
 
-Base URL (local dev): `http://localhost:5000` (the YARP Gateway — as of
-Phase 2 this is the only entry point the frontend uses; it proxies
-`/api/users/**` to the User API unchanged). User API itself still runs at
-`http://localhost:5010` (Swagger UI at `/swagger`) but is no longer called
-directly by the browser.
+Base URL (local dev): `http://localhost:5000` (the YARP Gateway — the only
+entry point the frontend uses; it proxies `/api/users/**` to the User API
+unchanged, including the `Authorization` header). User API itself still
+runs at `http://localhost:5010` (Swagger UI at `/swagger`) but is no longer
+called directly by the browser.
 
-These endpoints are unauthenticated for now — Phase 3 adds JWT auth and
-replaces the `{id}` route parameter on the profile endpoint with a real
-`GET /api/users/me` derived from the token. `POST /api/users/login` was
-added ahead of schedule (before Phase 3) as a basic, non-JWT check so the
-Login page had something real to call — see README's "Out-of-order: basic
-Login" note.
+`GET /api/users/me` requires a valid JWT access token
+(`Authorization: Bearer <token>`). Register/Login/Refresh/Logout are
+anonymous. There is no role-gated endpoint yet.
 
 Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
 - `Requests/User/RegisterUserRequest.cs`
 - `Requests/User/LoginUserRequest.cs`
+- `Requests/User/RefreshTokenRequest.cs`
 - `Responses/User/RegisterUserResponse.cs`
 - `Responses/User/UserProfileResponse.cs`
+- `Responses/User/LoginResponse.cs`
+- `Responses/User/RefreshTokenResponse.cs`
 
 Verified manually against the running services on 2026-08-11 (see
-`README.md` Day 9 and Day 10 notes).
+`README.md` Day 9, 10, and 12-15 notes).
 
 ## POST /api/users/register
 
-Creates a new user account.
+Creates a new user account. Issues no tokens — log in separately afterward.
 
 **Request body**
 
@@ -38,7 +38,8 @@ Creates a new user account.
 
 ### 201 Created
 
-Returned on success. `Location` header points at `GET /api/users/{id}`.
+Returned on success. No `Location` header — there's no public "get another
+user by id" endpoint anymore (see `GET /api/users/me` below).
 
 ```json
 {
@@ -77,36 +78,10 @@ human-readable messages (all rule violations, not just the first).
 }
 ```
 
-## GET /api/users/{id}
-
-Fetches a user's profile by id.
-
-**Route parameter**: `id` — GUID.
-
-### 200 OK
-
-```json
-{
-  "id": "8b81bf23-516b-4b76-8765-108077f0f52d",
-  "fullName": "Day9 Verify User",
-  "email": "day9.verify@example.com",
-  "role": "Student"
-}
-```
-
-### 404 Not Found
-
-Returned when no user exists with the given id.
-
-```json
-{ "message": "User not found." }
-```
-
 ## POST /api/users/login
 
-Verifies email + password against the stored (hashed) password. Not JWT —
-no token is issued, no session is persisted. See README's "Out-of-order:
-basic Login" note.
+Verifies email + password, issues a JWT access token (15 min) and an opaque
+refresh token (7 days, persisted server-side as a SHA-256 hash).
 
 **Request body**
 
@@ -119,14 +94,16 @@ basic Login" note.
 
 ### 200 OK
 
-Returned on success. Same shape as `GET /api/users/{id}`.
-
 ```json
 {
-  "id": "3b0a3df7-6c0c-4f21-a69a-35f711702ac3",
-  "fullName": "Phase2 Gateway User2",
-  "email": "phase2.gateway2@example.com",
-  "role": "Student"
+  "user": {
+    "id": "3b0a3df7-6c0c-4f21-a69a-35f711702ac3",
+    "fullName": "Phase3 JWT User",
+    "email": "phase3.jwt@example.com",
+    "role": "Student"
+  },
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "XUcpz57T5a/CqBVa4LAwUv+2X34XhxbJeFIqXCUZa7UDe..."
 }
 ```
 
@@ -139,3 +116,71 @@ enumeration).
 ```json
 { "message": "Invalid email or password." }
 ```
+
+## POST /api/users/refresh-token
+
+Rotates a refresh token: validates it (hash lookup, not expired, not
+revoked), revokes it, issues + persists a new access/refresh pair. A
+refresh token can only be used once — reusing an already-rotated,
+expired, or unknown token all produce the same 401.
+
+**Request body**
+
+```json
+{ "refreshToken": "string, required" }
+```
+
+### 200 OK
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "avjrEXrq+5FhYcT3PDLJa8zcxN1c3kB4WSQVYVq3s0a..."
+}
+```
+
+### 401 Unauthorized
+
+```json
+{ "message": "Invalid or expired refresh token." }
+```
+
+## POST /api/users/logout
+
+Revokes the presented refresh token. Always returns 204, even if the token
+was already invalid or unknown — logging out an invalid session isn't an
+error.
+
+**Request body**
+
+```json
+{ "refreshToken": "string, required" }
+```
+
+### 204 No Content
+
+No body.
+
+## GET /api/users/me
+
+Returns the authenticated caller's own profile, derived from the access
+token's claims. Replaces the old `GET /api/users/{id}` (removed in Phase
+3 — this was always the planned swap, called out in the Day 8 code comment).
+
+**Header**: `Authorization: Bearer <accessToken>`
+
+### 200 OK
+
+```json
+{
+  "id": "3b0a3df7-6c0c-4f21-a69a-35f711702ac3",
+  "fullName": "Phase3 JWT User",
+  "email": "phase3.jwt@example.com",
+  "role": "Student"
+}
+```
+
+### 401 Unauthorized
+
+Returned when the `Authorization` header is missing or the token is
+invalid/expired. No body.

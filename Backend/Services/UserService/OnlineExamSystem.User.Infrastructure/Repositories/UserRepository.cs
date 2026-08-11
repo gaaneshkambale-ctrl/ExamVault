@@ -23,6 +23,12 @@ public class UserRepository : IUserRepository
     public Task AddAsync(AppUser user, CancellationToken cancellationToken = default) =>
         _dbContext.Users.AddAsync(user, cancellationToken).AsTask();
 
+    public Task AddRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken = default) =>
+        _dbContext.RefreshTokens.AddAsync(refreshToken, cancellationToken).AsTask();
+
+    public Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
+        _dbContext.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

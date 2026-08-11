@@ -59,16 +59,18 @@ directly.
 ```
 dotnet restore
 dotnet build
+dotnet ef database update --project Backend/Services/UserService/OnlineExamSystem.User.Infrastructure --startup-project Backend/Services/UserService/OnlineExamSystem.User.API
 dotnet run --project Backend/Services/UserService/OnlineExamSystem.User.API
 dotnet run --project Backend/Gateway/OnlineExamSystem.ApiGateway
 ```
 
-Backend secrets (connection strings, JWT signing keys, etc., once they exist)
-go in .NET User Secrets, never in `appsettings.Development.json`:
+Backend secrets (connection strings, JWT signing keys, etc.) go in .NET User
+Secrets, never in `appsettings.Development.json`. The JWT signing key is
+required for `User.API` to start:
 
 ```
 cd Backend/Services/UserService/OnlineExamSystem.User.API
-dotnet user-secrets set "Key" "Value"
+dotnet user-secrets set "Jwt:SigningKey" "<a long random string>"
 ```
 
 ### Frontend
@@ -257,5 +259,89 @@ session, no protected routes yet; Phase 3 replaces this properly.
   requests hit `:5000`, never `:5010`
 - `npm run build`, `npm run lint`, `npm run test` (12/12) all green after
   the cutover
+
+**Phase 2 (API Gateway) is complete. Phase 3 (JWT Authentication) is unlocked.**
+
+## Phase 3 Progress
+
+- [x] Day 12 — JWT issuing and refresh token storage
+- [x] Day 13 — Refresh, logout, and `GET /api/users/me`
+- [x] Day 14 — Frontend auth state
+- [x] Day 15 — Protected routes and gate
+
+### Day 12 Notes
+
+- Added `Microsoft.AspNetCore.Authentication.JwtBearer` to `User.API` and
+  `System.IdentityModel.Tokens.Jwt` to `User.Infrastructure`
+- Non-secret `Jwt` settings (Issuer/Audience/token lifetimes) in
+  `appsettings.Development.json`; signing key via
+  `dotnet user-secrets set "Jwt:SigningKey" ...` (never in appsettings)
+- New `RefreshToken` entity (`UserId`, `TokenHash` — SHA-256 of the raw
+  token, never the raw value — `ExpiresAtUtc`, `RevokedAtUtc`), wired into
+  `UserDbContext`, migration `AddRefreshTokens`
+- New `IJwtTokenService`/`JwtTokenService` (access token generation, opaque
+  refresh token generation, hashing) and matching `IUserRepository`
+  methods
+- `LoginUserHandler` now issues + persists a refresh token and returns both
+  tokens alongside the profile (new `LoginResponse` contract)
+
+### Day 13 Notes
+
+- Added `POST /api/users/refresh-token`: hash lookup, checks not
+  expired/revoked, rotates (revoke old, issue+persist new) — reusing an
+  already-rotated token fails the same way as an unknown one (401)
+- Added `POST /api/users/logout`: revokes the presented refresh token, 204
+  regardless of whether it was already invalid
+- Added `GET /api/users/me` (`[Authorize]`, reads the user id from the
+  JWT's claims) and removed `GET /api/users/{id}` — the exact swap the Day
+  8 code comment had called out for Phase 3
+- Wired `AddAuthentication`/`AddJwtBearer`/`UseAuthentication` in
+  `Program.cs`
+- 7 new unit tests (login now returns tokens; refresh valid/reused/expired/
+  revoked/unknown; logout) — 23 backend tests total, all passing
+- Verified via curl through the Gateway: login issues real tokens, `/me`
+  200 with a valid token / 401 without, refresh rotates (old token then
+  fails), logout revokes (subsequent refresh fails) — found and fixed a bug
+  during this pass: the `AddRefreshTokens` migration had been generated but
+  never applied to the database (`dotnet ef database update`)
+
+### Day 14 Notes
+
+- Added `AuthContext`/`AuthProvider` (`src/context/`) and a `useAuth` hook
+  (`src/hooks/`) — first real use of those placeholder folders. Access
+  token lives in memory only; refresh token in `localStorage`
+  (`examvault.refreshToken`) — the confirmed tradeoff vs. an HttpOnly
+  cookie, out of scope for this phase
+- Silent-refresh-on-mount: if a refresh token exists in `localStorage` on
+  app load, `AuthProvider` calls `/api/users/refresh-token` then
+  `/api/users/me` to restore the session without forcing a re-login
+- `axiosClient.ts`: request interceptor attaches
+  `Authorization: Bearer <token>`; response interceptor retries once on a
+  401 after a silent refresh, and calls an auth-failure handler (clears
+  React state) if that also fails
+- `Login.tsx` now calls the context's `login()` and navigates to `/profile`
+  (no id); `Register.tsx`'s success screen links to `/login` instead of
+  `/profile/:id` (Register still issues no tokens — confirmed decision)
+
+### Day 15 Notes
+
+- Added `ProtectedRoute` (redirects to `/login` when not authenticated;
+  accepts an optional `roles` prop for when a role-gated page exists —
+  none do yet)
+- `/profile/:id` → `/profile` (no param), wrapped in `ProtectedRoute`,
+  reading the current user from `AuthContext` instead of a route param
+- Added a Logout button on the Profile page; found during verification
+  that `ProtectedRoute`'s own guard already redirects to `/login` the
+  instant `logout()` clears the user (it wins the race against an
+  explicit `navigate('/')`), so the explicit navigate was removed as
+  redundant
+- Verified end-to-end in the browser: register → redirected to login → log
+  in → lands on `/profile` with real data → reload the page and the
+  session survives via silent refresh → logout → `/profile` now redirects
+  to `/login`
+- Full verification green: `dotnet build`, `dotnet test` (23/23),
+  `npm run build`, `npm run lint`, `npm run test` (12/12)
+
+**Phase 3 (JWT Authentication) is complete. Phase 4 (RabbitMQ / Azure Service Bus) is unlocked.**
 
 **Phase 2 (API Gateway) is complete. Phase 3 (JWT Authentication) is unlocked.**

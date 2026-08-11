@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import AuthLayout from '../layouts/AuthLayout';
 import LoginIllustration from '../components/illustrations/LoginIllustration';
-import { loginUser } from '../api/userApi';
+import { useAuth } from '../hooks/useAuth';
 
 function extractServerError(error: unknown): string {
   if (isAxiosError(error) && error.response?.status === 401) {
@@ -16,6 +16,7 @@ function extractServerError(error: unknown): string {
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -33,8 +34,8 @@ export default function Login() {
     setStatus('loading');
     setErrorMessage('');
     try {
-      const profile = await loginUser({ email, password });
-      navigate(`/profile/${profile.id}`);
+      await login(email, password);
+      navigate('/profile');
     } catch (error) {
       setStatus('error');
       setErrorMessage(extractServerError(error));

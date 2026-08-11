@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Backend\Services\UserService\OnlineExamSystem.User.Application\OnlineExamSystem.User.Application.csproj" />
+    <ProjectReference Include="..\..\..\Backend\Services\UserService\OnlineExamSystem.User.Infrastructure\OnlineExamSystem.User.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

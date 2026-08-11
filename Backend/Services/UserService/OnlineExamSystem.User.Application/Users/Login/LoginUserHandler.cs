@@ -10,15 +10,18 @@ public class LoginUserHandler
     private readonly IUserRepository _userRepository;
     private readonly IValidator<LoginUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
+    private readonly IJwtTokenService _jwtTokenService;
 
     public LoginUserHandler(
         IUserRepository userRepository,
         IValidator<LoginUserCommand> validator,
-        IPasswordHasher<AppUser> passwordHasher)
+        IPasswordHasher<AppUser> passwordHasher,
+        IJwtTokenService jwtTokenService)
     {
         _userRepository = userRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
+        _jwtTokenService = jwtTokenService;
     }
 
     public async Task<LoginUserResult> HandleAsync(
@@ -43,6 +46,17 @@ public class LoginUserHandler
             return LoginUserResult.InvalidCredentials();
         }
 
-        return LoginUserResult.Ok(user);
+        var accessToken = _jwtTokenService.GenerateAccessToken(user);
+        var refreshToken = _jwtTokenService.GenerateRefreshToken();
+
+        await _userRepository.AddRefreshTokenAsync(new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = _jwtTokenService.HashToken(refreshToken),
+            ExpiresAtUtc = _jwtTokenService.GetRefreshTokenExpiry(),
+        }, cancellationToken);
+        await _userRepository.SaveChangesAsync(cancellationToken);
+
+        return LoginUserResult.Ok(user, accessToken, refreshToken);
     }
 }

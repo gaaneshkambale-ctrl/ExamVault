@@ -9,7 +9,7 @@ namespace OnlineExamSystem.User.Application.Tests;
 public class LoginUserHandlerTests
 {
     private static LoginUserHandler CreateHandler(FakeUserRepository repository) =>
-        new(repository, new LoginUserValidator(), new PasswordHasher<AppUser>());
+        new(repository, new LoginUserValidator(), new PasswordHasher<AppUser>(), JwtTestHelper.CreateService());
 
     private static async Task<AppUser> SeedUser(FakeUserRepository repository, string email, string password)
     {
@@ -30,6 +30,8 @@ public class LoginUserHandlerTests
 
         Assert.True(result.Success);
         Assert.Equal(user.Id, result.User!.Id);
+        Assert.False(string.IsNullOrEmpty(result.AccessToken));
+        Assert.False(string.IsNullOrEmpty(result.RefreshToken));
     }
 
     [Fact]
