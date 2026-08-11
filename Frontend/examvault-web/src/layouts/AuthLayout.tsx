@@ -18,19 +18,23 @@ export default function AuthLayout({
   footer,
 }: AuthLayoutProps) {
   return (
-    <div className="d-flex align-items-center justify-content-center min-vh-100 bg-light py-4 px-3">
-      <div className="shadow-lg rounded-4 bg-white w-100" style={{ maxWidth: 900 }}>
-        <div className="p-4 pb-0">
-          <Link to="/" className="d-inline-flex align-items-center gap-2 fw-bold text-decoration-none text-dark">
-            <BrandMark />
-            ExamVault
-          </Link>
+    <div className="d-flex flex-column min-vh-100 bg-white">
+      <div className="p-4">
+        <Link
+          to="/"
+          className="d-inline-flex align-items-center gap-2 fw-bold text-decoration-none text-dark"
+        >
+          <BrandMark />
+          ExamVault
+        </Link>
+      </div>
+
+      <div className="row g-0 flex-grow-1 align-items-center">
+        <div className="col-lg-6 d-none d-lg-flex align-items-center justify-content-center py-5">
+          {illustration}
         </div>
-        <div className="row g-0">
-          <div className="col-md-5 d-none d-md-flex align-items-center justify-content-center p-5">
-            {illustration}
-          </div>
-          <div className="col-md-7 p-4 p-md-5 pt-3">
+        <div className="col-lg-6 d-flex justify-content-center px-3">
+          <div className="w-100 py-5" style={{ maxWidth: 440 }}>
             <h1 className="h3 fw-bold mb-1">{title}</h1>
             <p className="text-muted mb-4">{subtitle}</p>
             {children}

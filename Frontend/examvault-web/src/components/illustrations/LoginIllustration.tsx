@@ -1,6 +1,6 @@
 export default function LoginIllustration() {
   return (
-    <svg width="220" height="220" viewBox="0 0 220 220" fill="none" aria-hidden="true">
+    <svg width="320" height="320" viewBox="0 0 220 220" fill="none" aria-hidden="true">
       <rect x="20" y="30" width="130" height="95" rx="10" fill="#eef2ff" />
       <rect x="34" y="44" width="102" height="67" rx="4" fill="white" stroke="#c7d2fe" />
       <rect x="70" y="145" width="30" height="8" rx="2" fill="#c7d2fe" />

@@ -1,6 +1,6 @@
 export default function RegisterIllustration() {
   return (
-    <svg width="220" height="220" viewBox="0 0 220 220" fill="none" aria-hidden="true">
+    <svg width="320" height="320" viewBox="0 0 220 220" fill="none" aria-hidden="true">
       <circle cx="110" cy="105" r="70" fill="#eef2ff" />
 
       <rect x="80" y="60" width="60" height="90" rx="8" fill="white" stroke="#c7d2fe" strokeWidth="2" />
