@@ -42,11 +42,31 @@ ExamVault
 
 ## Getting Started
 
+### Local Ports / URLs
+
+| App                     | HTTP                    | HTTPS                    |
+|--------------------------|--------------------------|----------------------------|
+| React (Vite)              | http://localhost:5173  | —                          |
+| Gateway (ApiGateway)       | http://localhost:5000  | https://localhost:7000     |
+| User API                  | http://localhost:5010  | https://localhost:7010 (Swagger UI at `/swagger`) |
+
+Until Phase 2 (YARP Gateway) is wired up, the frontend calls User API directly.
+After Phase 2, all frontend calls go through the Gateway only.
+
 ### Backend
 
 ```
 dotnet restore
 dotnet build
+dotnet run --project Backend/Services/UserService/OnlineExamSystem.User.API
+```
+
+Backend secrets (connection strings, JWT signing keys, etc., once they exist)
+go in .NET User Secrets, never in `appsettings.Development.json`:
+
+```
+cd Backend/Services/UserService/OnlineExamSystem.User.API
+dotnet user-secrets set "Key" "Value"
 ```
 
 ### Frontend
@@ -54,8 +74,12 @@ dotnet build
 ```
 cd Frontend/examvault-web
 npm install
+cp .env.example .env.local   # optional: override VITE_API_BASE_URL locally
 npm run dev
 ```
+
+`.env.development` holds the non-secret local default (API base URL only).
+`.env.local` (gitignored) can override it per machine if needed.
 
 ## Development Roadmap
 
@@ -69,5 +93,5 @@ UI reference: `wireframe.png`.
 - [x] Day 1 — Repository and tooling setup
 - [x] Day 2 — .NET solution skeleton
 - [x] Day 3 — React frontend
-- [ ] Day 4 — Configuration and local ports
+- [x] Day 4 — Configuration and local ports
 - [ ] Day 5 — Phase 0 gate
