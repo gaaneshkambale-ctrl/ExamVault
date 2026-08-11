@@ -68,6 +68,6 @@ UI reference: `wireframe.png`.
 
 - [x] Day 1 — Repository and tooling setup
 - [x] Day 2 — .NET solution skeleton
-- [ ] Day 3 — React frontend
+- [x] Day 3 — React frontend
 - [ ] Day 4 — Configuration and local ports
 - [ ] Day 5 — Phase 0 gate
