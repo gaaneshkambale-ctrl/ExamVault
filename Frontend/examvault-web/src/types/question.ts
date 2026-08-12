@@ -6,14 +6,19 @@ export interface CreateQuestionOptionRequest {
   isCorrect: boolean;
 }
 
-export interface CreateQuestionRequest {
-  examId: string;
+export interface QuestionFormFields {
   questionType: QuestionType;
   questionText: string;
   marks: number;
   difficulty: QuestionDifficulty;
   options: CreateQuestionOptionRequest[];
 }
+
+export interface CreateQuestionRequest extends QuestionFormFields {
+  examId: string;
+}
+
+export type UpdateQuestionRequest = QuestionFormFields;
 
 export interface QuestionOptionResponse {
   id: string;

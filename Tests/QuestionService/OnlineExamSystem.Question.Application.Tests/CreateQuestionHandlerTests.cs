@@ -1,3 +1,4 @@
+using OnlineExamSystem.Question.Application.Questions;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Tests.Fakes;
 using OnlineExamSystem.Question.Domain.Enums;
@@ -24,8 +25,8 @@ public class CreateQuestionHandlerTests
             1,
             "Easy",
             [
-                new CreateQuestionOptionInput("object", true),
-                new CreateQuestionOptionInput("System.Object", false),
+                new QuestionOptionInput("object", true),
+                new QuestionOptionInput("System.Object", false),
             ],
             createdByUserId);
 
@@ -54,9 +55,9 @@ public class CreateQuestionHandlerTests
             1,
             "Easy",
             [
-                new CreateQuestionOptionInput("extends", false),
-                new CreateQuestionOptionInput(":", true),
-                new CreateQuestionOptionInput("implements", false),
+                new QuestionOptionInput("extends", false),
+                new QuestionOptionInput(":", true),
+                new QuestionOptionInput("implements", false),
             ],
             Guid.NewGuid());
 
@@ -76,7 +77,7 @@ public class CreateQuestionHandlerTests
             "",
             1,
             "Easy",
-            [new CreateQuestionOptionInput("object", true)],
+            [new QuestionOptionInput("object", true)],
             Guid.NewGuid());
 
         var result = await handler.HandleAsync(command);

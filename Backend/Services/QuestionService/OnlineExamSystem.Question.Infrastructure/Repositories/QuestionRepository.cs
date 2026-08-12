@@ -50,6 +50,20 @@ public class QuestionRepository : IQuestionRepository
             .OrderBy(o => o.DisplayOrder)
             .ToListAsync(cancellationToken);
 
+    public Task AddOptionsAsync(IReadOnlyList<QuestionOption> options, CancellationToken cancellationToken = default) =>
+        _dbContext.QuestionOptions.AddRangeAsync(options, cancellationToken);
+
+    public Task RemoveOptionsByQuestionIdAsync(Guid questionId, CancellationToken cancellationToken = default) =>
+        _dbContext.QuestionOptions
+            .Where(o => o.QuestionId == questionId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+    public Task RemoveQuestionAsync(ExamQuestion question, CancellationToken cancellationToken = default)
+    {
+        _dbContext.Questions.Remove(question);
+        return Task.CompletedTask;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

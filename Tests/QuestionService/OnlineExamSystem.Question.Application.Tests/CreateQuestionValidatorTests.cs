@@ -1,3 +1,4 @@
+using OnlineExamSystem.Question.Application.Questions;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using Xunit;
 
@@ -15,9 +16,9 @@ public class CreateQuestionValidatorTests
             1,
             "Easy",
             [
-                new CreateQuestionOptionInput("object", true),
-                new CreateQuestionOptionInput("System.Object", false),
-                new CreateQuestionOptionInput("BaseClass", false),
+                new QuestionOptionInput("object", true),
+                new QuestionOptionInput("System.Object", false),
+                new QuestionOptionInput("BaseClass", false),
             ],
             Guid.NewGuid());
 
@@ -29,8 +30,8 @@ public class CreateQuestionValidatorTests
             1,
             "Medium",
             [
-                new CreateQuestionOptionInput("True", true),
-                new CreateQuestionOptionInput("False", false),
+                new QuestionOptionInput("True", true),
+                new QuestionOptionInput("False", false),
             ],
             Guid.NewGuid());
 
@@ -77,8 +78,8 @@ public class CreateQuestionValidatorTests
         {
             Options =
             [
-                new CreateQuestionOptionInput("object", false),
-                new CreateQuestionOptionInput("System.Object", false),
+                new QuestionOptionInput("object", false),
+                new QuestionOptionInput("System.Object", false),
             ],
         };
 
@@ -94,8 +95,8 @@ public class CreateQuestionValidatorTests
         {
             Options =
             [
-                new CreateQuestionOptionInput("object", true),
-                new CreateQuestionOptionInput("System.Object", true),
+                new QuestionOptionInput("object", true),
+                new QuestionOptionInput("System.Object", true),
             ],
         };
 
@@ -109,7 +110,7 @@ public class CreateQuestionValidatorTests
     {
         var command = ValidMultipleChoiceCommand() with
         {
-            Options = [new CreateQuestionOptionInput("object", true)],
+            Options = [new QuestionOptionInput("object", true)],
         };
 
         var result = _validator.Validate(command);
@@ -124,8 +125,8 @@ public class CreateQuestionValidatorTests
         {
             Options =
             [
-                new CreateQuestionOptionInput("Yes", true),
-                new CreateQuestionOptionInput("No", false),
+                new QuestionOptionInput("Yes", true),
+                new QuestionOptionInput("No", false),
             ],
         };
 
@@ -141,9 +142,9 @@ public class CreateQuestionValidatorTests
         {
             Options =
             [
-                new CreateQuestionOptionInput("True", true),
-                new CreateQuestionOptionInput("False", false),
-                new CreateQuestionOptionInput("Maybe", false),
+                new QuestionOptionInput("True", true),
+                new QuestionOptionInput("False", false),
+                new QuestionOptionInput("Maybe", false),
             ],
         };
 

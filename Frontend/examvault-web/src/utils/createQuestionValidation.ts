@@ -1,4 +1,4 @@
-import type { CreateQuestionRequest } from '../types/question';
+import type { QuestionFormFields } from '../types/question';
 
 export interface CreateQuestionFormErrors {
   questionText?: string;
@@ -6,7 +6,7 @@ export interface CreateQuestionFormErrors {
   options?: string;
 }
 
-export function validateCreateQuestion(form: CreateQuestionRequest): CreateQuestionFormErrors {
+export function validateCreateQuestion(form: QuestionFormFields): CreateQuestionFormErrors {
   const errors: CreateQuestionFormErrors = {};
 
   if (!form.questionText.trim()) {

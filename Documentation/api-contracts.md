@@ -357,11 +357,12 @@ Returned when the transition isn't allowed from the exam's current status
 ## Question Service
 
 Every endpoint requires a valid JWT access token with the `Admin` role,
-same as Exam Service. `POST`/`GET /api/questions`/`GET /api/questions/{id}`
-all exist as of Day 25 — `PUT`/`DELETE` land Day 26.
+same as Exam Service. All endpoints exist as of Day 26 (Phase 6 gate):
+`POST`, `GET` (list and by id), `PUT`, and `DELETE`.
 
 Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
 - `Requests/Question/CreateQuestionRequest.cs`
+- `Requests/Question/UpdateQuestionRequest.cs`
 - `Responses/Question/QuestionResponse.cs`
 
 Only `MultipleChoice` and `TrueFalse` question types are accepted —
@@ -445,6 +446,51 @@ with no questions (or an unknown `examId`) returns an empty array, not
 
 Returns a single question with its options. Same shape as one entry
 from the list endpoint.
+
+### 404 Not Found
+
+```json
+{ "message": "Question not found." }
+```
+
+## PUT /api/questions/{id}
+
+Replaces a question's text/type/marks/difficulty and its **entire**
+options list — existing options are deleted and the request's options
+are inserted fresh (not diffed/merged). Same validation rules as
+`POST /api/questions`.
+
+**Request body**
+
+```json
+{
+  "questionType": "\"MultipleChoice\" or \"TrueFalse\"",
+  "questionText": "string, required, max 2000 chars",
+  "marks": "int, required, > 0",
+  "difficulty": "\"Easy\", \"Medium\", or \"Hard\"",
+  "options": [
+    { "optionText": "string, required", "isCorrect": "bool" }
+  ]
+}
+```
+
+### 200 OK
+
+Same shape as `GET /api/questions/{id}`, reflecting the update — option
+`id`s are new (the old options were deleted, not reused).
+
+### 400 Bad Request / 404 Not Found
+
+Same shapes as `POST /api/questions` 400 and `GET /api/questions/{id}` 404.
+
+## DELETE /api/questions/{id}
+
+Deletes a question and its options (`ON DELETE CASCADE` at the database
+level — no separate call needed to remove the options first).
+
+### 204 No Content
+
+No body.
 
 ### 404 Not Found
 

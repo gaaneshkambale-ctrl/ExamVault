@@ -1,5 +1,5 @@
 import apiClient from './axiosClient';
-import type { CreateQuestionRequest, QuestionResponse } from '../types/question';
+import type { CreateQuestionRequest, QuestionResponse, UpdateQuestionRequest } from '../types/question';
 
 export async function createQuestion(request: CreateQuestionRequest): Promise<QuestionResponse> {
   const { data } = await apiClient.post<QuestionResponse>('/api/questions', request);
@@ -14,4 +14,16 @@ export async function listQuestions(examId: string): Promise<QuestionResponse[]>
 export async function getQuestion(id: string): Promise<QuestionResponse> {
   const { data } = await apiClient.get<QuestionResponse>(`/api/questions/${id}`);
   return data;
+}
+
+export async function updateQuestion(
+  id: string,
+  request: UpdateQuestionRequest,
+): Promise<QuestionResponse> {
+  const { data } = await apiClient.put<QuestionResponse>(`/api/questions/${id}`, request);
+  return data;
+}
+
+export async function deleteQuestion(id: string): Promise<void> {
+  await apiClient.delete(`/api/questions/${id}`);
 }

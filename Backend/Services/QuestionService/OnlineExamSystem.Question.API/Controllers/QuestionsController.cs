@@ -1,9 +1,12 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Question.Application.Questions;
 using OnlineExamSystem.Question.Application.Questions.Create;
+using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Question;
 using OnlineExamSystem.Shared.Contracts.Responses.Question;
@@ -18,17 +21,23 @@ public class QuestionsController : ControllerBase
     private readonly CreateQuestionHandler _createQuestionHandler;
     private readonly GetQuestionHandler _getQuestionHandler;
     private readonly ListQuestionsHandler _listQuestionsHandler;
+    private readonly UpdateQuestionHandler _updateQuestionHandler;
+    private readonly DeleteQuestionHandler _deleteQuestionHandler;
     private readonly ILogger<QuestionsController> _logger;
 
     public QuestionsController(
         CreateQuestionHandler createQuestionHandler,
         GetQuestionHandler getQuestionHandler,
         ListQuestionsHandler listQuestionsHandler,
+        UpdateQuestionHandler updateQuestionHandler,
+        DeleteQuestionHandler deleteQuestionHandler,
         ILogger<QuestionsController> logger)
     {
         _createQuestionHandler = createQuestionHandler;
         _getQuestionHandler = getQuestionHandler;
         _listQuestionsHandler = listQuestionsHandler;
+        _updateQuestionHandler = updateQuestionHandler;
+        _deleteQuestionHandler = deleteQuestionHandler;
         _logger = logger;
     }
 
@@ -42,7 +51,7 @@ public class QuestionsController : ControllerBase
             request.QuestionText,
             request.Marks,
             request.Difficulty,
-            request.Options.Select(o => new CreateQuestionOptionInput(o.OptionText, o.IsCorrect)).ToList(),
+            request.Options.Select(o => new QuestionOptionInput(o.OptionText, o.IsCorrect)).ToList(),
             createdByUserId);
 
         var result = await _createQuestionHandler.HandleAsync(command, cancellationToken);
@@ -86,6 +95,55 @@ public class QuestionsController : ControllerBase
         }
 
         return Ok(ToResponse(result.Question, result.Options));
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateQuestionRequest request, CancellationToken cancellationToken)
+    {
+        var command = new UpdateQuestionCommand(
+            id,
+            request.QuestionType,
+            request.QuestionText,
+            request.Marks,
+            request.Difficulty,
+            request.Options.Select(o => new QuestionOptionInput(o.OptionText, o.IsCorrect)).ToList());
+
+        var result = await _updateQuestionHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Question not found." });
+        }
+
+        if (!result.Success)
+        {
+            _logger.LogWarning(
+                "Update question validation failed for {QuestionId}: {Errors}",
+                id,
+                string.Join("; ", result.ValidationErrors));
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        _logger.LogInformation("Question {QuestionId} updated.", id);
+        return Ok(ToResponse(result.Question!, result.Options));
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _deleteQuestionHandler.HandleAsync(new DeleteQuestionCommand(id), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Question not found." });
+        }
+
+        _logger.LogInformation("Question {QuestionId} deleted.", id);
+        return NoContent();
     }
 
     private static QuestionResponse ToResponse(ExamQuestion question, IReadOnlyList<QuestionOption> options) =>

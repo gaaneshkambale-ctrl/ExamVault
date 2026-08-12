@@ -630,7 +630,7 @@ for `Admin` and `/profile` for `Student`.
 - [x] Day 23 — Question service skeleton and Question Bank shell
 - [x] Day 24 — Question persistence and Add Question
 - [x] Day 25 — Question APIs and live question list
-- [ ] Day 26 — Edit, delete, and gate
+- [x] Day 26 — Edit, delete, and gate
 
 ### Day 23 Notes
 
@@ -748,3 +748,54 @@ for `Admin` and `/profile` for `Student`.
 - `dotnet build`/`dotnet test` (24 User + 32 Exam + 16 Question = 72/72)
   and `npm run build`/`lint`/`test` (25/25) all green. Chrome extension
   still not connected — same caveat as every day this phase
+
+### Day 26 Notes
+
+- Small refactor before adding Update: extracted `CreateQuestionOptionInput`
+  into a shared `QuestionOptionInput` (`Questions/QuestionOptionInput.cs`),
+  used by both Create and Update — avoided Update depending on Create's
+  namespace for a type that was never really Create-specific
+- New `UpdateQuestionCommand`/`Validator`/`Handler` and
+  `DeleteQuestionCommand`/`Handler`. Update replaces the **entire**
+  options list rather than diffing (delete old via a bulk
+  `ExecuteDeleteAsync`, add the new ones, one `SaveChangesAsync`) — much
+  simpler than matching old options to new ones, and correct since
+  options have no identity the client would need preserved. Delete just
+  removes the `ExamQuestion` row; `QuestionOptions` rows are cleaned up
+  by the `ON DELETE CASCADE` FK already configured on Day 23 — verified
+  this actually fires (0 orphaned rows) rather than assuming it
+- `PUT /api/questions/{id}` and `DELETE /api/questions/{id}` added to
+  `QuestionsController`, same `[Authorize(Roles = "Admin")]` as the rest
+- 10 new backend unit tests (`UpdateQuestionValidator` x5,
+  `UpdateQuestionHandler` x3, `DeleteQuestionHandler` x2) — 82/82 backend
+  tests total
+- New `EditQuestion` page (`/admin/questions/:id/edit`), pre-populated
+  from the fetched question, same form shape as `CreateQuestion` (kept
+  as a separate file rather than extracting a shared form component —
+  matching the precedent `CreateExam`/`EditExam` already set of not
+  sharing form components between create and edit)
+- New shared `DeleteQuestionButton` component (a small confirmation
+  `Modal` + mutation) used from both the Exam edit page's Questions
+  table and the `QuestionDetails` page — the exact same delete flow
+  needed in two places, not a premature abstraction
+- Small type cleanup: extracted `QuestionFormFields` (the fields
+  `CreateQuestionRequest` and `UpdateQuestionRequest` actually share) so
+  `validateCreateQuestion` stopped requiring a fake `examId` value just
+  to satisfy `CreateQuestionRequest`'s shape when validating an edit
+  form that has no `examId` at all
+- Verified end-to-end for real through the Gateway with a real Admin
+  JWT: updated a question's text/marks/difficulty/options and confirmed
+  in `ExamVault.QuestionDb` that the old option row was gone and only
+  the two new ones existed; deleted a question, confirmed it vanished
+  from the list, confirmed `GET` on it now 404s, and confirmed its
+  options were cascade-deleted (0 rows) directly against the database;
+  confirmed a `Student` token gets 403 on both `PUT` and `DELETE`, and
+  that the question survived the rejected delete attempt. Confirmed via
+  source inspection that the new "Edit" link compiles to a real
+  interpolated URL and resolves (200)
+- `dotnet build`/`dotnet test` (24 User + 32 Exam + 26 Question = 82/82,
+  Release config too) and `npm run build`/`lint`/`test` (25/25) all
+  green. Chrome extension still not connected — same caveat as every
+  day this phase
+
+**Phase 6 (Question Service) is complete. AI Milestone (Days 27-30) is unlocked.**

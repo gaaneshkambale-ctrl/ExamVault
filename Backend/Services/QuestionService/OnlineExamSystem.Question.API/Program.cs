@@ -5,8 +5,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Application.Questions.Create;
+using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Infrastructure.Persistence;
 using OnlineExamSystem.Question.Infrastructure.Repositories;
 
@@ -33,6 +35,9 @@ public class Program
         builder.Services.AddScoped<CreateQuestionHandler>();
         builder.Services.AddScoped<GetQuestionHandler>();
         builder.Services.AddScoped<ListQuestionsHandler>();
+        builder.Services.AddScoped<IValidator<UpdateQuestionCommand>, UpdateQuestionValidator>();
+        builder.Services.AddScoped<UpdateQuestionHandler>();
+        builder.Services.AddScoped<DeleteQuestionHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

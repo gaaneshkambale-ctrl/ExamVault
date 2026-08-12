@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
+import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/examApi';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
@@ -461,7 +462,13 @@ export default function EditExam() {
                         </td>
                         <td>{question.marks}</td>
                         <td className="pe-4">
-                          <Link to={`/admin/questions/${question.id}`}>View</Link>
+                          <Link to={`/admin/questions/${question.id}`} className="me-3">
+                            View
+                          </Link>
+                          <Link to={`/admin/questions/${question.id}/edit`} className="me-3">
+                            Edit
+                          </Link>
+                          <DeleteQuestionButton questionId={question.id} examId={id!} />
                         </td>
                       </tr>
                     ))}

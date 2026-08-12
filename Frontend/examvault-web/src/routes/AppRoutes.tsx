@@ -11,6 +11,7 @@ import EditExam from '../pages/admin/EditExam';
 import QuestionBank from '../pages/admin/QuestionBank';
 import CreateQuestion from '../pages/admin/CreateQuestion';
 import QuestionDetails from '../pages/admin/QuestionDetails';
+import EditQuestion from '../pages/admin/EditQuestion';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -88,6 +89,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <QuestionDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/questions/:id/edit"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <EditQuestion />
           </ProtectedRoute>
         }
       />

@@ -23,5 +23,11 @@ public interface IQuestionRepository
         IReadOnlyList<Guid> questionIds,
         CancellationToken cancellationToken = default);
 
+    Task AddOptionsAsync(IReadOnlyList<QuestionOption> options, CancellationToken cancellationToken = default);
+
+    Task RemoveOptionsByQuestionIdAsync(Guid questionId, CancellationToken cancellationToken = default);
+
+    Task RemoveQuestionAsync(ExamQuestion question, CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

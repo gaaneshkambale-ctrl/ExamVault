@@ -1,6 +1,7 @@
 import { Badge, Card, ListGroup, Spinner } from 'react-bootstrap';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { useQuestion } from '../../hooks/useQuestions';
 import type { QuestionDifficulty, QuestionType } from '../../types/question';
 
@@ -17,6 +18,7 @@ const questionTypeLabel: Record<QuestionType, string> = {
 
 export default function QuestionDetails() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data: question, isLoading, isError } = useQuestion(id);
 
   return (
@@ -24,9 +26,19 @@ export default function QuestionDetails() {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0">Question Details</h1>
         {question && (
-          <Link to={`/admin/exams/${question.examId}/edit`} className="btn btn-outline-secondary">
-            Back to Exam
-          </Link>
+          <div className="d-flex align-items-center gap-3">
+            <Link to={`/admin/questions/${question.id}/edit`} className="btn btn-primary">
+              Edit
+            </Link>
+            <DeleteQuestionButton
+              questionId={question.id}
+              examId={question.examId}
+              onDeleted={() => navigate(`/admin/exams/${question.examId}/edit`)}
+            />
+            <Link to={`/admin/exams/${question.examId}/edit`} className="btn btn-outline-secondary">
+              Back to Exam
+            </Link>
+          </div>
         )}
       </div>
 
