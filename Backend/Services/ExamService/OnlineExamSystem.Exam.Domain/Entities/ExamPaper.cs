@@ -3,7 +3,7 @@ using OnlineExamSystem.Shared.Common.Entities;
 
 namespace OnlineExamSystem.Exam.Domain.Entities;
 
-public class Exam : BaseEntity
+public class ExamPaper : BaseEntity
 {
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

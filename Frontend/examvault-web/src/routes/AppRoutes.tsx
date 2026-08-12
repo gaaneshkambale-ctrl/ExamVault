@@ -5,6 +5,7 @@ import Register from '../pages/Register';
 import Profile from '../pages/Profile';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import ManageExams from '../pages/admin/ManageExams';
+import CreateExam from '../pages/admin/CreateExam';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -34,6 +35,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <ManageExams />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/create"
+        element={
+          <ProtectedRoute>
+            <CreateExam />
           </ProtectedRoute>
         }
       />

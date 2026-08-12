@@ -1,14 +1,17 @@
-# User Service API Contracts
+# API Contracts
 
 Base URL (local dev): `http://localhost:5000` (the YARP Gateway — the only
-entry point the frontend uses; it proxies `/api/users/**` to the User API
-unchanged, including the `Authorization` header). User API itself still
-runs at `http://localhost:5010` (Swagger UI at `/swagger`) but is no longer
-called directly by the browser.
+entry point the frontend uses; it proxies `/api/users/**` and `/api/exams/**`
+to their respective services unchanged, including the `Authorization`
+header). User API itself still runs at `http://localhost:5010` and Exam API
+at `http://localhost:5020` (each with Swagger UI at `/swagger`) but neither
+is called directly by the browser.
+
+## User Service
 
 `GET /api/users/me` requires a valid JWT access token
 (`Authorization: Bearer <token>`). Register/Login/Refresh/Logout are
-anonymous. There is no role-gated endpoint yet.
+anonymous.
 
 Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
 - `Requests/User/RegisterUserRequest.cs`
@@ -184,3 +187,63 @@ token's claims. Replaces the old `GET /api/users/{id}` (removed in Phase
 
 Returned when the `Authorization` header is missing or the token is
 invalid/expired. No body.
+
+## Exam Service
+
+Every endpoint requires a valid JWT access token with the `Admin` role
+(`Authorization: Bearer <token>`) — a `Student` token gets 403 Forbidden.
+This is the first role-gated part of the API (the JWT role claim has
+existed since Phase 3; this is the first endpoint to actually check it).
+
+Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
+- `Requests/Exam/CreateExamRequest.cs`
+- `Responses/Exam/ExamResponse.cs`
+
+Only `POST /api/exams` exists so far (Day 20) — `GET /api/exams` and
+`GET /api/exams/{id}` land Day 21.
+
+### POST /api/exams
+
+Creates a new exam. Always created with `status: "Draft"` — publishing is
+a separate action (Day 22).
+
+**Request body**
+
+```json
+{
+  "title": "string, required, max 200 chars",
+  "description": "string, max 2000 chars",
+  "examType": "\"Manual\" or \"AiGenerated\"",
+  "durationMinutes": "int, required, > 0",
+  "totalMarks": "int, required, > 0",
+  "passingMarks": "int, required, 0 <= passingMarks <= totalMarks",
+  "instructions": "string, max 2000 chars"
+}
+```
+
+### 201 Created
+
+```json
+{
+  "id": "54b2147b-ec59-43d0-a102-900f9659c2af",
+  "title": "C# Fundamentals",
+  "description": "Covers the basics of C#.",
+  "examType": "Manual",
+  "durationMinutes": 60,
+  "totalMarks": 50,
+  "passingMarks": 25,
+  "instructions": "Answer all questions.",
+  "status": "Draft",
+  "totalQuestions": 0,
+  "createdOn": "2026-08-12T10:09:35.6119531Z"
+}
+```
+
+### 400 Bad Request
+
+Same `ValidationProblemDetails` shape as `POST /api/users/register`
+(`errors.request` is an array of human-readable messages).
+
+### 403 Forbidden
+
+Returned for a valid token without the `Admin` role. No body.

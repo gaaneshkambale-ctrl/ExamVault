@@ -5,6 +5,10 @@
     <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Events\OnlineExamSystem.Shared.Events.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" Version="11.11.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

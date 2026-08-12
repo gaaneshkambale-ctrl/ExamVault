@@ -50,10 +50,11 @@ ExamVault
 | React (Vite)              | http://localhost:5173  | —                          |
 | Gateway (ApiGateway)       | http://localhost:5000  | https://localhost:7000     |
 | User API                  | http://localhost:5010  | https://localhost:7010 (Swagger UI at `/swagger`) |
+| Exam API                  | http://localhost:5020  | https://localhost:7020 (Swagger UI at `/swagger`) |
 
 As of Phase 2, all frontend calls go through the Gateway only — it proxies
-`/api/users/**` to the User API. The frontend no longer calls User API
-directly.
+`/api/users/**` and (as of Phase 5) `/api/exams/**` to their respective
+services. The frontend never calls User API or Exam API directly.
 
 ### Backend
 
@@ -61,8 +62,10 @@ directly.
 dotnet restore
 dotnet build
 dotnet ef database update --project Backend/Services/UserService/OnlineExamSystem.User.Infrastructure --startup-project Backend/Services/UserService/OnlineExamSystem.User.API
+dotnet ef database update --project Backend/Services/ExamService/OnlineExamSystem.Exam.Infrastructure --startup-project Backend/Services/ExamService/OnlineExamSystem.Exam.API
 docker run -d --name examvault-rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 dotnet run --project Backend/Services/UserService/OnlineExamSystem.User.API
+dotnet run --project Backend/Services/ExamService/OnlineExamSystem.Exam.API
 dotnet run --project Backend/Gateway/OnlineExamSystem.ApiGateway
 dotnet run --project Backend/Services/NotificationService/OnlineExamSystem.NotificationService.Worker
 ```
@@ -76,12 +79,21 @@ connection string).
 
 Backend secrets (connection strings, JWT signing keys, etc.) go in .NET User
 Secrets, never in `appsettings.Development.json`. The JWT signing key is
-required for `User.API` to start:
+required for both `User.API` and `Exam.API` to start, and must be the
+**same value** in both (`Exam.API` validates tokens issued by `User.API`,
+sharing the config value, not any code):
 
 ```
 cd Backend/Services/UserService/OnlineExamSystem.User.API
 dotnet user-secrets set "Jwt:SigningKey" "<a long random string>"
+cd ../../ExamService/OnlineExamSystem.Exam.API
+dotnet user-secrets set "Jwt:SigningKey" "<the same long random string>"
 ```
+
+Exam Service endpoints are Admin-only. A freshly registered user is always
+`Student`; to test them locally, promote a user to `Admin` directly in
+`ExamVault.UserDb` (`UPDATE Users SET Role = 1 WHERE Email = '...'`) and
+log in again to get a token with the `Admin` role claim.
 
 ### Frontend
 
@@ -428,7 +440,7 @@ session, no protected routes yet; Phase 3 replaces this properly.
 ## Phase 5 Progress
 
 - [x] Day 19 — Exam service skeleton and Admin Dashboard shell
-- [ ] Day 20 — Exam persistence and Create Exam
+- [x] Day 20 — Exam persistence and Create Exam
 - [ ] Day 21 — Exam APIs and live exam list
 - [ ] Day 22 — Edit, settings, publish, and gate
 
@@ -437,7 +449,11 @@ session, no protected routes yet; Phase 3 replaces this properly.
 - New `OnlineExamSystem.Exam.API`/`.Application`/`.Domain`/`.Infrastructure`
   projects (`Backend/Services/ExamService/`), mirroring UserService's
   layout and project-reference rules, added to `ExamVault.sln`
-- New `Exam` entity (`Exam.Domain/Entities/`): Basic Information fields
+- New `ExamPaper` entity (`Exam.Domain/Entities/`) — named `ExamPaper`, not
+  `Exam`, for the same reason the User service's entity is `AppUser` not
+  `User`: a class named `Exam` inside the `OnlineExamSystem.Exam.*`
+  namespace tree collides with the namespace segment itself. Basic
+  Information fields
   (Title, Description, ExamType, DurationMinutes, TotalMarks,
   PassingMarks, Instructions, Status, TotalQuestions, CreatedByUserId)
   plus the Exam Settings fields from `Adminwireframe.png` screen 9
@@ -463,3 +479,47 @@ session, no protected routes yet; Phase 3 replaces this properly.
   build, lint, full test suite, and the Vite dev server returning 200 for
   both new routes; an actual visual check is still worth doing before
   Day 20 builds on top of this shell
+
+### Day 20 Notes
+
+- New `ExamDbContext` (`Exam.Infrastructure/Persistence/`), SQL Server
+  (local MSSQLSERVER, Windows Auth, `ExamVault.ExamDb` — Exam Service owns
+  its own database), migration `InitialCreate`, `IExamRepository`/
+  `ExamRepository` (`AddAsync`/`SaveChangesAsync` only — `GetByIdAsync`/
+  `GetAllAsync` land Day 21 alongside the endpoints that need them)
+- New `CreateExamCommand`/`Validator`/`Handler` (`Exam.Application/Exams/Create/`):
+  Title, Description, ExamType, DurationMinutes, TotalMarks, PassingMarks,
+  Instructions. Settings fields keep their entity defaults for now — the
+  settings-editing UI is Day 22. New exams always start `Status: Draft`
+- Plan adjustment, out of necessity: the frontend only ever talks to the
+  Gateway (a locked-in principle since Phase 2), so the Create Exam form
+  couldn't work without a real endpoint to call. Added `POST /api/exams`
+  (`[Authorize(Roles = "Admin")]`, reusing the JWT role claim — applied
+  now rather than waiting for Day 21/22, since leaving a write endpoint
+  unauthenticated even temporarily isn't worth the risk) plus the Gateway
+  route (`/api/exams/{**catch-all}` → `:5020`) and the
+  `CreateExamRequest`/`ExamResponse` contracts in `Shared.Contracts`. Day
+  21 still owns `GET /api/exams`, `GET /api/exams/{id}`, and full
+  API-level test coverage
+- `Exam.API` validates JWTs independently (own `Jwt:Issuer`/`Audience`/
+  `SigningKey` config, own User Secrets store) — no code sharing with
+  `User.API`, just the same signing key value, the normal microservices
+  pattern for a service that only validates tokens it doesn't issue
+- New `OnlineExamSystem.Exam.Application.Tests` project (`Tests/ExamService/`),
+  mirroring UserService's — `FakeExamRepository`, 5 validator tests, 2
+  handler tests (mirroring the Day 7 precedent of testing the handler the
+  same day it's built, not deferring to Day 21)
+- New Create Exam form (`/admin/exams/create`, Basic Information fields
+  only, client-side validation in `utils/createExamValidation.ts` + 6
+  tests) — the Exams list's "+ Create Exam" button now links here instead
+  of being disabled
+- Verified end-to-end for real: registered a user through the Gateway,
+  promoted it to `Admin` directly in `ExamVault.UserDb`, logged in, and
+  `POST /api/exams` with the Admin JWT returned 201 with a Draft exam —
+  confirmed the row exists in `ExamVault.ExamDb`. Also confirmed a
+  `Student`-role token gets 403 on the same endpoint
+- `dotnet build`/`dotnet test` (24 User + 8 Exam = 32/32) and
+  `npm run build`/`lint`/`test` (18/18) all green. Chrome extension still
+  wasn't connected this session, so the Create Exam form itself wasn't
+  visually exercised in a browser — only verified via the API directly
+  and the frontend's own build/lint/test/type-check

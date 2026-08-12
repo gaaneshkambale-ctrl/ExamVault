@@ -51,6 +51,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Exam.Domai
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Exam.Infrastructure", "Backend\Services\ExamService\OnlineExamSystem.Exam.Infrastructure\OnlineExamSystem.Exam.Infrastructure.csproj", "{8DC4A40F-DF7A-48B3-AA2A-7894043E8D52}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ExamService", "ExamService", "{30F49C00-F42F-47DE-BCEA-C0886C25FCC1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Exam.Application.Tests", "Tests\ExamService\OnlineExamSystem.Exam.Application.Tests\OnlineExamSystem.Exam.Application.Tests.csproj", "{9AEF9E92-B06B-451F-A51B-2C9576C901F9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -116,6 +120,10 @@ Global
 		{8DC4A40F-DF7A-48B3-AA2A-7894043E8D52}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8DC4A40F-DF7A-48B3-AA2A-7894043E8D52}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8DC4A40F-DF7A-48B3-AA2A-7894043E8D52}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9AEF9E92-B06B-451F-A51B-2C9576C901F9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9AEF9E92-B06B-451F-A51B-2C9576C901F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9AEF9E92-B06B-451F-A51B-2C9576C901F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9AEF9E92-B06B-451F-A51B-2C9576C901F9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8314B0DE-3264-488A-9C66-BF410203CC19} = {24F021E6-C582-43B4-8E9C-FA50BD9C1458}
@@ -137,5 +145,7 @@ Global
 		{76047390-BFE9-4243-9FF2-30205D8D323E} = {4BD777B9-EE1A-4AD4-8223-886A7702C9BF}
 		{D2302250-D8E6-41B2-B34D-2F42690A6CEB} = {4BD777B9-EE1A-4AD4-8223-886A7702C9BF}
 		{8DC4A40F-DF7A-48B3-AA2A-7894043E8D52} = {4BD777B9-EE1A-4AD4-8223-886A7702C9BF}
+		{30F49C00-F42F-47DE-BCEA-C0886C25FCC1} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
+		{9AEF9E92-B06B-451F-A51B-2C9576C901F9} = {30F49C00-F42F-47DE-BCEA-C0886C25FCC1}
 	EndGlobalSection
 EndGlobal

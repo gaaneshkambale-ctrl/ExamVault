@@ -1,4 +1,5 @@
 import { Badge, Button, Card, Table } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 
 interface ExamRow {
@@ -56,9 +57,9 @@ export default function ManageExams() {
     <AdminLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0">Exams</h1>
-        <Button variant="primary" disabled>
+        <Link to="/admin/exams/create" className="btn btn-primary">
           + Create Exam
-        </Button>
+        </Link>
       </div>
 
       <Card className="border-0 shadow-sm">
