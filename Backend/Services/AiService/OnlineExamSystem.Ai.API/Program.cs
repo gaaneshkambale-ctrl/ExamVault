@@ -1,6 +1,10 @@
 using System.Text;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Ai.Application.Generate;
+using OnlineExamSystem.Ai.Application.Interfaces;
+using OnlineExamSystem.Ai.Infrastructure;
 
 namespace OnlineExamSystem.Ai.API;
 
@@ -18,8 +22,10 @@ public class Program
         builder.Services.AddSwaggerGen();
 
         // No DbContext/repository registrations here - AI Service owns no database.
-        // No generator/handler registrations yet either - IAiQuestionGenerator has no
-        // implementation until Day 28.
+
+        builder.Services.AddHttpClient<IAiQuestionGenerator, N8nQuestionGenerator>();
+        builder.Services.AddScoped<IValidator<GenerateQuestionsRequest>, GenerateQuestionsValidator>();
+        builder.Services.AddScoped<GenerateQuestionsHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
