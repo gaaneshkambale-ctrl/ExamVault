@@ -24,7 +24,7 @@ export default function QuestionDetails() {
   return (
     <AdminLayout active="Questions">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h4 fw-bold mb-0">Question Details</h1>
+        <h1 className="h4 fw-bold mb-0 text-primary">Question Details</h1>
         {question && (
           <div className="d-flex align-items-center gap-3">
             <Link to={`/admin/questions/${question.id}/edit`} className="btn btn-primary">
@@ -35,8 +35,8 @@ export default function QuestionDetails() {
               examId={question.examId}
               onDeleted={() => navigate(`/admin/exams/${question.examId}/edit`)}
             />
-            <Link to={`/admin/exams/${question.examId}/edit`} className="btn btn-outline-secondary">
-              Back to Exam
+            <Link to="/admin/questions" className="btn btn-outline-secondary">
+              Back to Questions
             </Link>
           </div>
         )}
@@ -68,6 +68,7 @@ export default function QuestionDetails() {
               <div className="d-flex gap-4 text-muted small mb-4">
                 <div>Type: {questionTypeLabel[question.questionType]}</div>
                 <div>Marks: {question.marks}</div>
+                <div>Shuffle Options: {question.shuffleOptions ? 'Yes' : 'No'}</div>
                 <div>Created: {new Date(question.createdOn).toLocaleString()}</div>
               </div>
 

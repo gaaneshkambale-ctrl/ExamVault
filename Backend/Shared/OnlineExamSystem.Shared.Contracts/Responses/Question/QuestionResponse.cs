@@ -9,5 +9,6 @@ public record QuestionResponse(
     string QuestionText,
     int Marks,
     string Difficulty,
+    bool ShuffleOptions,
     IReadOnlyList<QuestionOptionResponse> Options,
     DateTime CreatedOn);

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 using OnlineExamSystem.Exam.Application.Exams.Create;
+using OnlineExamSystem.Exam.Application.Exams.Delete;
 using OnlineExamSystem.Exam.Application.Exams.GetById;
 using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Exams.Update;
@@ -38,6 +39,7 @@ public class Program
         builder.Services.AddScoped<IValidator<UpdateExamCommand>, UpdateExamValidator>();
         builder.Services.AddScoped<UpdateExamHandler>();
         builder.Services.AddScoped<ChangeExamStatusHandler>();
+        builder.Services.AddScoped<DeleteExamHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

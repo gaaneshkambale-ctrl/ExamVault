@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
@@ -62,6 +62,7 @@ function extractServerError(error: unknown): string {
 
 export default function EditExam() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: exam, isLoading, isError } = useExam(id);
   const { data: questions, isLoading: isLoadingQuestions } = useQuestions(id);
@@ -89,6 +90,7 @@ export default function EditExam() {
       setForm(toFormState(updated));
       setServerError('');
       invalidateExam();
+      navigate('/admin/exams');
     },
     onError: (error) => setServerError(extractServerError(error)),
   });
@@ -137,7 +139,7 @@ export default function EditExam() {
     <AdminLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="h4 fw-bold mb-0">Edit Exam</h1>
+          <h1 className="h4 fw-bold mb-0 text-primary">Edit Exam</h1>
           <p className="text-muted mb-0">Basic Information &amp; Settings</p>
         </div>
         <Link to="/admin/exams" className="btn btn-outline-secondary">
@@ -199,17 +201,11 @@ export default function EditExam() {
                 </div>
               </div>
 
-              <div className="mb-4">
-                <Link to={`/admin/exams/${id}/questions/create`} className="btn btn-outline-primary btn-sm">
-                  + Add Question
-                </Link>
-              </div>
-
               <Form noValidate onSubmit={handleSubmit}>
                 <Row>
                   <Col md={8}>
                     <Form.Group className="mb-3" controlId="editExamTitle">
-                      <Form.Label>Exam Title</Form.Label>
+                      <Form.Label className="fw-bold">Exam Title</Form.Label>
                       <Form.Control
                         type="text"
                         value={form.title}
@@ -223,7 +219,7 @@ export default function EditExam() {
                   </Col>
                   <Col md={4}>
                     <Form.Group className="mb-3" controlId="editExamType">
-                      <Form.Label>Exam Type</Form.Label>
+                      <Form.Label className="fw-bold">Exam Type</Form.Label>
                       <Form.Select
                         value={form.examType}
                         onChange={(e) => updateField('examType', e.target.value as ExamType)}
@@ -236,7 +232,7 @@ export default function EditExam() {
                 </Row>
 
                 <Form.Group className="mb-3" controlId="editExamDescription">
-                  <Form.Label>Description</Form.Label>
+                  <Form.Label className="fw-bold">Description</Form.Label>
                   <Form.Control
                     as="textarea"
                     rows={3}
@@ -252,7 +248,7 @@ export default function EditExam() {
                 <Row>
                   <Col md={4}>
                     <Form.Group className="mb-3" controlId="editExamDuration">
-                      <Form.Label>Duration (minutes)</Form.Label>
+                      <Form.Label className="fw-bold">Duration (minutes)</Form.Label>
                       <Form.Control
                         type="number"
                         min={1}
@@ -267,7 +263,7 @@ export default function EditExam() {
                   </Col>
                   <Col md={4}>
                     <Form.Group className="mb-3" controlId="editExamTotalMarks">
-                      <Form.Label>Total Marks</Form.Label>
+                      <Form.Label className="fw-bold">Total Marks</Form.Label>
                       <Form.Control
                         type="number"
                         min={1}
@@ -282,7 +278,7 @@ export default function EditExam() {
                   </Col>
                   <Col md={4}>
                     <Form.Group className="mb-3" controlId="editExamPassingMarks">
-                      <Form.Label>Passing Marks</Form.Label>
+                      <Form.Label className="fw-bold">Passing Marks</Form.Label>
                       <Form.Control
                         type="number"
                         min={0}
@@ -298,7 +294,7 @@ export default function EditExam() {
                 </Row>
 
                 <Form.Group className="mb-4" controlId="editExamInstructions">
-                  <Form.Label>Instructions</Form.Label>
+                  <Form.Label className="fw-bold">Instructions</Form.Label>
                   <Form.Control
                     as="textarea"
                     rows={3}
@@ -318,42 +314,42 @@ export default function EditExam() {
                     <Form.Check
                       type="switch"
                       id="editShuffleQuestions"
-                      label="Shuffle Questions"
+                      label={<span className="fw-bold">Shuffle Questions</span>}
                       checked={form.shuffleQuestions}
                       onChange={(e) => updateField('shuffleQuestions', e.target.checked)}
                     />
                     <Form.Check
                       type="switch"
                       id="editShuffleOptions"
-                      label="Shuffle Options"
+                      label={<span className="fw-bold">Shuffle Options</span>}
                       checked={form.shuffleOptions}
                       onChange={(e) => updateField('shuffleOptions', e.target.checked)}
                     />
                     <Form.Check
                       type="switch"
                       id="editShowResult"
-                      label="Show Result"
+                      label={<span className="fw-bold">Show Result</span>}
                       checked={form.showResult}
                       onChange={(e) => updateField('showResult', e.target.checked)}
                     />
                     <Form.Check
                       type="switch"
                       id="editShowCorrectAnswers"
-                      label="Show Correct Answers"
+                      label={<span className="fw-bold">Show Correct Answers</span>}
                       checked={form.showCorrectAnswers}
                       onChange={(e) => updateField('showCorrectAnswers', e.target.checked)}
                     />
                     <Form.Check
                       type="switch"
                       id="editAllowReview"
-                      label="Allow Review"
+                      label={<span className="fw-bold">Allow Review</span>}
                       checked={form.allowReview}
                       onChange={(e) => updateField('allowReview', e.target.checked)}
                     />
                   </Col>
                   <Col md={6}>
                     <Form.Group className="mb-3" controlId="editStartAt">
-                      <Form.Label>Start Date &amp; Time</Form.Label>
+                      <Form.Label className="fw-bold">Start Date &amp; Time</Form.Label>
                       <Form.Control
                         type="datetime-local"
                         value={toDatetimeLocal(form.startAtUtc)}
@@ -361,7 +357,7 @@ export default function EditExam() {
                       />
                     </Form.Group>
                     <Form.Group className="mb-3" controlId="editEndAt">
-                      <Form.Label>End Date &amp; Time</Form.Label>
+                      <Form.Label className="fw-bold">End Date &amp; Time</Form.Label>
                       <Form.Control
                         type="datetime-local"
                         value={toDatetimeLocal(form.endAtUtc)}
@@ -369,7 +365,7 @@ export default function EditExam() {
                       />
                     </Form.Group>
                     <Form.Group className="mb-3" controlId="editMaxAttempts">
-                      <Form.Label>Maximum Attempts</Form.Label>
+                      <Form.Label className="fw-bold">Maximum Attempts</Form.Label>
                       <Form.Control
                         type="number"
                         min={1}
@@ -380,14 +376,14 @@ export default function EditExam() {
                     <Form.Check
                       type="switch"
                       id="editNegativeMarkingEnabled"
-                      label="Negative Marking"
+                      label={<span className="fw-bold">Negative Marking</span>}
                       checked={form.negativeMarkingEnabled}
                       onChange={(e) => updateField('negativeMarkingEnabled', e.target.checked)}
                       className="mb-3"
                     />
                     {form.negativeMarkingEnabled && (
                       <Form.Group className="mb-3" controlId="editNegativeMarks">
-                        <Form.Label>Negative Marks (per wrong answer)</Form.Label>
+                        <Form.Label className="fw-bold">Negative Marks (per wrong answer)</Form.Label>
                         <Form.Control
                           type="number"
                           min={0}
@@ -462,13 +458,21 @@ export default function EditExam() {
                         </td>
                         <td>{question.marks}</td>
                         <td className="pe-4">
-                          <Link to={`/admin/questions/${question.id}`} className="me-3">
-                            View
-                          </Link>
-                          <Link to={`/admin/questions/${question.id}/edit`} className="me-3">
-                            Edit
-                          </Link>
-                          <DeleteQuestionButton questionId={question.id} examId={id!} />
+                          <div className="d-flex gap-2">
+                            <Link
+                              to={`/admin/questions/${question.id}`}
+                              className="btn btn-outline-secondary btn-sm"
+                            >
+                              View
+                            </Link>
+                            <Link
+                              to={`/admin/questions/${question.id}/edit`}
+                              className="btn btn-outline-primary btn-sm"
+                            >
+                              Edit
+                            </Link>
+                            <DeleteQuestionButton questionId={question.id} examId={id!} />
+                          </div>
                         </td>
                       </tr>
                     ))}

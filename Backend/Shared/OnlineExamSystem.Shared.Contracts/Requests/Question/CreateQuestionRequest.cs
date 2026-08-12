@@ -8,4 +8,5 @@ public record CreateQuestionRequest(
     string QuestionText,
     int Marks,
     string Difficulty,
-    IReadOnlyList<CreateQuestionOptionRequest> Options);
+    IReadOnlyList<CreateQuestionOptionRequest> Options,
+    bool ShuffleOptions = false);

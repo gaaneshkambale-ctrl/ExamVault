@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OnlineExamSystem.Question.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using OnlineExamSystem.Question.Infrastructure.Persistence;
 namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(QuestionDbContext))]
-    partial class QuestionDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260812132827_AddShuffleOptionsToQuestion")]
+    partial class AddShuffleOptionsToQuestion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

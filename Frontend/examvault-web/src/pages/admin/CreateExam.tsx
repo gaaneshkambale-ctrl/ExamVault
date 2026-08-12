@@ -64,7 +64,7 @@ export default function CreateExam() {
   return (
     <AdminLayout active="Exams">
       <div className="mb-4">
-        <h1 className="h4 fw-bold mb-0">Create Exam</h1>
+        <h1 className="h4 fw-bold mb-0 text-primary">Create Exam</h1>
         <p className="text-muted mb-0">Basic Information</p>
       </div>
 
@@ -76,7 +76,7 @@ export default function CreateExam() {
             <Row>
               <Col md={8}>
                 <Form.Group className="mb-3" controlId="examTitle">
-                  <Form.Label>Exam Title</Form.Label>
+                  <Form.Label className="fw-bold">Exam Title</Form.Label>
                   <Form.Control
                     type="text"
                     placeholder="Enter exam title"
@@ -89,7 +89,7 @@ export default function CreateExam() {
               </Col>
               <Col md={4}>
                 <Form.Group className="mb-3" controlId="examType">
-                  <Form.Label>Exam Type</Form.Label>
+                  <Form.Label className="fw-bold">Exam Type</Form.Label>
                   <Form.Select
                     value={form.examType}
                     onChange={(e) => updateField('examType', e.target.value as ExamType)}
@@ -102,7 +102,7 @@ export default function CreateExam() {
             </Row>
 
             <Form.Group className="mb-3" controlId="examDescription">
-              <Form.Label>Description</Form.Label>
+              <Form.Label className="fw-bold">Description</Form.Label>
               <Form.Control
                 as="textarea"
                 rows={3}
@@ -119,7 +119,7 @@ export default function CreateExam() {
             <Row>
               <Col md={4}>
                 <Form.Group className="mb-3" controlId="examDuration">
-                  <Form.Label>Duration (minutes)</Form.Label>
+                  <Form.Label className="fw-bold">Duration (minutes)</Form.Label>
                   <Form.Control
                     type="number"
                     min={1}
@@ -134,7 +134,7 @@ export default function CreateExam() {
               </Col>
               <Col md={4}>
                 <Form.Group className="mb-3" controlId="examTotalMarks">
-                  <Form.Label>Total Marks</Form.Label>
+                  <Form.Label className="fw-bold">Total Marks</Form.Label>
                   <Form.Control
                     type="number"
                     min={1}
@@ -149,7 +149,7 @@ export default function CreateExam() {
               </Col>
               <Col md={4}>
                 <Form.Group className="mb-3" controlId="examPassingMarks">
-                  <Form.Label>Passing Marks</Form.Label>
+                  <Form.Label className="fw-bold">Passing Marks</Form.Label>
                   <Form.Control
                     type="number"
                     min={0}
@@ -165,7 +165,7 @@ export default function CreateExam() {
             </Row>
 
             <Form.Group className="mb-4" controlId="examInstructions">
-              <Form.Label>Instructions</Form.Label>
+              <Form.Label className="fw-bold">Instructions</Form.Label>
               <Form.Control
                 as="textarea"
                 rows={3}

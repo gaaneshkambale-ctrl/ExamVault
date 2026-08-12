@@ -31,7 +31,7 @@ export default function ExamDetails() {
   return (
     <AdminLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h4 fw-bold mb-0">Exam Details</h1>
+        <h1 className="h4 fw-bold mb-0 text-primary">Exam Details</h1>
         <div className="d-flex gap-2">
           {id && (
             <Link to={`/admin/exams/${id}/edit`} className="btn btn-primary">

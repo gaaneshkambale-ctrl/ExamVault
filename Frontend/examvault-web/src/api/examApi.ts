@@ -35,3 +35,7 @@ export async function archiveExam(id: string): Promise<ExamResponse> {
   const { data } = await apiClient.post<ExamResponse>(`/api/exams/${id}/archive`);
   return data;
 }
+
+export async function deleteExam(id: string): Promise<void> {
+  await apiClient.delete(`/api/exams/${id}`);
+}

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 using OnlineExamSystem.Exam.Application.Exams.Create;
+using OnlineExamSystem.Exam.Application.Exams.Delete;
 using OnlineExamSystem.Exam.Application.Exams.GetById;
 using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Exams.Update;
@@ -23,6 +24,7 @@ public class ExamsController : ControllerBase
     private readonly ListExamsHandler _listExamsHandler;
     private readonly UpdateExamHandler _updateExamHandler;
     private readonly ChangeExamStatusHandler _changeExamStatusHandler;
+    private readonly DeleteExamHandler _deleteExamHandler;
     private readonly ILogger<ExamsController> _logger;
 
     public ExamsController(
@@ -31,6 +33,7 @@ public class ExamsController : ControllerBase
         ListExamsHandler listExamsHandler,
         UpdateExamHandler updateExamHandler,
         ChangeExamStatusHandler changeExamStatusHandler,
+        DeleteExamHandler deleteExamHandler,
         ILogger<ExamsController> logger)
     {
         _createExamHandler = createExamHandler;
@@ -38,6 +41,7 @@ public class ExamsController : ControllerBase
         _listExamsHandler = listExamsHandler;
         _updateExamHandler = updateExamHandler;
         _changeExamStatusHandler = changeExamStatusHandler;
+        _deleteExamHandler = deleteExamHandler;
         _logger = logger;
     }
 
@@ -139,6 +143,20 @@ public class ExamsController : ControllerBase
 
         _logger.LogInformation("Exam {ExamId} updated.", id);
         return Ok(ToResponse(result.Exam!));
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _deleteExamHandler.HandleAsync(new DeleteExamCommand(id), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Exam not found." });
+        }
+
+        _logger.LogInformation("Exam {ExamId} deleted.", id);
+        return NoContent();
     }
 
     [HttpPost("{id:guid}/publish")]

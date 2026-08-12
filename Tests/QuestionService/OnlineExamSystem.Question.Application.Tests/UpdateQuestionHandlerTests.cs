@@ -48,6 +48,34 @@ public class UpdateQuestionHandlerTests
     }
 
     [Fact]
+    public async Task Valid_command_updates_shuffle_options()
+    {
+        var repository = new FakeQuestionRepository();
+        var question = new ExamQuestion { QuestionText = "Old text", ShuffleOptions = false };
+        var oldOptions = new List<QuestionOption>
+        {
+            new() { QuestionId = question.Id, OptionText = "A", IsCorrect = true, DisplayOrder = 0 },
+            new() { QuestionId = question.Id, OptionText = "B", IsCorrect = false, DisplayOrder = 1 },
+        };
+        await repository.AddAsync(question, oldOptions);
+        var handler = CreateHandler(repository);
+
+        var command = new UpdateQuestionCommand(
+            question.Id,
+            "MultipleChoice",
+            "New text",
+            5,
+            "Hard",
+            [new QuestionOptionInput("X", true), new QuestionOptionInput("Y", false)],
+            ShuffleOptions: true);
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.True(result.Question!.ShuffleOptions);
+    }
+
+    [Fact]
     public async Task Unknown_question_returns_not_found()
     {
         var repository = new FakeQuestionRepository();

@@ -6,4 +6,5 @@ public record UpdateQuestionCommand(
     string QuestionText,
     int Marks,
     string Difficulty,
-    IReadOnlyList<QuestionOptionInput> Options);
+    IReadOnlyList<QuestionOptionInput> Options,
+    bool ShuffleOptions = false);

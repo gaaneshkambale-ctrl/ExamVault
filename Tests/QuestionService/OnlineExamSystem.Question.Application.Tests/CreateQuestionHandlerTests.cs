@@ -44,6 +44,30 @@ public class CreateQuestionHandlerTests
     }
 
     [Fact]
+    public async Task ShuffleOptions_defaults_to_false_and_flows_through_when_set()
+    {
+        var repository = new FakeQuestionRepository();
+        var handler = CreateHandler(repository);
+        var defaultCommand = new CreateQuestionCommand(
+            Guid.NewGuid(),
+            "MultipleChoice",
+            "What is the base class for all classes in C#?",
+            1,
+            "Easy",
+            [new QuestionOptionInput("object", true), new QuestionOptionInput("System.Object", false)],
+            Guid.NewGuid());
+
+        var defaultResult = await handler.HandleAsync(defaultCommand);
+
+        Assert.False(defaultResult.Question!.ShuffleOptions);
+
+        var shuffledCommand = defaultCommand with { ShuffleOptions = true };
+        var shuffledResult = await handler.HandleAsync(shuffledCommand);
+
+        Assert.True(shuffledResult.Question!.ShuffleOptions);
+    }
+
+    [Fact]
     public async Task Options_get_sequential_display_order()
     {
         var repository = new FakeQuestionRepository();

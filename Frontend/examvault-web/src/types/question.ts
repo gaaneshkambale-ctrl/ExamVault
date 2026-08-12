@@ -11,6 +11,7 @@ export interface QuestionFormFields {
   questionText: string;
   marks: number;
   difficulty: QuestionDifficulty;
+  shuffleOptions: boolean;
   options: CreateQuestionOptionRequest[];
 }
 
@@ -34,6 +35,7 @@ export interface QuestionResponse {
   questionText: string;
   marks: number;
   difficulty: QuestionDifficulty;
+  shuffleOptions: boolean;
   options: QuestionOptionResponse[];
   createdOn: string;
 }

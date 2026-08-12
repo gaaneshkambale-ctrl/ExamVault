@@ -8,6 +8,7 @@ const validMultipleChoice: CreateQuestionRequest = {
   questionText: 'What is the base class for all classes in C#?',
   marks: 1,
   difficulty: 'Easy',
+  shuffleOptions: false,
   options: [
     { optionText: 'object', isCorrect: true },
     { optionText: 'System.Object', isCorrect: false },
@@ -20,6 +21,7 @@ const validTrueFalse: CreateQuestionRequest = {
   questionText: 'ASP.NET Core middleware runs in the order it is registered.',
   marks: 1,
   difficulty: 'Medium',
+  shuffleOptions: false,
   options: [
     { optionText: 'True', isCorrect: true },
     { optionText: 'False', isCorrect: false },

@@ -7,4 +7,5 @@ public record CreateQuestionCommand(
     int Marks,
     string Difficulty,
     IReadOnlyList<QuestionOptionInput> Options,
-    Guid CreatedByUserId);
+    Guid CreatedByUserId,
+    bool ShuffleOptions = false);

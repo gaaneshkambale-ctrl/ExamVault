@@ -37,6 +37,7 @@ public class UpdateQuestionHandler
         question.QuestionText = command.QuestionText;
         question.Marks = command.Marks;
         question.Difficulty = Enum.Parse<QuestionDifficulty>(command.Difficulty, ignoreCase: true);
+        question.ShuffleOptions = command.ShuffleOptions;
 
         await _questionRepository.RemoveOptionsByQuestionIdAsync(question.Id, cancellationToken);
 

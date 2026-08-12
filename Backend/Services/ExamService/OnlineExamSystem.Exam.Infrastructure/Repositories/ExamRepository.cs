@@ -25,6 +25,12 @@ public class ExamRepository : IExamRepository
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
+    {
+        _dbContext.Exams.Remove(exam);
+        return Task.CompletedTask;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

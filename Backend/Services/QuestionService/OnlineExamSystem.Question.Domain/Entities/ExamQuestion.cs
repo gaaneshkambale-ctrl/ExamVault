@@ -10,5 +10,6 @@ public class ExamQuestion : BaseEntity
     public string QuestionText { get; set; } = string.Empty;
     public int Marks { get; set; }
     public QuestionDifficulty Difficulty { get; set; } = QuestionDifficulty.Medium;
+    public bool ShuffleOptions { get; set; }
     public Guid CreatedByUserId { get; set; }
 }

@@ -52,7 +52,8 @@ public class QuestionsController : ControllerBase
             request.Marks,
             request.Difficulty,
             request.Options.Select(o => new QuestionOptionInput(o.OptionText, o.IsCorrect)).ToList(),
-            createdByUserId);
+            createdByUserId,
+            request.ShuffleOptions);
 
         var result = await _createQuestionHandler.HandleAsync(command, cancellationToken);
 
@@ -106,7 +107,8 @@ public class QuestionsController : ControllerBase
             request.QuestionText,
             request.Marks,
             request.Difficulty,
-            request.Options.Select(o => new QuestionOptionInput(o.OptionText, o.IsCorrect)).ToList());
+            request.Options.Select(o => new QuestionOptionInput(o.OptionText, o.IsCorrect)).ToList(),
+            request.ShuffleOptions);
 
         var result = await _updateQuestionHandler.HandleAsync(command, cancellationToken);
 
@@ -154,6 +156,7 @@ public class QuestionsController : ControllerBase
             question.QuestionText,
             question.Marks,
             question.Difficulty.ToString(),
+            question.ShuffleOptions,
             options
                 .Select(o => new QuestionOptionResponse(o.Id, o.OptionText, o.IsCorrect, o.DisplayOrder))
                 .ToList(),

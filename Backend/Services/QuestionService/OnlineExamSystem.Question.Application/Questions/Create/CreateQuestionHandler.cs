@@ -34,6 +34,7 @@ public class CreateQuestionHandler
             QuestionText = command.QuestionText,
             Marks = command.Marks,
             Difficulty = Enum.Parse<QuestionDifficulty>(command.Difficulty, ignoreCase: true),
+            ShuffleOptions = command.ShuffleOptions,
             CreatedByUserId = command.CreatedByUserId,
         };
 
