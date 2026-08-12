@@ -799,3 +799,148 @@ for `Admin` and `/profile` for `Student`.
   day this phase
 
 **Phase 6 (Question Service) is complete. AI Milestone (Days 27-30) is unlocked.**
+
+## AI Milestone Progress
+
+- [x] Day 27 — AI Service skeleton and Generator UI shell
+- [x] Day 28 — Real generation and draft preview
+- [x] Day 29 — Edit drafts and human approval
+- [x] Day 30 — Polish, verification, and gate
+
+### Day 27 Notes
+
+- New `OnlineExamSystem.Ai.API`/`.Application`/`.Domain`/`.Infrastructure`
+  projects (`Backend/Services/AiService/`), mirroring Question Service's
+  layout, added to `ExamVault.sln`. Runs on port 5040 (5010 User, 5020
+  Exam, 5030 Question, 5040 AI). AI Service owns no database — going
+  further than the "AI Service never owns the Question DB" principle
+  already locked in, it owns no persistence at all
+- New `DraftQuestion`/`DraftQuestionOption` in `Ai.Domain` — plain,
+  unpersisted value types, no `BaseEntity`/`Shared.Common` dependency
+- New `IAiQuestionGenerator` interface + `GenerateQuestionsRequest` shape
+  in `Ai.Application` — interface only, no implementation, no
+  handler/validator/DI registration yet, matching Question Service's Day
+  23 skeleton-only precedent. Concrete provider deliberately deferred to
+  Day 28, mirroring how Day 16 defined `IEventPublisher` before Day 17
+  wired RabbitMQ
+- New AI Generate Questions form (`/admin/exams/:examId/questions/
+  ai-generate`) matching Adminwireframe.png screen 5: source toggle (From
+  Existing Exam/From Topic-Text enabled, From Document visibly disabled),
+  question type chips (Multiple Choice/True-False enabled, Short Answer
+  visibly disabled), difficulty checkboxes, instructions textarea.
+  Reachable via a new "+ AI Generate" button on the Edit Exam page's
+  Questions section. Generate Questions showed an honest "not connected
+  yet" notice this day rather than a silent no-op
+- `dotnet build` clean (4 new projects), `Ai.API` verified actually
+  starting and responding on `:5040`. `npm run build`/`lint`/`test`
+  (25/25) all green
+
+### Day 28 Notes
+
+- AI provider: an n8n Chat Trigger webhook (tested directly with curl
+  before writing any code — confirmed request/response contract:
+  `POST {chatInput, sessionId, action:"sendMessage"}` →
+  `{"output": "<json-string>"}`). Concrete `IAiQuestionGenerator`
+  implementation is `N8nQuestionGenerator` (`Ai.Infrastructure`) —
+  builds a prompt, posts to the webhook, parses the inner JSON string
+  (stripping markdown fences defensively) into `DraftQuestion`s,
+  matching `answer` against `options` case-insensitively for
+  `IsCorrect`. Webhook URL stored via `dotnet user-secrets`, not
+  appsettings — possessing the URL alone is enough to invoke the
+  workflow (confirmed empirically), so it's treated as a credential
+  exactly like the JWT signing key
+- Real bug found and fixed while testing: the prompt said "use a mix of
+  these question types" even when only one type/difficulty was
+  selected, and the model added an unrequested extra type anyway. Fixed
+  by switching to "Use ONLY this type — every question must be that
+  type" when exactly one is selected; reverified with a direct curl
+  call before moving on
+- New `GenerateQuestionsHandler`/`Result`/`Validator`
+  (`Ai.Application/Generate/`, deferred from Day 27) — question count
+  bounded 1-20, types/difficulties validated against the supported
+  sets, `Topic` required regardless of source. `POST
+  /api/ai/generate-questions` on new `AiController`
+  (`[Authorize(Roles = "Admin")]`), provider failures caught and
+  returned as a clean HTTP 502 with a generic message — the raw
+  exception is only logged server-side, never exposed to the client.
+  Gateway route `/api/ai/{**catch-all}` → `:5040` added
+- New `aiApi.ts` (`generateQuestions()`) and the Preview screen: 3 stat
+  cards (Total/MCQ/True-False, computed client-side from the returned
+  drafts), a table of generated questions, working Back/Regenerate.
+  View/Edit/Delete-per-row rendered but `disabled` — Day 29's job.
+  When source is an existing exam, the frontend derives the AI's topic
+  context from `exam.title`/`description` itself rather than AI
+  Service calling Exam Service, keeping AI Service dependency-free
+- Verified end-to-end through the Gateway with a real Admin JWT, both
+  before and after the prompt fix. Exam (34/34) and Question (28/28)
+  backend tests unaffected. `npm run build`/`lint`/`test` (25/25) all
+  green
+
+### Day 29 Notes
+
+- No new backend endpoints — approval reuses Question Service's
+  existing `POST /api/questions` from Day 24 exactly as-is, one call
+  per approved draft. This is the human-approval boundary made
+  concrete: an AI-suggested question only becomes a real `Question` row
+  through the exact same validated path a manually-typed one already
+  goes through
+- New `DraftEditorModal.tsx` — edits a draft's text, marks, difficulty
+  and options (lettered badges + Correct Answer dropdown, matching
+  Create/Edit Question's pattern) as its own self-contained copy rather
+  than a shared extraction across all three forms — a deliberate choice
+  to avoid touching already-shipped, tested Create/EditQuestion
+  internals for a "reuse the pattern" ask that was about visual/UX
+  consistency, not literal code sharing
+- Preview screen gained per-row + select-all checkboxes (defaulting to
+  all-selected right after a successful generate/regenerate), working
+  Edit (opens the modal, saves back into local state by id) and Delete
+  (pure local-state removal, never sent anywhere), and "Add Selected to
+  Exam" wired to `Promise.allSettled` over `createQuestion()` calls for
+  every selected draft
+- Partial-failure handling: on any rejected call, the
+  successfully-created drafts are removed from the local list (already
+  safely persisted) while failed ones stay behind with an error banner,
+  still selected, ready for a retry — only a full-success run
+  invalidates the exam's question cache and navigates to its Edit page
+- Verified end-to-end by simulating the exact frontend flow via curl:
+  generated real drafts for a real exam, approved one with the exact
+  payload shape the UI builds, confirmed it round-trips through
+  `GET /api/questions?examId=`. `npm run build`/`lint`/`test` (25/25)
+  all green; Exam (34/34) and Question (28/28) backend tests unaffected
+
+### Day 30 Notes
+
+- New `OnlineExamSystem.Ai.Application.Tests` project (mirrors
+  Question/Exam Application.Tests layout) — `GenerateQuestionsValidator`
+  (11 tests: valid Topic/Existing-Exam requests, unsupported source,
+  empty/null topic, out-of-bounds count, empty/unsupported question
+  types and difficulty levels) and `GenerateQuestionsHandler` (3 tests,
+  using a `FakeAiQuestionGenerator`: valid request returns drafts and
+  calls the generator once, an invalid request never calls the
+  generator at all, a generator exception returns a clean provider
+  failure result instead of propagating) — 14/14 new tests, backend
+  total now 96/96 (24 User + 34 Exam + 28 Question + 14 AI — Exam and
+  Question app-only tests, User total tracked separately in Phase 1)
+- Frontend polish: empty-result state on the Preview table ("No
+  questions were generated. Try adjusting your inputs and Regenerate.")
+  for the edge case where the AI returns zero drafts — the Generator
+  form and Preview screen already matched the rest of the admin UI's
+  standard (bold labels, brand-indigo heading, outline View/Edit/Delete
+  buttons) from Days 27-29, no further styling changes needed
+- Full end-to-end re-verification through the Gateway with a real Admin
+  JWT, matching the plan's exact scenario: generated 5 questions (Multiple
+  Choice + True/False, Medium difficulty) for a real exam, simulated
+  editing one draft's correct answer and deselecting another, approved
+  the remaining 4 — confirmed exactly those 4 (edit intact) exist in the
+  exam's live question list and the deselected one exists nowhere.
+  Confirmed a `Student` token gets 403 on `/api/ai/generate-questions`
+  and an unauthenticated request gets 401, matching every other
+  Admin-only endpoint in the system
+- `dotnet build`/`dotnet test` all green across every service. `npm run
+  build`/`lint`/`test` (25/25) all green. Chrome extension still not
+  connected this entire milestone — every verification pass was a real
+  API-level walkthrough through the Gateway with real JWTs, not a
+  literal browser click-through; flagged consistently rather than
+  silently assumed
+
+**AI Milestone is complete. Phase 7 (Submission Service, Days 31-33) is unlocked.**

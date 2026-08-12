@@ -371,7 +371,13 @@ export default function AiGenerateQuestions() {
           </Row>
 
           <Card className="border-0 shadow-sm">
-            <Card.Body className="p-0">
+            <Card.Body className={drafts.length === 0 ? '' : 'p-0'}>
+              {drafts.length === 0 && (
+                <div className="text-center text-muted py-4">
+                  No questions were generated. Try adjusting your inputs and Regenerate.
+                </div>
+              )}
+              {drafts.length > 0 && (
               <Table responsive hover className="mb-0 align-middle">
                 <thead className="text-muted small text-uppercase bg-light">
                   <tr>
@@ -434,6 +440,7 @@ export default function AiGenerateQuestions() {
                   ))}
                 </tbody>
               </Table>
+              )}
             </Card.Body>
           </Card>
 

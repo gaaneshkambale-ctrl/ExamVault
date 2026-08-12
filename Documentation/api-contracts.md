@@ -389,6 +389,7 @@ matter, exactly one marked correct).
   "questionText": "string, required, max 2000 chars",
   "marks": "int, required, > 0",
   "difficulty": "\"Easy\", \"Medium\", or \"Hard\"",
+  "shuffleOptions": "bool, optional, defaults to false",
   "options": [
     { "optionText": "string, required", "isCorrect": "bool" }
   ]
@@ -405,6 +406,7 @@ matter, exactly one marked correct).
   "questionText": "Which method starts an ASP.NET Core app?",
   "marks": 2,
   "difficulty": "Medium",
+  "shuffleOptions": false,
   "options": [
     { "id": "c942c788-554f-4b53-84a9-4627cc175de5", "optionText": "app.Run()", "isCorrect": true, "displayOrder": 0 },
     { "id": "3d995dde-96b3-46f9-b8f5-3819ce019b19", "optionText": "app.Start()", "isCorrect": false, "displayOrder": 1 },
@@ -468,6 +470,7 @@ are inserted fresh (not diffed/merged). Same validation rules as
   "questionText": "string, required, max 2000 chars",
   "marks": "int, required, > 0",
   "difficulty": "\"Easy\", \"Medium\", or \"Hard\"",
+  "shuffleOptions": "bool, optional, defaults to false",
   "options": [
     { "optionText": "string, required", "isCorrect": "bool" }
   ]
@@ -497,3 +500,81 @@ No body.
 ```json
 { "message": "Question not found." }
 ```
+
+## AI Service
+
+Requires a valid JWT access token with the `Admin` role, same as every
+other service. AI Service owns no database — every generated question is
+disposable draft state that exists only in the response body and the
+browser's React state until an admin explicitly approves it via
+`POST /api/questions` (Question Service, unchanged from Phase 6). There is
+no "AI question" data model or DB flag — an approved draft is
+indistinguishable in storage from a manually-typed question.
+
+The concrete generator is an n8n Chat Trigger webhook (configured via
+`N8n:WebhookUrl` in User Secrets, never appsettings). Only `MultipleChoice`
+and `TrueFalse` question types can be requested — matching the only two
+types Question Service persists since Phase 6.
+
+Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
+- `Requests/Ai/GenerateQuestionsRequest.cs`
+- `Responses/Ai/DraftQuestionResponse.cs`
+
+### POST /api/ai/generate-questions
+
+Generates draft questions for review — nothing is persisted by this call.
+
+**Request body**
+
+```json
+{
+  "source": "\"ExistingExam\" or \"TopicText\"",
+  "examId": "guid, optional, informational only (not used to call Exam Service)",
+  "topic": "string, required — the exam's title/description or a free-text topic",
+  "questionCount": "int, required, 1-20",
+  "questionTypes": ["\"MultipleChoice\" and/or \"TrueFalse\", at least one"],
+  "difficultyLevels": ["\"Easy\"/\"Medium\"/\"Hard\", at least one"],
+  "additionalInstructions": "string, optional"
+}
+```
+
+### 200 OK
+
+```json
+[
+  {
+    "id": "9210ce3d-3076-4371-866a-c4dcf2bf1871",
+    "questionType": "MultipleChoice",
+    "questionText": "What is the correct way to declare an integer variable in Java?",
+    "marks": 1,
+    "difficulty": "Easy",
+    "options": [
+      { "optionText": "int number;", "isCorrect": true },
+      { "optionText": "integer number;", "isCorrect": false },
+      { "optionText": "num int;", "isCorrect": false },
+      { "optionText": "int = number;", "isCorrect": false }
+    ]
+  }
+]
+```
+
+### 400 Bad Request
+
+Same `ValidationProblemDetails` shape as `POST /api/questions`. Common
+messages: `"Topic is required."`, `"Question count must be between 1 and
+20."`, `"Select at least one supported question type (Multiple Choice or
+True/False)."`, `"Select at least one difficulty level."`
+
+### 502 Bad Gateway
+
+Returned when the AI provider itself fails (timeout, malformed response,
+rate limit). Body is a generic message — the real error is logged
+server-side only, never exposed to the client.
+
+```json
+{ "message": "Failed to generate questions. Please try again." }
+```
+
+### 403 Forbidden
+
+Returned for a valid token without the `Admin` role. No body.
