@@ -2,10 +2,13 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { isAxiosError } from 'axios';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import DraftEditorModal from '../../components/DraftEditorModal';
 import { useExam } from '../../hooks/useExams';
 import { generateQuestions } from '../../api/aiApi';
+import { createQuestion } from '../../api/questionApi';
 import type {
   DraftQuestion,
   GenerateDifficulty,
@@ -40,6 +43,8 @@ function extractServerError(error: unknown): string {
 
 export default function AiGenerateQuestions() {
   const { examId } = useParams<{ examId: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: exam } = useExam(examId);
 
   const [view, setView] = useState<'form' | 'preview'>('form');
@@ -53,6 +58,10 @@ export default function AiGenerateQuestions() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
   const [drafts, setDrafts] = useState<DraftQuestion[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
+  const [approveError, setApproveError] = useState('');
 
   const toggleQuestionType = (type: GenerateQuestionType) => {
     setQuestionTypes((prev) =>
@@ -82,9 +91,11 @@ export default function AiGenerateQuestions() {
   const runGenerate = async () => {
     setIsGenerating(true);
     setGenerateError('');
+    setApproveError('');
     try {
       const result = await generateQuestions(buildRequest());
       setDrafts(result);
+      setSelectedIds(new Set(result.map((d) => d.id)));
       setView('preview');
     } catch (error) {
       setGenerateError(extractServerError(error));
@@ -100,6 +111,77 @@ export default function AiGenerateQuestions() {
 
   const handleRegenerate = () => {
     void runGenerate();
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteDraft = (id: string) => {
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const handleSaveDraft = (updated: DraftQuestion) => {
+    setDrafts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+    setEditingDraftId(null);
+  };
+
+  const editingDraft = drafts.find((d) => d.id === editingDraftId) ?? null;
+
+  const handleApprove = async () => {
+    const selectedDrafts = drafts.filter((d) => selectedIds.has(d.id));
+    if (selectedDrafts.length === 0 || !examId) {
+      return;
+    }
+
+    setIsApproving(true);
+    setApproveError('');
+
+    const results = await Promise.allSettled(
+      selectedDrafts.map((draft) =>
+        createQuestion({
+          examId,
+          questionType: draft.questionType,
+          questionText: draft.questionText,
+          marks: draft.marks,
+          difficulty: draft.difficulty,
+          shuffleOptions: false,
+          options: draft.options,
+        }),
+      ),
+    );
+
+    const failedIds = new Set(
+      results
+        .map((result, index) => (result.status === 'rejected' ? selectedDrafts[index].id : null))
+        .filter((id): id is string => id !== null),
+    );
+
+    if (failedIds.size > 0) {
+      setApproveError(
+        `${failedIds.size} question(s) failed to save and are still in the list below - fix and try again.`,
+      );
+      setDrafts((prev) => prev.filter((d) => failedIds.has(d.id) || !selectedIds.has(d.id)));
+      setSelectedIds(failedIds);
+      setIsApproving(false);
+      return;
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', examId] });
+    navigate(`/admin/exams/${examId}/edit`);
   };
 
   const counts = {
@@ -259,6 +341,7 @@ export default function AiGenerateQuestions() {
       {view === 'preview' && (
         <>
           {generateError && <Alert variant="danger">{generateError}</Alert>}
+          {approveError && <Alert variant="danger">{approveError}</Alert>}
 
           <Row className="g-3 mb-4">
             <Col xs={12} sm={4}>
@@ -292,7 +375,17 @@ export default function AiGenerateQuestions() {
               <Table responsive hover className="mb-0 align-middle">
                 <thead className="text-muted small text-uppercase bg-light">
                   <tr>
-                    <th className="ps-4">Question</th>
+                    <th className="ps-4" style={{ width: 40 }}>
+                      <Form.Check
+                        type="checkbox"
+                        aria-label="Select all"
+                        checked={drafts.length > 0 && selectedIds.size === drafts.length}
+                        onChange={(e) =>
+                          setSelectedIds(e.target.checked ? new Set(drafts.map((d) => d.id)) : new Set())
+                        }
+                      />
+                    </th>
+                    <th>Question</th>
                     <th>Type</th>
                     <th>Difficulty</th>
                     <th className="pe-4">Actions</th>
@@ -301,7 +394,15 @@ export default function AiGenerateQuestions() {
                 <tbody>
                   {drafts.map((draft) => (
                     <tr key={draft.id}>
-                      <td className="ps-4 fw-medium" style={{ maxWidth: 420 }}>
+                      <td className="ps-4">
+                        <Form.Check
+                          type="checkbox"
+                          aria-label={`Select question: ${draft.questionText}`}
+                          checked={selectedIds.has(draft.id)}
+                          onChange={() => toggleSelected(draft.id)}
+                        />
+                      </td>
+                      <td className="fw-medium" style={{ maxWidth: 420 }}>
                         {draft.questionText}
                       </td>
                       <td>{questionTypeLabel[draft.questionType]}</td>
@@ -313,10 +414,18 @@ export default function AiGenerateQuestions() {
                           <Button variant="outline-secondary" size="sm" disabled>
                             View
                           </Button>
-                          <Button variant="outline-primary" size="sm" disabled>
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            onClick={() => setEditingDraftId(draft.id)}
+                          >
                             Edit
                           </Button>
-                          <Button variant="outline-danger" size="sm" disabled>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={() => handleDeleteDraft(draft.id)}
+                          >
                             Delete
                           </Button>
                         </div>
@@ -343,11 +452,28 @@ export default function AiGenerateQuestions() {
                   'Regenerate'
                 )}
               </Button>
-              <Button variant="primary" disabled>
-                Add Selected to Exam
+              <Button
+                variant="primary"
+                onClick={() => void handleApprove()}
+                disabled={isApproving || selectedIds.size === 0}
+              >
+                {isApproving ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Adding...
+                  </>
+                ) : (
+                  `Add Selected to Exam (${selectedIds.size})`
+                )}
               </Button>
             </div>
           </div>
+
+          <DraftEditorModal
+            draft={editingDraft}
+            onCancel={() => setEditingDraftId(null)}
+            onSave={handleSaveDraft}
+          />
         </>
       )}
     </AdminLayout>
