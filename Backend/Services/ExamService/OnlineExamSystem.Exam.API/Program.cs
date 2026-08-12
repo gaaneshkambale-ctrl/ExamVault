@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Exam.Application.Exams.Create;
+using OnlineExamSystem.Exam.Application.Exams.GetById;
+using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Infrastructure.Persistence;
 using OnlineExamSystem.Exam.Infrastructure.Repositories;
@@ -29,6 +31,8 @@ public class Program
 
         builder.Services.AddScoped<IValidator<CreateExamCommand>, CreateExamValidator>();
         builder.Services.AddScoped<CreateExamHandler>();
+        builder.Services.AddScoped<GetExamHandler>();
+        builder.Services.AddScoped<ListExamsHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

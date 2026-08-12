@@ -441,7 +441,7 @@ session, no protected routes yet; Phase 3 replaces this properly.
 
 - [x] Day 19 — Exam service skeleton and Admin Dashboard shell
 - [x] Day 20 — Exam persistence and Create Exam
-- [ ] Day 21 — Exam APIs and live exam list
+- [x] Day 21 — Exam APIs and live exam list
 - [ ] Day 22 — Edit, settings, publish, and gate
 
 ### Day 19 Notes
@@ -523,3 +523,40 @@ session, no protected routes yet; Phase 3 replaces this properly.
   wasn't connected this session, so the Create Exam form itself wasn't
   visually exercised in a browser — only verified via the API directly
   and the frontend's own build/lint/test/type-check
+
+### Day 21 Notes
+
+- Added `GetExamQuery`/`GetExamHandler` and `ListExamsQuery`/
+  `ListExamsHandler` (`Exam.Application/Exams/`), and
+  `GetByIdAsync`/`GetAllAsync` on `IExamRepository`/`ExamRepository`
+  (`GetAllAsync` orders newest-first by `CreatedAtUtc`) — the two methods
+  deliberately deferred from Day 20
+- Added `GET /api/exams` and `GET /api/exams/{id}` to `ExamsController`
+  (same `[Authorize(Roles = "Admin")]` as `POST`); factored the
+  `ExamPaper` → `ExamResponse` mapping into one `ToResponse` helper used
+  by all three actions instead of repeating the 11-arg constructor call
+- New `useExams()`/`useExam(id)` hooks (`hooks/useExams.ts`) — the first
+  real use of TanStack Query in this codebase (the provider has existed
+  since Day 3, unused until now)
+- `ManageExams` now fetches real data instead of Day 19's mock rows, with
+  loading/error/empty states; the list's "View" action links to a new
+  view-only `ExamDetails` page (`/admin/exams/:id`); "Delete" stays
+  disabled — there's no `DELETE` endpoint, that's not in this phase's
+  scope
+- Plan adjustment: the plan's Day 21 line called for "unit tests for the
+  CreateExam validator/handler" — those were already written Day 20
+  (mirroring the Day 7 precedent of testing a handler the day it's
+  built). Added 4 new unit tests for `GetExamHandler`/`ListExamsHandler`
+  instead. No `WebApplicationFactory`-style API-level test harness exists
+  anywhere in this codebase (User Service's endpoints were never covered
+  that way either — verification has consistently been manual/`curl`,
+  captured in these notes), so continued that pattern rather than
+  introducing new test infrastructure ad hoc
+- Verified end-to-end for real, through the Gateway with a real Admin
+  JWT: `GET /api/exams` returned both exams newest-first, `GET /api/exams/{id}`
+  returned the right one, an unknown id returned 404, and a
+  `Student`-role token got 403 on both endpoints
+- `dotnet build`/`dotnet test` (24 User + 12 Exam = 36/36) and
+  `npm run build`/`lint`/`test` (18/18) all green. Chrome extension still
+  not connected — same caveat as Days 19-20, verified via direct API
+  calls and the frontend's build/lint/test/type-check, not a live browser

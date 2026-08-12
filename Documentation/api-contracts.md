@@ -199,8 +199,8 @@ Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
 - `Requests/Exam/CreateExamRequest.cs`
 - `Responses/Exam/ExamResponse.cs`
 
-Only `POST /api/exams` exists so far (Day 20) — `GET /api/exams` and
-`GET /api/exams/{id}` land Day 21.
+`POST /api/exams`, `GET /api/exams`, and `GET /api/exams/{id}` all exist
+as of Day 21. Update/publish/archive land Day 22.
 
 ### POST /api/exams
 
@@ -247,3 +247,47 @@ Same `ValidationProblemDetails` shape as `POST /api/users/register`
 ### 403 Forbidden
 
 Returned for a valid token without the `Admin` role. No body.
+
+## GET /api/exams
+
+Lists every exam, newest first (`CreatedAtUtc` descending). No pagination
+or filtering yet.
+
+### 200 OK
+
+```json
+[
+  {
+    "id": "5f4657f1-1e78-486b-8d25-d0979b77bcbd",
+    "title": "ASP.NET Core",
+    "description": "Covers ASP.NET Core basics.",
+    "examType": "Manual",
+    "durationMinutes": 90,
+    "totalMarks": 60,
+    "passingMarks": 30,
+    "instructions": "Answer all questions.",
+    "status": "Draft",
+    "totalQuestions": 0,
+    "createdOn": "2026-08-12T10:26:18.9736684Z"
+  },
+  {
+    "id": "54b2147b-ec59-43d0-a102-900f9659c2af",
+    "title": "C# Fundamentals",
+    "...": "..."
+  }
+]
+```
+
+## GET /api/exams/{id}
+
+Returns a single exam.
+
+### 200 OK
+
+Same shape as one entry from `GET /api/exams`.
+
+### 404 Not Found
+
+```json
+{ "message": "Exam not found." }
+```

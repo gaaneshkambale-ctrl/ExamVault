@@ -2,6 +2,9 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Exam.Application.Exams.Create;
+using OnlineExamSystem.Exam.Application.Exams.GetById;
+using OnlineExamSystem.Exam.Application.Exams.List;
+using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 
@@ -13,11 +16,19 @@ namespace OnlineExamSystem.Exam.API.Controllers;
 public class ExamsController : ControllerBase
 {
     private readonly CreateExamHandler _createExamHandler;
+    private readonly GetExamHandler _getExamHandler;
+    private readonly ListExamsHandler _listExamsHandler;
     private readonly ILogger<ExamsController> _logger;
 
-    public ExamsController(CreateExamHandler createExamHandler, ILogger<ExamsController> logger)
+    public ExamsController(
+        CreateExamHandler createExamHandler,
+        GetExamHandler getExamHandler,
+        ListExamsHandler listExamsHandler,
+        ILogger<ExamsController> logger)
     {
         _createExamHandler = createExamHandler;
+        _getExamHandler = getExamHandler;
+        _listExamsHandler = listExamsHandler;
         _logger = logger;
     }
 
@@ -52,7 +63,30 @@ public class ExamsController : ControllerBase
 
         var exam = result.Exam!;
         _logger.LogInformation("Exam {ExamId} created by {UserId}.", exam.Id, createdByUserId);
-        var response = new ExamResponse(
+        return StatusCode(StatusCodes.Status201Created, ToResponse(exam));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> List(CancellationToken cancellationToken)
+    {
+        var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(), cancellationToken);
+        return Ok(exams.Select(ToResponse));
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
+    {
+        var exam = await _getExamHandler.HandleAsync(new GetExamQuery(id), cancellationToken);
+        if (exam is null)
+        {
+            return NotFound(new { message = "Exam not found." });
+        }
+
+        return Ok(ToResponse(exam));
+    }
+
+    private static ExamResponse ToResponse(ExamPaper exam) =>
+        new(
             exam.Id,
             exam.Title,
             exam.Description,
@@ -64,6 +98,4 @@ public class ExamsController : ControllerBase
             exam.Status.ToString(),
             exam.TotalQuestions,
             exam.CreatedAtUtc);
-        return StatusCode(StatusCodes.Status201Created, response);
-    }
 }

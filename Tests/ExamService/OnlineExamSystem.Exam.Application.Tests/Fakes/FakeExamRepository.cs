@@ -15,5 +15,11 @@ public class FakeExamRepository : IExamRepository
         return Task.CompletedTask;
     }
 
+    public Task<ExamPaper?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_exams.FirstOrDefault(e => e.Id == id));
+
+    public Task<IReadOnlyList<ExamPaper>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamPaper>>(_exams.OrderByDescending(e => e.CreatedAtUtc).ToList());
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
