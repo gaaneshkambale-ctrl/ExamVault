@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +15,116 @@ const statusVariant: Record<ExamStatus, string> = {
   Published: 'success',
   Archived: 'dark',
 };
+
+function SettingIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+}
+
+const icons = {
+  shuffleQuestions: (
+    <SettingIcon>
+      <path d="M16 3h5v5" /><path d="M4 20L21 3" /><path d="M21 16v5h-5" /><path d="M15 15l6 6" /><path d="M4 4l5 5" />
+    </SettingIcon>
+  ),
+  shuffleOptions: (
+    <SettingIcon>
+      <rect x="3" y="4" width="7" height="7" rx="1" /><rect x="14" y="13" width="7" height="7" rx="1" />
+      <path d="M10 7h6a2 2 0 0 1 2 2v4" /><path d="M14 17H8a2 2 0 0 1-2-2V9" />
+    </SettingIcon>
+  ),
+  showResult: (
+    <SettingIcon>
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" />
+    </SettingIcon>
+  ),
+  showCorrectAnswers: (
+    <SettingIcon>
+      <circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.5 2.5L16 9.5" />
+    </SettingIcon>
+  ),
+  allowReview: (
+    <SettingIcon>
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" /><path d="M3 21v-5h5" />
+    </SettingIcon>
+  ),
+  schedule: (
+    <SettingIcon>
+      <rect x="3" y="4" width="18" height="17" rx="2" /><line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="8" y1="2" x2="8" y2="6" /><line x1="16" y1="2" x2="16" y2="6" />
+    </SettingIcon>
+  ),
+  maxAttempts: (
+    <SettingIcon>
+      <rect x="4" y="3" width="16" height="18" rx="2" /><path d="M9 8h6" /><path d="M9 12h6" /><path d="M9 16h3" />
+    </SettingIcon>
+  ),
+  negativeMarking: (
+    <SettingIcon>
+      <line x1="19" y1="5" x2="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" />
+    </SettingIcon>
+  ),
+  questionNavigation: (
+    <SettingIcon>
+      <circle cx="12" cy="12" r="9" /><path d="M16 8l-3 5-5 3 3-5 5-3z" />
+    </SettingIcon>
+  ),
+  autoSubmit: (
+    <SettingIcon>
+      <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+    </SettingIcon>
+  ),
+  examInstructions: (
+    <SettingIcon>
+      <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
+      <path d="M9 13h6" /><path d="M9 17h6" />
+    </SettingIcon>
+  ),
+};
+
+interface SettingCardProps {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  checked: boolean;
+  onToggle: (checked: boolean) => void;
+  children?: ReactNode;
+}
+
+function SettingCard({ icon, title, description, checked, onToggle, children }: SettingCardProps) {
+  return (
+    <Card className="border-0 shadow-sm mb-3">
+      <Card.Body className="p-3">
+        <div className="d-flex align-items-start justify-content-between gap-3">
+          <div className="d-flex align-items-start gap-3">
+            <div
+              className="rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0"
+              style={{ width: 36, height: 36 }}
+            >
+              {icon}
+            </div>
+            <div>
+              <div className="fw-bold">{title}</div>
+              <div className="text-muted small">{description}</div>
+            </div>
+          </div>
+          <Form.Check
+            type="switch"
+            aria-label={title}
+            checked={checked}
+            onChange={(e) => onToggle(e.target.checked)}
+            className="flex-shrink-0"
+          />
+        </div>
+        {children && <div className="mt-3">{children}</div>}
+      </Card.Body>
+    </Card>
+  );
+}
 
 function toDatetimeLocal(value: string | null): string {
   if (!value) {
@@ -57,12 +167,35 @@ export default function EditExam() {
     {},
   );
   const [serverError, setServerError] = useState('');
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+
+  // UI-only toggles: not yet backed by exam settings on the server.
+  const [maxAttemptsEnabled, setMaxAttemptsEnabled] = useState(true);
+  const [questionNavigationEnabled, setQuestionNavigationEnabled] = useState(true);
+  const [autoSubmitEnabled, setAutoSubmitEnabled] = useState(true);
+  const [examInstructionsEnabled, setExamInstructionsEnabled] = useState(true);
+
+  const instructionsRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleEditInstructions = () => {
+    instructionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    instructionsRef.current?.focus();
+  };
 
   useEffect(() => {
     if (exam) {
       setForm(toFormState(exam));
+      setScheduleEnabled(Boolean(exam.startAtUtc) || Boolean(exam.endAtUtc));
     }
   }, [exam]);
+
+  const toggleSchedule = (enabled: boolean) => {
+    setScheduleEnabled(enabled);
+    if (!enabled) {
+      updateField('startAtUtc', null);
+      updateField('endAtUtc', null);
+    }
+  };
 
   const invalidateExam = () => {
     queryClient.invalidateQueries({ queryKey: ['exams'] });
@@ -121,7 +254,7 @@ export default function EditExam() {
     publishMutation.isPending || unpublishMutation.isPending || archiveMutation.isPending;
 
   return (
-    <AdminLayout active="Exam Settings">
+    <AdminLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="h4 fw-bold mb-0 text-primary">Edit Exam</h1>
@@ -283,6 +416,7 @@ export default function EditExam() {
                   <Form.Control
                     as="textarea"
                     rows={3}
+                    ref={instructionsRef}
                     value={form.instructions}
                     onChange={(e) => updateField('instructions', e.target.value)}
                     isInvalid={!!fieldErrors.instructions}
@@ -292,96 +426,146 @@ export default function EditExam() {
                   </Form.Control.Feedback>
                 </Form.Group>
 
-                <h2 className="h6 fw-bold mb-3">Exam Settings</h2>
+                <h2 className="h6 fw-bold mb-1">Exam Settings</h2>
+                <p className="text-muted small mb-3">Configure exam behavior and rules for students.</p>
 
-                <Row className="mb-3">
+                <Row>
                   <Col md={6}>
-                    <Form.Check
-                      type="switch"
-                      id="editShuffleQuestions"
-                      label={<span className="fw-bold">Shuffle Questions</span>}
+                    <SettingCard
+                      icon={icons.shuffleQuestions}
+                      title="Shuffle Questions"
+                      description="Shuffle question order for each student"
                       checked={form.shuffleQuestions}
-                      onChange={(e) => updateField('shuffleQuestions', e.target.checked)}
+                      onToggle={(checked) => updateField('shuffleQuestions', checked)}
                     />
-                    <Form.Check
-                      type="switch"
-                      id="editShuffleOptions"
-                      label={<span className="fw-bold">Shuffle Options</span>}
+                    <SettingCard
+                      icon={icons.shuffleOptions}
+                      title="Shuffle Options (MCQ)"
+                      description="Shuffle options for multiple choice questions"
                       checked={form.shuffleOptions}
-                      onChange={(e) => updateField('shuffleOptions', e.target.checked)}
+                      onToggle={(checked) => updateField('shuffleOptions', checked)}
                     />
-                    <Form.Check
-                      type="switch"
-                      id="editShowResult"
-                      label={<span className="fw-bold">Show Result</span>}
+                    <SettingCard
+                      icon={icons.showResult}
+                      title="Show Result to Student"
+                      description="Show result after exam submission"
                       checked={form.showResult}
-                      onChange={(e) => updateField('showResult', e.target.checked)}
+                      onToggle={(checked) => updateField('showResult', checked)}
                     />
-                    <Form.Check
-                      type="switch"
-                      id="editShowCorrectAnswers"
-                      label={<span className="fw-bold">Show Correct Answers</span>}
+                    <SettingCard
+                      icon={icons.showCorrectAnswers}
+                      title="Show Correct Answers"
+                      description="Show correct answers after exam"
                       checked={form.showCorrectAnswers}
-                      onChange={(e) => updateField('showCorrectAnswers', e.target.checked)}
+                      onToggle={(checked) => updateField('showCorrectAnswers', checked)}
                     />
-                    <Form.Check
-                      type="switch"
-                      id="editAllowReview"
-                      label={<span className="fw-bold">Allow Review</span>}
+                    <SettingCard
+                      icon={icons.allowReview}
+                      title="Allow Review"
+                      description="Allow students to review answers before submission"
                       checked={form.allowReview}
-                      onChange={(e) => updateField('allowReview', e.target.checked)}
+                      onToggle={(checked) => updateField('allowReview', checked)}
                     />
+                    <SettingCard
+                      icon={icons.schedule}
+                      title="Start & End Time (Schedule Exam)"
+                      description="Schedule exam start and end date & time"
+                      checked={scheduleEnabled}
+                      onToggle={toggleSchedule}
+                    >
+                      {scheduleEnabled && (
+                        <>
+                          <Form.Group className="mb-3" controlId="editStartAt">
+                            <Form.Label className="fw-bold small">Start Date &amp; Time</Form.Label>
+                            <Form.Control
+                              type="datetime-local"
+                              value={toDatetimeLocal(form.startAtUtc)}
+                              onChange={(e) => updateField('startAtUtc', fromDatetimeLocal(e.target.value))}
+                            />
+                          </Form.Group>
+                          <Form.Group controlId="editEndAt">
+                            <Form.Label className="fw-bold small">End Date &amp; Time</Form.Label>
+                            <Form.Control
+                              type="datetime-local"
+                              value={toDatetimeLocal(form.endAtUtc)}
+                              onChange={(e) => updateField('endAtUtc', fromDatetimeLocal(e.target.value))}
+                            />
+                          </Form.Group>
+                        </>
+                      )}
+                    </SettingCard>
                   </Col>
                   <Col md={6}>
-                    <Form.Group className="mb-3" controlId="editStartAt">
-                      <Form.Label className="fw-bold">Start Date &amp; Time</Form.Label>
-                      <Form.Control
-                        type="datetime-local"
-                        value={toDatetimeLocal(form.startAtUtc)}
-                        onChange={(e) => updateField('startAtUtc', fromDatetimeLocal(e.target.value))}
-                      />
-                    </Form.Group>
-                    <Form.Group className="mb-3" controlId="editEndAt">
-                      <Form.Label className="fw-bold">End Date &amp; Time</Form.Label>
-                      <Form.Control
-                        type="datetime-local"
-                        value={toDatetimeLocal(form.endAtUtc)}
-                        onChange={(e) => updateField('endAtUtc', fromDatetimeLocal(e.target.value))}
-                      />
-                    </Form.Group>
-                    <Form.Group className="mb-3" controlId="editMaxAttempts">
-                      <Form.Label className="fw-bold">Maximum Attempts</Form.Label>
-                      <Form.Control
-                        type="number"
-                        min={1}
-                        value={form.maxAttempts}
-                        onChange={(e) => updateField('maxAttempts', Number(e.target.value))}
-                      />
-                    </Form.Group>
-                    <Form.Check
-                      type="switch"
-                      id="editNegativeMarkingEnabled"
-                      label={<span className="fw-bold">Negative Marking</span>}
+                    <SettingCard
+                      icon={icons.maxAttempts}
+                      title="Maximum Attempts"
+                      description="Limit the number of attempts per student"
+                      checked={maxAttemptsEnabled}
+                      onToggle={setMaxAttemptsEnabled}
+                    >
+                      {maxAttemptsEnabled && (
+                        <Form.Group controlId="editMaxAttempts">
+                          <Form.Label className="fw-bold small">Max Attempts Allowed</Form.Label>
+                          <Form.Control
+                            type="number"
+                            min={1}
+                            value={form.maxAttempts}
+                            onChange={(e) => updateField('maxAttempts', Number(e.target.value))}
+                          />
+                        </Form.Group>
+                      )}
+                    </SettingCard>
+                    <SettingCard
+                      icon={icons.negativeMarking}
+                      title="Negative Marking"
+                      description="Enable or disable negative marking"
                       checked={form.negativeMarkingEnabled}
-                      onChange={(e) => updateField('negativeMarkingEnabled', e.target.checked)}
-                      className="mb-3"
+                      onToggle={(checked) => updateField('negativeMarkingEnabled', checked)}
+                    >
+                      {form.negativeMarkingEnabled && (
+                        <Form.Group controlId="editNegativeMarks">
+                          <Form.Label className="fw-bold small">Negative Marks for Wrong Answer</Form.Label>
+                          <Form.Control
+                            type="number"
+                            min={0}
+                            step={0.25}
+                            value={form.negativeMarks}
+                            onChange={(e) => updateField('negativeMarks', Number(e.target.value))}
+                          />
+                        </Form.Group>
+                      )}
+                    </SettingCard>
+                    <SettingCard
+                      icon={icons.questionNavigation}
+                      title="Question Navigation"
+                      description="Students can navigate between questions"
+                      checked={questionNavigationEnabled}
+                      onToggle={setQuestionNavigationEnabled}
                     />
-                    {form.negativeMarkingEnabled && (
-                      <Form.Group className="mb-3" controlId="editNegativeMarks">
-                        <Form.Label className="fw-bold">Negative Marks (per wrong answer)</Form.Label>
-                        <Form.Control
-                          type="number"
-                          min={0}
-                          step={0.25}
-                          value={form.negativeMarks}
-                          onChange={(e) => updateField('negativeMarks', Number(e.target.value))}
-                        />
-                      </Form.Group>
-                    )}
+                    <SettingCard
+                      icon={icons.autoSubmit}
+                      title="Auto Submit"
+                      description="Automatically submit exam when time is over"
+                      checked={autoSubmitEnabled}
+                      onToggle={setAutoSubmitEnabled}
+                    />
+                    <SettingCard
+                      icon={icons.examInstructions}
+                      title="Exam Instructions"
+                      description="Show instructions before exam starts"
+                      checked={examInstructionsEnabled}
+                      onToggle={setExamInstructionsEnabled}
+                    >
+                      {examInstructionsEnabled && (
+                        <Button variant="outline-primary" size="sm" onClick={handleEditInstructions}>
+                          Edit Instructions
+                        </Button>
+                      )}
+                    </SettingCard>
                   </Col>
                 </Row>
 
-                <div className="d-flex justify-content-end gap-2">
+                <div className="d-flex justify-content-end gap-2 mt-2">
                   <Link to="/admin/exams" className="btn btn-outline-secondary">
                     Cancel
                   </Link>
