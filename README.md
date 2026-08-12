@@ -629,7 +629,7 @@ for `Admin` and `/profile` for `Student`.
 
 - [x] Day 23 — Question service skeleton and Question Bank shell
 - [x] Day 24 — Question persistence and Add Question
-- [ ] Day 25 — Question APIs and live question list
+- [x] Day 25 — Question APIs and live question list
 - [ ] Day 26 — Edit, delete, and gate
 
 ### Day 23 Notes
@@ -704,5 +704,47 @@ for `Admin` and `/profile` for `Student`.
   "+ Add Question" link compiles to a real `${id}`-interpolated URL, not
   another stale placeholder
 - `dotnet build`/`dotnet test` (24 User + 32 Exam + 12 Question = 68/68)
+  and `npm run build`/`lint`/`test` (25/25) all green. Chrome extension
+  still not connected — same caveat as every day this phase
+
+### Day 25 Notes
+
+- `IQuestionRepository` gained `GetQuestionByIdAsync`/
+  `GetOptionsByQuestionIdAsync`/`GetQuestionsByExamIdAsync`/
+  `GetOptionsByQuestionIdsAsync` — the four deferred from Day 24. List
+  batches all options for the exam's questions in one query (a
+  `ToLookup` grouped by `QuestionId`) instead of querying per-question,
+  avoiding N+1
+- New `GetQuestionQuery`/`Handler` and `ListQuestionsQuery`/`Handler`
+  (`Question.Application/Questions/`), sharing a `QuestionWithOptions`
+  record between them. Added `GET /api/questions?examId={id}` and
+  `GET /api/questions/{id}` to `QuestionsController`, same
+  `[Authorize(Roles = "Admin")]` as `POST`
+- Scope note: the list endpoint is exam-scoped only (no "all questions
+  across every exam" endpoint) — the plan only ever specified
+  `GET /api/questions?examId={id}`. This means Day 23's global
+  `/admin/questions` Question Bank shell still can't be wired to real
+  data and **stays on its Day 23 mock rows** — the live list instead
+  became a new "Questions" section on the Exam edit page
+  (`EditExam.tsx`), which is exam-scoped by construction and genuinely
+  satisfies the Day 25 exit criterion ("Admin can add a question... and
+  see it appear in the live question list for that exam")
+- New `useQuestions(examId)`/`useQuestion(id)` hooks
+  (`hooks/useQuestions.ts`), and a new view-only `QuestionDetails` page
+  (`/admin/questions/:id`) showing the question, its options, and which
+  one is correct — reachable via a "View" link from the Exam edit
+  page's new Questions table
+- 4 new backend unit tests (`GetQuestionHandler` x2, `ListQuestionsHandler`
+  x2, including a test that a second exam's questions never leak into
+  the first exam's list) — 72/72 backend tests total
+- Verified end-to-end for real through the Gateway with a real Admin
+  JWT: listed both Day 24 questions for the real exam (newest-first,
+  correct option counts), fetched one by id, confirmed an unknown id
+  404s and an exam with no questions returns `[]` (not 404), confirmed
+  a `Student` token gets 403 on both endpoints (one check initially hit
+  401 from an expired 15-minute access token, not a bug — resolved with
+  a fresh login). Confirmed via source inspection that the new "View"
+  link compiles to a real `${question.id}`-interpolated URL
+- `dotnet build`/`dotnet test` (24 User + 32 Exam + 16 Question = 72/72)
   and `npm run build`/`lint`/`test` (25/25) all green. Chrome extension
   still not connected — same caveat as every day this phase

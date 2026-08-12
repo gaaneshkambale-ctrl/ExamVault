@@ -21,5 +21,26 @@ public class FakeQuestionRepository : IQuestionRepository
         return Task.CompletedTask;
     }
 
+    public Task<ExamQuestion?> GetQuestionByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_questions.FirstOrDefault(q => q.Id == id));
+
+    public Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdAsync(
+        Guid questionId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<QuestionOption>>(
+            _options.Where(o => o.QuestionId == questionId).OrderBy(o => o.DisplayOrder).ToList());
+
+    public Task<IReadOnlyList<ExamQuestion>> GetQuestionsByExamIdAsync(
+        Guid examId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamQuestion>>(
+            _questions.Where(q => q.ExamId == examId).OrderByDescending(q => q.CreatedAtUtc).ToList());
+
+    public Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdsAsync(
+        IReadOnlyList<Guid> questionIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<QuestionOption>>(
+            _options.Where(o => questionIds.Contains(o.QuestionId)).OrderBy(o => o.DisplayOrder).ToList());
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

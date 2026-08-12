@@ -1,14 +1,27 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/examApi';
 import { useExam } from '../../hooks/useExams';
+import { useQuestions } from '../../hooks/useQuestions';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import type { ExamResponse, ExamStatus, ExamType, UpdateExamRequest } from '../../types/exam';
+import type { QuestionDifficulty, QuestionType } from '../../types/question';
+
+const difficultyVariant: Record<QuestionDifficulty, string> = {
+  Easy: 'success',
+  Medium: 'warning',
+  Hard: 'danger',
+};
+
+const questionTypeLabel: Record<QuestionType, string> = {
+  MultipleChoice: 'Multiple Choice',
+  TrueFalse: 'True/False',
+};
 
 const statusVariant: Record<ExamStatus, string> = {
   Draft: 'secondary',
@@ -50,6 +63,7 @@ export default function EditExam() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { data: exam, isLoading, isError } = useExam(id);
+  const { data: questions, isLoading: isLoadingQuestions } = useQuestions(id);
 
   const [form, setForm] = useState<UpdateExamRequest | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof UpdateExamRequest, string>>>(
@@ -401,6 +415,59 @@ export default function EditExam() {
                   </Button>
                 </div>
               </Form>
+            </Card.Body>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <Card.Body className="p-0">
+              <div className="d-flex justify-content-between align-items-center p-4 pb-3">
+                <h2 className="h6 fw-bold mb-0">Questions</h2>
+              </div>
+
+              {isLoadingQuestions && (
+                <div className="d-flex justify-content-center py-4">
+                  <Spinner animation="border" size="sm" />
+                </div>
+              )}
+
+              {!isLoadingQuestions && questions?.length === 0 && (
+                <div className="text-center text-muted py-4">
+                  No questions yet. Click "+ Add Question" above to add one.
+                </div>
+              )}
+
+              {!isLoadingQuestions && questions && questions.length > 0 && (
+                <Table responsive hover className="mb-0 align-middle">
+                  <thead className="text-muted small text-uppercase">
+                    <tr>
+                      <th className="ps-4">Question</th>
+                      <th>Type</th>
+                      <th>Difficulty</th>
+                      <th>Marks</th>
+                      <th className="pe-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {questions.map((question) => (
+                      <tr key={question.id}>
+                        <td className="ps-4 fw-medium" style={{ maxWidth: 360 }}>
+                          {question.questionText}
+                        </td>
+                        <td>{questionTypeLabel[question.questionType]}</td>
+                        <td>
+                          <Badge bg={difficultyVariant[question.difficulty]}>
+                            {question.difficulty}
+                          </Badge>
+                        </td>
+                        <td>{question.marks}</td>
+                        <td className="pe-4">
+                          <Link to={`/admin/questions/${question.id}`}>View</Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
             </Card.Body>
           </Card>
         </>

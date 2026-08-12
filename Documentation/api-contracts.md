@@ -357,8 +357,8 @@ Returned when the transition isn't allowed from the exam's current status
 ## Question Service
 
 Every endpoint requires a valid JWT access token with the `Admin` role,
-same as Exam Service. Only `POST /api/questions` exists as of Day 24 —
-`GET`/`PUT`/`DELETE` land Days 25-26.
+same as Exam Service. `POST`/`GET /api/questions`/`GET /api/questions/{id}`
+all exist as of Day 25 — `PUT`/`DELETE` land Day 26.
 
 Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
 - `Requests/Question/CreateQuestionRequest.cs`
@@ -424,3 +424,30 @@ questions need exactly two options: True and False."`
 ### 403 Forbidden
 
 Returned for a valid token without the `Admin` role. No body.
+
+## GET /api/questions?examId={id}
+
+Lists every question for the given exam, newest first. Each entry has
+the same shape as the `POST /api/questions` 201 response above. An exam
+with no questions (or an unknown `examId`) returns an empty array, not
+404 — the query is always well-formed, it just may match nothing.
+
+### 200 OK
+
+```json
+[
+  { "id": "91af9829-316b-42ec-8762-45ed44c116c0", "questionType": "TrueFalse", "...": "..." },
+  { "id": "7eebe881-7723-41e0-914b-fb993adcfc3b", "questionType": "MultipleChoice", "...": "..." }
+]
+```
+
+## GET /api/questions/{id}
+
+Returns a single question with its options. Same shape as one entry
+from the list endpoint.
+
+### 404 Not Found
+
+```json
+{ "message": "Question not found." }
+```
