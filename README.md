@@ -100,7 +100,8 @@ npm run dev
 See `ActionPlan.txt` for the full day-by-day execution plan (Phase 0 → Phase 10),
 and `Readmap.txt` / `ExamVault_Day_By_Day_Implementation_Hierarchy.docx` /
 `ExamVault_Daily_Frontend_Backend_Parallel_Roadmap.docx` for the source roadmaps.
-UI reference: `wireframe.png`.
+UI reference: `wireframe.png` (12-screen overview) and `Adminwireframe.png`
+(10 detailed admin-side screens, spanning Phase 5/6/AI Milestone).
 
 ## Phase 0 Progress
 
@@ -424,4 +425,41 @@ session, no protected routes yet; Phase 3 replaces this properly.
 
 **Phase 4 (RabbitMQ / Azure Service Bus foundation) is complete. Phase 5 (Exam Service) is unlocked.**
 
-**Phase 2 (API Gateway) is complete. Phase 3 (JWT Authentication) is unlocked.**
+## Phase 5 Progress
+
+- [x] Day 19 — Exam service skeleton and Admin Dashboard shell
+- [ ] Day 20 — Exam persistence and Create Exam
+- [ ] Day 21 — Exam APIs and live exam list
+- [ ] Day 22 — Edit, settings, publish, and gate
+
+### Day 19 Notes
+
+- New `OnlineExamSystem.Exam.API`/`.Application`/`.Domain`/`.Infrastructure`
+  projects (`Backend/Services/ExamService/`), mirroring UserService's
+  layout and project-reference rules, added to `ExamVault.sln`
+- New `Exam` entity (`Exam.Domain/Entities/`): Basic Information fields
+  (Title, Description, ExamType, DurationMinutes, TotalMarks,
+  PassingMarks, Instructions, Status, TotalQuestions, CreatedByUserId)
+  plus the Exam Settings fields from `Adminwireframe.png` screen 9
+  (ShuffleQuestions, ShuffleOptions, ShowResult, ShowCorrectAnswers,
+  AllowReview, StartAtUtc/EndAtUtc, MaxAttempts, NegativeMarkingEnabled,
+  NegativeMarks) — no DbContext/migration/endpoints yet, that's Day 20/21
+- `TotalQuestions` is exam-level metadata the admin will enter at
+  creation, not a live count of real `Question` rows — Question Service
+  doesn't exist until Phase 6
+- New `AdminSidebar`/`AdminLayout` (distinct from the student-facing
+  `DashboardSidebar` used by Profile) — sidebar nav matches
+  `Adminwireframe.png`; only Dashboard and Exams are real links, the rest
+  render as non-clickable placeholders for later phases
+- New `/admin/dashboard` (stat cards, all zero — no stats endpoint exists
+  yet, intentionally not fabricated) and `/admin/exams` (static mock rows
+  matching the wireframe's table columns; Create/View/Delete actions
+  disabled — wired to real data starting Day 21), both behind
+  `ProtectedRoute` (no role restriction yet — that's Day 22)
+- `dotnet build` (backend, including the 4 new projects) and
+  `npm run build`/`lint`/`test` (12/12) all green
+- Not verified visually in a real browser this session — the Chrome
+  extension wasn't connected. Confirmed instead via a clean TypeScript
+  build, lint, full test suite, and the Vite dev server returning 200 for
+  both new routes; an actual visual check is still worth doing before
+  Day 20 builds on top of this shell

@@ -344,11 +344,145 @@ Day complete when: a user registration can publish an event and a local
 consumer can receive it, and the retry/DLQ/idempotency/Azure Service Bus
 boundary notes are documented. -> Phase 4 complete, Phase 5 unlocked.
 
+WIREFRAME SCOPE NOTE FOR PHASE 5 (AND LATER)
+----------------------------------------------------
+Two wireframes exist: wireframe.png (the original 12-screen overview) and
+Adminwireframe.png (10 detailed admin-side screens: Manage Exams, Create
+Exam wizard, Add Questions Manually, Import Questions, AI Generate
+Questions, AI Generated Questions Preview, Question Bank, Manage
+Categories, Exam Settings, Exam Review & Publish). Adminwireframe.png is
+the layout reference for Phase 5, Phase 6 and the AI Milestone combined -
+I am only building the Phase 5 slice of it now (Manage Exams, Create Exam
+Basic Information, Exam Settings, Exam Review & Publish minus questions).
+Add Questions Manually, Import Questions, AI Generate/Preview, Question
+Bank and Manage Categories are Phase 6 / AI Milestone screens - I am not
+touching them yet, per the no-skipping-ahead rule.
+
+DAY 19 — PHASE 5: EXAM SERVICE SKELETON AND ADMIN DASHBOARD SHELL
+--------------------------------------------------------------------------
+Backend:
+- I am creating the Exam service projects (OnlineExamSystem.Exam.API,
+  .Application, .Domain, .Infrastructure), mirroring UserService's
+  project layout and project-reference rules, and adding them to
+  ExamVault.sln.
+- I am creating the Exam entity in Exam.Domain: Title, Description,
+  ExamType (Manual/AiGenerated), DurationMinutes, TotalMarks,
+  PassingMarks, Instructions, Status (Draft/Published/Archived),
+  TotalQuestions, CreatedByUserId, plus the Exam Settings fields from
+  Adminwireframe.png screen 9 (ShuffleQuestions, ShuffleOptions,
+  ShowResult, ShowCorrectAnswers, AllowReview, StartAtUtc, EndAtUtc,
+  MaxAttempts, NegativeMarkingEnabled, NegativeMarks).
+- TotalQuestions is exam-level metadata the admin enters at creation, not
+  a live count of real Question rows - Question Service doesn't exist
+  until Phase 6, so reconciling this with actual questions is explicitly
+  out of scope here.
+- I am NOT creating the DbContext/migration yet (Day 20) or any endpoints
+  yet (Day 21) - this day is project + entity skeleton only, matching how
+  UserService started (Days 2 and 6).
+Frontend:
+- I am creating the Admin Dashboard shell per Adminwireframe.png's
+  sidebar: Dashboard, Users, Exams, Questions, Categories, Results,
+  Reports, Notifications, Settings - only Dashboard and Exams are
+  functional this phase, the rest are placeholders for later phases.
+- I am creating an Exam list placeholder page at /admin/exams (static/mock
+  rows matching the Manage Exams table columns: Title, Type, Total
+  Questions, Duration, Total Marks, Status, Created On, Actions) - wired
+  to real data in Day 21.
+Day complete when: the Exam.Domain/.Application/.Infrastructure/.API
+projects build and are in ExamVault.sln, and the Admin Dashboard shell +
+Exam list placeholder render in the browser.
+
+DAY 20 — PHASE 5: EXAM PERSISTENCE AND CREATE EXAM
+--------------------------------------------------------------------------
+Backend:
+- I am creating ExamDbContext in Exam.Infrastructure, configuring SQL
+  Server (local MSSQLSERVER, Windows Auth, ExamVault.ExamDb - Exam
+  Service owns its own database, per the microservices principle already
+  locked in).
+- I am creating the initial EF Core migration.
+- I am creating the repository abstraction/implementation, mirroring
+  UserService's pattern.
+- I am creating CreateExamCommand/Validator/Handler covering the Basic
+  Information fields from the Create Exam wizard's step 1
+  (Adminwireframe.png screen 2): Title, ExamType, Description,
+  DurationMinutes, TotalMarks, PassingMarks, Instructions. Settings
+  fields get sensible defaults for now - the dedicated settings-editing
+  UI is Day 22. New exams are always created with Status = Draft.
+Frontend:
+- I am creating the Create Exam form UI (the Basic Information step only)
+  with client-side validation, reachable from the Exam list placeholder's
+  "+ Create Exam" button.
+- I am NOT building the full 4-step wizard (Add Questions / Exam Settings
+  / Review & Publish) yet - Add Questions depends on Question Service
+  (Phase 6); Settings and Review & Publish land Day 22.
+Day complete when: submitting the Create Exam form calls CreateExamCommand
+end-to-end and a Draft exam row appears in ExamVault.ExamDb.
+
+DAY 21 — PHASE 5: EXAM APIS AND LIVE EXAM LIST
+--------------------------------------------------------------------------
+Backend:
+- I am adding POST /api/exams, GET /api/exams, and GET /api/exams/{id} to
+  Exam.API, all [Authorize(Roles = "Admin")] - reusing the JWT role claim
+  already issued since Phase 3, no new auth plumbing needed.
+- I am adding request/response contracts to Shared.Contracts
+  (Requests/Exam, Responses/Exam).
+- I am adding the Gateway route (/api/exams/{**catch-all} -> Exam API),
+  mirroring the Day 10 User API route.
+- I am writing unit tests for the CreateExam validator/handler and
+  API-level tests for the three endpoints.
+Frontend:
+- I am wiring the Exam list page to real data via GET /api/exams (React
+  Query hook), replacing Day 19's placeholder rows.
+- I am wiring the Create Exam form to POST /api/exams and redirecting to
+  the exam list on success.
+- I am adding a view-only exam details page (GET /api/exams/{id})
+  reachable from the list's view action.
+Day complete when: Admin can create an exam through the React form and
+see it appear in the live exam list, through Gateway -> Exam API -> SQL
+Server, matching the Phase 5 exit gate ("Admin can create and retrieve
+exams").
+
+DAY 22 — PHASE 5: EDIT, SETTINGS, PUBLISH, AND GATE
+--------------------------------------------------------------------------
+Backend:
+- I am adding PUT /api/exams/{id} for editing an exam's Basic Information
+  and Settings fields (the Adminwireframe.png Exam Settings screen:
+  ShuffleQuestions, ShuffleOptions, ShowResult, ShowCorrectAnswers,
+  AllowReview, StartAtUtc/EndAtUtc, MaxAttempts,
+  NegativeMarkingEnabled/NegativeMarks), [Authorize(Roles = "Admin")].
+- I am adding publish/unpublish/archive as explicit status transitions
+  (Draft <-> Published, either -> Archived), validating the transition
+  server-side rather than accepting an arbitrary Status value from the
+  client.
+- I am writing unit tests for the update handler and the status-transition
+  rules.
+Frontend:
+- I am adding an Exam edit page: Basic Information fields plus an Exam
+  Settings panel (the wireframe's toggle list), and Publish / Save as
+  Draft / Archive actions - a simplified version of the wireframe's
+  Review & Publish screen, without the per-question-type breakdown (no
+  Questions exist yet - that panel becomes real once Phase 6 lands).
+- I am making Exams the first role-gated page: ProtectedRoute's existing
+  (currently unused) roles check now guards /admin/exams and
+  /admin/exams/**.
+- I am wiring the list's view/edit/publish/archive actions to the new
+  endpoints.
+Verification:
+- I am re-verifying end-to-end in the browser: log in as Admin -> create
+  an exam (Draft) -> edit its settings -> publish it -> see it listed as
+  Published -> archive it -> see it listed as Archived. I am also
+  verifying a Student-role account is rejected (403) from every
+  /api/exams endpoint and from /admin/exams in the UI.
+- I am updating README (Phase 5 Progress section), api-contracts.md (exam
+  endpoints), and running the full verification suite (dotnet build/test,
+  npm run build/lint/test).
+Day complete when: the full Admin exam workflow (create -> edit/settings
+-> publish -> archive) works end-to-end through the Gateway with real
+JWTs and Admin-only authorization enforced. -> Phase 5 complete, Phase 6
+unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-Phase 4 (Days 16-18)  I set up RabbitMQ locally, publish UserRegisteredEvent,
-                       and design the Azure Service Bus boundary.
-Phase 5 (Days 19-22)  I build the Exam Service and the Admin exam UI.
 Phase 6 (Days 23-26)  I build the Question Service and the question/option UI.
 AI Milestone (27-30)  I build the AI Service, the AI question generator UI,
                        and the human approval flow before questions reach the DB.
@@ -369,14 +503,23 @@ PRINCIPLES I AM KEEPING IN MIND THE WHOLE PROJECT
 - RabbitMQ locally, Azure Service Bus in the cloud.
 - I never commit secrets to Git.
 
-UI REFERENCE (wireframe.png)
----------------------------------
+UI REFERENCE (wireframe.png, Adminwireframe.png)
+---------------------------------------------------------
 A wireframe has already been provided (wireframe.png) covering 12 screens:
 Landing, Login, Register, Admin Dashboard, Manage Exams, Manage Questions,
 Student Dashboard, Take Exam, Exam Result, Profile, Notifications, and
 AI Question Generation (Admin).
 
-I am treating this wireframe as the layout reference only (structure, flow,
+A second, more detailed wireframe (Adminwireframe.png) covers 10 admin-side
+screens: Manage Exams, Create Exam (4-step wizard: Basic Information / Add
+Questions / Exam Settings / Review & Publish), Add Questions Manually,
+Import Questions, AI Generate Questions, AI Generated Questions Preview,
+Question Bank, Manage Categories, Exam Settings, and Exam Review & Publish.
+It spans Phase 5 (Exam Service), Phase 6 (Question Service) and the AI
+Milestone combined - each phase only builds its own slice of it, per the
+WIREFRAME SCOPE NOTE above Day 19.
+
+I am treating both wireframes as the layout reference only (structure, flow,
 component placement), and building the final UI to a professional standard
 on top of it:
 - Consistent design system: one color palette, spacing scale, and typography
