@@ -1,19 +1,48 @@
 import { Link } from 'react-router-dom';
 import BrandMark from './BrandMark';
 
-const navItems = [
+export type AdminNavItem =
+  | 'Dashboard'
+  | 'Users'
+  | 'Exams'
+  | 'Questions'
+  | 'AI Generate Question'
+  | 'AI Generate Question Preview'
+  | 'Categories'
+  | 'Results'
+  | 'Reports'
+  | 'Notifications'
+  | 'Settings';
+
+interface NavChild {
+  label: AdminNavItem;
+  path: string;
+}
+
+interface NavItem {
+  label: AdminNavItem;
+  path: string | null;
+  children?: NavChild[];
+}
+
+const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/admin/dashboard' },
   { label: 'Users', path: null },
   { label: 'Exams', path: '/admin/exams' },
-  { label: 'Questions', path: '/admin/questions' },
+  {
+    label: 'Questions',
+    path: '/admin/questions',
+    children: [
+      { label: 'AI Generate Question', path: '/admin/questions/ai-generate' },
+      { label: 'AI Generate Question Preview', path: '/admin/questions/ai-generate/preview' },
+    ],
+  },
   { label: 'Categories', path: null },
   { label: 'Results', path: null },
   { label: 'Reports', path: null },
   { label: 'Notifications', path: null },
   { label: 'Settings', path: null },
-] as const;
-
-export type AdminNavItem = (typeof navItems)[number]['label'];
+];
 
 interface AdminSidebarProps {
   active: AdminNavItem;
@@ -30,26 +59,47 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
         ExamVault
       </div>
       <nav className="d-flex flex-column gap-1">
-        {navItems.map(({ label, path }) =>
-          path ? (
-            <Link
-              key={label}
-              to={path}
-              className="px-3 py-2 rounded-2 text-decoration-none"
-              style={
-                label === active
-                  ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
-                  : { color: '#94a3b8' }
-              }
-            >
-              {label}
-            </Link>
-          ) : (
-            <span key={label} className="px-3 py-2 rounded-2" style={{ color: '#475569' }}>
-              {label}
-            </span>
-          ),
-        )}
+        {navItems.map((item) => (
+          <div key={item.label}>
+            {item.path ? (
+              <Link
+                to={item.path}
+                className="px-3 py-2 rounded-2 text-decoration-none d-block"
+                style={
+                  item.label === active
+                    ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
+                    : { color: '#94a3b8' }
+                }
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <span className="px-3 py-2 rounded-2 d-block" style={{ color: '#475569' }}>
+                {item.label}
+              </span>
+            )}
+            {item.children && (
+              <div className="d-flex flex-column gap-1 mt-1">
+                {item.children.map((child) => (
+                  <Link
+                    key={child.label}
+                    to={child.path}
+                    className="py-1 rounded-2 text-decoration-none small d-block"
+                    style={{
+                      paddingLeft: '2.25rem',
+                      paddingRight: '0.75rem',
+                      ...(child.label === active
+                        ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
+                        : { color: '#94a3b8' }),
+                    }}
+                  >
+                    {child.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </nav>
     </aside>
   );

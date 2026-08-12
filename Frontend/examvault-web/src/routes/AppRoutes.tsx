@@ -12,7 +12,8 @@ import QuestionBank from '../pages/admin/QuestionBank';
 import CreateQuestion from '../pages/admin/CreateQuestion';
 import QuestionDetails from '../pages/admin/QuestionDetails';
 import EditQuestion from '../pages/admin/EditQuestion';
-import AiGenerateQuestions from '../pages/admin/AiGenerateQuestions';
+import AiGenerateQuestion from '../pages/admin/AiGenerateQuestion';
+import AiGeneratedQuestionsPreview from '../pages/admin/AiGeneratedQuestionsPreview';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -89,7 +90,23 @@ export default function AppRoutes() {
         path="/admin/exams/:examId/questions/ai-generate"
         element={
           <ProtectedRoute roles={['Admin']}>
-            <AiGenerateQuestions />
+            <AiGenerateQuestion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/questions/ai-generate"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AiGenerateQuestion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/questions/ai-generate/preview"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AiGeneratedQuestionsPreview />
           </ProtectedRoute>
         }
       />
