@@ -5,6 +5,8 @@ export type AdminNavItem =
   | 'Dashboard'
   | 'Users'
   | 'Exams'
+  | 'Exam Settings'
+  | 'Exam Review & Publish'
   | 'Questions'
   | 'AI Generate Question'
   | 'AI Generate Question Preview'
@@ -28,7 +30,14 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/admin/dashboard' },
   { label: 'Users', path: null },
-  { label: 'Exams', path: '/admin/exams' },
+  {
+    label: 'Exams',
+    path: '/admin/exams',
+    children: [
+      { label: 'Exam Settings', path: '/admin/exams' },
+      { label: 'Exam Review & Publish', path: '/admin/exams' },
+    ],
+  },
   {
     label: 'Questions',
     path: '/admin/questions',

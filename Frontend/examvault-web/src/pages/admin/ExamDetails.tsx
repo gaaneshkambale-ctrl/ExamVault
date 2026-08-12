@@ -1,6 +1,10 @@
-import { Badge, Card, Col, Row, Spinner } from 'react-bootstrap';
+import { useState } from 'react';
+import { Alert, Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
+import { archiveExam, publishExam, unpublishExam } from '../../api/examApi';
 import { useExam } from '../../hooks/useExams';
 import type { ExamStatus, ExamType } from '../../types/exam';
 
@@ -24,14 +28,58 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+function extractServerError(error: unknown): string {
+  if (isAxiosError(error) && error.response?.status === 409) {
+    return 'That status change is not allowed from the exam’s current state.';
+  }
+  return 'Something went wrong. Please try again.';
+}
+
 export default function ExamDetails() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
   const { data: exam, isLoading, isError } = useExam(id);
+  const [statusError, setStatusError] = useState('');
+
+  const invalidateExam = () => {
+    queryClient.invalidateQueries({ queryKey: ['exams'] });
+    queryClient.invalidateQueries({ queryKey: ['exams', id] });
+  };
+
+  const publishMutation = useMutation({
+    mutationFn: () => publishExam(id!),
+    onSuccess: () => {
+      setStatusError('');
+      invalidateExam();
+    },
+    onError: (error) => setStatusError(extractServerError(error)),
+  });
+
+  const unpublishMutation = useMutation({
+    mutationFn: () => unpublishExam(id!),
+    onSuccess: () => {
+      setStatusError('');
+      invalidateExam();
+    },
+    onError: (error) => setStatusError(extractServerError(error)),
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: () => archiveExam(id!),
+    onSuccess: () => {
+      setStatusError('');
+      invalidateExam();
+    },
+    onError: (error) => setStatusError(extractServerError(error)),
+  });
+
+  const anyStatusActionPending =
+    publishMutation.isPending || unpublishMutation.isPending || archiveMutation.isPending;
 
   return (
-    <AdminLayout active="Exams">
+    <AdminLayout active="Exam Review & Publish">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h4 fw-bold mb-0 text-primary">Exam Details</h1>
+        <h1 className="h4 fw-bold mb-0 text-primary">Exam Review &amp; Publish</h1>
         <div className="d-flex gap-2">
           {id && (
             <Link to={`/admin/exams/${id}/edit`} className="btn btn-primary">
@@ -43,6 +91,8 @@ export default function ExamDetails() {
           </Link>
         </div>
       </div>
+
+      {statusError && <Alert variant="danger">{statusError}</Alert>}
 
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-4">
@@ -65,7 +115,41 @@ export default function ExamDetails() {
                   <h2 className="h5 fw-bold mb-1">{exam.title}</h2>
                   <p className="text-muted mb-0">{exam.description || 'No description.'}</p>
                 </div>
-                <Badge bg={statusVariant[exam.status]}>{exam.status}</Badge>
+                <div className="d-flex align-items-center gap-2">
+                  <Badge bg={statusVariant[exam.status]} className="fs-6">
+                    {exam.status}
+                  </Badge>
+                  {exam.status === 'Draft' && (
+                    <Button
+                      variant="success"
+                      size="sm"
+                      disabled={anyStatusActionPending}
+                      onClick={() => publishMutation.mutate()}
+                    >
+                      {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+                    </Button>
+                  )}
+                  {exam.status === 'Published' && (
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      disabled={anyStatusActionPending}
+                      onClick={() => unpublishMutation.mutate()}
+                    >
+                      {unpublishMutation.isPending ? 'Saving...' : 'Save as Draft'}
+                    </Button>
+                  )}
+                  {exam.status !== 'Archived' && (
+                    <Button
+                      variant="outline-dark"
+                      size="sm"
+                      disabled={anyStatusActionPending}
+                      onClick={() => archiveMutation.mutate()}
+                    >
+                      {archiveMutation.isPending ? 'Archiving...' : 'Archive'}
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <Row>
