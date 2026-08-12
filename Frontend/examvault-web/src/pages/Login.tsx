@@ -34,8 +34,8 @@ export default function Login() {
     setStatus('loading');
     setErrorMessage('');
     try {
-      await login(email, password);
-      navigate('/profile');
+      const profile = await login(email, password);
+      navigate(profile.role === 'Admin' ? '/admin/dashboard' : '/profile');
     } catch (error) {
       setStatus('error');
       setErrorMessage(extractServerError(error));

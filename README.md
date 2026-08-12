@@ -612,3 +612,15 @@ session, no protected routes yet; Phase 3 replaces this properly.
   build/lint/test/type-check
 
 **Phase 5 (Exam Service) is complete. Phase 6 (Question Service) is unlocked.**
+
+### Post-Phase-5 fix: role-based login redirect
+
+Found by actually logging in and looking, right after the Chrome
+extension still couldn't verify the UI itself: `Login.tsx` unconditionally
+navigated to `/profile` after login, regardless of role — a leftover
+from Day 14, before any Admin-only route existed. Nothing ever routed an
+Admin to `/admin/dashboard`, so the entire Phase 5 Admin UI was
+unreachable through the normal login flow even though every API behind
+it worked correctly. `login()` (`AuthProvider`/`useAuth`) now returns the
+logged-in `UserProfile`, and `Login.tsx` redirects to `/admin/dashboard`
+for `Admin` and `/profile` for `Student`.

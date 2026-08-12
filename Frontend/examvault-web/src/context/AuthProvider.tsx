@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAxiosAccessToken(response.accessToken);
     setRefreshToken(response.refreshToken);
     setUser(response.user);
+    return response.user;
   };
 
   const logout = async () => {
