@@ -606,10 +606,169 @@ Day complete when: the full Admin question workflow (add -> list -> edit
 Admin-only authorization enforced, and questions can be attached to and
 retrieved from an exam. -> Phase 6 complete, AI Milestone unlocked.
 
+WIREFRAME SCOPE NOTE FOR THE AI MILESTONE
+------------------------------------------------
+Adminwireframe.png's remaining two admin screens are AI Generate Questions
+(screen 5: "AI: Generate Questions from Given Exam / Topic", step 1 of 3)
+and AI Generated Questions Preview (screen 6, step 2 of 3). Screen 5 offers
+three sources (From Existing Exam / From Topic-Text / From Document) and
+three question types (Multiple Choice, True/False, Short Answer) as chips.
+I am building From Existing Exam and From Topic/Text only - From Document
+means parsing an uploaded file into prompt content, which is the same kind
+of scope jump as Phase 6's deferred Import Questions (bulk CSV/Excel), so
+it is deferred the same way, not built now. Generated question TYPES are
+restricted to Multiple Choice and True/False, matching the only two types
+Question Service actually persists/validates since Phase 6 - Short Answer
+stays an unused enum value here too, same reasoning as Phase 6's other five
+deferred types. Screen 4 (Import Questions) is not an AI Milestone screen
+at all per the Phase 6 scope note and stays out of scope; screen 8 (Manage
+Categories) likewise. There is no "screen 7" (Question Bank) work here -
+that was Phase 6.
+
+AI Service owns no database at all, going further than the "AI Service
+never owns the Question DB" principle already locked in - every generated
+question is disposable draft state that lives only in the browser (React
+state) between generation and approval. Nothing an admin doesn't explicitly
+approve ever reaches SQL Server. Approved drafts are persisted by calling
+Question Service's existing POST /api/questions one row at a time (Phase
+6's endpoint, unchanged) - there is no separate "AI question" data model or
+DB flag; once approved, an AI-generated question is indistinguishable in
+storage from one added through the Day 24 Add Question form.
+
+The concrete AI provider (which LLM API, how the key is supplied) is
+deliberately not decided in this plan - Day 27 defines an
+IAiQuestionGenerator abstraction only (no provider wired), the same
+interface-first approach Day 16 used for IEventPublisher before Day 17
+wired the concrete RabbitMQ implementation. The provider gets chosen and
+wired at Day 28. Whatever it is, the API key is a secret: .NET User
+Secrets locally, never appsettings, same rule as the JWT signing key since
+Phase 3.
+
+DAY 27 — AI MILESTONE: AI SERVICE SKELETON AND GENERATOR UI SHELL
+--------------------------------------------------------------------------
+Backend:
+- I am creating the AI service projects (OnlineExamSystem.Ai.API,
+  .Application, .Domain, .Infrastructure), mirroring Question Service's
+  project layout and project-reference rules, and adding them to
+  ExamVault.sln. .Domain holds no persisted entities (no DbContext, no
+  migration, no SQL Server database for this service, per the scope note
+  above) - just the request/result shapes a generator produces.
+- I am defining IAiQuestionGenerator in Ai.Application: takes a source
+  (existing exam id, or a free-text topic), desired question count,
+  allowed types (Multiple Choice/True-False), difficulty, and optional
+  extra instructions; returns a list of draft questions (text + options +
+  suggested correct answer + suggested marks/difficulty) - no
+  implementation yet, interface only.
+- I am NOT adding any endpoint yet (Day 28) - this day is project +
+  interface skeleton only, matching Exam Service's Day 19 and Question
+  Service's Day 23.
+Frontend:
+- I am adding an "AI Generate" action next to each exam's existing "+ Add
+  Question" button on the Edit Exam page, opening the AI Question
+  Generator form (Adminwireframe.png screen 5 layout): source toggle
+  (From Existing Exam pre-filled with the current exam / From Topic-Text),
+  number of questions, question type chips (Multiple Choice, True/False
+  only - Short Answer chip is visibly disabled, not hidden, so the
+  deferral is honest rather than silent), difficulty checkboxes, an
+  optional instructions textarea, Cancel/Generate Questions buttons.
+- This day the form is static/shell only - Generate Questions does not
+  call anything real yet, matching how Day 19's Exam list and Day 23's
+  Question Bank both shipped as shells before their APIs existed.
+Day complete when: the four new Ai.* projects build and are in
+ExamVault.sln, and the AI Generator form shell renders from the Edit Exam
+page with the Multiple Choice/True-False-only chip restriction visible.
+
+DAY 28 — AI MILESTONE: REAL GENERATION AND DRAFT PREVIEW
+--------------------------------------------------------------------------
+Backend:
+- I am choosing and wiring a concrete IAiQuestionGenerator implementation
+  in Ai.Infrastructure (the specific provider/API decided at this point,
+  key via User Secrets).
+- I am adding POST /api/ai/generate-questions to Ai.API
+  ([Authorize(Roles = "Admin")], same as every other endpoint since
+  Phase 3), plus the Gateway route (/api/ai/{**catch-all} -> AI API),
+  the same necessity as every prior service's cutover day.
+- I am adding request/response contracts to Shared.Contracts
+  (Requests/Ai, Responses/Ai) - the response is a list of draft questions,
+  never anything written to a database.
+- I am handling provider failures (timeout, bad response, rate limit) as
+  a clean error result, not an unhandled exception - the UI needs a real
+  error state, not a 500.
+Frontend:
+- I am wiring the Day 27 form's Generate Questions button to the new
+  endpoint and building the AI Generated Questions Preview screen
+  (Adminwireframe.png screen 6): stat chips (Total Questions, MCQ count,
+  True/False count), the generated list with a type badge per row, and
+  Back/Regenerate actions. View/Edit/Delete-per-row icons are visible
+  this day; Edit and the final Add Selected to Exam approval action are
+  wired Day 29.
+- All of this state lives in React state only - nothing persisted, so a
+  page refresh loses an ungenerated/unapproved batch by design.
+Day complete when: submitting the Generator form calls the real AI
+endpoint and renders an actual (not mock) list of draft questions on the
+Preview screen, with Regenerate producing a fresh batch.
+
+DAY 29 — AI MILESTONE: EDIT DRAFTS AND HUMAN APPROVAL
+--------------------------------------------------------------------------
+Backend:
+- No new AI Service endpoints - approval reuses Question Service's
+  existing POST /api/questions from Day 24 exactly as-is, one call per
+  approved draft. This is the human-approval boundary made concrete: the
+  only way an AI-suggested question becomes a real Question row is
+  through the same validated path a manually-typed question already goes
+  through (same validator, same "exactly one correct option" rule, same
+  Admin-only authorization).
+Frontend:
+- I am making each draft row's Edit icon functional: inline editing of
+  question text, options, correct answer, marks and difficulty before
+  approval, reusing the Day 27/Phase-6 option-editing UI (lettered
+  badges + Correct Answer dropdown) rather than building a second one.
+- I am making each draft row's Delete icon remove it from the batch
+  (discard, never sent anywhere).
+- I am adding per-row selection (checkbox, matching the wireframe's
+  intent for "Add Selected to Exam") and wiring the Add Selected to Exam
+  button to POST each selected/edited draft to Question Service, then
+  invalidating that exam's question-list cache and navigating back to
+  the exam's Edit page so the admin immediately sees the approved
+  questions in the real Questions table.
+Day complete when: approving a subset of generated drafts creates that
+many real rows in ExamVault.QuestionDb (edited text/options intact), and
+anything left unapproved or deleted from the batch never reaches the
+database.
+
+DAY 30 — AI MILESTONE: POLISH, VERIFICATION, AND GATE
+--------------------------------------------------------------------------
+Backend:
+- I am adding loading/error UI states for the generate call (in progress,
+  provider error with a retry action, empty result).
+- I am writing unit tests for whatever validation/mapping logic sits
+  around IAiQuestionGenerator (request shaping, draft-to-CreateQuestion
+  mapping), matching every prior service's test coverage.
+Frontend:
+- I am polishing the Generator form and Preview screen to the same
+  standard as the rest of the admin UI (bold labels, brand-indigo
+  heading, consistent outline buttons - the same pass already done for
+  Exam and Question pages).
+Verification:
+- I am re-verifying end-to-end in the browser: open an exam -> AI
+  Generate -> From Existing Exam, 5 questions, Multiple Choice + True/
+  False, Medium difficulty -> Generate -> Preview shows 5 drafts -> edit
+  one draft's correct answer -> deselect one draft -> Add Selected to
+  Exam -> confirm exactly the selected/edited ones appear in the exam's
+  real Questions table and the deselected one does not exist anywhere. I
+  am also verifying a Student-role account is rejected (403) from
+  /api/ai/generate-questions and from the AI Generate UI.
+- I am updating README (AI Milestone Progress section), api-contracts.md
+  (the new /api/ai/generate-questions contract), and running the full
+  verification suite (dotnet build/test, npm run build/lint/test).
+Day complete when: the full Admin AI-assisted question workflow (generate
+-> preview -> edit/select -> approve) works end-to-end through the
+Gateway with real JWTs and Admin-only authorization enforced, and no
+generated question reaches the database without an explicit approval
+click. -> AI Milestone complete, Phase 7 unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-AI Milestone (27-30)  I build the AI Service, the AI question generator UI,
-                       and the human approval flow before questions reach the DB.
 Phase 7 (Days 31-33)  I build the Submission Service and the Take Exam UI.
 Phase 8 (Days 34-36)  I build the Result Service and the Result UI.
 Phase 9 (Days 37-38)  I build the Notification Service.
@@ -641,7 +800,8 @@ Import Questions, AI Generate Questions, AI Generated Questions Preview,
 Question Bank, Manage Categories, Exam Settings, and Exam Review & Publish.
 It spans Phase 5 (Exam Service), Phase 6 (Question Service) and the AI
 Milestone combined - each phase only builds its own slice of it, per the
-WIREFRAME SCOPE NOTE above Day 19 (Phase 5) and above Day 23 (Phase 6).
+WIREFRAME SCOPE NOTE above Day 19 (Phase 5), above Day 23 (Phase 6), and
+above Day 27 (AI Milestone).
 
 I am treating both wireframes as the layout reference only (structure, flow,
 component placement), and building the final UI to a professional standard

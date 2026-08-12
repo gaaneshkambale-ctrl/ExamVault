@@ -419,6 +419,12 @@ export default function EditExam() {
             <Card.Body className="p-0">
               <div className="d-flex justify-content-between align-items-center p-4 pb-3">
                 <h2 className="h6 fw-bold mb-0">Questions</h2>
+                <Link
+                  to={`/admin/exams/${id}/questions/ai-generate`}
+                  className="btn btn-outline-primary btn-sm"
+                >
+                  + AI Generate
+                </Link>
               </div>
 
               {isLoadingQuestions && (
@@ -429,7 +435,7 @@ export default function EditExam() {
 
               {!isLoadingQuestions && questions?.length === 0 && (
                 <div className="text-center text-muted py-4">
-                  No questions yet. Click "+ Add Question" above to add one.
+                  No questions yet. Add one from the Questions page, or try "+ AI Generate" above.
                 </div>
               )}
 

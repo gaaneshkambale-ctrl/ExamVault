@@ -69,6 +69,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "QuestionService", "Question
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Question.Application.Tests", "Tests\QuestionService\OnlineExamSystem.Question.Application.Tests\OnlineExamSystem.Question.Application.Tests.csproj", "{A370116D-2EF1-4630-8FB0-E5C7CC399237}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AiService", "AiService", "{811024B0-9D9F-48EC-8714-627898EAFCCF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Ai.API", "Backend\Services\AiService\OnlineExamSystem.Ai.API\OnlineExamSystem.Ai.API.csproj", "{49C44A7E-391A-40C2-AFC2-8F39A16990BF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Ai.Application", "Backend\Services\AiService\OnlineExamSystem.Ai.Application\OnlineExamSystem.Ai.Application.csproj", "{397FF081-A2CA-4078-AF7D-47EAF9F4135C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Ai.Domain", "Backend\Services\AiService\OnlineExamSystem.Ai.Domain\OnlineExamSystem.Ai.Domain.csproj", "{DFB822C7-BE73-4190-A788-D075023C1000}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Ai.Infrastructure", "Backend\Services\AiService\OnlineExamSystem.Ai.Infrastructure\OnlineExamSystem.Ai.Infrastructure.csproj", "{D764F47A-1442-4FFF-B352-A1D8F50BCCF1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -158,6 +168,22 @@ Global
 		{A370116D-2EF1-4630-8FB0-E5C7CC399237}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A370116D-2EF1-4630-8FB0-E5C7CC399237}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A370116D-2EF1-4630-8FB0-E5C7CC399237}.Release|Any CPU.Build.0 = Release|Any CPU
+		{49C44A7E-391A-40C2-AFC2-8F39A16990BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49C44A7E-391A-40C2-AFC2-8F39A16990BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49C44A7E-391A-40C2-AFC2-8F39A16990BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49C44A7E-391A-40C2-AFC2-8F39A16990BF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{397FF081-A2CA-4078-AF7D-47EAF9F4135C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{397FF081-A2CA-4078-AF7D-47EAF9F4135C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{397FF081-A2CA-4078-AF7D-47EAF9F4135C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{397FF081-A2CA-4078-AF7D-47EAF9F4135C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DFB822C7-BE73-4190-A788-D075023C1000}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFB822C7-BE73-4190-A788-D075023C1000}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFB822C7-BE73-4190-A788-D075023C1000}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFB822C7-BE73-4190-A788-D075023C1000}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D764F47A-1442-4FFF-B352-A1D8F50BCCF1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D764F47A-1442-4FFF-B352-A1D8F50BCCF1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D764F47A-1442-4FFF-B352-A1D8F50BCCF1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D764F47A-1442-4FFF-B352-A1D8F50BCCF1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8314B0DE-3264-488A-9C66-BF410203CC19} = {24F021E6-C582-43B4-8E9C-FA50BD9C1458}
@@ -188,5 +214,10 @@ Global
 		{B81620B4-55E2-420D-AB30-C09BB3725AD2} = {4897C443-C043-4458-AF9B-90E7662F3316}
 		{7C1A9846-7AF6-478A-B8EA-1C1A9E028FDE} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
 		{A370116D-2EF1-4630-8FB0-E5C7CC399237} = {7C1A9846-7AF6-478A-B8EA-1C1A9E028FDE}
+		{49C44A7E-391A-40C2-AFC2-8F39A16990BF} = {811024B0-9D9F-48EC-8714-627898EAFCCF}
+		{397FF081-A2CA-4078-AF7D-47EAF9F4135C} = {811024B0-9D9F-48EC-8714-627898EAFCCF}
+		{DFB822C7-BE73-4190-A788-D075023C1000} = {811024B0-9D9F-48EC-8714-627898EAFCCF}
+		{D764F47A-1442-4FFF-B352-A1D8F50BCCF1} = {811024B0-9D9F-48EC-8714-627898EAFCCF}
+		{811024B0-9D9F-48EC-8714-627898EAFCCF} = {858A1CEA-9237-4B7D-8E87-F934E6494A77}
 	EndGlobalSection
 EndGlobal
