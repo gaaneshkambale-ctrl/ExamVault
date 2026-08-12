@@ -33,6 +33,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "UserService", "UserService"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.User.Application.Tests", "Tests\UserService\OnlineExamSystem.User.Application.Tests\OnlineExamSystem.User.Application.Tests.csproj", "{F6FA18D0-D138-474A-A98F-558254F6E034}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Backend", "Backend", "{CE2BA043-2700-4AF8-B7FE-F212BB71B961}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Services", "Services", "{15602C65-C8E6-4555-B25F-9E1B60B58078}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "NotificationService", "NotificationService", "{0D688ED2-200F-4388-9FAA-BF16136BEDCC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.NotificationService.Worker", "Backend\Services\NotificationService\OnlineExamSystem.NotificationService.Worker\OnlineExamSystem.NotificationService.Worker.csproj", "{94B30349-1C51-41E9-B502-85460233D817}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -78,6 +86,10 @@ Global
 		{F6FA18D0-D138-474A-A98F-558254F6E034}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F6FA18D0-D138-474A-A98F-558254F6E034}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F6FA18D0-D138-474A-A98F-558254F6E034}.Release|Any CPU.Build.0 = Release|Any CPU
+		{94B30349-1C51-41E9-B502-85460233D817}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{94B30349-1C51-41E9-B502-85460233D817}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{94B30349-1C51-41E9-B502-85460233D817}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{94B30349-1C51-41E9-B502-85460233D817}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8314B0DE-3264-488A-9C66-BF410203CC19} = {24F021E6-C582-43B4-8E9C-FA50BD9C1458}
@@ -91,5 +103,8 @@ Global
 		{D4EDB18F-A519-43AF-B3D6-E2D70121A156} = {767AF458-2655-40D3-8614-96488D7385FD}
 		{833C3488-4EB3-4AC5-83C1-D8AF58D57618} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
 		{F6FA18D0-D138-474A-A98F-558254F6E034} = {833C3488-4EB3-4AC5-83C1-D8AF58D57618}
+		{15602C65-C8E6-4555-B25F-9E1B60B58078} = {CE2BA043-2700-4AF8-B7FE-F212BB71B961}
+		{0D688ED2-200F-4388-9FAA-BF16136BEDCC} = {15602C65-C8E6-4555-B25F-9E1B60B58078}
+		{94B30349-1C51-41E9-B502-85460233D817} = {0D688ED2-200F-4388-9FAA-BF16136BEDCC}
 	EndGlobalSection
 EndGlobal

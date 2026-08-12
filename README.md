@@ -39,6 +39,7 @@ ExamVault
 - Node.js LTS + npm
 - Git
 - SQL Server / SQL Server tooling
+- Docker (for local RabbitMQ, as of Phase 4)
 
 ## Getting Started
 
@@ -60,9 +61,18 @@ directly.
 dotnet restore
 dotnet build
 dotnet ef database update --project Backend/Services/UserService/OnlineExamSystem.User.Infrastructure --startup-project Backend/Services/UserService/OnlineExamSystem.User.API
+docker run -d --name examvault-rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 dotnet run --project Backend/Services/UserService/OnlineExamSystem.User.API
 dotnet run --project Backend/Gateway/OnlineExamSystem.ApiGateway
+dotnet run --project Backend/Services/NotificationService/OnlineExamSystem.NotificationService.Worker
 ```
+
+RabbitMQ must be running before `User.API` starts — `RegisterUserHandler`
+publishes `UserRegisteredEvent` synchronously as part of registration, so
+registration fails if RabbitMQ is unreachable. Management UI:
+http://localhost:15672 (guest/guest — RabbitMQ's default local-only
+credential, not a real secret, same reasoning as the Windows Auth SQL
+connection string).
 
 Backend secrets (connection strings, JWT signing keys, etc.) go in .NET User
 Secrets, never in `appsettings.Development.json`. The JWT signing key is
@@ -352,5 +362,49 @@ session, no protected routes yet; Phase 3 replaces this properly.
   `npm run build`, `npm run lint`, `npm run test` (12/12)
 
 **Phase 3 (JWT Authentication) is complete. Phase 4 (RabbitMQ / Azure Service Bus) is unlocked.**
+
+## Phase 4 Progress
+
+- [x] Day 16 — Event contracts
+- [x] Day 17 — RabbitMQ local
+- [ ] Day 18 — Production messaging foundation and gate
+
+### Day 16 Notes
+
+- Added `IntegrationEvent` (`Base/`) — shared base convention (`EventId`,
+  `OccurredAtUtc`) every future event inherits
+- Added `UserRegisteredEvent` (`User/`) — `UserId`, `Email`, `FullName`
+- Added `IEventPublisher` (`Publishing/`) — `PublishAsync<TEvent>` where
+  `TEvent : IntegrationEvent`
+- Contracts only — no RabbitMQ package referenced yet, `RegisterUserHandler`
+  untouched
+- `dotnet build` and `dotnet test` (23/23) both green
+
+### Day 17 Notes
+
+- Added `RabbitMQ.Client` (7.2.2) to `User.Infrastructure`; new
+  `RabbitMqSettings` (non-secret, `appsettings.Development.json`) and
+  `RabbitMqEventPublisher` implementing `IEventPublisher` — one long-lived
+  `IConnection` (singleton), a short-lived `IChannel` per publish, a durable
+  fanout exchange (`examvault.events`), message `Type` property set to the
+  event's class name for the consumer to key off
+  `RegisterUserHandler` now takes `IEventPublisher` and publishes
+  `UserRegisteredEvent` after a successful save; registered as
+  `AddSingleton<IEventPublisher, RabbitMqEventPublisher>` in `Program.cs`
+- New minimal `OnlineExamSystem.NotificationService.Worker` project
+  (`Backend/Services/NotificationService/`) — a `BackgroundService` that
+  declares/binds a queue to the fanout exchange and logs any
+  `UserRegisteredEvent` it receives. This is only the Day 17 foundation, not
+  the full Phase 9 Notification Service
+- New `FakeEventPublisher` test double + a test asserting registration
+  publishes the event with the right `UserId`/`Email`/`FullName` — 24/24
+  backend tests green
+- Verified end-to-end: `docker run rabbitmq:3-management` → started the
+  Worker → registered a user via `curl` through `User.API` → Worker logged
+  `UserRegisteredEvent received: UserId=..., Email=..., FullName=...`
+  matching the registration response
+- Known tradeoff, intentionally deferred to Day 18: registration now fails
+  if RabbitMQ is unreachable (no retry/circuit-breaker yet) — that hardening
+  is explicitly Day 18's job, not Day 17's
 
 **Phase 2 (API Gateway) is complete. Phase 3 (JWT Authentication) is unlocked.**

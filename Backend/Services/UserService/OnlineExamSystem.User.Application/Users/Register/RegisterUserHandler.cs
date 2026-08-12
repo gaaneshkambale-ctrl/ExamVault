@@ -1,5 +1,7 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Identity;
+using OnlineExamSystem.Shared.Events.Publishing;
+using OnlineExamSystem.Shared.Events.User;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Entities;
 
@@ -10,15 +12,18 @@ public class RegisterUserHandler
     private readonly IUserRepository _userRepository;
     private readonly IValidator<RegisterUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
+    private readonly IEventPublisher _eventPublisher;
 
     public RegisterUserHandler(
         IUserRepository userRepository,
         IValidator<RegisterUserCommand> validator,
-        IPasswordHasher<AppUser> passwordHasher)
+        IPasswordHasher<AppUser> passwordHasher,
+        IEventPublisher eventPublisher)
     {
         _userRepository = userRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
+        _eventPublisher = eventPublisher;
     }
 
     public async Task<RegisterUserResult> HandleAsync(
@@ -47,6 +52,10 @@ public class RegisterUserHandler
 
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
+
+        await _eventPublisher.PublishAsync(
+            new UserRegisteredEvent { UserId = user.Id, Email = user.Email, FullName = user.FullName },
+            cancellationToken);
 
         return RegisterUserResult.Ok(user);
     }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using OnlineExamSystem.Shared.Events.User;
 using OnlineExamSystem.User.Application.Tests.Fakes;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Domain.Entities;
@@ -8,8 +9,8 @@ namespace OnlineExamSystem.User.Application.Tests;
 
 public class RegisterUserHandlerTests
 {
-    private static RegisterUserHandler CreateHandler(FakeUserRepository repository) =>
-        new(repository, new RegisterUserValidator(), new PasswordHasher<AppUser>());
+    private static RegisterUserHandler CreateHandler(FakeUserRepository repository, FakeEventPublisher? eventPublisher = null) =>
+        new(repository, new RegisterUserValidator(), new PasswordHasher<AppUser>(), eventPublisher ?? new FakeEventPublisher());
 
     [Fact]
     public async Task Valid_registration_creates_user_with_hashed_password()
@@ -24,6 +25,23 @@ public class RegisterUserHandlerTests
         Assert.NotNull(result.User);
         Assert.Equal("jane@example.com", result.User!.Email);
         Assert.NotEqual("Passw0rd!", result.User!.PasswordHash);
+    }
+
+    [Fact]
+    public async Task Valid_registration_publishes_UserRegisteredEvent()
+    {
+        var repository = new FakeUserRepository();
+        var eventPublisher = new FakeEventPublisher();
+        var handler = CreateHandler(repository, eventPublisher);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        var published = Assert.Single(eventPublisher.PublishedEvents);
+        var userRegistered = Assert.IsType<UserRegisteredEvent>(published);
+        Assert.Equal(result.User!.Id, userRegistered.UserId);
+        Assert.Equal("jane@example.com", userRegistered.Email);
+        Assert.Equal("Jane Doe", userRegistered.FullName);
     }
 
     [Fact]

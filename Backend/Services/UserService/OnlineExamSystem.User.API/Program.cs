@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.GetProfile;
 using OnlineExamSystem.User.Application.Users.Login;
@@ -12,6 +13,7 @@ using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Infrastructure.Authentication;
+using OnlineExamSystem.User.Infrastructure.Messaging;
 using OnlineExamSystem.User.Infrastructure.Persistence;
 using OnlineExamSystem.User.Infrastructure.Repositories;
 
@@ -42,6 +44,9 @@ public class Program
         builder.Services.AddScoped<LoginUserHandler>();
         builder.Services.AddScoped<RefreshTokenHandler>();
         builder.Services.AddScoped<LogoutHandler>();
+
+        builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+        builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
 
         var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
             ?? throw new InvalidOperationException("Missing \"Jwt\" configuration section.");
