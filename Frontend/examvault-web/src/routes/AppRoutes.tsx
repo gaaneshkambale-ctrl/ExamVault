@@ -7,6 +7,7 @@ import AdminDashboard from '../pages/admin/AdminDashboard';
 import ManageExams from '../pages/admin/ManageExams';
 import CreateExam from '../pages/admin/CreateExam';
 import ExamDetails from '../pages/admin/ExamDetails';
+import EditExam from '../pages/admin/EditExam';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -34,7 +35,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute roles={['Admin']}>
             <ManageExams />
           </ProtectedRoute>
         }
@@ -42,15 +43,23 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/create"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute roles={['Admin']}>
             <CreateExam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:id/edit"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <EditExam />
           </ProtectedRoute>
         }
       />
       <Route
         path="/admin/exams/:id"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute roles={['Admin']}>
             <ExamDetails />
           </ProtectedRoute>
         }

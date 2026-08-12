@@ -32,9 +32,16 @@ export default function ExamDetails() {
     <AdminLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0">Exam Details</h1>
-        <Link to="/admin/exams" className="btn btn-outline-secondary">
-          Back to Exams
-        </Link>
+        <div className="d-flex gap-2">
+          {id && (
+            <Link to={`/admin/exams/${id}/edit`} className="btn btn-primary">
+              Edit
+            </Link>
+          )}
+          <Link to="/admin/exams" className="btn btn-outline-secondary">
+            Back to Exams
+          </Link>
+        </div>
       </div>
 
       <Card className="border-0 shadow-sm">

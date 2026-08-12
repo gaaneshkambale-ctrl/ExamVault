@@ -197,15 +197,22 @@ existed since Phase 3; this is the first endpoint to actually check it).
 
 Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
 - `Requests/Exam/CreateExamRequest.cs`
+- `Requests/Exam/UpdateExamRequest.cs`
 - `Responses/Exam/ExamResponse.cs`
 
-`POST /api/exams`, `GET /api/exams`, and `GET /api/exams/{id}` all exist
-as of Day 21. Update/publish/archive land Day 22.
+All endpoints exist as of Day 22 (Phase 5 gate): `POST /api/exams`,
+`GET /api/exams`, `GET /api/exams/{id}`, `PUT /api/exams/{id}`, and the
+three status-transition actions (`publish`/`unpublish`/`archive`).
+`ExamResponse` now also carries the Exam Settings fields
+(`shuffleQuestions`, `shuffleOptions`, `showResult`, `showCorrectAnswers`,
+`allowReview`, `startAtUtc`, `endAtUtc`, `maxAttempts`,
+`negativeMarkingEnabled`, `negativeMarks`), added this day.
 
 ### POST /api/exams
 
 Creates a new exam. Always created with `status: "Draft"` — publishing is
-a separate action (Day 22).
+a separate action (see below). Settings fields (`shuffleQuestions`, etc.)
+get the entity's defaults on create; edit them via `PUT /api/exams/{id}`.
 
 **Request body**
 
@@ -235,7 +242,17 @@ a separate action (Day 22).
   "instructions": "Answer all questions.",
   "status": "Draft",
   "totalQuestions": 0,
-  "createdOn": "2026-08-12T10:09:35.6119531Z"
+  "createdOn": "2026-08-12T10:09:35.6119531Z",
+  "shuffleQuestions": true,
+  "shuffleOptions": true,
+  "showResult": true,
+  "showCorrectAnswers": false,
+  "allowReview": true,
+  "startAtUtc": null,
+  "endAtUtc": null,
+  "maxAttempts": 1,
+  "negativeMarkingEnabled": false,
+  "negativeMarks": 0
 }
 ```
 
@@ -251,43 +268,88 @@ Returned for a valid token without the `Admin` role. No body.
 ## GET /api/exams
 
 Lists every exam, newest first (`CreatedAtUtc` descending). No pagination
-or filtering yet.
+or filtering yet. Each entry has the same shape as the
+`POST /api/exams` 201 response above.
 
 ### 200 OK
 
 ```json
 [
-  {
-    "id": "5f4657f1-1e78-486b-8d25-d0979b77bcbd",
-    "title": "ASP.NET Core",
-    "description": "Covers ASP.NET Core basics.",
-    "examType": "Manual",
-    "durationMinutes": 90,
-    "totalMarks": 60,
-    "passingMarks": 30,
-    "instructions": "Answer all questions.",
-    "status": "Draft",
-    "totalQuestions": 0,
-    "createdOn": "2026-08-12T10:26:18.9736684Z"
-  },
-  {
-    "id": "54b2147b-ec59-43d0-a102-900f9659c2af",
-    "title": "C# Fundamentals",
-    "...": "..."
-  }
+  { "id": "5f4657f1-1e78-486b-8d25-d0979b77bcbd", "title": "ASP.NET Core", "...": "..." },
+  { "id": "54b2147b-ec59-43d0-a102-900f9659c2af", "title": "C# Fundamentals", "...": "..." }
 ]
 ```
 
 ## GET /api/exams/{id}
 
-Returns a single exam.
-
-### 200 OK
-
-Same shape as one entry from `GET /api/exams`.
+Returns a single exam. Same shape as one entry from `GET /api/exams`.
 
 ### 404 Not Found
 
 ```json
 { "message": "Exam not found." }
+```
+
+## PUT /api/exams/{id}
+
+Updates an exam's Basic Information and Settings fields. Does **not**
+touch `status` — that's only ever changed via the publish/unpublish/
+archive actions below, never by sending an arbitrary `status` value here.
+
+**Request body** — same fields as `POST /api/exams`, plus:
+
+```json
+{
+  "...": "same fields as POST /api/exams",
+  "shuffleQuestions": "bool",
+  "shuffleOptions": "bool",
+  "showResult": "bool",
+  "showCorrectAnswers": "bool",
+  "allowReview": "bool",
+  "startAtUtc": "ISO datetime or null",
+  "endAtUtc": "ISO datetime or null, must be after startAtUtc if both are set",
+  "maxAttempts": "int, required, > 0",
+  "negativeMarkingEnabled": "bool",
+  "negativeMarks": "decimal, required, >= 0"
+}
+```
+
+### 200 OK
+
+Same shape as `GET /api/exams/{id}`, reflecting the update.
+
+### 400 Bad Request / 404 Not Found
+
+Same shapes as `POST /api/exams` 400 and `GET /api/exams/{id}` 404.
+
+## POST /api/exams/{id}/publish, /unpublish, /archive
+
+Explicit status transitions — the only way `status` ever changes. Allowed
+transitions: `Draft -> Published`, `Published -> Draft` (`unpublish`),
+`Draft -> Archived`, `Published -> Archived`. `Archived` is terminal — no
+transition leads out of it. Each returns the full updated exam on success.
+
+| Action       | Target status |
+|--------------|----------------|
+| `/publish`   | `Published`    |
+| `/unpublish` | `Draft`        |
+| `/archive`   | `Archived`     |
+
+### 200 OK
+
+Same shape as `GET /api/exams/{id}`.
+
+### 404 Not Found
+
+```json
+{ "message": "Exam not found." }
+```
+
+### 409 Conflict
+
+Returned when the transition isn't allowed from the exam's current status
+(e.g. publishing an already-archived exam).
+
+```json
+{ "message": "Exam cannot transition to Published." }
 ```

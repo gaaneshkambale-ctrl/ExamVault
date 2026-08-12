@@ -442,7 +442,7 @@ session, no protected routes yet; Phase 3 replaces this properly.
 - [x] Day 19 — Exam service skeleton and Admin Dashboard shell
 - [x] Day 20 — Exam persistence and Create Exam
 - [x] Day 21 — Exam APIs and live exam list
-- [ ] Day 22 — Edit, settings, publish, and gate
+- [x] Day 22 — Edit, settings, publish, and gate
 
 ### Day 19 Notes
 
@@ -560,3 +560,55 @@ session, no protected routes yet; Phase 3 replaces this properly.
   `npm run build`/`lint`/`test` (18/18) all green. Chrome extension still
   not connected — same caveat as Days 19-20, verified via direct API
   calls and the frontend's build/lint/test/type-check, not a live browser
+
+### Day 22 Notes
+
+- New `ExamStatusTransitions` (`Exam.Domain/Rules/`) — a pure rule table
+  (`Draft <-> Published`, either `-> Archived`, `Archived` terminal). One
+  `ChangeExamStatusCommand`/`ChangeExamStatusHandler` handles all three
+  transitions (parameterized by target status) rather than three
+  near-identical handlers; the controller exposes it as three named
+  actions (`POST /api/exams/{id}/publish|unpublish|archive`) so the
+  client can only ever request one of those three states, never an
+  arbitrary `status` value
+- New `UpdateExamCommand`/`Validator`/`Handler` — Basic Information +
+  Settings fields (not `status`). `ExamResponse` now also carries the
+  Settings fields, added this day since the edit form needs them to
+  pre-populate
+- `PUT /api/exams/{id}` and the three status-transition endpoints added
+  to `ExamsController`, all `[Authorize(Roles = "Admin")]`. A 409 (not
+  400) on an invalid transition — it's a legal request that conflicts
+  with current state, not a malformed one
+- 12 new backend unit tests: `ExamStatusTransitions` (all 4 allowed + 5
+  disallowed combinations), `ChangeExamStatusHandler` (valid transition,
+  disallowed transition, unknown exam), `UpdateExamValidator` (5 cases
+  incl. end-before-start date), `UpdateExamHandler` (3 cases) — 56/56
+  backend tests total
+- New `EditExam` page (`/admin/exams/:id/edit`): Basic Information +
+  a Settings panel (toggles via `Form.Check type="switch"`, start/end
+  `datetime-local` inputs, max attempts, negative marking) using
+  `useMutation` for save and each status action, invalidating the
+  `['exams']` query cache on success so the list/detail refresh. Publish/
+  Save as Draft (unpublish)/Archive buttons are conditional on the
+  exam's current status — `Archived` shows none, matching the terminal
+  rule server-side
+- Exams is now the first role-gated section of the UI:
+  `/admin/exams`, `/admin/exams/create`, `/admin/exams/:id`, and
+  `/admin/exams/:id/edit` all pass `roles={['Admin']}` to `ProtectedRoute`
+  (its `roles` prop existed unused since Day 15 — first real use).
+  `/admin/dashboard` deliberately stays open to any authenticated user
+  for now, per the plan
+- Verified end-to-end for real through the Gateway with a real Admin JWT:
+  edited an exam's settings (`maxAttempts` 1→2, enabled negative
+  marking) → published it → confirmed `Published` in the list → archived
+  it → confirmed `Archived` in the list → confirmed publishing an
+  already-archived exam returns 409. Also confirmed a `Student` token
+  gets 403 on `PUT`, `/publish`, and `/archive`
+- `dotnet build`/`dotnet test` (24 User + 32 Exam = 56/56, Release config
+  too) and `npm run build`/`lint`/`test` (18/18) all green. Chrome
+  extension still not connected — same caveat as Days 19-21, the edit
+  page and role-gating weren't visually exercised in a browser, only
+  verified via direct API calls and the frontend's own
+  build/lint/test/type-check
+
+**Phase 5 (Exam Service) is complete. Phase 6 (Question Service) is unlocked.**

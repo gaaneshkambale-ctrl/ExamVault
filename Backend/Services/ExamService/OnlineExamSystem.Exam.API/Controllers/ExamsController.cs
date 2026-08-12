@@ -1,10 +1,13 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 using OnlineExamSystem.Exam.Application.Exams.Create;
 using OnlineExamSystem.Exam.Application.Exams.GetById;
 using OnlineExamSystem.Exam.Application.Exams.List;
+using OnlineExamSystem.Exam.Application.Exams.Update;
 using OnlineExamSystem.Exam.Domain.Entities;
+using OnlineExamSystem.Exam.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 
@@ -18,17 +21,23 @@ public class ExamsController : ControllerBase
     private readonly CreateExamHandler _createExamHandler;
     private readonly GetExamHandler _getExamHandler;
     private readonly ListExamsHandler _listExamsHandler;
+    private readonly UpdateExamHandler _updateExamHandler;
+    private readonly ChangeExamStatusHandler _changeExamStatusHandler;
     private readonly ILogger<ExamsController> _logger;
 
     public ExamsController(
         CreateExamHandler createExamHandler,
         GetExamHandler getExamHandler,
         ListExamsHandler listExamsHandler,
+        UpdateExamHandler updateExamHandler,
+        ChangeExamStatusHandler changeExamStatusHandler,
         ILogger<ExamsController> logger)
     {
         _createExamHandler = createExamHandler;
         _getExamHandler = getExamHandler;
         _listExamsHandler = listExamsHandler;
+        _updateExamHandler = updateExamHandler;
+        _changeExamStatusHandler = changeExamStatusHandler;
         _logger = logger;
     }
 
@@ -85,6 +94,88 @@ public class ExamsController : ControllerBase
         return Ok(ToResponse(exam));
     }
 
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateExamRequest request, CancellationToken cancellationToken)
+    {
+        var command = new UpdateExamCommand(
+            id,
+            request.Title,
+            request.Description,
+            request.ExamType,
+            request.DurationMinutes,
+            request.TotalMarks,
+            request.PassingMarks,
+            request.Instructions,
+            request.ShuffleQuestions,
+            request.ShuffleOptions,
+            request.ShowResult,
+            request.ShowCorrectAnswers,
+            request.AllowReview,
+            request.StartAtUtc,
+            request.EndAtUtc,
+            request.MaxAttempts,
+            request.NegativeMarkingEnabled,
+            request.NegativeMarks);
+
+        var result = await _updateExamHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Exam not found." });
+        }
+
+        if (!result.Success)
+        {
+            _logger.LogWarning(
+                "Update exam validation failed for {ExamId}: {Errors}",
+                id,
+                string.Join("; ", result.ValidationErrors));
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        _logger.LogInformation("Exam {ExamId} updated.", id);
+        return Ok(ToResponse(result.Exam!));
+    }
+
+    [HttpPost("{id:guid}/publish")]
+    public Task<IActionResult> Publish(Guid id, CancellationToken cancellationToken) =>
+        ChangeStatus(id, ExamStatus.Published, cancellationToken);
+
+    [HttpPost("{id:guid}/unpublish")]
+    public Task<IActionResult> Unpublish(Guid id, CancellationToken cancellationToken) =>
+        ChangeStatus(id, ExamStatus.Draft, cancellationToken);
+
+    [HttpPost("{id:guid}/archive")]
+    public Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken) =>
+        ChangeStatus(id, ExamStatus.Archived, cancellationToken);
+
+    private async Task<IActionResult> ChangeStatus(
+        Guid id,
+        ExamStatus targetStatus,
+        CancellationToken cancellationToken)
+    {
+        var result = await _changeExamStatusHandler.HandleAsync(
+            new ChangeExamStatusCommand(id, targetStatus),
+            cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Exam not found." });
+        }
+
+        if (result.InvalidTransition)
+        {
+            return Conflict(new { message = $"Exam cannot transition to {targetStatus}." });
+        }
+
+        _logger.LogInformation("Exam {ExamId} moved to {Status}.", id, targetStatus);
+        return Ok(ToResponse(result.Exam!));
+    }
+
     private static ExamResponse ToResponse(ExamPaper exam) =>
         new(
             exam.Id,
@@ -97,5 +188,15 @@ public class ExamsController : ControllerBase
             exam.Instructions,
             exam.Status.ToString(),
             exam.TotalQuestions,
-            exam.CreatedAtUtc);
+            exam.CreatedAtUtc,
+            exam.ShuffleQuestions,
+            exam.ShuffleOptions,
+            exam.ShowResult,
+            exam.ShowCorrectAnswers,
+            exam.AllowReview,
+            exam.StartAtUtc,
+            exam.EndAtUtc,
+            exam.MaxAttempts,
+            exam.NegativeMarkingEnabled,
+            exam.NegativeMarks);
 }

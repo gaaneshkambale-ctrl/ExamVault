@@ -1,7 +1,7 @@
-namespace OnlineExamSystem.Shared.Contracts.Responses.Exam;
+namespace OnlineExamSystem.Exam.Application.Exams.Update;
 
-public record ExamResponse(
-    Guid Id,
+public record UpdateExamCommand(
+    Guid ExamId,
     string Title,
     string Description,
     string ExamType,
@@ -9,9 +9,6 @@ public record ExamResponse(
     int TotalMarks,
     int PassingMarks,
     string Instructions,
-    string Status,
-    int TotalQuestions,
-    DateTime CreatedOn,
     bool ShuffleQuestions,
     bool ShuffleOptions,
     bool ShowResult,

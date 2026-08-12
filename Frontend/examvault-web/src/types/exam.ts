@@ -11,15 +11,23 @@ export interface CreateExamRequest {
   instructions: string;
 }
 
-export interface ExamResponse {
+export interface ExamSettings {
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  showResult: boolean;
+  showCorrectAnswers: boolean;
+  allowReview: boolean;
+  startAtUtc: string | null;
+  endAtUtc: string | null;
+  maxAttempts: number;
+  negativeMarkingEnabled: boolean;
+  negativeMarks: number;
+}
+
+export interface UpdateExamRequest extends CreateExamRequest, ExamSettings {}
+
+export interface ExamResponse extends CreateExamRequest, ExamSettings {
   id: string;
-  title: string;
-  description: string;
-  examType: ExamType;
-  durationMinutes: number;
-  totalMarks: number;
-  passingMarks: number;
-  instructions: string;
   status: ExamStatus;
   totalQuestions: number;
   createdOn: string;

@@ -77,6 +77,9 @@ export default function ManageExams() {
                       <Link to={`/admin/exams/${exam.id}`} className="me-3">
                         View
                       </Link>
+                      <Link to={`/admin/exams/${exam.id}/edit`} className="me-3">
+                        Edit
+                      </Link>
                       <Button variant="link" size="sm" disabled className="text-muted p-0">
                         Delete
                       </Button>
