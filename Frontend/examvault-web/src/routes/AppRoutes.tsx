@@ -8,6 +8,7 @@ import ManageExams from '../pages/admin/ManageExams';
 import CreateExam from '../pages/admin/CreateExam';
 import ExamDetails from '../pages/admin/ExamDetails';
 import EditExam from '../pages/admin/EditExam';
+import QuestionBank from '../pages/admin/QuestionBank';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -61,6 +62,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ExamDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/questions"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <QuestionBank />
           </ProtectedRoute>
         }
       />

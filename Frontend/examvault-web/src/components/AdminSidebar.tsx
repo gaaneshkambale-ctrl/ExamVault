@@ -5,7 +5,7 @@ const navItems = [
   { label: 'Dashboard', path: '/admin/dashboard' },
   { label: 'Users', path: null },
   { label: 'Exams', path: '/admin/exams' },
-  { label: 'Questions', path: null },
+  { label: 'Questions', path: '/admin/questions' },
   { label: 'Categories', path: null },
   { label: 'Results', path: null },
   { label: 'Reports', path: null },

@@ -482,9 +482,132 @@ Day complete when: the full Admin exam workflow (create -> edit/settings
 JWTs and Admin-only authorization enforced. -> Phase 5 complete, Phase 6
 unlocked.
 
+WIREFRAME SCOPE NOTE FOR PHASE 6
+-------------------------------------
+Adminwireframe.png's Question-related screens are Add Questions Manually,
+Import Questions, AI Generate Questions, AI Generated Questions Preview,
+Question Bank, and Manage Categories. Phase 6 only builds its own slice:
+Question Bank (list/search) and Add/Edit/Delete Question, for two
+question types only - Multiple Choice and True/False (the two with the
+largest counts in the wireframe's own stat chips: MCQ 750, True/False
+150). Import Questions (bulk CSV/Excel upload), Manage Categories (a
+separate normalized category CRUD - the wireframe's "Exam/Topic" column
+is satisfied by the existing ExamId relationship, not a new entity), the
+rich-text question editor toolbar, and the other five question types
+(Short Answer, Fill in the Blanks, Match the Following, Code/Program,
+Essay) are explicitly out of scope - reserved as enum values so nothing
+needs revisiting later, but no UI or business logic built for them now.
+AI Generate Questions and AI Generated Questions Preview belong to the
+AI Milestone (Days 27-30), not Phase 6.
+
+DAY 23 — PHASE 6: QUESTION SERVICE SKELETON AND QUESTION BANK SHELL
+--------------------------------------------------------------------------
+Backend:
+- I am creating the Question service projects (OnlineExamSystem.Question.API,
+  .Application, .Domain, .Infrastructure), mirroring ExamService's project
+  layout and project-reference rules, and adding them to ExamVault.sln.
+- I am creating the ExamQuestion and QuestionOption entities in
+  Question.Domain. ExamQuestion: ExamId, QuestionType (enum with all
+  seven wireframe types - MultipleChoice, TrueFalse, ShortAnswer,
+  FillInTheBlank, MatchTheFollowing, CodeProgram, Essay - only the first
+  two get real support this phase), QuestionText, Marks, Difficulty
+  (enum: Easy/Medium/Hard), CreatedByUserId. QuestionOption: QuestionId,
+  OptionText, IsCorrect, DisplayOrder - shared by both Multiple Choice
+  and True/False questions (a True/False question is just two fixed
+  QuestionOption rows), so there is one options model, not two.
+- The entity is named ExamQuestion, not Question, for the same
+  namespace-collision reason OnlineExamSystem.Exam.Domain.Entities.Exam
+  was renamed ExamPaper - OnlineExamSystem.Question.Domain would collide
+  with a bare type named Question the same way.
+- I am NOT creating the DbContext/migration yet (Day 24) or any endpoints
+  yet (Day 25) - skeleton only, matching Exam Service's Day 19.
+Frontend:
+- I am making the sidebar's "Questions" link real (/admin/questions) -
+  it has been a non-functional placeholder since Day 19.
+- I am creating a Question Bank page shell: static/mock rows matching
+  the wireframe's table columns (Question, Type, Exam, Difficulty,
+  Marks, Actions) and type-count tabs (All/Multiple Choice/True-False),
+  all at zero - no real data yet, wired in Day 25.
+Day complete when: the four new Question.* projects build and are in
+ExamVault.sln, and the Question Bank shell renders with the sidebar link
+now functional.
+
+DAY 24 — PHASE 6: QUESTION PERSISTENCE AND ADD QUESTION
+--------------------------------------------------------------------------
+Backend:
+- I am creating QuestionDbContext in Question.Infrastructure, SQL Server
+  (local MSSQLSERVER, Windows Auth, ExamVault.QuestionDb - Question
+  Service owns its own database).
+- I am creating the initial EF Core migration and the repository
+  abstraction/implementation (AddAsync/SaveChangesAsync only - GetById/
+  GetByExamId land Day 25 alongside the endpoints that need them,
+  mirroring Exam Service's Day 20/21 split).
+- I am creating CreateQuestionCommand/Validator/Handler covering
+  QuestionText, Marks, Difficulty, ExamId, QuestionType (Multiple Choice
+  or True/False only), and Options (list of text + is-correct) -
+  validating exactly one correct option, at least two options for
+  Multiple Choice, and exactly the two fixed options for True/False.
+- I am adding POST /api/questions and the Gateway route
+  (/api/questions/{**catch-all} -> Question API), the same necessity as
+  Exam Service's Day 20 - the frontend only ever calls the Gateway.
+  [Authorize(Roles = "Admin")] from the start, same reasoning as before.
+Frontend:
+- I am creating the Add Question form (Multiple Choice/True-False only):
+  question text (plain textarea - no rich-text editor this phase),
+  marks, difficulty, a dynamic options list with correct-answer
+  selection, Save/Cancel. Reachable from an exam's Edit page ("Add
+  Question" action) at /admin/exams/:examId/questions/create.
+Day complete when: submitting the Add Question form calls
+CreateQuestionCommand end-to-end and a question with its options appears
+in ExamVault.QuestionDb.
+
+DAY 25 — PHASE 6: QUESTION APIS AND LIVE QUESTION LIST
+--------------------------------------------------------------------------
+Backend:
+- I am adding GET /api/questions?examId={id} and GET /api/questions/{id},
+  plus the deferred GetByIdAsync/GetByExamIdAsync repository methods.
+- I am writing unit tests for the CreateQuestion validator/handler and
+  the new query handlers, mirroring Exam Service's test project layout
+  (a new OnlineExamSystem.Question.Application.Tests project).
+Frontend:
+- I am wiring the Question Bank / per-exam question list to real data
+  (a new useQuestions hook, matching Exam Service's Day 21 pattern),
+  replacing Day 23's placeholder rows.
+- I am adding a view-only question preview reachable from the list.
+Day complete when: Admin can add a question through the form and see it
+appear in the live question list for that exam, through Gateway ->
+Question API -> SQL Server.
+
+DAY 26 — PHASE 6: EDIT, DELETE, AND GATE
+--------------------------------------------------------------------------
+Backend:
+- I am adding PUT /api/questions/{id} and DELETE /api/questions/{id},
+  [Authorize(Roles = "Admin")].
+- I am writing unit tests for the update and delete handlers.
+Frontend:
+- I am adding an Edit Question page (reusing the Add Question form) and
+  a Delete action with a confirmation step.
+- I am NOT syncing ExamPaper.TotalQuestions to the real question count -
+  that field stays the Day 19 admin-entered metadata value; reconciling
+  it with actual questions would mean Question Service reaching into
+  Exam Service's data, which crosses a service boundary and is
+  explicitly out of scope here.
+Verification:
+- I am re-verifying end-to-end in the browser: create an exam -> add a
+  Multiple Choice question -> add a True/False question -> edit a
+  question -> delete a question -> confirm the list updates each time. I
+  am also verifying a Student-role account is rejected (403) from every
+  /api/questions endpoint.
+- I am updating README (Phase 6 Progress section), api-contracts.md
+  (question endpoints), and running the full verification suite (dotnet
+  build/test, npm run build/lint/test).
+Day complete when: the full Admin question workflow (add -> list -> edit
+-> delete) works end-to-end through the Gateway with real JWTs and
+Admin-only authorization enforced, and questions can be attached to and
+retrieved from an exam. -> Phase 6 complete, AI Milestone unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-Phase 6 (Days 23-26)  I build the Question Service and the question/option UI.
 AI Milestone (27-30)  I build the AI Service, the AI question generator UI,
                        and the human approval flow before questions reach the DB.
 Phase 7 (Days 31-33)  I build the Submission Service and the Take Exam UI.
@@ -518,7 +641,7 @@ Import Questions, AI Generate Questions, AI Generated Questions Preview,
 Question Bank, Manage Categories, Exam Settings, and Exam Review & Publish.
 It spans Phase 5 (Exam Service), Phase 6 (Question Service) and the AI
 Milestone combined - each phase only builds its own slice of it, per the
-WIREFRAME SCOPE NOTE above Day 19.
+WIREFRAME SCOPE NOTE above Day 19 (Phase 5) and above Day 23 (Phase 6).
 
 I am treating both wireframes as the layout reference only (structure, flow,
 component placement), and building the final UI to a professional standard

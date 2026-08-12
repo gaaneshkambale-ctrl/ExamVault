@@ -624,3 +624,40 @@ unreachable through the normal login flow even though every API behind
 it worked correctly. `login()` (`AuthProvider`/`useAuth`) now returns the
 logged-in `UserProfile`, and `Login.tsx` redirects to `/admin/dashboard`
 for `Admin` and `/profile` for `Student`.
+
+## Phase 6 Progress
+
+- [x] Day 23 — Question service skeleton and Question Bank shell
+- [ ] Day 24 — Question persistence and Add Question
+- [ ] Day 25 — Question APIs and live question list
+- [ ] Day 26 — Edit, delete, and gate
+
+### Day 23 Notes
+
+- New `OnlineExamSystem.Question.API`/`.Application`/`.Domain`/
+  `.Infrastructure` projects (`Backend/Services/QuestionService/`),
+  mirroring Exam Service's layout and project-reference rules, added to
+  `ExamVault.sln`. Runs on port 5030 (5010 User, 5020 Exam, 5030
+  Question)
+- New `ExamQuestion`/`QuestionOption` entities (`Question.Domain/Entities/`).
+  `ExamQuestion`, not `Question` — same namespace-collision reason `Exam`
+  became `ExamPaper`. `QuestionType` enum has all seven wireframe types
+  (MultipleChoice, TrueFalse, ShortAnswer, FillInTheBlank,
+  MatchTheFollowing, CodeProgram, Essay) — only the first two get real
+  support this phase, the rest are reserved so nothing needs revisiting
+  later. `QuestionOption` is shared by both supported types (a
+  True/False question is just two fixed option rows, not a special
+  case) — no DbContext/migration/endpoints yet, that's Days 24-25
+- Sidebar's "Questions" link is real now (`/admin/questions`) — a
+  non-functional placeholder since Day 19. New `QuestionBank` page shell:
+  mock rows matching the wireframe's table columns (Question, Type,
+  Exam, Difficulty, Marks, Actions) and type tabs (All/Multiple
+  Choice/True-False), tab counts at zero — not fabricated, no real data
+  exists yet
+- `dotnet build` (backend, including the 4 new projects, 56/56 tests
+  unaffected) and `npm run build`/`lint`/`test` (18/18) all green.
+  Smoke-tested `Question.API` standalone — boots and Swagger loads at
+  `:5030/swagger`. Confirmed via source inspection (not a live browser —
+  Chrome extension still not connected) that the sidebar's "Questions"
+  item now renders as an actual `<Link>`, not another stale placeholder
+  like the Day 22 login bug
