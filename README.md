@@ -628,7 +628,7 @@ for `Admin` and `/profile` for `Student`.
 ## Phase 6 Progress
 
 - [x] Day 23 — Question service skeleton and Question Bank shell
-- [ ] Day 24 — Question persistence and Add Question
+- [x] Day 24 — Question persistence and Add Question
 - [ ] Day 25 — Question APIs and live question list
 - [ ] Day 26 — Edit, delete, and gate
 
@@ -661,3 +661,48 @@ for `Admin` and `/profile` for `Student`.
   Chrome extension still not connected) that the sidebar's "Questions"
   item now renders as an actual `<Link>`, not another stale placeholder
   like the Day 22 login bug
+
+### Day 24 Notes
+
+- New `QuestionDbContext` (`Question.Infrastructure/Persistence/`), SQL
+  Server (`ExamVault.QuestionDb` — Question Service owns its own
+  database), migration `InitialCreate` (`Questions` + `QuestionOptions`
+  tables, FK with cascade delete), `IQuestionRepository`/
+  `QuestionRepository` (`AddAsync` writes a question and its options
+  together in one call — `GetById`/`GetByExamId` land Day 25 alongside
+  the endpoints that need them, mirroring Exam Service's split)
+- New `CreateQuestionCommand`/`Validator`/`Handler`
+  (`Question.Application/Questions/Create/`): only `MultipleChoice`/
+  `TrueFalse` accepted; validates exactly one correct option, ≥2 options
+  for Multiple Choice, exactly the two fixed True/False options.
+  `ExamId` is stored as-is, not validated against a real exam — doing so
+  would mean Question Service reaching into Exam Service's data, an
+  explicit service-boundary cross this phase doesn't take (same
+  reasoning as Day 26's planned `TotalQuestions` non-sync)
+- `POST /api/questions` (`[Authorize(Roles = "Admin")]`, applied from the
+  start) + the Gateway route (`/api/questions/{**catch-all}` → `:5030`)
+  — same necessity as Exam Service's Day 20, the frontend only ever
+  calls the Gateway
+- New `OnlineExamSystem.Question.Application.Tests` project — 9
+  validator tests (both supported types, wrong type, empty text, 0/2
+  correct options, too few MC options, wrong True/False text, wrong
+  True/False count) + 3 handler tests (create with options, sequential
+  `DisplayOrder`, invalid command saves nothing) — 12/12 green
+- New Create Question form (`/admin/exams/:examId/questions/create`):
+  question type/difficulty selects, question text, marks, a dynamic
+  options list for Multiple Choice (add/remove, radio-button correct
+  selection) that becomes two fixed True/False rows when that type is
+  selected, client-side validation matching the backend rules + 7 tests.
+  Reachable via a new "+ Add Question" action on the Exam edit page
+- Verified end-to-end for real through the Gateway with a real Admin
+  JWT: created a Multiple Choice question (3 options) and a True/False
+  question on a real exam, confirmed both plus their options in
+  `ExamVault.QuestionDb` (right `OptionCount`/`CorrectCount` per
+  question); confirmed two correct options and an unsupported type
+  (`Essay`) both 400 with the right messages; confirmed a `Student`
+  token gets 403. Also confirmed via source inspection that the new
+  "+ Add Question" link compiles to a real `${id}`-interpolated URL, not
+  another stale placeholder
+- `dotnet build`/`dotnet test` (24 User + 32 Exam + 12 Question = 68/68)
+  and `npm run build`/`lint`/`test` (25/25) all green. Chrome extension
+  still not connected — same caveat as every day this phase

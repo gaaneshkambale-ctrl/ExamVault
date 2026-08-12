@@ -353,3 +353,74 @@ Returned when the transition isn't allowed from the exam's current status
 ```json
 { "message": "Exam cannot transition to Published." }
 ```
+
+## Question Service
+
+Every endpoint requires a valid JWT access token with the `Admin` role,
+same as Exam Service. Only `POST /api/questions` exists as of Day 24 —
+`GET`/`PUT`/`DELETE` land Days 25-26.
+
+Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
+- `Requests/Question/CreateQuestionRequest.cs`
+- `Responses/Question/QuestionResponse.cs`
+
+Only `MultipleChoice` and `TrueFalse` question types are accepted —
+other values (`ShortAnswer`, `FillInTheBlank`, `MatchTheFollowing`,
+`CodeProgram`, `Essay`) exist in the domain enum but are rejected by the
+validator until a later phase builds real support for them. `ExamId` is
+not validated against a real exam (that would mean Question Service
+reaching into Exam Service's data — a service-boundary cross this phase
+doesn't take).
+
+### POST /api/questions
+
+Creates a question with its options in one call. Exactly one option must
+be marked correct. Multiple Choice needs at least two options; True/False
+needs exactly two, with `optionText` "True" and "False" (order doesn't
+matter, exactly one marked correct).
+
+**Request body**
+
+```json
+{
+  "examId": "guid, required",
+  "questionType": "\"MultipleChoice\" or \"TrueFalse\"",
+  "questionText": "string, required, max 2000 chars",
+  "marks": "int, required, > 0",
+  "difficulty": "\"Easy\", \"Medium\", or \"Hard\"",
+  "options": [
+    { "optionText": "string, required", "isCorrect": "bool" }
+  ]
+}
+```
+
+### 201 Created
+
+```json
+{
+  "id": "7eebe881-7723-41e0-914b-fb993adcfc3b",
+  "examId": "5f4657f1-1e78-486b-8d25-d0979b77bcbd",
+  "questionType": "MultipleChoice",
+  "questionText": "Which method starts an ASP.NET Core app?",
+  "marks": 2,
+  "difficulty": "Medium",
+  "options": [
+    { "id": "c942c788-554f-4b53-84a9-4627cc175de5", "optionText": "app.Run()", "isCorrect": true, "displayOrder": 0 },
+    { "id": "3d995dde-96b3-46f9-b8f5-3819ce019b19", "optionText": "app.Start()", "isCorrect": false, "displayOrder": 1 },
+    { "id": "e6dd07b8-1086-4a5f-8780-2c4c78019cf5", "optionText": "app.Execute()", "isCorrect": false, "displayOrder": 2 }
+  ],
+  "createdOn": "2026-08-12T11:41:08.1206666Z"
+}
+```
+
+### 400 Bad Request
+
+Same `ValidationProblemDetails` shape as `POST /api/exams`. Common
+messages: `"Only Multiple Choice and True/False questions are supported
+currently."`, `"Exactly one option must be marked correct."`,
+`"Multiple Choice questions need at least two options; True/False
+questions need exactly two options: True and False."`
+
+### 403 Forbidden
+
+Returned for a valid token without the `Admin` role. No body.

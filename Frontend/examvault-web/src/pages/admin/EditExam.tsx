@@ -184,6 +184,12 @@ export default function EditExam() {
                 </div>
               </div>
 
+              <div className="mb-4">
+                <Link to={`/admin/exams/${id}/questions/create`} className="btn btn-outline-primary btn-sm">
+                  + Add Question
+                </Link>
+              </div>
+
               <Form noValidate onSubmit={handleSubmit}>
                 <Row>
                   <Col md={8}>

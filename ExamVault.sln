@@ -65,6 +65,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Question.D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Question.Infrastructure", "Backend\Services\QuestionService\OnlineExamSystem.Question.Infrastructure\OnlineExamSystem.Question.Infrastructure.csproj", "{B81620B4-55E2-420D-AB30-C09BB3725AD2}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "QuestionService", "QuestionService", "{7C1A9846-7AF6-478A-B8EA-1C1A9E028FDE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Question.Application.Tests", "Tests\QuestionService\OnlineExamSystem.Question.Application.Tests\OnlineExamSystem.Question.Application.Tests.csproj", "{A370116D-2EF1-4630-8FB0-E5C7CC399237}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -150,6 +154,10 @@ Global
 		{B81620B4-55E2-420D-AB30-C09BB3725AD2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B81620B4-55E2-420D-AB30-C09BB3725AD2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B81620B4-55E2-420D-AB30-C09BB3725AD2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A370116D-2EF1-4630-8FB0-E5C7CC399237}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A370116D-2EF1-4630-8FB0-E5C7CC399237}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A370116D-2EF1-4630-8FB0-E5C7CC399237}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A370116D-2EF1-4630-8FB0-E5C7CC399237}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8314B0DE-3264-488A-9C66-BF410203CC19} = {24F021E6-C582-43B4-8E9C-FA50BD9C1458}
@@ -178,5 +186,7 @@ Global
 		{D2C5AEA7-CA8A-4B38-86B7-46823134D19E} = {4897C443-C043-4458-AF9B-90E7662F3316}
 		{50DB9813-7BDF-46C2-852F-74993804814D} = {4897C443-C043-4458-AF9B-90E7662F3316}
 		{B81620B4-55E2-420D-AB30-C09BB3725AD2} = {4897C443-C043-4458-AF9B-90E7662F3316}
+		{7C1A9846-7AF6-478A-B8EA-1C1A9E028FDE} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
+		{A370116D-2EF1-4630-8FB0-E5C7CC399237} = {7C1A9846-7AF6-478A-B8EA-1C1A9E028FDE}
 	EndGlobalSection
 EndGlobal
