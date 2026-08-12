@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { Button, Card, Col, Container, Row } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
+import AuthModal from '../components/AuthModal';
+import type { AuthMode } from '../components/AuthModal';
 
 function HeroIllustration() {
   return (
@@ -88,6 +90,12 @@ const features: Feature[] = [
 ];
 
 export default function Home() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const mode: AuthMode | null =
+    location.pathname === '/login' ? 'login' : location.pathname === '/register' ? 'register' : null;
+
   return (
     <div>
       <NavBar />
@@ -138,6 +146,8 @@ export default function Home() {
           ))}
         </Row>
       </Container>
+
+      {mode && <AuthModal mode={mode} onClose={() => navigate('/')} />}
     </div>
   );
 }

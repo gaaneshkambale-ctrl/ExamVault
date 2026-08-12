@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { getExam, listExams } from '../api/examApi';
 
-export function useExams() {
+export function useExams(enabled = true) {
   return useQuery({
     queryKey: ['exams'],
     queryFn: listExams,
+    enabled,
   });
 }
 

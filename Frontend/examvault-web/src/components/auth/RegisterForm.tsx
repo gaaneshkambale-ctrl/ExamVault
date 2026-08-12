@@ -3,11 +3,9 @@ import type { FormEvent } from 'react';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import AuthLayout from '../layouts/AuthLayout';
-import RegisterIllustration from '../components/illustrations/RegisterIllustration';
-import { registerUser } from '../api/userApi';
-import { validate } from '../utils/validation';
-import type { RegisterFormState } from '../utils/validation';
+import { registerUser } from '../../api/userApi';
+import { validate } from '../../utils/validation';
+import type { RegisterFormState } from '../../utils/validation';
 
 type FormState = RegisterFormState;
 
@@ -31,7 +29,7 @@ function extractServerError(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-export default function Register() {
+export default function RegisterForm() {
   const [form, setForm] = useState<FormState>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -68,29 +66,14 @@ export default function Register() {
 
   if (status === 'success') {
     return (
-      <AuthLayout
-        title="Create Account"
-        subtitle="Register a new account"
-        illustration={<RegisterIllustration />}
-      >
-        <Alert variant="success">
-          Account created successfully. You can now <Link to="/login">log in</Link>.
-        </Alert>
-      </AuthLayout>
+      <Alert variant="success">
+        Account created successfully. You can now <Link to="/login">log in</Link>.
+      </Alert>
     );
   }
 
   return (
-    <AuthLayout
-      title="Create Account"
-      subtitle="Register a new account"
-      illustration={<RegisterIllustration />}
-      footer={
-        <span className="text-muted">
-          Already have an account? <Link to="/login">Login</Link>
-        </span>
-      }
-    >
+    <>
       {status === 'error' && <Alert variant="danger">{serverError}</Alert>}
       <Form noValidate onSubmit={handleSubmit}>
         <Form.Group className="mb-3" controlId="registerFullName">
@@ -158,6 +141,11 @@ export default function Register() {
           )}
         </Button>
       </Form>
-    </AuthLayout>
+      <div className="mt-4 text-center">
+        <span className="text-muted">
+          Already have an account? <Link to="/login">Login</Link>
+        </span>
+      </div>
+    </>
   );
 }

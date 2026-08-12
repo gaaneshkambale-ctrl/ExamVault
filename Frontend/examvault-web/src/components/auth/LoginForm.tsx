@@ -3,9 +3,7 @@ import type { FormEvent } from 'react';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import AuthLayout from '../layouts/AuthLayout';
-import LoginIllustration from '../components/illustrations/LoginIllustration';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 
 function extractServerError(error: unknown): string {
   if (isAxiosError(error) && error.response?.status === 401) {
@@ -14,7 +12,7 @@ function extractServerError(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-export default function Login() {
+export default function LoginForm() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -43,16 +41,7 @@ export default function Login() {
   };
 
   return (
-    <AuthLayout
-      title="Welcome Back!"
-      subtitle="Login to your account"
-      illustration={<LoginIllustration />}
-      footer={
-        <span className="text-muted">
-          Don't have an account? <Link to="/register">Register</Link>
-        </span>
-      }
-    >
+    <>
       {status === 'error' && <Alert variant="danger">{errorMessage}</Alert>}
       <Form noValidate onSubmit={handleSubmit}>
         <Form.Group className="mb-3" controlId="loginEmail">
@@ -91,6 +80,11 @@ export default function Login() {
           )}
         </Button>
       </Form>
-    </AuthLayout>
+      <div className="mt-4 text-center">
+        <span className="text-muted">
+          Don't have an account? <Link to="/register">Register</Link>
+        </span>
+      </div>
+    </>
   );
 }

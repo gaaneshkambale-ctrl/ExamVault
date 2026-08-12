@@ -1,4 +1,6 @@
 import { Button, Card, Col, Form, Row } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import AdminSidebar from '../components/AdminSidebar';
 import DashboardSidebar from '../components/DashboardSidebar';
 import ProfileAvatarIllustration from '../components/illustrations/ProfileAvatarIllustration';
 import { useAuth } from '../hooks/useAuth';
@@ -18,20 +20,30 @@ function ProfileField({ label, value }: { label: string; value: string }) {
 
 export default function Profile() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   if (!user) {
     return null;
   }
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
   return (
     <div className="d-flex min-vh-100">
-      <DashboardSidebar active="Profile" />
+      {user.role === 'Admin' ? (
+        <AdminSidebar active="Profile" />
+      ) : (
+        <DashboardSidebar active="Profile" />
+      )}
 
       <main className="flex-grow-1 bg-light">
         <div className="container-fluid py-5 px-4 px-md-5" style={{ maxWidth: 880 }}>
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h1 className="h4 fw-bold mb-0">Profile</h1>
-            <Button variant="outline-secondary" size="sm" onClick={() => logout()}>
+            <Button variant="outline-secondary" size="sm" onClick={() => void handleLogout()}>
               Logout
             </Button>
           </div>
@@ -46,7 +58,7 @@ export default function Profile() {
                   className="d-flex flex-column align-items-center text-center mb-4 mb-sm-0"
                 >
                   <ProfileAvatarIllustration />
-                  <Button variant="outline-primary" size="sm" className="mt-3">
+                  <Button variant="outline-primary" size="sm" className="mt-3" disabled>
                     Change Photo
                   </Button>
                 </Col>

@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import Register from './Register';
+import RegisterForm from './RegisterForm';
 
 function renderRegister() {
   return render(
     <MemoryRouter>
-      <Register />
+      <RegisterForm />
     </MemoryRouter>,
   );
 }
 
-describe('Register page', () => {
+describe('RegisterForm', () => {
   it('shows field errors when submitting an empty form', async () => {
     const user = userEvent.setup();
     renderRegister();
