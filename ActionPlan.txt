@@ -285,6 +285,64 @@ works end-to-end through the Gateway with real JWTs, and no page reachable
 without a valid session renders another user's data. -> Phase 3 complete,
 Phase 4 unlocked.
 
+DAY 16 — PHASE 4: EVENT CONTRACTS
+--------------------------------------
+Backend:
+- I am creating UserRegisteredEvent (UserId, Email, RegisteredAtUtc) in
+  Shared.Events, following a shared base-event convention (EventId,
+  OccurredAtUtc) so every future service event looks the same.
+- I am creating IEventPublisher in Shared.Events as the publisher
+  abstraction - no RabbitMQ package referenced yet, just the interface.
+- I am NOT wiring RabbitMQ or touching RegisterUserHandler yet - this day
+  is contracts only.
+Frontend:
+- No major UI work this day - the Day 7 registration success state already
+  covers it.
+Day complete when: Shared.Events and the new publisher interface compile
+and are referenced from User.Application without introducing a RabbitMQ
+package dependency yet.
+
+DAY 17 — PHASE 4: RABBITMQ LOCAL
+-------------------------------------
+Backend:
+- I am running RabbitMQ locally (Docker container).
+- I am adding the RabbitMQ.Client package and a concrete
+  RabbitMqEventPublisher (implementing IEventPublisher) in
+  User.Infrastructure.
+- I am wiring RegisterUserHandler to publish UserRegisteredEvent after a
+  successful registration.
+- I am creating a Notification consumer foundation - a minimal standalone
+  consumer/worker that connects to RabbitMQ and logs received
+  UserRegisteredEvent messages. This is NOT the full Phase 9 Notification
+  Service, just enough to prove the event round-trips.
+Frontend:
+- I am confirming the existing Register success state is unaffected -
+  event publishing is fire-and-forget and invisible to the user for now.
+Day complete when: registering a user through the API publishes a
+UserRegisteredEvent to RabbitMQ, and the local consumer receives and logs
+it.
+
+DAY 18 — PHASE 4: PRODUCTION MESSAGING FOUNDATION AND GATE
+------------------------------------------------------------------
+Backend:
+- I am documenting retry/DLQ design notes (consumer-failure handling,
+  dead-letter queue strategy) - design notes only, not a full
+  implementation.
+- I am documenting idempotency considerations (consumers must tolerate
+  duplicate delivery, e.g. dedupe by EventId).
+- I am defining the Azure Service Bus implementation boundary in
+  Documentation - which interface (IEventPublisher) swaps in an Azure
+  Service Bus-backed implementation later, without changing
+  Application-layer code.
+Verification:
+- I am re-verifying the full Register -> RabbitMQ publish -> consumer
+  receive flow end-to-end.
+- I am updating README (Phase 4 Progress section) with the event
+  contract/messaging design.
+Day complete when: a user registration can publish an event and a local
+consumer can receive it, and the retry/DLQ/idempotency/Azure Service Bus
+boundary notes are documented. -> Phase 4 complete, Phase 5 unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
 Phase 4 (Days 16-18)  I set up RabbitMQ locally, publish UserRegisteredEvent,
