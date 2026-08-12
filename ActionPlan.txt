@@ -39,7 +39,8 @@ COMPLETE (gate passed). Phase 4 (RabbitMQ / Azure Service Bus, Days 16-18)
 is COMPLETE (gate passed). Phase 5 (Exam Service, Days 19-22) is COMPLETE
 (gate passed). Phase 6 (Question Service, Days 23-26) is COMPLETE (gate
 passed). AI Milestone (Days 27-30) is COMPLETE (gate passed). Phase 7
-(Submission Service, Days 31-33) is unlocked and is where I go next.
+(Submission Service, Days 31-33) is unlocked and now IN PROGRESS -
+starting at Day 31.
 
 DAY 1 — PHASE 0: REPOSITORY & TOOLING SETUP  (TODAY)
 ------------------------------------------------------
@@ -768,9 +769,214 @@ Gateway with real JWTs and Admin-only authorization enforced, and no
 generated question reaches the database without an explicit approval
 click. -> AI Milestone complete, Phase 7 unlocked.
 
+WIREFRAME SCOPE NOTE FOR PHASE 7
+-------------------------------------
+A dedicated detailed wireframe exists for the student side -
+StudentWireframe.png - the same kind of upgrade Adminwireframe.png was
+over wireframe.png's admin summary, and it supersedes wireframe.png's
+3-screen student summary (Student Dashboard/Take Exam/Exam Result) as
+the Phase 7 layout reference. It has 10 screens: 1 Student Dashboard
+(Overview), 2 My Exams, 3 Upcoming Exam Details, 4 Take Exam (In
+Progress), 5 Review Before Submit, 6 Exam Submitted Successfully, 7 My
+Results, 8 Result Details, 9 My Certificates, 10 Profile.
+
+Phase 7 builds screens 1-6 only. Screens 7-8 (My Results, Result
+Details) need a real score, which is explicitly Phase 8's job (Result
+Service comparing stored answers against Question Service's IsCorrect
+flag) - Phase 7's screen 6 (Exam Submitted Successfully) shows Total
+Questions/Submitted On/Status only, never a score. Screen 9 (My
+Certificates) does not map to any phase in this plan at all - there was
+never a Certificate Service or certificate-generation step scoped
+anywhere from Phase 7 through Phase 10, so it is flagged here as an
+explicit open gap rather than silently dropped; it needs its own
+scoping decision later, not built now. Screen 10 (Profile) already
+exists since Phase 1/3; its extra fields (Phone, a real Change Photo)
+are not stored anywhere (AppUser only has FullName/Email/Role, and the
+existing Profile page's Change Photo button is already disabled for the
+same reason) - Phase 7 does not extend AppUser to add them.
+
+DashboardSidebar (My Exams, My Results, Dashboard, Profile - present
+since early on but non-functional placeholders) gets Dashboard and My
+Exams wired to real routes this phase; My Results stays visibly
+disabled (same "disabled, not hidden" honesty rule as Day 27's Short
+Answer chip) until Phase 8.
+
+Screen 3's instructions panel explicitly says "You cannot pause or
+resume the exam" and "Do not refresh or close the browser window."
+Phase 7 follows that as the UI's stated behavior - no pause button, no
+"resume" messaging or affordance anywhere in the Take Exam UI. The
+backend still treats a duplicate start-attempt call as returning the
+already-existing InProgress attempt rather than erroring or creating a
+second one, purely as a defensive safety net if a refresh happens by
+accident - this is not surfaced to the student as a supported feature,
+just a "don't lose everything" backstop behind an interface that tells
+them not to rely on it.
+
+Screen 4's question navigator has four states - Answered, Not Answered,
+Marked for Review, Not Visited - not the two I originally assumed.
+AttemptAnswer gets an IsMarkedForReview flag to support this. "Not
+Visited" is a client-only concept (which questions the student has
+scrolled to this session) and is never persisted. Screen 5 (Review
+Before Submit) is a required intermediate step between clicking Submit
+and the attempt actually being marked Submitted, showing real counts of
+each state before the student confirms.
+
+Submission Service's boundary otherwise stands as before: it owns
+attempts and raw answers only and does NOT grade anything - crossing
+into Question Service's IsCorrect data now would be the same kind of
+service-boundary violation the Day 26 TotalQuestions note already ruled
+out for Exam/Question Service.
+
+DAY 31 — PHASE 7: SUBMISSION SERVICE SKELETON AND STUDENT-SIDE SHELL
+--------------------------------------------------------------------------
+Backend:
+- I am creating the Submission service projects
+  (OnlineExamSystem.Submission.API, .Application, .Domain,
+  .Infrastructure), mirroring Question/AI Service's project layout and
+  project-reference rules, and adding them to ExamVault.sln.
+- I am creating the ExamAttempt entity (Id, ExamId, UserId,
+  AttemptNumber, StartedAtUtc, SubmittedAtUtc - nullable, Status enum:
+  InProgress/Submitted/AutoSubmitted) and AttemptAnswer entity (Id,
+  AttemptId, QuestionId, SelectedOptionId - nullable, IsMarkedForReview,
+  AnsweredAtUtc) in Submission.Domain.
+- The entity is named ExamAttempt, not Submission, for the same
+  namespace-collision reason Exam became ExamPaper and Question became
+  ExamQuestion - OnlineExamSystem.Submission.Domain.Entities.Submission
+  would collide with the namespace segment "Submission" the same way.
+- I am NOT creating the DbContext/migration yet (Day 32) or any
+  endpoints yet (Day 32/33) - skeleton only, matching every prior
+  service's first day (Exam's Day 19, Question's Day 23, AI's Day 27).
+Frontend:
+- I am wiring DashboardSidebar's Dashboard and My Exams items to real
+  routes (/dashboard, /exams) - both have existed as non-functional
+  placeholder labels since before this phase.
+- I am creating the Student Dashboard page (StudentWireframe.png screen
+  1): stat chips (Upcoming Exams, Completed Exams, Average Score,
+  Certificates - the last two static zero placeholders per the scope
+  note above), an Upcoming Exams list and a Recent Results list (the
+  latter an empty placeholder), and a Performance Overview chart shown
+  empty/placeholder (same reasoning - no scores exist yet).
+- I am creating the My Exams page (screen 2): tabs (All/Upcoming/
+  Completed/In Progress), search, a type filter, and a table (Exam
+  Title, Type, Questions, Duration, Status, Action) reading real exams
+  from the existing GET /api/exams (Phase 5's endpoint). Only the
+  All/Upcoming tabs are meaningfully real this day (Published exams);
+  Completed/In Progress need attempt data that doesn't exist until Day
+  32/33 and render empty here.
+- I am creating the Upcoming Exam Details / Instructions page shell at
+  /exams/:id (screen 3: exam meta card, the fixed instructions list,
+  the "start only once" warning banner, Start Exam Now button) - not
+  wired to a real attempt yet.
+- I am creating a Take Exam page shell at /exams/:id/take (screen 4
+  layout: timer display, numbered question-navigator sidebar with the
+  four-state legend, single question + options panel, Mark for Review
+  checkbox, Previous/Next, Submit Exam) - static/shell only this day.
+Day complete when: the four new Submission.* projects build and are in
+ExamVault.sln, the Student Dashboard and My Exams pages render real
+Published exams, and the Exam Details and Take Exam shells are reachable
+from My Exams' Start Exam action.
+
+DAY 32 — PHASE 7: ATTEMPT PERSISTENCE, START EXAM, AND ANSWER SAVING
+--------------------------------------------------------------------------
+Backend:
+- I am creating SubmissionDbContext in Submission.Infrastructure,
+  configuring SQL Server (local MSSQLSERVER, Windows Auth,
+  ExamVault.SubmissionDb - Submission Service owns its own database,
+  same principle as every prior service).
+- I am creating the initial EF Core migration and the repository
+  abstraction/implementation.
+- I am creating StartAttemptCommand/Validator/Handler: creates an
+  ExamAttempt (Status=InProgress), enforcing the exam's MaxAttempts
+  setting (Phase 5 field - counts prior attempts for that ExamId+UserId)
+  and its StartAtUtc/EndAtUtc scheduling window, and returning the
+  already-existing InProgress attempt instead of creating a second one
+  if one is found (the accidental-refresh safety net from the scope
+  note above - not something the UI advertises).
+- I am creating SaveAnswerCommand/Validator/Handler: upserts one
+  AttemptAnswer for a given question (SelectedOptionId and/or
+  IsMarkedForReview), only while the attempt's Status=InProgress and the
+  attempt belongs to the calling user.
+- I am adding POST /api/submissions/start and PUT
+  /api/submissions/{attemptId}/answers, [Authorize] (any authenticated
+  role, not Admin-only - the first Student-facing write endpoint in the
+  system), plus the Gateway route (/api/submissions/{**catch-all} ->
+  Submission API), the same necessity as every prior service's cutover.
+- I am writing unit tests for start (max-attempts exceeded, outside
+  scheduling window, returns an existing InProgress attempt rather than
+  duplicating it) and save-answer (attempt not InProgress, attempt
+  belongs to another user) failure paths.
+Frontend:
+- I am wiring the Exam Details page's "Start Exam Now" to the real start
+  endpoint, then fetching the exam's questions (existing GET
+  /api/questions?examId=) and applying ShuffleQuestions/ShuffleOptions
+  client-side per the exam's settings (Phase 5 fields, consumed for the
+  first time here), landing on Take Exam.
+- I am wiring each answer selection to call save-answer (on change, and
+  on Previous/Next navigation) so progress persists as the student goes,
+  and wiring the Mark for Review checkbox to the same call.
+- I am wiring the question navigator to its real four states -
+  Answered/Not Answered/Marked for Review from AttemptAnswer data, Not
+  Visited as client-only session state for questions not yet opened.
+Day complete when: starting an exam creates a real InProgress ExamAttempt
+row, answering and marking-for-review persist AttemptAnswer rows, and
+the question navigator reflects real state for the in-progress attempt.
+
+DAY 33 — PHASE 7: REVIEW, SUBMIT, AUTO-SUBMIT TIMER, AND GATE
+--------------------------------------------------------------------------
+Backend:
+- I am creating SubmitAttemptCommand/Validator/Handler: sets
+  Status=Submitted (or AutoSubmitted, per a flag the request carries) and
+  SubmittedAtUtc=now; rejects (409) if the attempt is already
+  submitted or does not belong to the calling user.
+- I am adding POST /api/submissions/{attemptId}/submit and GET
+  /api/submissions/mine?examId={id} (returns the caller's current/most
+  recent attempt for that exam, letting the frontend decide
+  start-vs-in-progress-vs-already-submitted without guessing, and
+  backing My Exams' Completed/In Progress tabs for the first time).
+- I am writing unit tests for submit (double-submit, submitting another
+  user's attempt) and the mine-lookup handler.
+Frontend:
+- I am creating the Review Before Submit screen (screen 5): the same
+  question navigator, plus a Review Summary panel with real Total
+  Questions/Answered/Not Answered/Marked for Review counts computed from
+  the attempt's AttemptAnswers, and Back to Exam / Submit Exam actions.
+- I am wiring a countdown timer to the exam's DurationMinutes (Phase 5
+  field) and the attempt's StartedAtUtc, auto-calling submit
+  (AutoSubmitted) when it reaches zero - the first place the "timers
+  never depend on AI" principle is actually exercised end-to-end.
+- I am wiring Submit Exam (from Review Before Submit) to the real submit
+  endpoint, landing on the Exam Submitted Successfully screen (screen 6:
+  Total Questions/Submitted On/Status, Go to My Exams - no score, per
+  the scope note above).
+- I am wiring Take Exam's mount logic to call the mine-lookup endpoint
+  first: continue an InProgress attempt with saved answers restored, or
+  redirect to Exam Submitted if already submitted.
+- I am wiring My Exams' Completed and In Progress tabs to real data via
+  mine-lookup; Completed rows show a "Submitted" status with a disabled
+  "View Result" action (visibly disabled, not hidden - Phase 8 wires it
+  for real).
+Verification:
+- I am re-verifying end-to-end in the browser: log in as Student ->
+  Student Dashboard/My Exams shows a Published exam -> Exam Details ->
+  Start Exam Now -> answer some questions, mark one for review -> Review
+  Before Submit shows correct counts -> Submit Exam -> Exam Submitted
+  Successfully, no score shown -> My Exams' Completed tab shows it with
+  a disabled View Result -> starting the same exam again once
+  MaxAttempts is reached is blocked. I am also verifying the timer
+  auto-submits when it reaches zero, a Student cannot start/answer/
+  submit/view another student's attempt (403/404), and every existing
+  Admin-only endpoint is unaffected.
+- I am updating README (Phase 7 Progress section), api-contracts.md
+  (submission endpoints), and running the full verification suite
+  (dotnet build/test, npm run build/lint/test).
+Day complete when: the full Student flow (Exam Details -> start ->
+answer/mark for review -> Review Before Submit -> submit/auto-submit ->
+MaxAttempts enforcement) works end-to-end through the Gateway with real
+JWTs, with no scoring/result logic and no My Certificates screen
+implemented yet. -> Phase 7 complete, Phase 8 unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-Phase 7 (Days 31-33)  I build the Submission Service and the Take Exam UI.
 Phase 8 (Days 34-36)  I build the Result Service and the Result UI.
 Phase 9 (Days 37-38)  I build the Notification Service.
 Phase 10 (Days 39-42) I containerize everything with Docker, deploy to Azure,

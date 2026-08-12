@@ -14,6 +14,15 @@ public class FakeUserRepository : IUserRepository
     public Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Email == email));
 
+    public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AppUser>>(_users.ToList());
+
+    public Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default)
+    {
+        _users.Remove(user);
+        return Task.CompletedTask;
+    }
+
     public Task AddAsync(AppUser user, CancellationToken cancellationToken = default)
     {
         _users.Add(user);
