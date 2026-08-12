@@ -1,10 +1,14 @@
 import apiClient from './axiosClient';
 import type {
+  CreateUserRequest,
   LoginRequest,
   LoginResponse,
   RefreshTokenResponse,
   RegisterRequest,
   RegisterResponse,
+  ResetPasswordRequest,
+  UpdateUserRequest,
+  UserListItem,
   UserProfile,
 } from '../types/user';
 
@@ -32,4 +36,32 @@ export async function logoutUser(refreshToken: string): Promise<void> {
 export async function getMyProfile(): Promise<UserProfile> {
   const { data } = await apiClient.get<UserProfile>('/api/users/me');
   return data;
+}
+
+export async function listUsers(): Promise<UserListItem[]> {
+  const { data } = await apiClient.get<UserListItem[]>('/api/users');
+  return data;
+}
+
+export async function getUser(id: string): Promise<UserListItem> {
+  const { data } = await apiClient.get<UserListItem>(`/api/users/${id}`);
+  return data;
+}
+
+export async function createUser(request: CreateUserRequest): Promise<UserListItem> {
+  const { data } = await apiClient.post<UserListItem>('/api/users', request);
+  return data;
+}
+
+export async function updateUser(id: string, request: UpdateUserRequest): Promise<UserListItem> {
+  const { data } = await apiClient.put<UserListItem>(`/api/users/${id}`, request);
+  return data;
+}
+
+export async function resetUserPassword(id: string, request: ResetPasswordRequest): Promise<void> {
+  await apiClient.put(`/api/users/${id}/reset-password`, request);
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  await apiClient.delete(`/api/users/${id}`);
 }

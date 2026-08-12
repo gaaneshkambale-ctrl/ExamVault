@@ -32,3 +32,30 @@ export interface RefreshTokenResponse {
   accessToken: string;
   refreshToken: string;
 }
+
+export type UserRole = 'Admin' | 'Student';
+
+export interface UserListItem {
+  id: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  createdAtUtc: string;
+}
+
+export interface CreateUserRequest {
+  fullName: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface UpdateUserRequest {
+  fullName: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface ResetPasswordRequest {
+  newPassword: string;
+}

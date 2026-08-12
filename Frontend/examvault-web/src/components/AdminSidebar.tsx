@@ -4,6 +4,7 @@ import BrandMark from './BrandMark';
 export type AdminNavItem =
   | 'Dashboard'
   | 'Users'
+  | 'Roles & Permissions'
   | 'Exams'
   | 'Exam Review & Publish'
   | 'Questions'
@@ -28,7 +29,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/admin/dashboard' },
-  { label: 'Users', path: null },
+  {
+    label: 'Users',
+    path: '/admin/users',
+    children: [{ label: 'Roles & Permissions', path: '/admin/users/roles' }],
+  },
   {
     label: 'Exams',
     path: '/admin/exams',

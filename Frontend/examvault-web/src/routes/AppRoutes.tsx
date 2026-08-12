@@ -4,6 +4,12 @@ import Login from '../pages/Login';
 import Register from '../pages/Register';
 import Profile from '../pages/Profile';
 import AdminDashboard from '../pages/admin/AdminDashboard';
+import ManageUsers from '../pages/admin/ManageUsers';
+import CreateUser from '../pages/admin/CreateUser';
+import EditUser from '../pages/admin/EditUser';
+import UserDetails from '../pages/admin/UserDetails';
+import ResetPassword from '../pages/admin/ResetPassword';
+import RolesPermissions from '../pages/admin/RolesPermissions';
 import ManageExams from '../pages/admin/ManageExams';
 import CreateExam from '../pages/admin/CreateExam';
 import ExamDetails from '../pages/admin/ExamDetails';
@@ -35,6 +41,54 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ManageUsers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/create"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <CreateUser />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/roles"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <RolesPermissions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/:id/edit"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <EditUser />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/:id/reset-password"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ResetPassword />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/:id"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <UserDetails />
           </ProtectedRoute>
         }
       />
