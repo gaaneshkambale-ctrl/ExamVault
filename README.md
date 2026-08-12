@@ -367,7 +367,7 @@ session, no protected routes yet; Phase 3 replaces this properly.
 
 - [x] Day 16 — Event contracts
 - [x] Day 17 — RabbitMQ local
-- [ ] Day 18 — Production messaging foundation and gate
+- [x] Day 18 — Production messaging foundation and gate
 
 ### Day 16 Notes
 
@@ -406,5 +406,22 @@ session, no protected routes yet; Phase 3 replaces this properly.
 - Known tradeoff, intentionally deferred to Day 18: registration now fails
   if RabbitMQ is unreachable (no retry/circuit-breaker yet) — that hardening
   is explicitly Day 18's job, not Day 17's
+
+### Day 18 Notes
+
+- Added `Documentation/messaging-design.md`: retry/DLQ design (outbox
+  pattern vs. retry-with-backoff on the publish side; manual ack + DLQ on
+  the consume side — none implemented, design notes only, per the plan),
+  idempotency (`EventId`-based dedup — at-least-once delivery, harmless
+  today since the consumer only logs, load-bearing once Phase 9 adds real
+  side effects), and the Azure Service Bus boundary (`IEventPublisher` is
+  the swap point; consumer side has no abstraction yet — not worth adding
+  until Phase 9 has more than one consumer to generalize from)
+- Re-verified the Day 17 flow end-to-end with no code changes: RabbitMQ up
+  → Worker started → registered a user via `curl` → Worker logged the
+  matching `UserRegisteredEvent` — no regressions
+- `dotnet build`/`dotnet test` (24/24) green in Release config, matching CI
+
+**Phase 4 (RabbitMQ / Azure Service Bus foundation) is complete. Phase 5 (Exam Service) is unlocked.**
 
 **Phase 2 (API Gateway) is complete. Phase 3 (JWT Authentication) is unlocked.**
