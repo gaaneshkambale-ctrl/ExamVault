@@ -18,6 +18,10 @@ import QuestionDetails from '../pages/admin/QuestionDetails';
 import EditQuestion from '../pages/admin/EditQuestion';
 import AiGenerateQuestion from '../pages/admin/AiGenerateQuestion';
 import AiGeneratedQuestionsPreview from '../pages/admin/AiGeneratedQuestionsPreview';
+import StudentDashboard from '../pages/student/StudentDashboard';
+import MyExams from '../pages/student/MyExams';
+import StudentExamDetails from '../pages/student/ExamDetails';
+import TakeExam from '../pages/student/TakeExam';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -175,6 +179,38 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <EditQuestion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <StudentDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/exams"
+        element={
+          <ProtectedRoute>
+            <MyExams />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/exams/:id"
+        element={
+          <ProtectedRoute>
+            <StudentExamDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/exams/:id/take"
+        element={
+          <ProtectedRoute>
+            <TakeExam />
           </ProtectedRoute>
         }
       />

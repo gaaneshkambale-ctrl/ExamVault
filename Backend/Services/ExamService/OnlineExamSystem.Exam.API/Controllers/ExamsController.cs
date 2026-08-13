@@ -16,7 +16,7 @@ namespace OnlineExamSystem.Exam.API.Controllers;
 
 [ApiController]
 [Route("api/exams")]
-[Authorize(Roles = "Admin")]
+[Authorize]
 public class ExamsController : ControllerBase
 {
     private readonly CreateExamHandler _createExamHandler;
@@ -46,6 +46,7 @@ public class ExamsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(CreateExamRequest request, CancellationToken cancellationToken)
     {
         var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -99,6 +100,7 @@ public class ExamsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(Guid id, UpdateExamRequest request, CancellationToken cancellationToken)
     {
         var command = new UpdateExamCommand(
@@ -146,6 +148,7 @@ public class ExamsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await _deleteExamHandler.HandleAsync(new DeleteExamCommand(id), cancellationToken);
@@ -160,14 +163,17 @@ public class ExamsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/publish")]
+    [Authorize(Roles = "Admin")]
     public Task<IActionResult> Publish(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Published, cancellationToken);
 
     [HttpPost("{id:guid}/unpublish")]
+    [Authorize(Roles = "Admin")]
     public Task<IActionResult> Unpublish(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Draft, cancellationToken);
 
     [HttpPost("{id:guid}/archive")]
+    [Authorize(Roles = "Admin")]
     public Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Archived, cancellationToken);
 

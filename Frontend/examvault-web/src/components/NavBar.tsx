@@ -38,8 +38,8 @@ export default function NavBar() {
                 <span className="fw-medium">{user.fullName}</span>
               </Dropdown.Toggle>
               <Dropdown.Menu>
-                <Dropdown.Item as={Link} to={user.role === 'Admin' ? '/admin/dashboard' : '/profile'}>
-                  {user.role === 'Admin' ? 'Admin Panel' : 'Profile'}
+                <Dropdown.Item as={Link} to={user.role === 'Admin' ? '/admin/dashboard' : '/dashboard'}>
+                  {user.role === 'Admin' ? 'Admin Panel' : 'Dashboard'}
                 </Dropdown.Item>
                 <Dropdown.Item onClick={() => void logout()}>Logout</Dropdown.Item>
               </Dropdown.Menu>

@@ -33,7 +33,7 @@ export default function LoginForm() {
     setErrorMessage('');
     try {
       const profile = await login(email, password);
-      navigate(profile.role === 'Admin' ? '/admin/dashboard' : '/profile');
+      navigate(profile.role === 'Admin' ? '/admin/dashboard' : '/dashboard');
     } catch (error) {
       setStatus('error');
       setErrorMessage(extractServerError(error));

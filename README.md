@@ -943,4 +943,75 @@ for `Admin` and `/profile` for `Student`.
   literal browser click-through; flagged consistently rather than
   silently assumed
 
+## Phase 7 Progress
+
+- [x] Day 31 — Submission Service skeleton and student-side shell
+- [ ] Day 32 — Attempt persistence, start exam, and answer saving
+- [ ] Day 33 — Review, submit, auto-submit timer, and gate
+
+### Day 31 Notes
+
+- New `OnlineExamSystem.Submission.API`/`.Application`/`.Domain`/
+  `.Infrastructure` projects (`Backend/Services/SubmissionService/`),
+  mirroring Question/AI Service's skeleton-day layout, added to
+  `ExamVault.sln`. Runs on port 5050 (5010 User, 5020 Exam, 5030
+  Question, 5040 AI, 5050 Submission). No DbContext/migration or
+  endpoints yet — skeleton only, matching every prior service's first
+  day
+- New `ExamAttempt` (Id, ExamId, UserId, AttemptNumber, StartedAtUtc,
+  SubmittedAtUtc nullable, Status: InProgress/Submitted/AutoSubmitted)
+  and `AttemptAnswer` (Id, AttemptId, QuestionId, SelectedOptionId
+  nullable, IsMarkedForReview, AnsweredAtUtc) in `Submission.Domain`.
+  Entity is `ExamAttempt`, not `Submission`, for the same
+  namespace-collision reason `Exam` became `ExamPaper` and `Question`
+  became `ExamQuestion`
+- Scope gap found and fixed: the plan assumes students can call the
+  existing `GET /api/exams`/`GET /api/exams/{id}` to browse Published
+  exams, but `ExamsController` was class-level
+  `[Authorize(Roles = "Admin")]` from Phase 5, which would 403 every
+  student. Loosened the class-level attribute to plain `[Authorize]`
+  (any authenticated role) and pushed `[Authorize(Roles = "Admin")]`
+  down onto each write action individually (Create/Update/Delete/
+  Publish/Unpublish/Archive) so reads are open to any authenticated
+  user while mutations stay Admin-only. Reverified: Student token gets
+  200 on `GET /api/exams`, 403 on `POST /api/exams`; no token gets 401
+- `DashboardSidebar` wired to real routes — Dashboard → `/dashboard`,
+  My Exams → `/exams` (My Results stays visibly disabled, same
+  "disabled, not hidden" rule as Day 27's Short Answer chip, until
+  Phase 8). New `StudentLayout` mirrors `AdminLayout`. Student login
+  now lands on `/dashboard` instead of `/profile` (matching Admin's
+  existing dashboard-landing pattern); `NavBar`'s account menu updated
+  to match
+- New Student Dashboard (`/dashboard`, wireframe screen 1): stat chips
+  (Upcoming Exams computed from real Published exams; Completed
+  Exams/Average Score/Certificates are static zero/placeholder — no
+  attempt or result data exists until Phase 8), Upcoming Exams list,
+  empty-placeholder Recent Results list, and an empty Performance
+  Overview chart reusing `ExamsTrendChart`'s existing empty state
+- New My Exams (`/exams`, screen 2): All/Upcoming/Completed/In Progress
+  tabs, search, type filter, real Published exams via the now-open
+  `GET /api/exams`. Completed/In Progress render empty this day — they
+  need attempt data that doesn't exist until Day 32/33
+- New Exam Details/Instructions shell (`/exams/:id`, screen 3): exam
+  meta card, instructions list mixing real exam data (question/mark
+  counts, negative marking) with the fixed "cannot pause/resume, don't
+  refresh" warnings from the wireframe scope note, "start only once"
+  banner. Start Exam Now shows an honest "not connected yet" notice
+  rather than a silent no-op, matching Day 27's AI Generate precedent
+- New Take Exam shell (`/exams/:id/take`, screen 4): timer display,
+  question-navigator grid with the four-state legend (Answered/Not
+  Answered/Marked for Review/Not Visited), single question + options
+  panel, working Mark for Review checkbox and Previous/Next
+  (client-only state, no real questions or persistence yet — that's
+  Day 32), Submit Exam shows the same honest "not connected yet" notice
+- Verified end-to-end in a real browser (Chrome extension, not just
+  curl): registered a throwaway Student and Admin account, published a
+  real exam as Admin, logged in as the Student and confirmed it appears
+  on both the Dashboard and My Exams, clicked through to Exam Details
+  and Take Exam and exercised the interactive shell elements. Cleaned
+  up the throwaway accounts and reverted the exam back to Draft
+  afterward. `dotnet build`/`dotnet test` all green (100/100 unaffected
+  across User/Exam/Question/AI). `npm run build`/`lint`/`test` (25/25)
+  all green
+
 **AI Milestone is complete. Phase 7 (Submission Service, Days 31-33) is unlocked.**

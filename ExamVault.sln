@@ -83,6 +83,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AiService", "AiService", "{
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Ai.Application.Tests", "Tests\AiService\OnlineExamSystem.Ai.Application.Tests\OnlineExamSystem.Ai.Application.Tests.csproj", "{74A674B9-CB46-470B-96BC-24B7D2839C00}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SubmissionService", "SubmissionService", "{ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Submission.API", "Backend\Services\SubmissionService\OnlineExamSystem.Submission.API\OnlineExamSystem.Submission.API.csproj", "{C1FA8532-143E-4834-86F7-4113732EF5F8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Submission.Application", "Backend\Services\SubmissionService\OnlineExamSystem.Submission.Application\OnlineExamSystem.Submission.Application.csproj", "{40DF5595-0522-4EF2-8ABF-F6B32E64C239}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Submission.Domain", "Backend\Services\SubmissionService\OnlineExamSystem.Submission.Domain\OnlineExamSystem.Submission.Domain.csproj", "{E99B39F5-4582-4868-9F54-768D8565BCE5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Submission.Infrastructure", "Backend\Services\SubmissionService\OnlineExamSystem.Submission.Infrastructure\OnlineExamSystem.Submission.Infrastructure.csproj", "{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -192,6 +202,22 @@ Global
 		{74A674B9-CB46-470B-96BC-24B7D2839C00}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{74A674B9-CB46-470B-96BC-24B7D2839C00}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{74A674B9-CB46-470B-96BC-24B7D2839C00}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1FA8532-143E-4834-86F7-4113732EF5F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1FA8532-143E-4834-86F7-4113732EF5F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1FA8532-143E-4834-86F7-4113732EF5F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1FA8532-143E-4834-86F7-4113732EF5F8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{40DF5595-0522-4EF2-8ABF-F6B32E64C239}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{40DF5595-0522-4EF2-8ABF-F6B32E64C239}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{40DF5595-0522-4EF2-8ABF-F6B32E64C239}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{40DF5595-0522-4EF2-8ABF-F6B32E64C239}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E99B39F5-4582-4868-9F54-768D8565BCE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E99B39F5-4582-4868-9F54-768D8565BCE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E99B39F5-4582-4868-9F54-768D8565BCE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E99B39F5-4582-4868-9F54-768D8565BCE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8314B0DE-3264-488A-9C66-BF410203CC19} = {24F021E6-C582-43B4-8E9C-FA50BD9C1458}
@@ -229,5 +255,10 @@ Global
 		{811024B0-9D9F-48EC-8714-627898EAFCCF} = {858A1CEA-9237-4B7D-8E87-F934E6494A77}
 		{DF0B7C2B-3B25-49CA-8295-02F5C450B14D} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
 		{74A674B9-CB46-470B-96BC-24B7D2839C00} = {DF0B7C2B-3B25-49CA-8295-02F5C450B14D}
+		{ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C} = {858A1CEA-9237-4B7D-8E87-F934E6494A77}
+		{C1FA8532-143E-4834-86F7-4113732EF5F8} = {ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}
+		{40DF5595-0522-4EF2-8ABF-F6B32E64C239} = {ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}
+		{E99B39F5-4582-4868-9F54-768D8565BCE5} = {ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}
+		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386} = {ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}
 	EndGlobalSection
 EndGlobal
