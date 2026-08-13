@@ -56,5 +56,18 @@ public class ResultsController : ControllerBase
             summary.TotalMarks,
             summary.PassingMarks,
             summary.Passed,
-            summary.SubmittedAtUtc);
+            summary.SubmittedAtUtc,
+            summary.Questions?.Select(ToResponse).ToList());
+
+    private static QuestionResultResponse ToResponse(QuestionResult question) =>
+        new(
+            question.QuestionId,
+            question.QuestionText,
+            question.Marks,
+            question.MarksAwarded,
+            question.SelectedOptionId,
+            question.IsCorrect,
+            question.Options
+                .Select(o => new QuestionResultOptionResponse(o.OptionId, o.OptionText, o.IsCorrect))
+                .ToList());
 }

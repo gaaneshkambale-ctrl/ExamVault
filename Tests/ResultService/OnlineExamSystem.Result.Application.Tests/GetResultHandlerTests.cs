@@ -14,23 +14,39 @@ public class GetResultHandlerTests
     private static readonly Guid Question1CorrectOptionId = Guid.NewGuid();
     private static readonly Guid Question1WrongOptionId = Guid.NewGuid();
     private static readonly Guid Question2CorrectOptionId = Guid.NewGuid();
+    private static readonly Guid Question2WrongOptionId = Guid.NewGuid();
 
     private static GetResultHandler CreateHandler(
         SubmissionLookupResult? submission,
         IReadOnlyList<AnswerKeyQuestion> answerKey,
-        ExamLookupResult? exam) =>
+        ExamLookupResult? exam,
+        bool showCorrectAnswers = true) =>
         new(
             new FakeSubmissionLookupClient(submission),
             new FakeQuestionAnswerKeyClient(answerKey),
-            new FakeExamLookupClient(exam));
+            new FakeExamLookupClient(exam, showCorrectAnswers));
 
     private static SubmissionLookupResult Submitted(IReadOnlyList<SubmissionAnswer> answers) =>
         new(AttemptId, ExamId, "Submitted", DateTime.UtcNow, answers);
 
     private static IReadOnlyList<AnswerKeyQuestion> DefaultAnswerKey() =>
         [
-            new AnswerKeyQuestion(Question1Id, 1, Question1CorrectOptionId),
-            new AnswerKeyQuestion(Question2Id, 1, Question2CorrectOptionId),
+            new AnswerKeyQuestion(
+                Question1Id,
+                "Question 1",
+                1,
+                [
+                    new AnswerKeyOption(Question1CorrectOptionId, "Correct", true),
+                    new AnswerKeyOption(Question1WrongOptionId, "Wrong", false),
+                ]),
+            new AnswerKeyQuestion(
+                Question2Id,
+                "Question 2",
+                1,
+                [
+                    new AnswerKeyOption(Question2CorrectOptionId, "Correct", true),
+                    new AnswerKeyOption(Question2WrongOptionId, "Wrong", false),
+                ]),
         ];
 
     [Fact]
@@ -118,5 +134,55 @@ public class GetResultHandlerTests
         var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
 
         Assert.True(result.IsExamNotFound);
+    }
+
+    [Fact]
+    public async Task ShowCorrectAnswers_on_includes_per_question_breakdown()
+    {
+        var answers = new List<SubmissionAnswer>
+        {
+            new(Question1Id, Question1CorrectOptionId),
+            new(Question2Id, Question2WrongOptionId),
+        };
+        var handler = CreateHandler(
+            Submitted(answers),
+            DefaultAnswerKey(),
+            new ExamLookupResult(ExamId, "Test Exam", 2, 1),
+            showCorrectAnswers: true);
+
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+
+        Assert.NotNull(result.Summary!.Questions);
+        Assert.Equal(2, result.Summary.Questions!.Count);
+        var q1 = result.Summary.Questions.Single(q => q.QuestionId == Question1Id);
+        Assert.True(q1.IsCorrect);
+        Assert.Equal(1, q1.MarksAwarded);
+        var q2 = result.Summary.Questions.Single(q => q.QuestionId == Question2Id);
+        Assert.False(q2.IsCorrect);
+        Assert.Equal(0, q2.MarksAwarded);
+        Assert.Equal(Question2WrongOptionId, q2.SelectedOptionId);
+        // The total score is unaffected by whether the breakdown is shown.
+        Assert.Equal(1, result.Summary.TotalScore);
+    }
+
+    [Fact]
+    public async Task ShowCorrectAnswers_off_omits_per_question_breakdown_but_keeps_score()
+    {
+        var answers = new List<SubmissionAnswer>
+        {
+            new(Question1Id, Question1CorrectOptionId),
+            new(Question2Id, Question2WrongOptionId),
+        };
+        var handler = CreateHandler(
+            Submitted(answers),
+            DefaultAnswerKey(),
+            new ExamLookupResult(ExamId, "Test Exam", 2, 1),
+            showCorrectAnswers: false);
+
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+
+        Assert.Null(result.Summary!.Questions);
+        Assert.Equal(1, result.Summary.TotalScore);
+        Assert.Equal(2, result.Summary.TotalMarks);
     }
 }

@@ -1,9 +1,13 @@
-import { Card, Col, Row, Spinner } from 'react-bootstrap';
+import { useMemo } from 'react';
+import { Badge, Card, Col, Row, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
 import ExamsTrendChart from '../../components/ExamsTrendChart';
 import { useAuth } from '../../hooks/useAuth';
 import { useExams } from '../../hooks/useExams';
+import { getMyResult } from '../../api/resultApi';
+import type { ResultSummaryResponse } from '../../types/result';
 
 function isUpcoming(exam: { status: string; startAtUtc: string | null; endAtUtc: string | null }) {
   if (exam.status !== 'Published') {
@@ -85,11 +89,49 @@ function StatCard({ label, value, icon, variant, isLoading }: StatCardProps) {
 
 const UPCOMING_LIST_COUNT = 3;
 
+const RECENT_RESULTS_COUNT = 3;
+const TREND_RESULTS_COUNT = 6;
+
 export default function StudentDashboard() {
   const { user } = useAuth();
   const { data: exams, isLoading } = useExams();
 
   const upcomingExams = (exams ?? []).filter(isUpcoming).slice(0, UPCOMING_LIST_COUNT);
+
+  const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
+
+  const resultQueries = useQueries({
+    queries: publishedExams.map((exam) => ({
+      queryKey: ['results', 'mine', exam.id],
+      queryFn: () => getMyResult(exam.id),
+      enabled: !!exams,
+    })),
+  });
+
+  const isLoadingResults = publishedExams.length > 0 && resultQueries.some((q) => q.isLoading);
+
+  const results: ResultSummaryResponse[] = resultQueries
+    .map((q) => q.data)
+    .filter((result): result is ResultSummaryResponse => !!result)
+    .sort((a, b) => new Date(b.submittedAtUtc).getTime() - new Date(a.submittedAtUtc).getTime());
+
+  const averageScoreLabel =
+    results.length === 0
+      ? '—'
+      : `${Math.round(
+          results.reduce((sum, r) => sum + (r.totalMarks > 0 ? (r.totalScore / r.totalMarks) * 100 : 0), 0) /
+            results.length,
+        )}%`;
+
+  const recentResults = results.slice(0, RECENT_RESULTS_COUNT);
+
+  const trendData = [...results]
+    .sort((a, b) => new Date(a.submittedAtUtc).getTime() - new Date(b.submittedAtUtc).getTime())
+    .slice(-TREND_RESULTS_COUNT)
+    .map((r) => ({
+      label: r.examTitle.length > 10 ? `${r.examTitle.slice(0, 10)}…` : r.examTitle,
+      value: r.totalMarks > 0 ? Math.round((r.totalScore / r.totalMarks) * 100) : 0,
+    }));
 
   return (
     <StudentLayout active="Dashboard">
@@ -106,8 +148,20 @@ export default function StudentDashboard() {
           variant="primary"
           isLoading={isLoading}
         />
-        <StatCard label="Completed Exams" value="0" icon={<CompletedIcon />} variant="success" />
-        <StatCard label="Average Score" value="—" icon={<ScoreIcon />} variant="info" />
+        <StatCard
+          label="Completed Exams"
+          value={String(results.length)}
+          icon={<CompletedIcon />}
+          variant="success"
+          isLoading={isLoadingResults}
+        />
+        <StatCard
+          label="Average Score"
+          value={averageScoreLabel}
+          icon={<ScoreIcon />}
+          variant="info"
+          isLoading={isLoadingResults}
+        />
         <StatCard label="Certificates" value="0" icon={<CertificatesIcon />} variant="warning" />
       </Row>
 
@@ -159,11 +213,45 @@ export default function StudentDashboard() {
             <Card.Body>
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2 className="h6 fw-bold mb-0">Recent Results</h2>
-                <span className="small text-muted">View All</span>
+                <Link to="/results" className="small">
+                  View All
+                </Link>
               </div>
-              <div className="text-center text-muted py-5">
-                No results yet. They'll show up here once you complete an exam.
-              </div>
+
+              {isLoadingResults && (
+                <div className="d-flex justify-content-center py-4">
+                  <Spinner animation="border" size="sm" />
+                </div>
+              )}
+
+              {!isLoadingResults && recentResults.length === 0 && (
+                <div className="text-center text-muted py-5">
+                  No results yet. They'll show up here once you complete an exam.
+                </div>
+              )}
+
+              {!isLoadingResults && recentResults.length > 0 && (
+                <div className="d-flex flex-column gap-2">
+                  {recentResults.map((result) => (
+                    <Link
+                      key={result.attemptId}
+                      to={`/results/${result.examId}`}
+                      className="d-flex justify-content-between align-items-center text-decoration-none text-body p-2 rounded-2"
+                      style={{ border: '1px solid #eee' }}
+                    >
+                      <div>
+                        <div className="fw-medium">{result.examTitle}</div>
+                        <div className="text-muted small">
+                          {new Date(result.submittedAtUtc).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <Badge bg={result.passed ? 'success' : 'danger'}>
+                        {result.totalScore} / {result.totalMarks}
+                      </Badge>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </Card.Body>
           </Card>
         </Col>
@@ -172,8 +260,18 @@ export default function StudentDashboard() {
       <Card className="border-0 shadow-sm">
         <Card.Body>
           <h2 className="h6 fw-bold mb-3">Performance Overview</h2>
-          <ExamsTrendChart data={[]} />
-          <p className="text-muted small mb-0 mt-2">Your scores will appear here once results are available.</p>
+          {isLoadingResults ? (
+            <div className="d-flex justify-content-center py-5">
+              <Spinner animation="border" size="sm" />
+            </div>
+          ) : (
+            <ExamsTrendChart data={trendData} />
+          )}
+          <p className="text-muted small mb-0 mt-2">
+            {trendData.length === 0
+              ? 'Your scores will appear here once results are available.'
+              : 'Percentage scored on your most recent completed exams.'}
+          </p>
         </Card.Body>
       </Card>
     </StudentLayout>

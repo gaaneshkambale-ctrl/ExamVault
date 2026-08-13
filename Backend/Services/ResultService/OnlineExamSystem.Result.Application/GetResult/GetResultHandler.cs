@@ -42,20 +42,41 @@ public class GetResultHandler
             query.BearerToken,
             cancellationToken);
         var answerKeyByQuestionId = answerKey.ToDictionary(q => q.QuestionId);
+        var selectedOptionByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId, a => a.SelectedOptionId);
 
         var totalScore = 0;
-        foreach (var answer in attempt.Answers)
+        var questionResults = new List<QuestionResult>();
+        foreach (var question in answerKey)
         {
-            if (!answerKeyByQuestionId.TryGetValue(answer.QuestionId, out var question))
-            {
-                continue;
-            }
+            var correctOptionId = question.Options.FirstOrDefault(o => o.IsCorrect)?.OptionId;
+            selectedOptionByQuestionId.TryGetValue(question.QuestionId, out var selectedOptionId);
+            var isCorrect = selectedOptionId is not null && selectedOptionId == correctOptionId;
+            var marksAwarded = isCorrect ? question.Marks : 0;
+            totalScore += marksAwarded;
 
-            if (answer.SelectedOptionId is not null && answer.SelectedOptionId == question.CorrectOptionId)
+            questionResults.Add(new QuestionResult
             {
-                totalScore += question.Marks;
-            }
+                QuestionId = question.QuestionId,
+                QuestionText = question.QuestionText,
+                Marks = question.Marks,
+                MarksAwarded = marksAwarded,
+                SelectedOptionId = selectedOptionId,
+                IsCorrect = isCorrect,
+                Options = question.Options
+                    .Select(o => new QuestionResultOption
+                    {
+                        OptionId = o.OptionId,
+                        OptionText = o.OptionText,
+                        IsCorrect = o.IsCorrect,
+                    })
+                    .ToList(),
+            });
         }
+
+        var showCorrectAnswers = await _examLookupClient.GetShowCorrectAnswersAsync(
+            query.ExamId,
+            query.BearerToken,
+            cancellationToken);
 
         var summary = new ExamResultSummary
         {
@@ -67,6 +88,7 @@ public class GetResultHandler
             PassingMarks = exam.PassingMarks,
             Passed = totalScore >= exam.PassingMarks,
             SubmittedAtUtc = attempt.SubmittedAtUtc ?? DateTime.UtcNow,
+            Questions = showCorrectAnswers ? questionResults : null,
         };
 
         return GetResultResult.Ok(summary);

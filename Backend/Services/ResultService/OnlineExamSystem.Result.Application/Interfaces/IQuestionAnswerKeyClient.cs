@@ -1,6 +1,12 @@
 namespace OnlineExamSystem.Result.Application.Interfaces;
 
-public record AnswerKeyQuestion(Guid QuestionId, int Marks, Guid? CorrectOptionId);
+public record AnswerKeyOption(Guid OptionId, string OptionText, bool IsCorrect);
+
+public record AnswerKeyQuestion(
+    Guid QuestionId,
+    string QuestionText,
+    int Marks,
+    IReadOnlyList<AnswerKeyOption> Options);
 
 public interface IQuestionAnswerKeyClient
 {

@@ -36,14 +36,18 @@ public class QuestionServiceClient : IQuestionAnswerKeyClient
         return questions
             .Select(q => new AnswerKeyQuestion(
                 q.Id,
+                q.QuestionText,
                 q.Marks,
-                q.Options.FirstOrDefault(o => o.IsCorrect)?.Id))
+                q.Options
+                    .Select(o => new AnswerKeyOption(o.Id, o.OptionText, o.IsCorrect))
+                    .ToList()))
             .ToList();
     }
 
     private sealed class QuestionApiResponse
     {
         public Guid Id { get; init; }
+        public string QuestionText { get; init; } = string.Empty;
         public int Marks { get; init; }
         public List<QuestionOptionApiResponse> Options { get; init; } = [];
     }
@@ -51,6 +55,7 @@ public class QuestionServiceClient : IQuestionAnswerKeyClient
     private sealed class QuestionOptionApiResponse
     {
         public Guid Id { get; init; }
+        public string OptionText { get; init; } = string.Empty;
         public bool IsCorrect { get; init; }
     }
 }

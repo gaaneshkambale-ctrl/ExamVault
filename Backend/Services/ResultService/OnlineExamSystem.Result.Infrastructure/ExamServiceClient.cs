@@ -39,11 +39,38 @@ public class ExamServiceClient : IExamLookupClient
         return new ExamLookupResult(exam.Id, exam.Title, exam.TotalMarks, exam.PassingMarks);
     }
 
+    public async Task<bool> GetShowCorrectAnswersAsync(
+        Guid examId,
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/assignments/mine?examId={examId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return true;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var assignment = await response.Content.ReadFromJsonAsync<MyAssignmentApiResponse>(
+            JsonOptions,
+            cancellationToken);
+        return assignment?.ShowCorrectAnswers ?? true;
+    }
+
     private sealed class ExamApiResponse
     {
         public Guid Id { get; init; }
         public string Title { get; init; } = string.Empty;
         public int TotalMarks { get; init; }
         public int PassingMarks { get; init; }
+    }
+
+    private sealed class MyAssignmentApiResponse
+    {
+        public bool ShowCorrectAnswers { get; init; }
     }
 }
