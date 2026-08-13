@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
+using OnlineExamSystem.Submission.Application.Attempts.Submit;
 using OnlineExamSystem.Submission.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Submission;
 using OnlineExamSystem.Shared.Contracts.Responses.Submission;
@@ -16,15 +18,21 @@ public class SubmissionsController : ControllerBase
 {
     private readonly StartAttemptHandler _startAttemptHandler;
     private readonly SaveAnswerHandler _saveAnswerHandler;
+    private readonly SubmitAttemptHandler _submitAttemptHandler;
+    private readonly GetMyAttemptHandler _getMyAttemptHandler;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
         StartAttemptHandler startAttemptHandler,
         SaveAnswerHandler saveAnswerHandler,
+        SubmitAttemptHandler submitAttemptHandler,
+        GetMyAttemptHandler getMyAttemptHandler,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
         _saveAnswerHandler = saveAnswerHandler;
+        _submitAttemptHandler = submitAttemptHandler;
+        _getMyAttemptHandler = getMyAttemptHandler;
         _logger = logger;
     }
 
@@ -116,6 +124,65 @@ public class SubmissionsController : ControllerBase
         }
 
         return Ok(ToResponse(result.Answer!));
+    }
+
+    [HttpPost("{attemptId:guid}/submit")]
+    public async Task<IActionResult> Submit(
+        Guid attemptId,
+        SubmitAttemptRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var command = new SubmitAttemptCommand(attemptId, userId, request.IsAutoSubmitted);
+        var result = await _submitAttemptHandler.HandleAsync(command, cancellationToken);
+
+        if (result.ValidationErrors.Any())
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
+
+        if (result.IsAlreadySubmitted)
+        {
+            return Conflict(new { message = "This attempt has already been submitted." });
+        }
+
+        _logger.LogInformation(
+            "Attempt {AttemptId} submitted by {UserId} (auto={IsAutoSubmitted}).",
+            attemptId,
+            userId,
+            request.IsAutoSubmitted);
+        return Ok(ToResponse(result.Attempt!));
+    }
+
+    [HttpGet("mine")]
+    public async Task<IActionResult> Mine([FromQuery] Guid examId, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await _getMyAttemptHandler.HandleAsync(new GetMyAttemptQuery(examId, userId), cancellationToken);
+        if (result.Attempt is null)
+        {
+            return NotFound(new { message = "No attempt found." });
+        }
+
+        return Ok(new AttemptWithAnswersResponse(
+            ToResponse(result.Attempt),
+            result.Answers.Select(ToResponse).ToList()));
     }
 
     private static ExamAttemptResponse ToResponse(ExamAttempt attempt) =>

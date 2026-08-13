@@ -947,7 +947,7 @@ for `Admin` and `/profile` for `Student`.
 
 - [x] Day 31 — Submission Service skeleton and student-side shell
 - [x] Day 32 — Attempt persistence, start exam, and answer saving
-- [ ] Day 33 — Review, submit, auto-submit timer, and gate
+- [x] Day 33 — Review, submit, auto-submit timer, and gate
 
 ### Day 31 Notes
 
@@ -1094,4 +1094,92 @@ for `Admin` and `/profile` for `Student`.
   afterward. `dotnet build`/`dotnet test` 109/109 green; `npm run
   build`/`lint`/`test` (25/25) all green
 
-**AI Milestone is complete. Phase 7 (Submission Service, Days 31-33) is unlocked.**
+### Day 33 Notes
+
+- New `SubmitAttemptCommand`/`Validator`/`Handler`: sets
+  `Status=Submitted` (or `AutoSubmitted`, per a flag the request
+  carries) and `SubmittedAtUtc=now`; rejects an already-submitted
+  attempt with 409 and another user's attempt with 403. New
+  `GetMyAttemptQuery`/`Handler` (the "mine-lookup"): returns the
+  caller's most recent attempt for an exam plus its full list of
+  `AttemptAnswer`s in one response (`AttemptWithAnswersResponse`) - the
+  answers are what let Take Exam actually restore a resumed attempt's
+  state, not just its id. New `POST /api/submissions/{attemptId}/submit`
+  and `GET /api/submissions/mine?examId=` on `SubmissionsController`
+- Real bug found and fixed while wiring the mine-lookup path: SQL
+  Server's `datetime2` columns don't preserve `DateTimeKind`, so EF
+  Core reads every `DateTime` back as `Kind=Unspecified`. `StartedAtUtc`
+  serialized without a trailing `Z`, and the browser parsed the
+  resulting string as local time (IST, UTC+5:30) instead of UTC - a
+  freshly-started attempt looked like it had begun 5.5 hours earlier,
+  so the countdown timer computed zero time remaining and
+  auto-submitted the exam within a second of loading. Caught immediately
+  during browser verification, not left for later. Fixed with a
+  `ConfigureConventions` override in `SubmissionDbContext` that forces
+  `Kind=Utc` on every `DateTime`/`DateTime?` read via a
+  `ValueConverter` (`ForceUtcDateTimeKind` migration - empty Up/Down,
+  since the fix is metadata-only, no column type changed). This was
+  silently latent since Day 32 - the Start endpoint's own response
+  never hit it (it returns the freshly-created in-memory entity, which
+  already has `Kind=Utc`), only a value re-read from the database via
+  mine-lookup ever exposed it, which is exactly the new code path Day
+  33 added
+- Frontend: `TakeExam` reworked into three internal modes (`take` /
+  `review` / `submitted`) in the same component and route, mirroring
+  the one-page-multiple-wireframe-screens pattern Day 28's AI Generator
+  already established - simpler than threading attempt/answer state
+  through separate routes for what's really one continuous session.
+  Mount logic now calls the mine-lookup endpoint first: an `InProgress`
+  attempt restores its saved answers (and a `visited` set seeded from
+  them) and drops the student back into `take` mode where they left
+  off; a `Submitted`/`AutoSubmitted` attempt jumps straight to the
+  `submitted` view; no attempt at all falls back to calling `start()`
+  itself (still safe/idempotent). This let Exam Details' Start Exam Now
+  drop the router-state hand-off it grew on Day 32 - Take Exam now
+  resolves its own attempt regardless of how the student arrived
+- New Review Before Submit mode: the same question navigator plus a
+  Review Summary with real Total/Answered/Not Answered/Marked-for-Review
+  counts computed from local answer state, Back to Exam (returns to
+  `take`, same `currentIndex`) and Submit Exam. New countdown timer
+  from `exam.durationMinutes` + the attempt's real `StartedAtUtc`,
+  auto-submitting (`AutoSubmitted`) exactly once when it reaches zero
+  (guarded by a closure-local flag, not React state, so the interval
+  can't double-fire while the submit call is in flight). New Exam
+  Submitted view (Total Questions/Submitted On/Status, Go to My Exams -
+  no score, per the Phase 7 scope note)
+- My Exams' Completed/In Progress tabs now use real data: `useQueries()`
+  calling the mine-lookup endpoint once per Published exam, mirroring
+  the exact aggregation pattern Phase 6's Question Bank established
+  (`useExams()` + per-exam `useQueries()`, merged client-side). A row's
+  status is Upcoming (no attempt yet), In Progress, or Completed based
+  on the most recent attempt found; Completed rows show a disabled
+  "View Result" (visibly disabled, not hidden - Phase 8 wires it for
+  real), In Progress rows get a working "Resume Exam" straight to Take
+  Exam. Known gap, not fixed: once a student has any attempt on an
+  exam, My Exams shows it as Completed/In Progress with no visible way
+  to start a further attempt even if `MaxAttempts` allows one - the
+  backend correctly allows and enforces multi-attempt exams (tested
+  directly), but the retake UI itself isn't wired; flagged here rather
+  than silently scoped out, since it wasn't asked for on this day
+- 8 new tests (5 `SubmitAttemptHandler`, 3 `GetMyAttemptHandler`) -
+  backend total 117/117
+- Verified end-to-end in a real browser, matching the plan's exact
+  scenario: Student Dashboard/My Exams -> Exam Details -> Start Exam
+  Now -> answered one question, marked a second for review -> Review
+  Before Submit showed the correct 11/1/10/1 counts -> Back to Exam
+  preserved state -> Submit Exam -> Exam Submitted Successfully with no
+  score -> My Exams' Completed tab showed it with a disabled View
+  Result. Confirmed a third start attempt against a 2-attempt exam was
+  blocked with the real 409 message rendered in the UI (not just
+  curl). Confirmed the auto-submit timer actually fires by
+  backdating a real attempt's `StartedAtUtc` to a few seconds before
+  its deadline and loading Take Exam fresh - it counted down and
+  auto-submitted correctly once the UTC bug above was fixed. Confirmed
+  via curl: double-submit is 409, submitting another user's attempt is
+  403, no token is 401, and every existing Admin-only endpoint
+  (`POST /api/exams`, `POST /api/questions`) still rejects a Student
+  with 403. Cleaned up every throwaway account/attempt and reverted the
+  exam's Status/MaxAttempts afterward. `dotnet build`/`dotnet test`
+  117/117 green; `npm run build`/`lint`/`test` (25/25) all green
+
+**Phase 7 (Submission Service, Days 31-33) is COMPLETE. Gate passed.**

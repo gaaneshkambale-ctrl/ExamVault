@@ -190,10 +190,15 @@ invalid/expired. No body.
 
 ## Exam Service
 
-Every endpoint requires a valid JWT access token with the `Admin` role
-(`Authorization: Bearer <token>`) — a `Student` token gets 403 Forbidden.
-This is the first role-gated part of the API (the JWT role claim has
-existed since Phase 3; this is the first endpoint to actually check it).
+Requires a valid JWT access token (`Authorization: Bearer <token>`); no
+token gets 401. As of Day 31 (Phase 7), reads (`GET /api/exams`,
+`GET /api/exams/{id}`) are open to any authenticated role — a Student
+needs to browse Published exams to take them. Every write
+(`POST`/`PUT`/`DELETE` and the `publish`/`unpublish`/`archive`
+transitions) still requires the `Admin` role; a Student token gets 403
+Forbidden on those. Before Day 31 the whole controller was Admin-only —
+this is the first role-gated part of the API to distinguish reads from
+writes (the JWT role claim has existed since Phase 3).
 
 Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
 - `Requests/Exam/CreateExamRequest.cs`
@@ -356,9 +361,18 @@ Returned when the transition isn't allowed from the exam's current status
 
 ## Question Service
 
-Every endpoint requires a valid JWT access token with the `Admin` role,
-same as Exam Service. All endpoints exist as of Day 26 (Phase 6 gate):
-`POST`, `GET` (list and by id), `PUT`, and `DELETE`.
+Requires a valid JWT access token; no token gets 401. As of Day 32
+(Phase 7), reads (`GET` list and by id) are open to any authenticated
+role, the same reads-vs-writes split Day 31 gave Exam Service — a
+Student taking an exam needs to fetch its questions. Every write
+(`POST`/`PUT`/`DELETE`) still requires the `Admin` role. **Reads are
+also answer-masked for non-Admin callers**: every option's `isCorrect`
+is forced to `false` in the response unless the caller has the `Admin`
+role, so a student can't read the correct answer straight out of the
+network response while taking an exam — verified by comparing the same
+exam's raw JSON between a Student token and an Admin token. All
+endpoints exist as of Day 26 (Phase 6 gate): `POST`, `GET` (list and by
+id), `PUT`, and `DELETE`.
 
 Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
 - `Requests/Question/CreateQuestionRequest.cs`
@@ -578,3 +592,194 @@ server-side only, never exposed to the client.
 ### 403 Forbidden
 
 Returned for a valid token without the `Admin` role. No body.
+
+## Submission Service
+
+Requires a valid JWT access token; no token gets 401. Unlike every prior
+service, **every endpoint here accepts any authenticated role** — these
+are the first Student-facing write endpoints in the system. Submission
+Service owns attempts and raw answers only; it never grades anything and
+never touches Question Service's `IsCorrect` data (Result Service's job,
+Phase 8). It also owns no exam-scheduling data of its own — `start`
+calls Exam Service directly (`GET /api/exams/{id}` on `:5020`, not
+through the Gateway) to check `MaxAttempts`/`StartAtUtc`/`EndAtUtc`,
+forwarding the caller's own JWT rather than using a separate
+service-account credential.
+
+Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
+- `Requests/Submission/StartAttemptRequest.cs`
+- `Requests/Submission/SaveAnswerRequest.cs`
+- `Requests/Submission/SubmitAttemptRequest.cs`
+- `Responses/Submission/ExamAttemptResponse.cs`
+- `Responses/Submission/AttemptAnswerResponse.cs`
+- `Responses/Submission/AttemptWithAnswersResponse.cs`
+
+### POST /api/submissions/start
+
+Starts (or resumes) an attempt at an exam. If the caller already has an
+`InProgress` attempt for this exam, that same attempt is returned
+instead of creating a second one — an accidental-refresh safety net, not
+something the UI advertises as a "resume" feature. Otherwise validates
+the exam's scheduling window and `MaxAttempts` (counting every prior
+attempt for that Exam+User) before creating a new one.
+
+**Request body**
+
+```json
+{ "examId": "guid, required" }
+```
+
+### 200 OK
+
+```json
+{
+  "id": "ba1bcefc-40af-4d6c-b850-b54074db0511",
+  "examId": "902ec542-9679-4e66-8ce4-aeee561b2cd1",
+  "userId": "88ae167b-dd2c-4349-84de-179f11cb1cfd",
+  "attemptNumber": 1,
+  "status": "InProgress",
+  "startedAtUtc": "2026-08-13T07:35:31.9338673Z",
+  "submittedAtUtc": null
+}
+```
+
+### 404 Not Found
+
+```json
+{ "message": "Exam not found." }
+```
+
+### 409 Conflict
+
+Returned for either failure — check the message to tell them apart.
+
+```json
+{ "message": "This exam is not open right now." }
+```
+```json
+{ "message": "You have used all of your attempts for this exam." }
+```
+
+## PUT /api/submissions/{attemptId}/answers
+
+Upserts one `AttemptAnswer` for a question — one call per question, full
+replace of that question's `selectedOptionId`/`isMarkedForReview` each
+time (not a partial patch). Only works while the attempt is `InProgress`
+and belongs to the calling user.
+
+**Request body**
+
+```json
+{
+  "questionId": "guid, required",
+  "selectedOptionId": "guid or null",
+  "isMarkedForReview": "bool"
+}
+```
+
+### 200 OK
+
+```json
+{
+  "id": "3f1a2b3c-4d5e-6f70-8192-a3b4c5d6e7f8",
+  "attemptId": "ba1bcefc-40af-4d6c-b850-b54074db0511",
+  "questionId": "7899acb7-2f76-4775-b4c2-54b6c2218d91",
+  "selectedOptionId": "175883ed-5807-43e4-aa80-c880ecfa341a",
+  "isMarkedForReview": false,
+  "answeredAtUtc": "2026-08-13T07:35:41.0Z"
+}
+```
+
+### 403 Forbidden
+
+Returned when the attempt exists but doesn't belong to the calling user.
+No body.
+
+### 404 Not Found
+
+```json
+{ "message": "Attempt not found." }
+```
+
+### 409 Conflict
+
+Returned when the attempt is no longer `InProgress` (already submitted).
+
+```json
+{ "message": "This attempt is no longer in progress." }
+```
+
+## POST /api/submissions/{attemptId}/submit
+
+Marks an attempt `Submitted` (or `AutoSubmitted`, per the request flag)
+and sets `SubmittedAtUtc=now`. Rejects an attempt that isn't the
+caller's own with 403, and an attempt that isn't `InProgress` anymore
+(double-submit) with 409.
+
+**Request body**
+
+```json
+{ "isAutoSubmitted": "bool" }
+```
+
+### 200 OK
+
+Same shape as `POST /api/submissions/start`'s 200, with `status` now
+`"Submitted"` or `"AutoSubmitted"` and `submittedAtUtc` set.
+
+### 403 Forbidden / 404 Not Found
+
+Same shapes as `PUT /api/submissions/{attemptId}/answers`.
+
+### 409 Conflict
+
+```json
+{ "message": "This attempt has already been submitted." }
+```
+
+## GET /api/submissions/mine?examId={id}
+
+Returns the caller's own most recent attempt for an exam — regardless of
+its status — plus every `AttemptAnswer` recorded against it. This is
+what lets the frontend decide start-vs-resume-vs-already-submitted
+without guessing, and is how Take Exam restores a resumed `InProgress`
+attempt's answers after a refresh or a direct navigation.
+
+### 200 OK
+
+```json
+{
+  "attempt": {
+    "id": "ba1bcefc-40af-4d6c-b850-b54074db0511",
+    "examId": "902ec542-9679-4e66-8ce4-aeee561b2cd1",
+    "userId": "88ae167b-dd2c-4349-84de-179f11cb1cfd",
+    "attemptNumber": 1,
+    "status": "InProgress",
+    "startedAtUtc": "2026-08-13T07:35:31.9338673Z",
+    "submittedAtUtc": null
+  },
+  "answers": [
+    {
+      "id": "3f1a2b3c-4d5e-6f70-8192-a3b4c5d6e7f8",
+      "attemptId": "ba1bcefc-40af-4d6c-b850-b54074db0511",
+      "questionId": "7899acb7-2f76-4775-b4c2-54b6c2218d91",
+      "selectedOptionId": "175883ed-5807-43e4-aa80-c880ecfa341a",
+      "isMarkedForReview": false,
+      "answeredAtUtc": "2026-08-13T07:35:41.0Z"
+    }
+  ]
+}
+```
+
+Scoped to the caller by construction — the query is always
+`examId + the calling user's own id`, so this endpoint can never return
+another user's attempt.
+
+### 404 Not Found
+
+Returned when the caller has never attempted this exam at all (not an
+error state — the frontend uses this to decide "show Start Exam Now").
+
+```json
+{ "message": "No attempt found." }
+```

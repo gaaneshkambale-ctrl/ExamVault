@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OnlineExamSystem.Submission.Domain.Entities;
 
 namespace OnlineExamSystem.Submission.Infrastructure.Persistence;
@@ -11,6 +12,18 @@ public class SubmissionDbContext : DbContext
 
     public DbSet<ExamAttempt> ExamAttempts => Set<ExamAttempt>();
     public DbSet<AttemptAnswer> AttemptAnswers => Set<AttemptAnswer>();
+
+    // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
+    // reads every DateTime back as Kind=Unspecified. System.Text.Json then
+    // serializes those without a trailing "Z", and the browser parses the
+    // resulting ISO string as local time instead of UTC - badly wrong for
+    // the exam timer's Started/SubmittedAtUtc math. Forcing Kind=Utc on
+    // every read keeps every DateTime in this context honestly UTC end to end.
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,5 +42,21 @@ public class SubmissionDbContext : DbContext
                 .HasForeignKey(a => a.AttemptId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+    }
+}
+
+public class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
+{
+    public UtcDateTimeConverter()
+        : base(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+    {
+    }
+}
+
+public class NullableUtcDateTimeConverter : ValueConverter<DateTime?, DateTime?>
+{
+    public NullableUtcDateTimeConverter()
+        : base(v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v)
+    {
     }
 }

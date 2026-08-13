@@ -3,8 +3,10 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
+using OnlineExamSystem.Submission.Application.Attempts.Submit;
 using OnlineExamSystem.Submission.Application.Interfaces;
 using OnlineExamSystem.Submission.Infrastructure;
 using OnlineExamSystem.Submission.Infrastructure.Persistence;
@@ -38,6 +40,9 @@ public class Program
         builder.Services.AddScoped<StartAttemptHandler>();
         builder.Services.AddScoped<IValidator<SaveAnswerCommand>, SaveAnswerValidator>();
         builder.Services.AddScoped<SaveAnswerHandler>();
+        builder.Services.AddScoped<IValidator<SubmitAttemptCommand>, SubmitAttemptValidator>();
+        builder.Services.AddScoped<SubmitAttemptHandler>();
+        builder.Services.AddScoped<GetMyAttemptHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

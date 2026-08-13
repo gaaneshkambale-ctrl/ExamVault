@@ -39,10 +39,8 @@ COMPLETE (gate passed). Phase 4 (RabbitMQ / Azure Service Bus, Days 16-18)
 is COMPLETE (gate passed). Phase 5 (Exam Service, Days 19-22) is COMPLETE
 (gate passed). Phase 6 (Question Service, Days 23-26) is COMPLETE (gate
 passed). AI Milestone (Days 27-30) is COMPLETE (gate passed). Phase 7
-(Submission Service, Days 31-33) is IN PROGRESS - Day 31 (Submission
-Service skeleton and student-side shell) and Day 32 (attempt
-persistence, start exam, answer saving) are done; Day 33 (review,
-submit, auto-submit timer, and gate) is next.
+(Submission Service, Days 31-33) is COMPLETE (gate passed). Phase 8
+(Result Service, Days 34-36) is unlocked and next.
 
 DAY 1 — PHASE 0: REPOSITORY & TOOLING SETUP  (TODAY)
 ------------------------------------------------------

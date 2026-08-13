@@ -35,8 +35,10 @@ export default function ExamDetails() {
 
   const startMutation = useMutation({
     mutationFn: () => startAttempt(id!),
-    onSuccess: (attempt) => {
-      navigate(`/exams/${id}/take`, { state: { attemptId: attempt.id } });
+    onSuccess: () => {
+      // Take Exam resolves the attempt itself via the mine-lookup endpoint,
+      // so it doesn't need the attempt id handed through navigation state.
+      navigate(`/exams/${id}/take`);
     },
   });
 

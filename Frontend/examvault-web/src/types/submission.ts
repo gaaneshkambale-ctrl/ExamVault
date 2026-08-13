@@ -28,3 +28,12 @@ export interface AttemptAnswerResponse {
   isMarkedForReview: boolean;
   answeredAtUtc: string;
 }
+
+export interface SubmitAttemptRequest {
+  isAutoSubmitted: boolean;
+}
+
+export interface AttemptWithAnswersResponse {
+  attempt: ExamAttemptResponse;
+  answers: AttemptAnswerResponse[];
+}

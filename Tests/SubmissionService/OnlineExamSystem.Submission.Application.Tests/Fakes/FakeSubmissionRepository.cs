@@ -35,11 +35,26 @@ public class FakeSubmissionRepository : ISubmissionRepository
     public Task<ExamAttempt?> GetAttemptByIdAsync(Guid attemptId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_attempts.FirstOrDefault(a => a.Id == attemptId));
 
+    public Task<ExamAttempt?> GetMostRecentAttemptAsync(
+        Guid examId,
+        Guid userId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_attempts
+            .Where(a => a.ExamId == examId && a.UserId == userId)
+            .OrderByDescending(a => a.AttemptNumber)
+            .FirstOrDefault());
+
     public Task<AttemptAnswer?> GetAnswerAsync(
         Guid attemptId,
         Guid questionId,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(_answers.FirstOrDefault(a => a.AttemptId == attemptId && a.QuestionId == questionId));
+
+    public Task<IReadOnlyList<AttemptAnswer>> GetAnswersByAttemptIdAsync(
+        Guid attemptId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AttemptAnswer>>(
+            _answers.Where(a => a.AttemptId == attemptId).ToList());
 
     public Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default)
     {
