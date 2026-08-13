@@ -2,6 +2,7 @@ using OnlineExamSystem.Exam.Application.Assignments.Create;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Application.Tests.Fakes;
 using OnlineExamSystem.Exam.Domain.Entities;
+using OnlineExamSystem.Exam.Domain.Enums;
 using Xunit;
 
 namespace OnlineExamSystem.Exam.Application.Tests;
@@ -36,7 +37,7 @@ public class CreateAssignmentHandlerTests
     public async Task Valid_students_request_assigns_every_selected_student()
     {
         var repository = new FakeExamRepository();
-        var exam = new ExamPaper { Title = "C# Fundamentals" };
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
         await repository.AddAsync(exam);
         var studentA = Guid.NewGuid();
         var studentB = Guid.NewGuid();
@@ -54,7 +55,7 @@ public class CreateAssignmentHandlerTests
     public async Task Valid_batch_request_assigns_every_group_member()
     {
         var repository = new FakeExamRepository();
-        var exam = new ExamPaper { Title = "C# Fundamentals" };
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
         await repository.AddAsync(exam);
         var groupId = Guid.NewGuid();
         var memberA = Guid.NewGuid();
@@ -75,7 +76,7 @@ public class CreateAssignmentHandlerTests
     public async Task Valid_all_students_request_assigns_every_student_in_the_system()
     {
         var repository = new FakeExamRepository();
-        var exam = new ExamPaper { Title = "C# Fundamentals" };
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
         await repository.AddAsync(exam);
         var studentA = Guid.NewGuid();
         var studentB = Guid.NewGuid();
@@ -94,7 +95,7 @@ public class CreateAssignmentHandlerTests
     public async Task Unknown_group_returns_not_found()
     {
         var repository = new FakeExamRepository();
-        var exam = new ExamPaper { Title = "C# Fundamentals" };
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
         await repository.AddAsync(exam);
         var handler = CreateHandler(repository, new FakeUserLookupClient(result: null));
 
@@ -119,10 +120,25 @@ public class CreateAssignmentHandlerTests
     }
 
     [Fact]
+    public async Task Draft_exam_is_rejected()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Draft };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(StudentsCommand(exam.Id, Guid.NewGuid()));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsExamNotPublished);
+        Assert.Empty(repository.Assignments);
+    }
+
+    [Fact]
     public async Task Students_target_type_with_no_selected_students_fails_validation()
     {
         var repository = new FakeExamRepository();
-        var exam = new ExamPaper { Title = "C# Fundamentals" };
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
         await repository.AddAsync(exam);
         var handler = CreateHandler(repository);
 
@@ -137,7 +153,7 @@ public class CreateAssignmentHandlerTests
     public async Task End_date_before_start_date_fails_validation()
     {
         var repository = new FakeExamRepository();
-        var exam = new ExamPaper { Title = "C# Fundamentals" };
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
         await repository.AddAsync(exam);
         var handler = CreateHandler(repository);
 

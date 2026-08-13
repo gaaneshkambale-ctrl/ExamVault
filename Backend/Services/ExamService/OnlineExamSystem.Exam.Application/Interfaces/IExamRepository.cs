@@ -16,6 +16,13 @@ public interface IExamRepository
 
     Task<bool> IsUserAssignedAsync(Guid examId, Guid userId, CancellationToken cancellationToken = default);
 
+    /// <summary>The caller's own assignment for this exam, or null if unassigned. Picks the most
+    /// recently created one if more than one assignment targets the same user for the same exam.</summary>
+    Task<ExamAssignment?> GetAssignmentForUserAndExamAsync(
+        Guid examId,
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
     Task AddAssignmentAsync(
         ExamAssignment assignment,
         IReadOnlyList<Guid> targetUserIds,

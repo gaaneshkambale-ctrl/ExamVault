@@ -1,8 +1,10 @@
+import { isAxiosError } from 'axios';
 import apiClient from './axiosClient';
 import type {
   AssignmentListItemResponse,
   CreateAssignmentRequest,
   ExamAssignmentResponse,
+  MyAssignmentResponse,
 } from '../types/assignment';
 
 export async function listAllAssignments(): Promise<AssignmentListItemResponse[]> {
@@ -29,4 +31,18 @@ export async function createAssignment(request: CreateAssignmentRequest): Promis
 
 export async function deleteAssignment(id: string): Promise<void> {
   await apiClient.delete(`/api/assignments/${id}`);
+}
+
+export async function getMyAssignmentForExam(examId: string): Promise<MyAssignmentResponse | null> {
+  try {
+    const { data } = await apiClient.get<MyAssignmentResponse>('/api/assignments/mine', {
+      params: { examId },
+    });
+    return data;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }

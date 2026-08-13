@@ -61,6 +61,20 @@ public class ExamRepository : IExamRepository
                 (t, a) => t.Id)
             .AnyAsync(cancellationToken);
 
+    public Task<ExamAssignment?> GetAssignmentForUserAndExamAsync(
+        Guid examId,
+        Guid userId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.ExamAssignmentTargets
+            .Where(t => t.UserId == userId)
+            .Join(
+                _dbContext.ExamAssignments.Where(a => a.ExamId == examId),
+                t => t.ExamAssignmentId,
+                a => a.Id,
+                (t, a) => a)
+            .OrderByDescending(a => a.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public async Task AddAssignmentAsync(
         ExamAssignment assignment,
         IReadOnlyList<Guid> targetUserIds,

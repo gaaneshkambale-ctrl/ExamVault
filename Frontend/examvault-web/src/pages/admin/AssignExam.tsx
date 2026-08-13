@@ -78,10 +78,14 @@ export default function AssignExam() {
   const [submitError, setSubmitError] = useState('');
 
   const students = useMemo(() => (users ?? []).filter((u) => u.role === 'Student'), [users]);
-  const selectedExam = (exams ?? []).find((e) => e.id === selectedExamId) ?? null;
+  // Only Published exams are assignable - an assignment on a Draft/Archived
+  // exam would be silently invisible to students, so it's excluded here
+  // rather than allowed through and failing at submit time.
+  const publishableExams = useMemo(() => (exams ?? []).filter((e) => e.status === 'Published'), [exams]);
+  const selectedExam = publishableExams.find((e) => e.id === selectedExamId) ?? null;
   const selectedGroup = (groups ?? []).find((g) => g.id === selectedGroupId) ?? null;
 
-  const filteredExams = (exams ?? []).filter((e) =>
+  const filteredExams = publishableExams.filter((e) =>
     e.title.toLowerCase().includes(examSearch.trim().toLowerCase()),
   );
 
@@ -130,7 +134,7 @@ export default function AssignExam() {
     onError: (error) => setSubmitError(extractServerError(error)),
   });
 
-  const canProceedFromStep1 = !!selectedExamId;
+  const canProceedFromStep1 = !!selectedExam;
   const canProceedFromStep2 =
     (targetType === 'Students' && selectedStudentIds.length > 0) ||
     (targetType === 'Batch' && !!selectedGroupId) ||
@@ -296,7 +300,12 @@ export default function AssignExam() {
                   </tbody>
                 </Table>
               )}
-              {!examsLoading && filteredExams.length === 0 && (
+              {!examsLoading && publishableExams.length === 0 && (
+                <div className="text-center text-muted py-4">
+                  No published exams yet. Publish an exam under Exam Review &amp; Publish before assigning it.
+                </div>
+              )}
+              {!examsLoading && publishableExams.length > 0 && filteredExams.length === 0 && (
                 <div className="text-center text-muted py-4">No exams match your search.</div>
               )}
             </>

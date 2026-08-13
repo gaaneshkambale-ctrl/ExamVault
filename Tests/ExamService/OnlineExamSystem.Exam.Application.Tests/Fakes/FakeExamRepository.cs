@@ -64,6 +64,23 @@ public class FakeExamRepository : IExamRepository
         return Task.FromResult(isAssigned);
     }
 
+    public Task<ExamAssignment?> GetAssignmentForUserAndExamAsync(
+        Guid examId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var assignmentIds = _assignments.Where(a => a.ExamId == examId).Select(a => a.Id).ToHashSet();
+        var matchingAssignmentIds = _targets
+            .Where(t => assignmentIds.Contains(t.ExamAssignmentId) && t.UserId == userId)
+            .Select(t => t.ExamAssignmentId)
+            .ToHashSet();
+        var result = _assignments
+            .Where(a => matchingAssignmentIds.Contains(a.Id))
+            .OrderByDescending(a => a.CreatedAtUtc)
+            .FirstOrDefault();
+        return Task.FromResult(result);
+    }
+
     public Task AddAssignmentAsync(
         ExamAssignment assignment,
         IReadOnlyList<Guid> targetUserIds,

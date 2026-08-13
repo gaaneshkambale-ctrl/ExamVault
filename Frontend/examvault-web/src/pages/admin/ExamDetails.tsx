@@ -81,10 +81,18 @@ export default function ExamDetails() {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Exam Review &amp; Publish</h1>
         <div className="d-flex gap-2">
-          {id && (
-            <Link to={`/admin/assignments/new?examId=${id}`} className="btn btn-outline-primary">
-              Assign Students
-            </Link>
+          {id && exam && (
+            exam.status === 'Published' ? (
+              <Link to={`/admin/assignments/new?examId=${id}`} className="btn btn-outline-primary">
+                Assign Students
+              </Link>
+            ) : (
+              <span title="Publish this exam before assigning it to students.">
+                <Button variant="outline-primary" disabled>
+                  Assign Students
+                </Button>
+              </span>
+            )
           )}
           {id && (
             <Link to={`/admin/exams/${id}/edit`} className="btn btn-primary">

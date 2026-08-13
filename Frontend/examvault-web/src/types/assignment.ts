@@ -41,6 +41,23 @@ export interface ExamAssignmentResponse {
   createdAtUtc: string;
 }
 
+export interface MyAssignmentResponse {
+  id: string;
+  examId: string;
+  startAtUtc: string;
+  endAtUtc: string;
+  timeZoneId: string;
+  maxAttempts: number;
+  allowLateJoin: boolean;
+  graceTimeMinutes: number;
+  showInstructions: boolean;
+  showResultsAfterSubmit: boolean;
+  showCorrectAnswers: boolean;
+  allowReviewAfterSubmit: boolean;
+  autoSubmitOnTimeOver: boolean;
+  enableProctoring: boolean;
+}
+
 export interface AssignmentListItemResponse {
   id: string;
   assignmentNumber: number;

@@ -7,6 +7,7 @@ using OnlineExamSystem.Exam.Application.Assignments.Create;
 using OnlineExamSystem.Exam.Application.Assignments.Delete;
 using OnlineExamSystem.Exam.Application.Assignments.GetById;
 using OnlineExamSystem.Exam.Application.Assignments.List;
+using OnlineExamSystem.Exam.Application.Assignments.Mine;
 using OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 using OnlineExamSystem.Exam.Application.Exams.Create;
 using OnlineExamSystem.Exam.Application.Exams.Delete;
@@ -57,6 +58,7 @@ public class Program
         builder.Services.AddScoped<ListAssignmentsForExamHandler>();
         builder.Services.AddScoped<GetAssignmentHandler>();
         builder.Services.AddScoped<DeleteAssignmentHandler>();
+        builder.Services.AddScoped<GetMyAssignmentForExamHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

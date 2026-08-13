@@ -37,6 +37,11 @@ public class CreateAssignmentHandler
             return CreateAssignmentResult.ExamNotFound();
         }
 
+        if (exam.Status != ExamStatus.Published)
+        {
+            return CreateAssignmentResult.ExamNotPublished();
+        }
+
         var targetType = Enum.Parse<AssignmentTargetType>(command.TargetType, ignoreCase: true);
         IReadOnlyList<Guid> targetUserIds;
         Guid? groupId = null;

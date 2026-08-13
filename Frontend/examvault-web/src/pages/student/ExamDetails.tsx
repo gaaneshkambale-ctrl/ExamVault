@@ -4,6 +4,8 @@ import { useMutation } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
+import { useQuestions } from '../../hooks/useQuestions';
+import { useMyAssignmentForExam } from '../../hooks/useAssignments';
 import { startAttempt } from '../../api/submissionApi';
 import type { ExamType } from '../../types/exam';
 
@@ -32,6 +34,13 @@ export default function ExamDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: exam, isLoading, isError } = useExam(id);
+  const { data: questions } = useQuestions(id);
+  const { data: assignment } = useMyAssignmentForExam(id);
+
+  // exam.totalQuestions is a legacy Phase-5 field that's never kept in sync
+  // with Question Service, so it's frequently stale/wrong - the real count
+  // is however many questions actually exist for this exam.
+  const totalQuestions = questions?.length ?? exam?.totalQuestions ?? 0;
 
   const startMutation = useMutation({
     mutationFn: () => startAttempt(id!),
@@ -68,7 +77,7 @@ export default function ExamDetails() {
                   Upcoming
                 </Badge>
                 <Row>
-                  <Field label="Total Questions" value={String(exam.totalQuestions)} />
+                  <Field label="Total Questions" value={String(totalQuestions)} />
                   <Field label="Duration" value={`${exam.durationMinutes} Minutes`} />
                   <Field label="Total Marks" value={String(exam.totalMarks)} />
                   <Field
@@ -80,11 +89,11 @@ export default function ExamDetails() {
                   <Field label="Exam Type" value={examTypeLabel[exam.examType]} />
                   <Field
                     label="Start Date"
-                    value={exam.startAtUtc ? new Date(exam.startAtUtc).toLocaleString() : 'Not scheduled'}
+                    value={assignment ? new Date(assignment.startAtUtc).toLocaleString() : 'Not scheduled'}
                   />
                   <Field
                     label="End Date"
-                    value={exam.endAtUtc ? new Date(exam.endAtUtc).toLocaleString() : 'Not scheduled'}
+                    value={assignment ? new Date(assignment.endAtUtc).toLocaleString() : 'Not scheduled'}
                   />
                 </Row>
               </Card.Body>
@@ -97,7 +106,7 @@ export default function ExamDetails() {
                 <h2 className="h6 fw-bold mb-3">Instructions</h2>
                 <ol className="ps-3 mb-4">
                   <li className="mb-2">
-                    The exam contains {exam.totalQuestions} question{exam.totalQuestions === 1 ? '' : 's'}.
+                    The exam contains {totalQuestions} question{totalQuestions === 1 ? '' : 's'}.
                   </li>
                   <li className="mb-2">The exam carries a total of {exam.totalMarks} marks.</li>
                   <li className="mb-2">

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Exam.Application.Assignments;
@@ -5,6 +6,7 @@ using OnlineExamSystem.Exam.Application.Assignments.Create;
 using OnlineExamSystem.Exam.Application.Assignments.Delete;
 using OnlineExamSystem.Exam.Application.Assignments.GetById;
 using OnlineExamSystem.Exam.Application.Assignments.List;
+using OnlineExamSystem.Exam.Application.Assignments.Mine;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
@@ -13,7 +15,7 @@ namespace OnlineExamSystem.Exam.API.Controllers;
 
 [ApiController]
 [Route("api/assignments")]
-[Authorize(Roles = "Admin")]
+[Authorize]
 public class AssignmentsController : ControllerBase
 {
     private readonly CreateAssignmentHandler _createAssignmentHandler;
@@ -21,6 +23,7 @@ public class AssignmentsController : ControllerBase
     private readonly ListAssignmentsForExamHandler _listAssignmentsForExamHandler;
     private readonly GetAssignmentHandler _getAssignmentHandler;
     private readonly DeleteAssignmentHandler _deleteAssignmentHandler;
+    private readonly GetMyAssignmentForExamHandler _getMyAssignmentForExamHandler;
     private readonly ILogger<AssignmentsController> _logger;
 
     public AssignmentsController(
@@ -29,6 +32,7 @@ public class AssignmentsController : ControllerBase
         ListAssignmentsForExamHandler listAssignmentsForExamHandler,
         GetAssignmentHandler getAssignmentHandler,
         DeleteAssignmentHandler deleteAssignmentHandler,
+        GetMyAssignmentForExamHandler getMyAssignmentForExamHandler,
         ILogger<AssignmentsController> logger)
     {
         _createAssignmentHandler = createAssignmentHandler;
@@ -36,10 +40,28 @@ public class AssignmentsController : ControllerBase
         _listAssignmentsForExamHandler = listAssignmentsForExamHandler;
         _getAssignmentHandler = getAssignmentHandler;
         _deleteAssignmentHandler = deleteAssignmentHandler;
+        _getMyAssignmentForExamHandler = getMyAssignmentForExamHandler;
         _logger = logger;
     }
 
+    [HttpGet("mine")]
+    public async Task<IActionResult> Mine([FromQuery] Guid examId, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var assignment = await _getMyAssignmentForExamHandler.HandleAsync(
+            new GetMyAssignmentForExamQuery(examId, userId),
+            cancellationToken);
+
+        if (assignment is null)
+        {
+            return NotFound(new { message = "No assignment found for this exam." });
+        }
+
+        return Ok(ToMyResponse(assignment));
+    }
+
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(CreateAssignmentRequest request, CancellationToken cancellationToken)
     {
         var authorizationHeader = Request.Headers["Authorization"].ToString();
@@ -80,6 +102,11 @@ public class AssignmentsController : ControllerBase
             return NotFound(new { message = "Exam not found." });
         }
 
+        if (result.IsExamNotPublished)
+        {
+            return Conflict(new { message = "This exam must be published before it can be assigned to students." });
+        }
+
         if (result.IsGroupNotFound)
         {
             return NotFound(new { message = "Group not found." });
@@ -96,6 +123,7 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> List([FromQuery] Guid? examId, CancellationToken cancellationToken)
     {
         if (examId is { } id)
@@ -111,6 +139,7 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _getAssignmentHandler.HandleAsync(new GetAssignmentQuery(id), cancellationToken);
@@ -123,6 +152,7 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await _deleteAssignmentHandler.HandleAsync(new DeleteAssignmentCommand(id), cancellationToken);
@@ -157,6 +187,23 @@ public class AssignmentsController : ControllerBase
             assignment.AutoSubmitOnTimeOver,
             assignment.EnableProctoring,
             assignment.CreatedAtUtc);
+
+    private static MyAssignmentResponse ToMyResponse(ExamAssignment assignment) =>
+        new(
+            assignment.Id,
+            assignment.ExamId,
+            assignment.StartAtUtc,
+            assignment.EndAtUtc,
+            assignment.TimeZoneId,
+            assignment.MaxAttempts,
+            assignment.AllowLateJoin,
+            assignment.GraceTimeMinutes,
+            assignment.ShowInstructions,
+            assignment.ShowResultsAfterSubmit,
+            assignment.ShowCorrectAnswers,
+            assignment.AllowReviewAfterSubmit,
+            assignment.AutoSubmitOnTimeOver,
+            assignment.EnableProctoring);
 
     private static AssignmentListItemResponse ToListItemResponse(AssignmentWithExamTitle item) =>
         new(
