@@ -92,6 +92,7 @@ export default function ManageExams() {
   const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<'All' | ExamType>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | ExamStatus>('All');
   const [page, setPage] = useState(1);
 
   const counts = {
@@ -105,6 +106,9 @@ export default function ManageExams() {
     if (typeFilter !== 'All' && exam.examType !== typeFilter) {
       return false;
     }
+    if (statusFilter !== 'All' && exam.status !== statusFilter) {
+      return false;
+    }
     if (searchText.trim() && !exam.title.toLowerCase().includes(searchText.trim().toLowerCase())) {
       return false;
     }
@@ -113,7 +117,7 @@ export default function ManageExams() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchText, typeFilter]);
+  }, [searchText, typeFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredExams.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -141,7 +145,7 @@ export default function ManageExams() {
       </Row>
 
       <Row className="g-2 mb-3">
-        <Col md={8}>
+        <Col md={6}>
           <Form.Control
             type="search"
             placeholder="Search exams..."
@@ -149,7 +153,7 @@ export default function ManageExams() {
             onChange={(e) => setSearchText(e.target.value)}
           />
         </Col>
-        <Col md={4}>
+        <Col md={3}>
           <Form.Select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as 'All' | ExamType)}
@@ -157,6 +161,17 @@ export default function ManageExams() {
             <option value="All">All Types</option>
             <option value="Manual">Manual</option>
             <option value="AiGenerated">AI Generated</option>
+          </Form.Select>
+        </Col>
+        <Col md={3}>
+          <Form.Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'All' | ExamStatus)}
+          >
+            <option value="All">All Status</option>
+            <option value="Draft">Draft</option>
+            <option value="Published">Published</option>
+            <option value="Archived">Archived</option>
           </Form.Select>
         </Col>
       </Row>
