@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExams } from '../../hooks/useExams';
@@ -27,9 +27,15 @@ interface ExamRow extends ExamResponse {
   rowStatus: RowStatus;
 }
 
+function isTab(value: string | null): value is Tab {
+  return !!value && (TABS as string[]).includes(value);
+}
+
 export default function MyExams() {
   const { data: exams, isLoading, isError } = useExams();
-  const [tab, setTab] = useState<Tab>('All');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab');
+  const [tab, setTab] = useState<Tab>(isTab(initialTab) ? initialTab : 'All');
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<'All' | ExamType>('All');
 
@@ -71,7 +77,7 @@ export default function MyExams() {
   const loading = isLoading || isLoadingAttempts;
 
   return (
-    <StudentLayout active="My Exams">
+    <StudentLayout active={tab === 'Upcoming' ? 'Upcoming Exams' : 'My Exams'}>
       <h1 className="h4 fw-bold mb-4">My Exams</h1>
 
       <Card className="border-0 shadow-sm">

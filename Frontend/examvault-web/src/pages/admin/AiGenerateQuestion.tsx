@@ -33,6 +33,11 @@ export default function AiGenerateQuestion() {
   const { data: lockedExam } = useExam(urlExamId);
   const { data: allExams, isLoading: isLoadingExams } = useExams();
 
+  // This flow generates questions with AI - only exams tagged AI Generated
+  // are eligible sources, so Manual exams (added to by hand) don't clutter
+  // the picker.
+  const aiExams = allExams?.filter((exam) => exam.examType === 'AiGenerated');
+
   const [selectedExamId, setSelectedExamId] = useState(urlExamId ?? '');
   const [source, setSource] = useState<GenerateSource>('ExistingExam');
   const [topic, setTopic] = useState('');
@@ -46,7 +51,7 @@ export default function AiGenerateQuestion() {
 
   const selectedExam = urlExamId
     ? lockedExam
-    : allExams?.find((e) => e.id === selectedExamId);
+    : aiExams?.find((e) => e.id === selectedExamId);
 
   const toggleQuestionType = (type: GenerateQuestionType) => {
     setQuestionTypes((prev) =>
@@ -154,7 +159,7 @@ export default function AiGenerateQuestion() {
                       disabled={isLoadingExams}
                     >
                       <option value="">Select exam</option>
-                      {(allExams ?? []).map((exam) => (
+                      {(aiExams ?? []).map((exam) => (
                         <option key={exam.id} value={exam.id}>
                           {exam.title}
                         </option>
@@ -162,7 +167,9 @@ export default function AiGenerateQuestion() {
                     </Form.Select>
                   )}
                   <Form.Text className="text-muted">
-                    Approved questions are added to this exam.
+                    {!isLoadingExams && aiExams?.length === 0
+                      ? 'No AI Generated exams yet. Create one with Exam Type set to "AI Generated" first.'
+                      : 'Approved questions are added to this exam.'}
                   </Form.Text>
                 </Form.Group>
               </Col>
