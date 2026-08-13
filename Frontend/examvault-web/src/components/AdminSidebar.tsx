@@ -9,8 +9,7 @@ export type AdminNavItem =
   | 'Roles & Permissions'
   | 'Groups'
   | 'Exams'
-  | 'Exam Review & Publish'
-  | 'Assignments'
+  | 'Exam Assignment'
   | 'Questions'
   | 'Categories'
   | 'Results'
@@ -43,9 +42,8 @@ const navItems: NavItem[] = [
   {
     label: 'Exams',
     path: '/admin/exams',
-    children: [{ label: 'Exam Review & Publish', path: '/admin/exams' }],
+    children: [{ label: 'Exam Assignment', path: '/admin/assignments' }],
   },
-  { label: 'Assignments', path: '/admin/assignments' },
   { label: 'Questions', path: '/admin/questions' },
   { label: 'Categories', path: null },
   { label: 'Results', path: null },

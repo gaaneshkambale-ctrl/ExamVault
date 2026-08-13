@@ -113,7 +113,7 @@ export default function ManageGroups() {
             <Table responsive hover className="mb-0 align-middle">
               <thead className="text-muted small text-uppercase bg-light">
                 <tr>
-                  <th className="ps-4">Name</th>
+                  <th className="ps-4">Group Name</th>
                   <th>Members</th>
                   <th>Created On</th>
                   <th className="pe-4">Actions</th>

@@ -230,7 +230,7 @@ export default function AssignExam() {
 
   if (isEditMode && (assignmentLoading || !prefilled) && !assignmentError) {
     return (
-      <AdminLayout active="Assignments">
+      <AdminLayout active="Exam Assignment">
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
@@ -240,7 +240,7 @@ export default function AssignExam() {
 
   if (isEditMode && assignmentError) {
     return (
-      <AdminLayout active="Assignments">
+      <AdminLayout active="Exam Assignment">
         <div className="text-center text-muted py-5">
           Couldn't load this assignment.{' '}
           <Link to="/admin/assignments">Back to Assignments</Link>
@@ -251,7 +251,7 @@ export default function AssignExam() {
 
   if (createdAssignment) {
     return (
-      <AdminLayout active="Assignments">
+      <AdminLayout active="Exam Assignment">
         <Card className="border-0 shadow-sm mx-auto" style={{ maxWidth: 560 }}>
           <Card.Body className="p-4 text-center">
             <div
@@ -331,7 +331,7 @@ export default function AssignExam() {
   }
 
   return (
-    <AdminLayout active="Assignments">
+    <AdminLayout active="Exam Assignment">
       <h1 className="h4 fw-bold mb-1 text-primary">{isEditMode ? 'Edit Assignment' : 'Assign Exam'}</h1>
       <p className="text-muted mb-4">
         {isEditMode
