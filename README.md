@@ -1183,3 +1183,122 @@ for `Admin` and `/profile` for `Student`.
   117/117 green; `npm run build`/`lint`/`test` (25/25) all green
 
 **Phase 7 (Submission Service, Days 31-33) is COMPLETE. Gate passed.**
+
+## Phase 8 Progress
+
+- [x] Day 34 — Result Service skeleton, answer-key endpoint, and scoring
+- [x] Day 35 — Result Details breakdown, ShowCorrectAnswers gating, and Dashboard widgets
+- [x] Day 36 — Polish, verification, and gate
+
+### Day 34 Notes
+
+- New `OnlineExamSystem.Result.API`/`.Application`/`.Domain`/
+  `.Infrastructure` projects (`Backend/Services/ResultService/`), added
+  to `ExamVault.sln`. Runs on port 5060 (5010 User, 5020 Exam, 5030
+  Question, 5040 AI, 5050 Submission, 5060 Result). Owns no database at
+  all - the same design already used for AI Service - it computes a
+  score on demand by orchestrating read-only calls to the services that
+  already own the real data, rather than storing a second, syncable
+  copy of a score anywhere
+- Question Service's existing `GET /api/questions` masks `IsCorrect` to
+  `false` for non-Admin callers (the Day 32 fix), so Result Service
+  needs a different path to the real answer key. Caught before writing
+  any code: nesting a new endpoint under `/api/questions` would still
+  be reachable through the Gateway's existing
+  `/api/questions/{**catch-all}` route, defeating the point. Instead
+  added `GET /internal/questions/answer-key?examId=` - deliberately
+  outside `/api` entirely, a path the Gateway has no route for, so a
+  request to it through the Gateway 404s before ever reaching Question
+  API. Confirmed by curl: 404 via `:5000`, 200 direct to `:5030`
+- `GetResultHandler` orchestrates three service-to-service calls
+  (forwarding the caller's own JWT, the same pattern Submission
+  Service's Day 32 `ExamServiceClient` established): Submission
+  Service's existing `GET /api/submissions/mine?examId=` for the
+  attempt/answers, the new Question Service answer-key endpoint, and
+  Exam Service's existing `GET /api/exams/{id}` for
+  TotalMarks/PassingMarks. Returns 404 (`NotSubmitted`) if no
+  Submitted/AutoSubmitted attempt exists yet - no score before
+  submission. New `GET /api/results?examId=` on `ResultsController`,
+  `[Authorize]` (any role), plus the Gateway route
+  `/api/results/{**catch-all}` → `:5060`
+- New `Result.Application.Tests` project (6 tests: no attempt, attempt
+  still in-progress, correct/wrong/unanswered scoring math, exact
+  passing-marks boundary, exam not found) - backend total 154/154
+- Frontend: new `/results` (My Results list) and `/results/:examId`
+  (Result Details - score/pass-fail summary card this day). My Exams'
+  "View Result" (disabled since Day 33) and the sidebar's "My Results"
+  link (disabled since Day 31) both now go to real pages
+- Verified end-to-end twice: via curl with a purpose-built exam (one
+  question answered right, one wrong) confirming the exact 1/2 score
+  and pass boundary, and in a real browser against real completed
+  attempts, both rendering correctly
+
+### Day 35 Notes
+
+- `AnswerKeyQuestion` (Result.Application) and the answer-key response
+  both grew to carry full question text and every option, not just
+  marks/correct-option-id, so a real per-question breakdown could be
+  built. New `IExamLookupClient.GetShowCorrectAnswersAsync` calls Exam
+  Service's existing `GET /api/assignments/mine?examId=`, defaulting to
+  `true` when no assignment exists. `GetResultHandler` always computes
+  the full breakdown internally but only attaches it to the response
+  when that setting is on (`Questions: showCorrectAnswers ? list :
+  null`) - the gating happens server-side, never left to the frontend
+  to hide, the same principle as Question Service's Day 32 `IsCorrect`
+  masking
+- 2 new tests for the on/off branches - Result Service 8/8, backend
+  total 157/157
+- Frontend: Result Details gained an "Answer Review" section (lettered
+  options, green for correct, red + "Your Answer" badge when wrong,
+  reusing `QuestionDetails.tsx`'s existing visual pattern) that only
+  renders when `questions` is non-null. Student Dashboard's Completed
+  Exams/Average Score stat cards, Recent Results list, and Performance
+  Overview chart (all Day 31 static zeros/empty placeholders) now
+  aggregate real results via the same `useQueries`-per-published-exam
+  pattern as `MyResults.tsx`, sharing the `['results','mine',examId]`
+  query cache key so no extra network calls beyond what's already
+  fetched elsewhere
+- Verified end-to-end twice: via curl with two purpose-built
+  exams/assignments (one `ShowCorrectAnswers=true`, one `false`)
+  confirming the exact API-level gating, and in a real browser
+  confirming the Dashboard widgets and both Result Details pages
+- Known pre-existing gap noticed but not fixed (out of scope): Student
+  Dashboard's "Upcoming Exams" count doesn't exclude exams the student
+  has already completed - this logic predates Phase 8
+
+### Day 36 Notes
+
+- `GetResultHandler`'s three service-to-service calls are now wrapped
+  in a try/catch returning a clean provider-failure result (mirroring
+  AI Service's `GenerateQuestionsHandler`) instead of an unhandled 500
+  if a downstream service is unreachable; `ResultsController` maps that
+  to a 502 with a generic message, and also now rejects a missing/empty
+  `examId` with 400 before calling the handler at all. 2 new tests
+  (provider failure, plus the existing empty-`examId` path already
+  covered at the controller level) - Result Service 9/9, backend total
+  158/158
+- Frontend polish: `MyResults.tsx` gained the same stat-card + search
+  treatment every other list page in the app already has (`Total
+  Results`/`Passed`/`Failed`/`Average Score`, matching
+  `Assignments.tsx`'s exact pattern, plus a search-by-exam box).
+  `ResultDetails.tsx` now distinguishes a real fetch error (red text,
+  "Couldn't load your result") from the normal "not submitted yet"
+  case (muted text), matching the rest of the student UI's error-vs-
+  empty convention
+- Final gate verification in a real browser and via curl: submit an
+  exam → My Exams' Completed tab shows a working View Result link → My
+  Results lists it with a real score and pass/fail → Result Details
+  shows the real per-question breakdown → Student Dashboard's Average
+  Score/Recent Results/Performance Overview all reflect it. Also
+  specifically verified this day: a student with no attempt on an exam
+  gets a clean 404 (never another student's data) when requesting that
+  exam's result — proven with two real student accounts, one submitted
+  and one not; the internal answer-key endpoint remains unreachable
+  through the Gateway (re-confirmed, including the old
+  `/api/questions/internal/answer-key`-shaped path some earlier
+  thinking considered, which also 404s); toggling an assignment's
+  `ShowCorrectAnswers` off hides the per-question breakdown while
+  still showing the total score. `dotnet build`/`dotnet test` 158/158
+  green; `npm run build`/`lint`/`test` (25/25) all green
+
+**Phase 8 (Result Service, Days 34-36) is COMPLETE. Gate passed.**

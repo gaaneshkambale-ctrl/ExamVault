@@ -783,3 +783,123 @@ error state — the frontend uses this to decide "show Start Exam Now").
 ```json
 { "message": "No attempt found." }
 ```
+
+## Result Service
+
+Requires a valid JWT access token; no token gets 401. Any authenticated
+role can call it. Result Service owns no database — it computes a score
+on demand by calling Submission Service (the caller's own attempt and
+answers), Exam Service (title/marks/passing marks, and the caller's
+assignment `ShowCorrectAnswers` setting), and Question Service (the
+answer key), rather than storing a second, syncable copy of a score
+anywhere.
+
+Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
+- `Responses/Result/ResultSummaryResponse.cs`
+- `Responses/Result/QuestionResultResponse.cs`
+- `Responses/Result/QuestionResultOptionResponse.cs`
+
+### GET /api/results?examId={id}
+
+Computes and returns the caller's result for an exam. Scoped to the
+caller by construction (it reads Submission Service's `mine`-lookup),
+so a student can never see another student's result — requesting an
+exam they haven't submitted returns the same 404 a genuinely-unattempted
+exam would, never someone else's data.
+
+### 200 OK
+
+```json
+{
+  "attemptId": "f08cad9a-47a8-43ea-8c7f-86f47bf568b3",
+  "examId": "827e04e2-8803-47da-9f9d-0ee4e13fe000",
+  "examTitle": "Verify Result Exam",
+  "totalScore": 1,
+  "totalMarks": 2,
+  "passingMarks": 1,
+  "passed": true,
+  "submittedAtUtc": "2026-08-13T15:15:46.9242636Z",
+  "questions": [
+    {
+      "questionId": "db191840-9670-4135-b585-39530284afa7",
+      "questionText": "2+2=?",
+      "marks": 1,
+      "marksAwarded": 1,
+      "selectedOptionId": "b75eaaa6-5c67-4d2a-aea5-233154496a8a",
+      "isCorrect": true,
+      "options": [
+        { "optionId": "7d19be70-c990-4990-b363-2e804c52fc99", "optionText": "3", "isCorrect": false },
+        { "optionId": "b75eaaa6-5c67-4d2a-aea5-233154496a8a", "optionText": "4", "isCorrect": true }
+      ]
+    }
+  ]
+}
+```
+
+`questions` is `null` — never an empty array standing in for "hidden" —
+when the caller's assignment has `ShowCorrectAnswers` off. The total
+score is always present either way; only the per-question breakdown is
+gated. Defaults to visible (`true`) when no assignment record exists for
+the caller on this exam.
+
+### 400 Bad Request
+
+```json
+{ "message": "examId is required." }
+```
+
+### 404 Not Found
+
+Returned for either failure — check the message to tell them apart.
+
+```json
+{ "message": "No submitted attempt found for this exam." }
+```
+```json
+{ "message": "Exam not found." }
+```
+
+### 502 Bad Gateway
+
+Returned when a downstream service call fails (network error, service
+unreachable) rather than an unhandled 500 — the same pattern AI
+Service's `/api/ai/generate-questions` uses. The real error is logged
+server-side only.
+
+```json
+{ "message": "Failed to load your result. Please try again." }
+```
+
+### Internal-only: GET /internal/questions/answer-key?examId={id} (Question Service)
+
+**Not exposed through the Gateway — a request to it via `:5000` 404s
+before ever reaching Question API.** Only Result Service, calling
+Question API directly on its own port (`:5030`), can reach it. It exists
+specifically because the public `GET /api/questions` masks `IsCorrect`
+for non-Admin callers (Day 32), and Result Service needs the real answer
+key to grade anything. A student's browser only ever talks to the
+Gateway, so it can never reach this path — this is enforced by the
+Gateway's route table (no route exists for anything outside `/api`),
+not by authorization alone.
+
+Requires a valid JWT (any role) but does not mask `IsCorrect` — the
+unmasked response is the entire point of this endpoint.
+
+```json
+[
+  {
+    "id": "db191840-9670-4135-b585-39530284afa7",
+    "examId": "827e04e2-8803-47da-9f9d-0ee4e13fe000",
+    "questionType": "MultipleChoice",
+    "questionText": "2+2=?",
+    "marks": 1,
+    "difficulty": "Easy",
+    "shuffleOptions": false,
+    "options": [
+      { "id": "7d19be70-c990-4990-b363-2e804c52fc99", "optionText": "3", "isCorrect": false, "displayOrder": 0 },
+      { "id": "b75eaaa6-5c67-4d2a-aea5-233154496a8a", "optionText": "4", "isCorrect": true, "displayOrder": 1 }
+    ],
+    "createdOn": "2026-08-13T15:15:08.3462926Z"
+  }
+]
+```

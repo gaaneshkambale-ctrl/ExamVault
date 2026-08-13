@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using OnlineExamSystem.Result.Application.GetResult;
 using OnlineExamSystem.Result.Application.Interfaces;
 using OnlineExamSystem.Result.Application.Tests.Fakes;
@@ -20,11 +21,13 @@ public class GetResultHandlerTests
         SubmissionLookupResult? submission,
         IReadOnlyList<AnswerKeyQuestion> answerKey,
         ExamLookupResult? exam,
-        bool showCorrectAnswers = true) =>
+        bool showCorrectAnswers = true,
+        Exception? submissionLookupException = null) =>
         new(
-            new FakeSubmissionLookupClient(submission),
+            new FakeSubmissionLookupClient(submission, submissionLookupException),
             new FakeQuestionAnswerKeyClient(answerKey),
-            new FakeExamLookupClient(exam, showCorrectAnswers));
+            new FakeExamLookupClient(exam, showCorrectAnswers),
+            NullLogger<GetResultHandler>.Instance);
 
     private static SubmissionLookupResult Submitted(IReadOnlyList<SubmissionAnswer> answers) =>
         new(AttemptId, ExamId, "Submitted", DateTime.UtcNow, answers);
@@ -184,5 +187,22 @@ public class GetResultHandlerTests
         Assert.Null(result.Summary!.Questions);
         Assert.Equal(1, result.Summary.TotalScore);
         Assert.Equal(2, result.Summary.TotalMarks);
+    }
+
+    [Fact]
+    public async Task Downstream_service_failure_returns_clean_provider_failure_result()
+    {
+        var handler = CreateHandler(
+            null,
+            DefaultAnswerKey(),
+            new ExamLookupResult(ExamId, "Test", 2, 1),
+            submissionLookupException: new HttpRequestException("connection refused"));
+
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsProviderFailure);
+        Assert.NotNull(result.ProviderErrorMessage);
+        Assert.Null(result.Summary);
     }
 }

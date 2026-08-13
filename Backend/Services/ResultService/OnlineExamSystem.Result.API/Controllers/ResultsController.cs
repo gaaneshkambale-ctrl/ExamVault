@@ -23,10 +23,23 @@ public class ResultsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] Guid examId, CancellationToken cancellationToken)
     {
+        if (examId == Guid.Empty)
+        {
+            return BadRequest(new { message = "examId is required." });
+        }
+
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
 
         var result = await _getResultHandler.HandleAsync(new GetResultQuery(examId, bearerToken), cancellationToken);
+
+        if (result.IsProviderFailure)
+        {
+            _logger.LogError("Result computation provider failure: {Message}", result.ProviderErrorMessage);
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new { message = "Failed to load your result. Please try again." });
+        }
 
         if (result.IsNotSubmitted)
         {

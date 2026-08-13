@@ -68,7 +68,11 @@ export default function ResultDetails() {
         </div>
       )}
 
-      {!isLoading && (isError || !result) && (
+      {!isLoading && isError && (
+        <div className="text-center text-danger py-5">Couldn't load your result. Please try again.</div>
+      )}
+
+      {!isLoading && !isError && !result && (
         <div className="text-center text-muted py-5">
           No result available for this exam yet - it may not be submitted.
         </div>
