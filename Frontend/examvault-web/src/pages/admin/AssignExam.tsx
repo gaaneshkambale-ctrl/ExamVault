@@ -9,6 +9,7 @@ import { createAssignment, updateAssignment } from '../../api/assignmentApi';
 import { useAssignment } from '../../hooks/useAssignments';
 import { useExams } from '../../hooks/useExams';
 import { useGroups } from '../../hooks/useGroups';
+import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { useUsers } from '../../hooks/useUsers';
 import type { AssignmentTargetType, ExamAssignmentResponse } from '../../types/assignment';
 
@@ -53,6 +54,7 @@ export default function AssignExam() {
   const { data: exams, isLoading: examsLoading } = useExams();
   const { data: groups } = useGroups();
   const { data: users } = useUsers();
+  const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
 
   const [step, setStep] = useState<WizardStep>(1);
   const [examSearch, setExamSearch] = useState('');
@@ -407,7 +409,7 @@ export default function AssignExam() {
                         </td>
                         <td>{exam.title}</td>
                         <td>{exam.examType === 'AiGenerated' ? 'AI Generated' : 'Manual'}</td>
-                        <td>{exam.totalQuestions}</td>
+                        <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                         <td>{exam.durationMinutes} min</td>
                         <td>{exam.totalMarks}</td>
                       </tr>
@@ -702,7 +704,7 @@ export default function AssignExam() {
                         <Col xs={6} className="text-muted small">
                           Total Questions
                         </Col>
-                        <Col xs={6}>{selectedExam.totalQuestions}</Col>
+                        <Col xs={6}>{questionCounts[selectedExam.id] ?? selectedExam.totalQuestions}</Col>
                       </Row>
                       <Row className="mb-2">
                         <Col xs={6} className="text-muted small">

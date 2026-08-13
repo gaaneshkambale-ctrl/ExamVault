@@ -6,6 +6,7 @@ import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { archiveExam, publishExam, unpublishExam } from '../../api/examApi';
 import { useExam } from '../../hooks/useExams';
+import { useQuestions } from '../../hooks/useQuestions';
 import type { ExamStatus, ExamType } from '../../types/exam';
 
 const statusVariant: Record<ExamStatus, string> = {
@@ -39,7 +40,12 @@ export default function ExamDetails() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { data: exam, isLoading, isError } = useExam(id);
+  const { data: questions } = useQuestions(id);
   const [statusError, setStatusError] = useState('');
+
+  // exam.totalQuestions is a legacy field that's never kept in sync with
+  // Question Service, so it's always 0 - use the real live count instead.
+  const totalQuestions = questions?.length ?? exam?.totalQuestions ?? 0;
 
   const invalidateExam = () => {
     queryClient.invalidateQueries({ queryKey: ['exams'] });
@@ -170,7 +176,7 @@ export default function ExamDetails() {
                 <Field label="Duration" value={`${exam.durationMinutes} minutes`} />
                 <Field label="Total Marks" value={String(exam.totalMarks)} />
                 <Field label="Passing Marks" value={String(exam.passingMarks)} />
-                <Field label="Total Questions" value={String(exam.totalQuestions)} />
+                <Field label="Total Questions" value={String(totalQuestions)} />
                 <Field
                   label="Created On"
                   value={new Date(exam.createdOn).toLocaleString()}

@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExams } from '../../hooks/useExams';
+import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { getMyAttempt } from '../../api/submissionApi';
 import type { ExamResponse, ExamType } from '../../types/exam';
 
@@ -41,6 +42,7 @@ export default function MyExams() {
 
   // Only Published exams are relevant to a student.
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
+  const questionCounts = useQuestionCountsByExam(publishedExams.map((e) => e.id));
 
   const attemptQueries = useQueries({
     queries: publishedExams.map((exam) => ({
@@ -158,7 +160,7 @@ export default function MyExams() {
                   <tr key={exam.id}>
                     <td className="ps-4 fw-medium">{exam.title}</td>
                     <td>{examTypeLabel[exam.examType]}</td>
-                    <td>{exam.totalQuestions}</td>
+                    <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                     <td>{exam.durationMinutes} min</td>
                     <td>
                       <Badge bg={statusVariant[exam.rowStatus]}>{exam.rowStatus}</Badge>

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteExamButton from '../../components/DeleteExamButton';
 import { useExams } from '../../hooks/useExams';
+import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import type { ExamResponse, ExamStatus, ExamType } from '../../types/exam';
 
 const statusVariant: Record<ExamStatus, string> = {
@@ -88,6 +89,7 @@ const PAGE_SIZE = 6;
 
 export default function ManageExams() {
   const { data: exams, isLoading, isError } = useExams();
+  const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<'All' | ExamType>('All');
   const [page, setPage] = useState(1);
@@ -204,7 +206,7 @@ export default function ManageExams() {
                   <tr key={exam.id}>
                     <td className="ps-4 fw-medium">{exam.title}</td>
                     <td>{examTypeLabel[exam.examType]}</td>
-                    <td>{exam.totalQuestions}</td>
+                    <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                     <td>{exam.durationMinutes} min</td>
                     <td>{exam.totalMarks}</td>
                     <td>

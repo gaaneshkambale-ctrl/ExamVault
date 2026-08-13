@@ -5,6 +5,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import ExamsTrendChart from '../../components/ExamsTrendChart';
 import { useAuth } from '../../hooks/useAuth';
 import { useExams } from '../../hooks/useExams';
+import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { useUsers } from '../../hooks/useUsers';
 import type { ExamResponse, ExamStatus } from '../../types/exam';
 
@@ -123,9 +124,12 @@ export default function AdminDashboard() {
   const isAdmin = user?.role === 'Admin';
   const { data: exams, isLoading: isLoadingExams } = useExams(isAdmin);
   const { data: users, isLoading: isLoadingUsers } = useUsers(isAdmin);
+  const questionCounts = useQuestionCountsByExam(isAdmin ? exams?.map((e) => e.id) : undefined);
   const [trendMonths, setTrendMonths] = useState<(typeof PERIOD_OPTIONS)[number]>(6);
 
-  const totalQuestions = exams?.reduce((sum, exam) => sum + exam.totalQuestions, 0) ?? 0;
+  // exam.totalQuestions is a legacy field that's never kept in sync with
+  // Question Service, so it's always 0 - use the real live counts instead.
+  const totalQuestions = exams?.reduce((sum, exam) => sum + (questionCounts[exam.id] ?? 0), 0) ?? 0;
   const publishedExams = exams?.filter((exam) => exam.status === 'Published').length ?? 0;
 
   const newUsersThisMonth = users ? countCreatedInMonth(users.map((u) => u.createdAtUtc), 0) : 0;
@@ -234,7 +238,7 @@ export default function AdminDashboard() {
                             <td>
                               <Badge bg={statusVariant[exam.status]}>{exam.status}</Badge>
                             </td>
-                            <td>{exam.totalQuestions}</td>
+                            <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                             <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
                           </tr>
                         ))}
