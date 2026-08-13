@@ -28,6 +28,14 @@ import StudentExamDetails from '../pages/student/ExamDetails';
 import TakeExam from '../pages/student/TakeExam';
 import MyResults from '../pages/student/MyResults';
 import ResultDetails from '../pages/student/ResultDetails';
+import MyNotifications from '../pages/student/MyNotifications';
+import NotificationDetails from '../pages/student/NotificationDetails';
+import NotificationSettings from '../pages/student/NotificationSettings';
+import AdminNotifications from '../pages/admin/AdminNotifications';
+import AdminNotificationDetails from '../pages/admin/AdminNotificationDetails';
+import CreateNotification from '../pages/admin/CreateNotification';
+import NotificationHistory from '../pages/admin/NotificationHistory';
+import NotificationBatchDetails from '../pages/admin/NotificationBatchDetails';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -273,6 +281,70 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <ResultDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications/settings"
+        element={
+          <ProtectedRoute>
+            <NotificationSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications/:id"
+        element={
+          <ProtectedRoute>
+            <NotificationDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <MyNotifications />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/notifications/create"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <CreateNotification />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/notifications/history/:batchId"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <NotificationBatchDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/notifications/history"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <NotificationHistory />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/notifications/:id"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AdminNotificationDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/notifications"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AdminNotifications />
           </ProtectedRoute>
         }
       />

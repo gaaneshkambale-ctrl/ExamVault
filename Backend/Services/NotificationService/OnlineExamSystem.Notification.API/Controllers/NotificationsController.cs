@@ -8,6 +8,7 @@ using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificat
 using OnlineExamSystem.Notification.Application.Notifications.Admin.ResendNotificationBatch;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.DeleteMyNotification;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.GetMyNotifications;
+using OnlineExamSystem.Notification.Application.Notifications.Mine.GetNotificationById;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.GetUnreadCount;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAllAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAsRead;
@@ -25,6 +26,7 @@ namespace OnlineExamSystem.Notification.API.Controllers;
 public class NotificationsController : ControllerBase
 {
     private readonly GetMyNotificationsHandler _getMyNotificationsHandler;
+    private readonly GetNotificationByIdHandler _getNotificationByIdHandler;
     private readonly GetUnreadCountHandler _getUnreadCountHandler;
     private readonly MarkAsReadHandler _markAsReadHandler;
     private readonly MarkAllAsReadHandler _markAllAsReadHandler;
@@ -40,6 +42,7 @@ public class NotificationsController : ControllerBase
 
     public NotificationsController(
         GetMyNotificationsHandler getMyNotificationsHandler,
+        GetNotificationByIdHandler getNotificationByIdHandler,
         GetUnreadCountHandler getUnreadCountHandler,
         MarkAsReadHandler markAsReadHandler,
         MarkAllAsReadHandler markAllAsReadHandler,
@@ -54,6 +57,7 @@ public class NotificationsController : ControllerBase
         ILogger<NotificationsController> logger)
     {
         _getMyNotificationsHandler = getMyNotificationsHandler;
+        _getNotificationByIdHandler = getNotificationByIdHandler;
         _getUnreadCountHandler = getUnreadCountHandler;
         _markAsReadHandler = markAsReadHandler;
         _markAllAsReadHandler = markAllAsReadHandler;
@@ -86,6 +90,25 @@ public class NotificationsController : ControllerBase
             new GetMyNotificationsQuery(CallerId, unreadOnly, page, pageSize), cancellationToken);
 
         return Ok(new NotificationListResponse(items.Select(ToResponse).ToList(), totalCount, page, pageSize));
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _getNotificationByIdHandler.HandleAsync(
+            new GetNotificationByIdQuery(id, CallerId), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound();
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
+
+        return Ok(ToResponse(result.Notification!));
     }
 
     [HttpGet("unread-count")]

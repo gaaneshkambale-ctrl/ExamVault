@@ -25,7 +25,7 @@ const navItems: NavItem[] = [
   { label: 'My Results', path: '/results' },
   { label: 'My Certificates', path: null },
   { label: 'Profile', path: '/profile' },
-  { label: 'Notifications', path: null },
+  { label: 'Notifications', path: '/notifications' },
   { label: 'Settings', path: null },
 ];
 

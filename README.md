@@ -1302,3 +1302,110 @@ for `Admin` and `/profile` for `Student`.
   green; `npm run build`/`lint`/`test` (25/25) all green
 
 **Phase 8 (Result Service, Days 34-36) is COMPLETE. Gate passed.**
+
+## Phase 9 Progress
+
+- [x] Day 37 — Notification persistence, real events, and email via n8n/Gmail
+- [x] Day 38 — Notification API (mine reads/writes + admin broadcast/history)
+- [x] Day 39 — Frontend, polish, verification, and gate
+
+A dedicated `Notification.png` wireframe arrived mid-phase and replaced
+the original lighter design: notifications are no longer only
+event-triggered. An Admin can hand-author broadcast notifications
+(All Students/Selected Students/Specific Exam Candidates/Admins), every
+notification - system-triggered or admin-authored - shows up together
+in one Admin History with real per-batch delivery stats, and users get
+a per-type In-App/Email preference grid. Phase 9 grew from 2 days to 3
+to hold this.
+
+### Day 37 Notes
+
+- New `OnlineExamSystem.Notification.Domain`/`.Infrastructure` projects
+  (`Backend/Services/NotificationService/`), added to `ExamVault.sln`.
+  A `Notification` entity (BatchId/UserId/Type/Title/Message/IsRead/
+  RelatedExamId/EmailStatus/CreatedByAdminUserId/ScheduledAtUtc) and a
+  `NotificationPreference` entity, both persisted to a real
+  `ExamVault.NotificationDb` - the one deliberate exception to the
+  DB-less design AI Service and Result Service both established, since
+  a notification is read-later state, not a live computation
+- Email is real but goes through an n8n workflow over Gmail (Webhook →
+  Send Message via Gmail's native n8n node), not a .NET SMTP client -
+  keeps zero email credentials in this codebase. The workflow JSON
+  lives at `Documentation/n8n-notification-workflow.json`. The webhook
+  URL itself is treated as a credential (stored via `dotnet
+  user-secrets`, not appsettings), the same discipline the AI Service's
+  n8n webhook URL already used
+- Exam Service becomes the second-ever event publisher (after User
+  Service's `RegisterUserHandler`): `CreateAssignmentHandler` now
+  publishes `ExamAssignedEvent`, which carries resolved recipient
+  email/name (not bare ids) since the Worker has no bearer token to
+  look anything up with. `UserRegisteredConsumer` was rewritten to
+  persist + email a real "Welcome to ExamVault!" notification instead
+  of only logging; new `ExamAssignedConsumer` does the same per target
+  student
+- Verified live: a 29-message backlog of `UserRegisteredEvent`s queued
+  from earlier in development drained automatically the moment the
+  rewritten Worker started, creating real rows with real email attempts
+  (28 Delivered, 1 Failed - proving `EmailStatus` genuinely reflects the
+  n8n call outcome). A completely fresh registration and a fresh exam
+  assignment both confirmed live against the database
+
+### Day 38 Notes
+
+- New `OnlineExamSystem.Notification.Application` project - 12
+  CQRS-lite features: mine-scoped list/unread-count/mark-read/
+  mark-all-read/delete/preferences, and admin-side broadcast create/
+  history/batch-details/resend/delete. New
+  `OnlineExamSystem.Notification.API`, Gateway route on port `:5070`
+  (5000 Gateway/5010 User/5020 Exam/5030 Question/5040 AI/5050
+  Submission/5060 Result/5070 Notification)
+- Admin broadcast targeting (All Students/Selected Students/Exam
+  Candidates/Admins) resolves via two new cross-service clients to User
+  Service (`GET /api/users`) and Exam Service (`GET /api/assignments?
+  examId=`, which already returns resolved target user ids per
+  assignment) - forwarding the admin's own JWT like every other
+  cross-service call in this codebase
+- New `Notification.Application.Tests` project (19 tests: mine-scoping,
+  ownership on delete/mark-read, admin target resolution per `SendTo`
+  type, history aggregation, preference defaulting) - backend total
+  177/177
+- Verified live through the Gateway with real JWTs, including a real
+  403 for a non-owner trying to mark-read another user's notification
+  and a real 403 for a non-admin hitting an admin route - not just
+  unit-tested
+
+### Day 39 Notes
+
+- Frontend: a `NotificationBell` component (unread badge, dropdown of
+  the latest few, mark-as-read, "View All") added to both
+  `AdminLayout`/`StudentLayout` - the first piece of UI shared between
+  the two layouts, which needed a new slim header row since neither had
+  one before. Mine list + detail pages (shared components rendered
+  inside either layout depending on route), `/admin/notifications/
+  create`, `/admin/notifications/history` + `/history/:batchId`, and
+  `/notifications/settings` (In-App+Email toggle grid for the five
+  supported types - Exam/Reminder/Result/System/Account, no SMS column
+  per the user's explicit decision)
+- A real gap found while building the detail page: there was no `GET
+  /api/notifications/{id}` endpoint. Added one (mirroring
+  `MarkAsRead`'s exact ownership-check pattern: 404/403/200), plus 3
+  new tests - backend total 180/180
+- Verified live end-to-end in a real browser: registered a throwaway
+  student → Welcome notification appeared with a real `Delivered`
+  email status; as an admin, published and assigned a real exam → the
+  ExamAssigned notification appeared with a working "Take Exam" link;
+  turned Email off for the Exam type in Settings → confirmed via the
+  Worker's own log that the next Exam-type notification made **no**
+  `IEmailDispatcher` HTTP call at all, not just that it showed the same
+  status; composed an admin broadcast to All Students → real recipients
+  resolved, History showed it unified alongside the system-triggered
+  batches, Batch Details showed real delivery percentages, Resend
+  created a genuinely new batch with a fresh timestamp, Delete removed
+  it. Also verified live (not just via curl): a student can't load
+  another student's notification by URL (403), and a non-Admin gets
+  redirected away from an admin route
+- Full verification suite green: `dotnet build` clean, `dotnet test`
+  180/180 across all 7 backend services, `npm run build`/`lint`/`test`
+  (25/25) all green
+
+**Phase 9 (Notification Service, Days 37-39) is COMPLETE. Gate passed.**

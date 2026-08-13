@@ -11,6 +11,7 @@ using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificat
 using OnlineExamSystem.Notification.Application.Notifications.Admin.ResendNotificationBatch;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.DeleteMyNotification;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.GetMyNotifications;
+using OnlineExamSystem.Notification.Application.Notifications.Mine.GetNotificationById;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.GetUnreadCount;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAllAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAsRead;
@@ -53,6 +54,7 @@ public class Program
             client.BaseAddress = new Uri(examServiceBaseUrl));
 
         builder.Services.AddScoped<GetMyNotificationsHandler>();
+        builder.Services.AddScoped<GetNotificationByIdHandler>();
         builder.Services.AddScoped<GetUnreadCountHandler>();
         builder.Services.AddScoped<MarkAsReadHandler>();
         builder.Services.AddScoped<MarkAllAsReadHandler>();

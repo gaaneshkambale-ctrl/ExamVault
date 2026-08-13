@@ -903,3 +903,213 @@ unmasked response is the entire point of this endpoint.
   }
 ]
 ```
+
+## Notification Service
+
+Requires a valid JWT access token; no token gets 401. Owns a real
+database (`ExamVault.NotificationDb`) — the one deliberate exception to
+the DB-less design AI Service and Result Service both use, since a
+notification is read-later state, not a live computation. Two route
+families: `/api/notifications/*` is `[Authorize]` (any role), scoped to
+the caller's own `UserId` by construction; `/api/notifications/admin/*`
+is `[Authorize(Roles="Admin")]`.
+
+Shapes are defined in `Backend/Shared/OnlineExamSystem.Shared.Contracts`:
+- `Requests/Notification/CreateNotificationRequest.cs`
+- `Requests/Notification/SavePreferencesRequest.cs`
+- `Responses/Notification/NotificationResponse.cs`
+- `Responses/Notification/NotificationPreferenceResponse.cs`
+- `Responses/Notification/NotificationBatchResponses.cs`
+
+Notification `type` is one of `Exam`/`Reminder`/`Result`/`System`/
+`Account`. `emailStatus` is one of `Pending`/`Delivered`/`Failed` — it
+reflects whether the n8n/Gmail webhook call actually succeeded, or
+`Delivered` unconditionally when the recipient has Email disabled for
+that type (in-app delivery is instant and never fails). Email itself
+goes through an n8n workflow (`Documentation/n8n-notification-workflow.json`),
+not a .NET SMTP client — the webhook URL is stored via `dotnet
+user-secrets`, never in appsettings, the same discipline the AI
+Service's own n8n webhook URL already used.
+
+### GET /api/notifications?unreadOnly=&page=&pageSize=
+
+Returns the caller's own notifications, newest first. Excludes
+not-yet-due scheduled batches (`ScheduledAtUtc IS NULL OR <= now`).
+
+```json
+{
+  "items": [
+    {
+      "id": "d41d3a2c-2818-42af-ab33-8808860e417e",
+      "type": "Exam",
+      "title": "New Exam Assigned: Day39 Verify Exam",
+      "message": "You've been assigned to \"Day39 Verify Exam\". Please check your exams list for details.",
+      "isRead": false,
+      "relatedExamId": "5262663a-849b-4287-8962-9a99964b9c7a",
+      "emailStatus": "Delivered",
+      "createdAtUtc": "2026-08-13T18:39:07.3667322Z"
+    }
+  ],
+  "totalCount": 1,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+### GET /api/notifications/{id}
+
+Returns a single notification. 404 if it doesn't exist, 403 if it
+exists but belongs to a different user — never leaks another user's
+notification content in either case.
+
+### GET /api/notifications/unread-count
+
+```json
+{ "count": 3 }
+```
+
+### PUT /api/notifications/{id}/read
+
+Marks one notification read. 404/403 follow the same rules as the GET
+above. Returns the updated notification.
+
+### POST /api/notifications/read-all
+
+```json
+{ "markedCount": 3 }
+```
+
+### DELETE /api/notifications/{id}
+
+204 No Content. 404/403 follow the same ownership rules.
+
+### GET /api/notifications/preferences
+
+Returns all five types. A type with no saved row defaults to
+`inAppEnabled: true, emailEnabled: true` — nothing is seeded at
+registration time, the default is computed on read.
+
+```json
+[
+  { "type": "Exam", "inAppEnabled": true, "emailEnabled": false },
+  { "type": "Reminder", "inAppEnabled": true, "emailEnabled": true },
+  { "type": "Result", "inAppEnabled": true, "emailEnabled": true },
+  { "type": "System", "inAppEnabled": true, "emailEnabled": true },
+  { "type": "Account", "inAppEnabled": true, "emailEnabled": true }
+]
+```
+
+### PUT /api/notifications/preferences
+
+```json
+{
+  "preferences": [
+    { "type": "Exam", "inAppEnabled": true, "emailEnabled": false }
+  ]
+}
+```
+
+204 No Content on success, or a validation problem response.
+
+### POST /api/notifications/admin
+
+Admin-only. Creates a broadcast. `sendTo` is one of `AllStudents`/
+`SelectedStudents`/`ExamCandidates`/`Admins` — resolved via cross-service
+calls to User Service (`GET /api/users`) and, for `ExamCandidates`, Exam
+Service (`GET /api/assignments?examId=`), forwarding the admin's own
+JWT. `userIds` is required for `SelectedStudents`; `relatedExamId` is
+required for `ExamCandidates`. `scheduledAtUtc` is required (and must be
+future) when `sendNow` is `false` — store-only, no background dispatcher
+ever acts on it; it becomes visible to recipients purely because every
+"mine" read filters on `ScheduledAtUtc <= now`, and it never triggers an
+email attempt.
+
+```json
+{
+  "title": "Day 39 Verify Broadcast",
+  "message": "Testing the admin broadcast flow end to end.",
+  "type": "System",
+  "sendTo": "AllStudents",
+  "userIds": null,
+  "relatedExamId": null,
+  "sendNow": true,
+  "scheduledAtUtc": null
+}
+```
+
+### 201 Created
+
+```json
+{ "batchId": "46eb0614-204a-4732-b7b5-97cb03ac9161", "recipientCount": 9 }
+```
+
+### 400 Bad Request
+
+Returned when `sendTo` resolves zero recipients (e.g. `SelectedStudents`
+with ids that don't match any real student), in addition to normal
+validation errors.
+
+### GET /api/notifications/admin/history?type=&page=&pageSize=
+
+Admin-only. Every notification — system-triggered or admin-authored —
+grouped by `BatchId` into one row per broadcast/event, newest first.
+
+```json
+{
+  "items": [
+    {
+      "batchId": "46eb0614-204a-4732-b7b5-97cb03ac9161",
+      "title": "Day 39 Verify Broadcast",
+      "type": "System",
+      "recipientCount": 9,
+      "sentAtUtc": "2026-08-14T01:20:44Z",
+      "scheduledAtUtc": null,
+      "status": "Sent"
+    }
+  ],
+  "totalCount": 1,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+`status` is `"Scheduled"` when `scheduledAtUtc` is still in the future,
+`"Sent"` otherwise.
+
+### GET /api/notifications/admin/history/{batchId}
+
+Admin-only. Recipient delivery summary for one batch.
+
+```json
+{
+  "batchId": "46eb0614-204a-4732-b7b5-97cb03ac9161",
+  "title": "Day 39 Verify Broadcast",
+  "message": "Testing the admin broadcast flow end to end.",
+  "type": "System",
+  "relatedExamId": null,
+  "sentAtUtc": "2026-08-14T01:20:44Z",
+  "scheduledAtUtc": null,
+  "status": "Sent",
+  "totalRecipients": 9,
+  "delivered": 9,
+  "failed": 0,
+  "pending": 0
+}
+```
+
+404 if the batch doesn't exist.
+
+### POST /api/notifications/admin/history/{batchId}/resend
+
+Admin-only. Re-resolves the original recipients' current email/name and
+creates a brand-new batch (new `BatchId`, fresh email attempts) — the
+original batch is untouched.
+
+```json
+{ "newBatchId": "4db06214-9188-473f-8c4c-3337349b4abb", "recipientCount": 9 }
+```
+
+### DELETE /api/notifications/admin/history/{batchId}
+
+Admin-only. Removes every recipient row in the batch. 204 No Content,
+or 404 if the batch doesn't exist.
