@@ -82,6 +82,11 @@ export default function ExamDetails() {
         <h1 className="h4 fw-bold mb-0 text-primary">Exam Review &amp; Publish</h1>
         <div className="d-flex gap-2">
           {id && (
+            <Link to={`/admin/assignments/new?examId=${id}`} className="btn btn-outline-primary">
+              Assign Students
+            </Link>
+          )}
+          {id && (
             <Link to={`/admin/exams/${id}/edit`} className="btn btn-primary">
               Edit
             </Link>

@@ -15,5 +15,7 @@ public class ListExamsHandler
     public Task<IReadOnlyList<ExamPaper>> HandleAsync(
         ListExamsQuery query,
         CancellationToken cancellationToken = default) =>
-        _examRepository.GetAllAsync(cancellationToken);
+        query.IsAdmin
+            ? _examRepository.GetAllAsync(cancellationToken)
+            : _examRepository.GetAssignedPublishedExamsAsync(query.CallerId, cancellationToken);
 }

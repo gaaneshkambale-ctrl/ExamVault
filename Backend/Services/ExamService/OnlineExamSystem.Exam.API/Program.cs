@@ -3,6 +3,10 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Exam.Application.Assignments.Create;
+using OnlineExamSystem.Exam.Application.Assignments.Delete;
+using OnlineExamSystem.Exam.Application.Assignments.GetById;
+using OnlineExamSystem.Exam.Application.Assignments.List;
 using OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 using OnlineExamSystem.Exam.Application.Exams.Create;
 using OnlineExamSystem.Exam.Application.Exams.Delete;
@@ -10,6 +14,7 @@ using OnlineExamSystem.Exam.Application.Exams.GetById;
 using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Exams.Update;
 using OnlineExamSystem.Exam.Application.Interfaces;
+using OnlineExamSystem.Exam.Infrastructure;
 using OnlineExamSystem.Exam.Infrastructure.Persistence;
 using OnlineExamSystem.Exam.Infrastructure.Repositories;
 
@@ -32,6 +37,11 @@ public class Program
             options.UseSqlServer(builder.Configuration.GetConnectionString("ExamDb")));
         builder.Services.AddScoped<IExamRepository, ExamRepository>();
 
+        var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IUserLookupClient, UserServiceClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl));
+
         builder.Services.AddScoped<IValidator<CreateExamCommand>, CreateExamValidator>();
         builder.Services.AddScoped<CreateExamHandler>();
         builder.Services.AddScoped<GetExamHandler>();
@@ -40,6 +50,13 @@ public class Program
         builder.Services.AddScoped<UpdateExamHandler>();
         builder.Services.AddScoped<ChangeExamStatusHandler>();
         builder.Services.AddScoped<DeleteExamHandler>();
+
+        builder.Services.AddScoped<IValidator<CreateAssignmentCommand>, CreateAssignmentValidator>();
+        builder.Services.AddScoped<CreateAssignmentHandler>();
+        builder.Services.AddScoped<ListAllAssignmentsHandler>();
+        builder.Services.AddScoped<ListAssignmentsForExamHandler>();
+        builder.Services.AddScoped<GetAssignmentHandler>();
+        builder.Services.AddScoped<DeleteAssignmentHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

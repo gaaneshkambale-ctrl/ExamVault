@@ -7,8 +7,10 @@ export type AdminNavItem =
   | 'Dashboard'
   | 'Users'
   | 'Roles & Permissions'
+  | 'Groups'
   | 'Exams'
   | 'Exam Review & Publish'
+  | 'Assignments'
   | 'Questions'
   | 'AI Generate Question'
   | 'AI Generate Question Preview'
@@ -35,13 +37,17 @@ const navItems: NavItem[] = [
   {
     label: 'Users',
     path: '/admin/users',
-    children: [{ label: 'Roles & Permissions', path: '/admin/users/roles' }],
+    children: [
+      { label: 'Roles & Permissions', path: '/admin/users/roles' },
+      { label: 'Groups', path: '/admin/users/groups' },
+    ],
   },
   {
     label: 'Exams',
     path: '/admin/exams',
     children: [{ label: 'Exam Review & Publish', path: '/admin/exams' }],
   },
+  { label: 'Assignments', path: '/admin/assignments' },
   {
     label: 'Questions',
     path: '/admin/questions',

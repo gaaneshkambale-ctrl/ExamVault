@@ -11,6 +11,8 @@ public class UserDbContext : DbContext
 
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Group> Groups => Set<Group>();
+    public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +33,23 @@ public class UserDbContext : DbContext
             entity.HasOne<AppUser>()
                 .WithMany()
                 .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Group>(entity =>
+        {
+            entity.HasKey(g => g.Id);
+            entity.Property(g => g.Name).IsRequired().HasMaxLength(200);
+            entity.HasIndex(g => g.Name).IsUnique();
+        });
+
+        modelBuilder.Entity<GroupMember>(entity =>
+        {
+            entity.HasKey(m => m.Id);
+            entity.HasIndex(m => new { m.GroupId, m.UserId }).IsUnique();
+            entity.HasOne<Group>()
+                .WithMany()
+                .HasForeignKey(m => m.GroupId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

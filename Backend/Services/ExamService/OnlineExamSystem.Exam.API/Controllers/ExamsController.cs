@@ -83,14 +83,20 @@ public class ExamsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
-        var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(), cancellationToken);
+        var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var isAdmin = User.IsInRole("Admin");
+
+        var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(callerId, isAdmin), cancellationToken);
         return Ok(exams.Select(ToResponse));
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var exam = await _getExamHandler.HandleAsync(new GetExamQuery(id), cancellationToken);
+        var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var isAdmin = User.IsInRole("Admin");
+
+        var exam = await _getExamHandler.HandleAsync(new GetExamQuery(id, callerId, isAdmin), cancellationToken);
         if (exam is null)
         {
             return NotFound(new { message = "Exam not found." });

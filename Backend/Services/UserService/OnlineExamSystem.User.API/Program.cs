@@ -5,6 +5,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Shared.Events.Publishing;
+using OnlineExamSystem.User.Application.Groups.AddMember;
+using OnlineExamSystem.User.Application.Groups.Create;
+using OnlineExamSystem.User.Application.Groups.Delete;
+using OnlineExamSystem.User.Application.Groups.GetById;
+using OnlineExamSystem.User.Application.Groups.List;
+using OnlineExamSystem.User.Application.Groups.RemoveMember;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
@@ -40,6 +46,7 @@ public class Program
         builder.Services.AddDbContext<UserDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("UserDb")));
         builder.Services.AddScoped<IUserRepository, UserRepository>();
+        builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
@@ -57,6 +64,14 @@ public class Program
         builder.Services.AddScoped<LoginUserHandler>();
         builder.Services.AddScoped<RefreshTokenHandler>();
         builder.Services.AddScoped<LogoutHandler>();
+
+        builder.Services.AddScoped<IValidator<CreateGroupCommand>, CreateGroupValidator>();
+        builder.Services.AddScoped<CreateGroupHandler>();
+        builder.Services.AddScoped<ListGroupsHandler>();
+        builder.Services.AddScoped<GetGroupHandler>();
+        builder.Services.AddScoped<DeleteGroupHandler>();
+        builder.Services.AddScoped<AddGroupMemberHandler>();
+        builder.Services.AddScoped<RemoveGroupMemberHandler>();
 
         builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
         builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();

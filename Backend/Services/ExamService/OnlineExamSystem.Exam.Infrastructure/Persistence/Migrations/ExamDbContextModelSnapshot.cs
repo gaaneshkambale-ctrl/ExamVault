@@ -22,6 +22,101 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AllowLateJoin")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowReviewAfterSubmit")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("AssignmentNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AssignmentNumber"));
+
+                    b.Property<bool>("AutoSubmitOnTimeOver")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("EnableProctoring")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("EndAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ExamId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("GraceTimeMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("ShowCorrectAnswers")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowInstructions")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowResultsAfterSubmit")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("StartAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TargetType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("ExamId");
+
+                    b.ToTable("ExamAssignments");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamAssignmentTarget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ExamAssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExamAssignmentId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ExamAssignmentTargets");
+                });
+
             modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamPaper", b =>
                 {
                     b.Property<Guid>("Id")
@@ -100,6 +195,24 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Exams");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamAssignment", b =>
+                {
+                    b.HasOne("OnlineExamSystem.Exam.Domain.Entities.ExamPaper", null)
+                        .WithMany()
+                        .HasForeignKey("ExamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamAssignmentTarget", b =>
+                {
+                    b.HasOne("OnlineExamSystem.Exam.Domain.Entities.ExamAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("ExamAssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

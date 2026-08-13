@@ -18,6 +18,10 @@ import QuestionDetails from '../pages/admin/QuestionDetails';
 import EditQuestion from '../pages/admin/EditQuestion';
 import AiGenerateQuestion from '../pages/admin/AiGenerateQuestion';
 import AiGeneratedQuestionsPreview from '../pages/admin/AiGeneratedQuestionsPreview';
+import ManageGroups from '../pages/admin/ManageGroups';
+import GroupDetails from '../pages/admin/GroupDetails';
+import Assignments from '../pages/admin/Assignments';
+import AssignExam from '../pages/admin/AssignExam';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import MyExams from '../pages/student/MyExams';
 import StudentExamDetails from '../pages/student/ExamDetails';
@@ -91,6 +95,38 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <UserDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/groups"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ManageGroups />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/groups/:id"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <GroupDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/assignments"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <Assignments />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/assignments/new"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AssignExam />
           </ProtectedRoute>
         }
       />
