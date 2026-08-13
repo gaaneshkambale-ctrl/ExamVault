@@ -108,7 +108,7 @@ export default function AiGenerateQuestion() {
   };
 
   return (
-    <AdminLayout active="AI Generate Question">
+    <AdminLayout active="Questions">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">AI Generate Questions</h1>
         <p className="text-muted mb-0">

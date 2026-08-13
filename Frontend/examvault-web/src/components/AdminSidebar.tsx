@@ -12,8 +12,6 @@ export type AdminNavItem =
   | 'Exam Review & Publish'
   | 'Assignments'
   | 'Questions'
-  | 'AI Generate Question'
-  | 'AI Generate Question Preview'
   | 'Categories'
   | 'Results'
   | 'Reports'
@@ -48,14 +46,7 @@ const navItems: NavItem[] = [
     children: [{ label: 'Exam Review & Publish', path: '/admin/exams' }],
   },
   { label: 'Assignments', path: '/admin/assignments' },
-  {
-    label: 'Questions',
-    path: '/admin/questions',
-    children: [
-      { label: 'AI Generate Question', path: '/admin/questions/ai-generate' },
-      { label: 'AI Generate Question Preview', path: '/admin/questions/ai-generate/preview' },
-    ],
-  },
+  { label: 'Questions', path: '/admin/questions' },
   { label: 'Categories', path: null },
   { label: 'Results', path: null },
   { label: 'Reports', path: null },

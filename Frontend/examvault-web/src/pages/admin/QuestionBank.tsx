@@ -114,7 +114,13 @@ export default function QuestionBank() {
   };
 
   const goToAddQuestion = () => {
-    if (selectedExamId) {
+    if (!selectedExamId) {
+      return;
+    }
+    const selectedExam = exams?.find((exam) => exam.id === selectedExamId);
+    if (selectedExam?.examType === 'AiGenerated') {
+      navigate(`/admin/exams/${selectedExamId}/questions/ai-generate`);
+    } else {
       navigate(`/admin/exams/${selectedExamId}/questions/create`);
     }
   };
