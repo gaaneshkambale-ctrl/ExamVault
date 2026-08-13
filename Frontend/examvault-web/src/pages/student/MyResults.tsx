@@ -5,13 +5,36 @@ import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExams } from '../../hooks/useExams';
 import { getMyResult } from '../../api/resultApi';
+import { getGrade } from '../../types/result';
 import type { ResultSummaryResponse } from '../../types/result';
+import type { ExamType } from '../../types/exam';
+
+const examTypeLabel: Record<ExamType, string> = {
+  Manual: 'Manual',
+  AiGenerated: 'AI Generated',
+};
+
+const gradeVariant: Record<string, string> = {
+  'A+': 'success',
+  A: 'success',
+  B: 'info',
+  C: 'warning',
+  F: 'danger',
+};
 
 export default function MyResults() {
   const { data: exams, isLoading: isLoadingExams } = useExams();
   const [searchText, setSearchText] = useState('');
 
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
+
+  const examTypeById = useMemo(() => {
+    const map = new Map<string, ExamType>();
+    for (const exam of exams ?? []) {
+      map.set(exam.id, exam.examType);
+    }
+    return map;
+  }, [exams]);
 
   const resultQueries = useQueries({
     queries: publishedExams.map((exam) => ({
@@ -119,9 +142,12 @@ export default function MyResults() {
             <Table responsive hover className="mb-0 align-middle">
               <thead className="text-muted small text-uppercase bg-light">
                 <tr>
-                  <th className="ps-4">Exam</th>
+                  <th className="ps-4">Exam Title</th>
+                  <th>Type</th>
                   <th>Score</th>
+                  <th>Total Marks</th>
                   <th>Percentage</th>
+                  <th>Grade</th>
                   <th>Status</th>
                   <th>Submitted On</th>
                   <th className="pe-4">Action</th>
@@ -131,13 +157,18 @@ export default function MyResults() {
                 {filteredRows.map((result) => {
                   const percentage =
                     result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
+                  const examType = examTypeById.get(result.examId);
+                  const grade = getGrade(result.totalScore, result.totalMarks, result.passed);
                   return (
                     <tr key={result.attemptId}>
                       <td className="ps-4 fw-medium">{result.examTitle}</td>
-                      <td>
-                        {result.totalScore} / {result.totalMarks}
-                      </td>
+                      <td>{examType ? examTypeLabel[examType] : '—'}</td>
+                      <td>{result.totalScore}</td>
+                      <td>{result.totalMarks}</td>
                       <td>{percentage}%</td>
+                      <td>
+                        <Badge bg={gradeVariant[grade]}>{grade}</Badge>
+                      </td>
                       <td>
                         <Badge bg={result.passed ? 'success' : 'danger'}>
                           {result.passed ? 'Passed' : 'Failed'}
