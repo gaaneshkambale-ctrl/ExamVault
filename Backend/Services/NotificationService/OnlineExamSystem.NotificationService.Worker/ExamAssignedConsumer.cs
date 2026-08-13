@@ -2,21 +2,23 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using OnlineExamSystem.Notification.Domain.Enums;
 using OnlineExamSystem.Notification.Infrastructure.Persistence;
-using OnlineExamSystem.Shared.Events.User;
+using OnlineExamSystem.Shared.Events.Exam;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
 namespace OnlineExamSystem.NotificationService.Worker;
 
-public class UserRegisteredConsumer : BackgroundService
+public class ExamAssignedConsumer : BackgroundService
 {
+    private const string QueueName = "notification-service.exam-assigned-events";
+
     private readonly RabbitMqSettings _settings;
-    private readonly ILogger<UserRegisteredConsumer> _logger;
+    private readonly ILogger<ExamAssignedConsumer> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public UserRegisteredConsumer(
+    public ExamAssignedConsumer(
         IOptions<RabbitMqSettings> settings,
-        ILogger<UserRegisteredConsumer> logger,
+        ILogger<ExamAssignedConsumer> logger,
         IServiceScopeFactory scopeFactory)
     {
         _settings = settings.Value;
@@ -40,37 +42,42 @@ public class UserRegisteredConsumer : BackgroundService
         await channel.ExchangeDeclareAsync(
             _settings.ExchangeName, ExchangeType.Fanout, durable: true, cancellationToken: stoppingToken);
         var queue = await channel.QueueDeclareAsync(
-            _settings.QueueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
+            QueueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
         await channel.QueueBindAsync(
             queue.QueueName, _settings.ExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.ReceivedAsync += async (_, eventArgs) =>
         {
-            if (eventArgs.BasicProperties.Type != nameof(UserRegisteredEvent))
+            if (eventArgs.BasicProperties.Type != nameof(ExamAssignedEvent))
             {
                 return;
             }
 
-            var userRegistered = JsonSerializer.Deserialize<UserRegisteredEvent>(eventArgs.Body.Span);
-            if (userRegistered is null)
+            var examAssigned = JsonSerializer.Deserialize<ExamAssignedEvent>(eventArgs.Body.Span);
+            if (examAssigned is null || examAssigned.Targets.Count == 0)
             {
                 return;
             }
 
             _logger.LogInformation(
-                "UserRegisteredEvent received: UserId={UserId}, Email={Email}, FullName={FullName}",
-                userRegistered.UserId, userRegistered.Email, userRegistered.FullName);
+                "ExamAssignedEvent received: ExamId={ExamId}, ExamTitle={ExamTitle}, TargetCount={TargetCount}",
+                examAssigned.ExamId, examAssigned.ExamTitle, examAssigned.Targets.Count);
 
             using var scope = _scopeFactory.CreateScope();
             var persistenceService = scope.ServiceProvider.GetRequiredService<NotificationPersistenceService>();
 
+            var recipients = examAssigned.Targets
+                .Select(t => new NotificationRecipient(t.UserId, t.Email, t.FullName))
+                .ToList();
+
             await persistenceService.CreateNotificationsAsync(
                 batchId: Guid.NewGuid(),
-                recipients: [new NotificationRecipient(userRegistered.UserId, userRegistered.Email, userRegistered.FullName)],
-                type: NotificationType.Account,
-                title: "Welcome to ExamVault!",
-                message: $"Hello {userRegistered.FullName}, welcome to ExamVault! Your account has been created successfully.",
+                recipients: recipients,
+                type: NotificationType.Exam,
+                title: $"New Exam Assigned: {examAssigned.ExamTitle}",
+                message: $"You've been assigned to \"{examAssigned.ExamTitle}\". Please check your exams list for details.",
+                relatedExamId: examAssigned.ExamId,
                 cancellationToken: stoppingToken);
         };
 

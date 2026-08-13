@@ -17,8 +17,10 @@ using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Exams.Update;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Infrastructure;
+using OnlineExamSystem.Exam.Infrastructure.Messaging;
 using OnlineExamSystem.Exam.Infrastructure.Persistence;
 using OnlineExamSystem.Exam.Infrastructure.Repositories;
+using OnlineExamSystem.Shared.Events.Publishing;
 
 namespace OnlineExamSystem.Exam.API;
 
@@ -62,6 +64,9 @@ public class Program
         builder.Services.AddScoped<GetAssignmentHandler>();
         builder.Services.AddScoped<DeleteAssignmentHandler>();
         builder.Services.AddScoped<GetMyAssignmentForExamHandler>();
+
+        builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+        builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

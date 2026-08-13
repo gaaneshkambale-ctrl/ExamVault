@@ -1,0 +1,94 @@
+{
+  "name": "ExamVault - Send Notification Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "examvault/notify",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "9f1b8c2a-1e3d-4a6b-8c7f-1a2b3c4d5e6f",
+      "name": "Notification Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "examvault-notify-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1b2c3d4-0001-4000-8000-000000000001",
+              "name": "toEmail",
+              "value": "={{ $json.body.toEmail }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b2c3d4-0002-4000-8000-000000000002",
+              "name": "toName",
+              "value": "={{ $json.body.toName }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b2c3d4-0003-4000-8000-000000000003",
+              "name": "subject",
+              "value": "={{ $json.body.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b2c3d4-0004-4000-8000-000000000004",
+              "name": "textBody",
+              "value": "={{ 'Hello ' + $json.body.toName + ',\\n\\n' + $json.body.body }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9f1b8c2a-1e3d-4a6b-8c7f-1a2b3c4d5e70",
+      "name": "Build Email Content",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.toEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.textBody }}",
+        "options": {}
+      },
+      "id": "9f1b8c2a-1e3d-4a6b-8c7f-1a2b3c4d5e71",
+      "name": "Send Message (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Notification Webhook": {
+      "main": [
+        [
+          { "node": "Build Email Content", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Email Content": {
+      "main": [
+        [
+          { "node": "Send Message (Gmail)", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

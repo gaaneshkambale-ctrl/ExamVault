@@ -28,7 +28,7 @@ GIT / CI-CD PUSH RULE
   (dotnet restore/build/test) and the frontend (npm ci/build/test) on every
   push and pull request to Dev ONLY. Full CI/CD (build+test on all
   branches, container publish, Azure deploy, health checks) is still
-  completed in Phase 10 (Day 42) on top of this early workflow.
+  completed in Phase 10 (Day 43) on top of this early workflow.
 
 CURRENT STATUS
 --------------
@@ -41,7 +41,9 @@ is COMPLETE (gate passed). Phase 5 (Exam Service, Days 19-22) is COMPLETE
 passed). AI Milestone (Days 27-30) is COMPLETE (gate passed). Phase 7
 (Submission Service, Days 31-33) is COMPLETE (gate passed). Phase 8
 (Result Service, Days 34-36) is COMPLETE (gate passed). Phase 9
-(Notification Service, Days 37-38) is unlocked and next.
+(Notification Service, Days 37-39) is IN PROGRESS - Day 37 is DONE
+(persistence, real events, real email via n8n/Gmail, all verified live
+against the database), Day 38 (Notification API) starting next.
 
 DAY 1 — PHASE 0: REPOSITORY & TOOLING SETUP  (TODAY)
 ------------------------------------------------------
@@ -1145,10 +1147,249 @@ Gateway with real JWTs, grading logic is correct and covered by tests,
 and the answer-key data path is provably unreachable by a student's
 browser. -> Phase 8 complete, Phase 9 unlocked.
 
+WIREFRAME SCOPE NOTE FOR PHASE 9
+-------------------------------------
+A dedicated Notification.png wireframe (6 screens: Notification Details,
+Create Notification, Notification History, Notification Settings, Admin
+Notification Details, Mobile Inbox) arrived mid-phase, after Day 37 had
+already started under a lighter, no-mockup design. This note replaces
+the original one, which assumed no dedicated mockup existed.
+
+Real scope beyond the original design: notifications are no longer only
+event-triggered. An Admin can author and send a broadcast notification
+by hand (Create Notification screen) to All Students, Selected Students,
+Specific Exam Candidates, or Admins, either immediately or "for later."
+Every notification - system-triggered or admin-authored - shows up
+together in one Admin-facing History table with per-notification
+recipient/delivery counts, a details drill-down, and resend/delete
+actions. Students (and Admins, for their own inbox) get a per-type
+In-App/Email preference grid (Notification Settings) and a delete
+action on their own notification detail view, on top of the
+mark-as-read flow already scoped for Day 38.
+
+Three explicit scope decisions, made with the user mid-phase since none
+of them were derivable from existing code:
+- Email is real, sent through an n8n workflow over a Gmail account (an
+  n8n Webhook node -> Send Email node), not a direct SMTP integration
+  in .NET. The Notification Service only ever does one thing: HTTP
+  POST a small JSON payload to a configured n8n webhook URL. This keeps
+  no SMTP credentials in this codebase at all, and matches n8n's own
+  strength (workflow/credential management) instead of duplicating it
+  in code.
+- SMS is dropped entirely, not just left unimplemented - no SMS column
+  exists anywhere in the Settings UI or the Notification schema. The
+  wireframe's SMS toggle would otherwise be dead UI with nothing behind
+  it, which this project's own conventions call out to avoid.
+- "Schedule For Later" is store-only: the admin's chosen send time is
+  saved (`ScheduledAtUtc`) and the batch is created immediately, but no
+  background dispatcher exists to act on it. A scheduled batch becomes
+  visible to recipients automatically once its time passes - a side
+  effect of every "mine" read filtering on
+  `ScheduledAtUtc IS NULL OR ScheduledAtUtc <= UtcNow`, not a real job -
+  and it never triggers an email attempt. Flagged here as an explicit,
+  deliberate gap, the same honesty this plan has used for every other
+  not-yet-buildable trigger.
+
+Also dropped as inapplicable rather than deferred: the wireframe's
+"Certificate Available" notification type. No certificate feature
+exists anywhere in this codebase (My Certificates was already flagged
+as a Phase 7 gap) - a toggle for a feature that doesn't exist would be
+pure decoration, so the Settings grid only covers the five types this
+codebase can actually trigger or author: Exam, Reminder, Result,
+System, Account.
+
+Given the real scope increase, Phase 9 grows from 2 days to 3 (Days
+37-39), the same 3-day shape Phase 8 used for a similarly-sized
+service.
+
+DECISIONS LOCKED IN FOR PHASE 9
+------------------------------------
+- Notification Service gets a real database (`ExamVault.NotificationDb`)
+  - the one deliberate exception to the DB-less design AI Service (Day
+  27) and Result Service (Day 34) both established. A notification is
+  inherently something a user reads later, not a value recomputed
+  fresh on every request.
+- Every notification - system-triggered or admin-authored - is one row
+  per recipient in a single `Notification` table, tagged with a shared
+  `BatchId` per trigger. Admin History/Details aggregate with a
+  `GROUP BY BatchId` query rather than a separate campaign/header
+  table - the smallest structure that answers the question, not a
+  premature entity.
+- Exam Service's `CreateAssignmentHandler` becomes the second-ever
+  event publisher in the codebase (after `RegisterUserHandler`) - its
+  own `RabbitMqEventPublisher` copy in `Exam.Infrastructure`, matching
+  this codebase's established preference for a small per-service copy
+  over a shared abstraction.
+- `ExamAssignedEvent` carries resolved `Email`/`FullName` per target
+  user (a new `AssignedUserInfo` list, not bare `Guid` ids) - the
+  Worker that consumes it has no HTTP caller and therefore no bearer
+  token to look anything up with, and this codebase has never
+  introduced a service-account/client-credentials flow. Resolving
+  email/name at publish time (`CreateAssignmentHandler` already holds
+  the admin's own token) avoids inventing one now.
+  `UserRegisteredEvent` already carries Email/FullName and needs no
+  change.
+- `IUserLookupClient` (Exam Service) gains `GetUsersByIdsAsync` -
+  implemented the same way `GetAllStudentUserIdsAsync` already is:
+  call the existing `GET /api/users` (there is no id- or role-filtered
+  endpoint on User Service) and filter client-side, rather than adding
+  a new User Service endpoint for a one-off need.
+- The Worker keeps its established one-`BackgroundService`-per-event-
+  type shape - `UserRegisteredConsumer` goes from log-only to
+  persisting + emailing; `ExamAssignedConsumer` is new, not merged
+  into the first.
+- A shared `NotificationPersistenceService` in
+  `Notification.Infrastructure` (create rows + resolve per-recipient
+  email preference + call the email dispatcher) is used by both the
+  Worker (event-triggered path) and `Notification.API` (admin-
+  authored, Send Now path) - the one piece of logic both paths need,
+  factored once rather than duplicated.
+- Email delivery is real but goes through n8n, not a .NET SMTP client
+  - `Notification.Infrastructure` gets a small
+  `IEmailDispatcher`/`N8nEmailDispatcher` that POSTs
+  `{ toEmail, toName, subject, body, type, notificationId }` to a
+  configured webhook URL and records the per-recipient outcome
+  (`Delivered`/`Failed`) on the `Notification` row. A recipient with
+  the type's Email preference off gets no attempt at all and is still
+  counted `Delivered` for in-app purposes.
+- Admin broadcast targeting (`Create Notification`) does need cross-
+  service HTTP calls after all - `GET /api/users` (User Service) for
+  All Students/Selected Students/Admins, and the existing
+  `GET /api/assignments?examId=` (Exam Service, already returns
+  resolved `TargetUserIds` per assignment) for Specific Exam
+  Candidates - forwarding the admin's own JWT exactly like every other
+  cross-service call in this codebase. This reverses the original Day
+  37 assumption that Notification Service would need zero cross-
+  service calls; that assumption only ever held for "mine" reads, not
+  admin-authored writes.
+- Notification Settings only covers the five types this codebase can
+  actually trigger: Exam, Reminder, Result, System, Account - no
+  `Certificate Available` row (no certificate feature exists), no SMS
+  column (dropped per the user's decision).
+
+DAY 37 — PHASE 9: PERSISTENCE, REAL EVENTS, AND EMAIL VIA N8N
+--------------------------------------------------------------------------
+Backend:
+- I am creating a `Notification` entity (BatchId, UserId, Type enum
+  [Exam/Reminder/Result/System/Account], Title, Message, IsRead,
+  RelatedExamId, EmailStatus [Pending/Delivered/Failed],
+  CreatedByAdminUserId, ScheduledAtUtc) and a `NotificationPreference`
+  entity (UserId, Type, InAppEnabled, EmailEnabled) in a new
+  `OnlineExamSystem.Notification.Domain` project, and a
+  `NotificationDbContext` + initial EF Core migration
+  (`ExamVault.NotificationDb`) in a new `.Infrastructure` project -
+  both added to `ExamVault.sln` under the existing NotificationService
+  solution folder alongside the Worker.
+- I am adding a shared `NotificationPersistenceService`
+  (`Notification.Infrastructure`) that, given a BatchId/recipient list/
+  Type/Title/Message, writes one row per recipient and - for non-
+  scheduled batches, per recipient with Email enabled for that Type -
+  calls a new `IEmailDispatcher`/`N8nEmailDispatcher` (HTTP POST to a
+  configured `N8n:WebhookUrl`), recording `Delivered`/`Failed` back
+  onto the row.
+- I am reshaping `ExamAssignedEvent` (`Shared.Events`) to carry
+  `Targets: IReadOnlyList<AssignedUserInfo>` (UserId, Email, FullName)
+  instead of bare `TargetUserIds`, adding `IUserLookupClient.
+  GetUsersByIdsAsync` (Exam Service) to resolve them, and updating
+  `CreateAssignmentHandler` to resolve + publish before it returns.
+- I am giving Exam Service its first-ever publisher: a new
+  `RabbitMqEventPublisher` in `Exam.Infrastructure`, `IEventPublisher`
+  DI-wired into `Exam.API`'s `Program.cs` mirroring User.API's Day 17
+  setup, plus a real `RabbitMq` config section added to Exam.API's
+  `appsettings.Development.json`.
+- I am rewriting `UserRegisteredConsumer` to persist + email a
+  "Welcome to ExamVault!" notification (Type=Account) via
+  `NotificationPersistenceService` instead of only logging, and adding
+  a new `ExamAssignedConsumer` (same BackgroundService-per-event-type
+  shape) that persists + emails one "New Exam Assigned" notification
+  (Type=Exam, RelatedExamId set) per target.
+- I am adding a real `appsettings.Development.json` to the Worker
+  project (RabbitMq settings, the new NotificationDb connection
+  string, and `N8n:WebhookUrl`).
+- I am handing over an importable n8n workflow JSON (Webhook trigger ->
+  Send Email via a Gmail credential configured inside n8n) and noting
+  the one-time n8n setup (import workflow, add Gmail credential,
+  activate, copy the webhook URL into config) in the README.
+Day complete when: registering a user creates a DB row AND a real
+email arrives through the n8n/Gmail workflow; creating an assignment
+creates one row per target with a real per-recipient email attempt
+(respecting default preferences) - both verified directly against the
+database and a real inbox.
+
+DAY 38 — PHASE 9: NOTIFICATION API (MINE + ADMIN BROADCAST/HISTORY)
+--------------------------------------------------------------------------
+Backend:
+- I am creating `OnlineExamSystem.Notification.API` with a thin
+  `.Application` layer covering the "mine" side - GetMyNotifications
+  (paginated, newest first, unread-only filter, excludes not-yet-due
+  scheduled rows), GetUnreadCount, MarkAsRead, MarkAllAsRead,
+  DeleteMyNotification, GetMyPreferences/SavePreferences - and the
+  admin side - CreateNotification (resolves targets via new
+  Notification.Infrastructure clients to User/Exam Service, then calls
+  `NotificationPersistenceService`), GetNotificationHistory (BatchId-
+  grouped, paginated, type filter), GetNotificationBatchDetails
+  (recipient summary: total/delivered/failed/pending),
+  ResendNotificationBatch (new BatchId, same recipients, fresh email
+  attempts), DeleteNotificationBatch.
+- I am adding a `NotificationsController` with `/api/notifications/*`
+  (mine, `[Authorize]`, scoped to the caller's own UserId by
+  construction) and `/api/notifications/admin/*`
+  (`[Authorize(Roles="Admin")]`) routes, and a Gateway route on port
+  `:5070`.
+- I am adding a new `Notification.Application.Tests` project covering
+  mine-scoping, ownership on delete/mark-read, admin target resolution
+  (fake User/Exam clients), history aggregation, and preference
+  defaulting (no saved row = In-App+Email both on).
+Day complete when: dotnet build/test is green and every endpoint is
+verified through the Gateway with Swagger/a REST client.
+
+DAY 39 — PHASE 9: FRONTEND, POLISH, VERIFICATION, AND GATE
+--------------------------------------------------------------------------
+Frontend:
+- I am adding a `NotificationBell` component (unread badge, dropdown
+  of the latest few, mark-as-read, "View All" link) to both
+  `AdminLayout` and `StudentLayout` headers - the first piece of UI
+  shared between the two layouts.
+- I am adding `/notifications` and `/admin/notifications` (list +
+  detail, screen 13 shape: Type/Related Exam/Published On/Expires On/
+  Status, Take Exam/Mark as Read/Delete actions), `/admin/notifications/
+  create` (screen 14: title/message/type/send-to picker/related exam/
+  send now or schedule), `/admin/notifications/history` +
+  `/history/{batchId}` (screens 15/17: table with type filter and
+  pagination, details with recipient summary and resend/delete), and
+  `/notifications/settings` (screen 16: In-App+Email toggle grid for
+  the five supported types, no SMS column).
+- I am wiring the long-disabled "Notifications" sidebar label in both
+  `AdminSidebar.tsx` and `DashboardSidebar.tsx` to real routes, and
+  adding the Admin sub-items (Create Notification, History) and
+  Student sub-item (Notification Settings) the wireframe's sidebars
+  show.
+Verification:
+- I am verifying end-to-end in the browser: register a throwaway
+  Student -> Welcome notification appears + a real email arrives ->
+  as a throwaway Admin, publish and assign a real exam to that student
+  -> ExamAssigned notification + real email per recipient -> as Admin,
+  compose a broadcast to All Students -> History shows it with real
+  delivery stats -> drill into details -> resend -> delete -> as the
+  Student, turn Email off for a type on Settings -> confirm the next
+  notification of that type gets no email attempt. I am also verifying
+  a user can never see or act on another user's "mine" notifications,
+  and a non-Admin can never reach the admin routes, the same cross-
+  user proof pattern Day 36 already established.
+- I am updating README (Phase 9 Progress section + n8n workflow setup
+  steps), api-contracts.md (a new Notification Service section), and
+  running the full verification suite (dotnet build/test, npm run
+  build/lint/test).
+Day complete when: a real user sees real, persisted notifications from
+both event types and admin broadcasts end-to-end through the Gateway,
+with working bell/list/detail/settings, real email delivery through
+n8n, and admin history/resend/delete all working, and nothing is ever
+visible to a user or role it wasn't addressed to. -> Phase 9 complete,
+Phase 10 unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-Phase 9 (Days 37-38)  I build the Notification Service.
-Phase 10 (Days 39-42) I containerize everything with Docker, deploy to Azure,
+Phase 10 (Days 40-43) I containerize everything with Docker, deploy to Azure,
                        and set up CI/CD.
 
 PRINCIPLES I AM KEEPING IN MIND THE WHOLE PROJECT

@@ -23,4 +23,11 @@ public class FakeUserLookupClient : IUserLookupClient
         string bearerToken,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(_allStudentUserIds);
+
+    public Task<IReadOnlyList<UserLookupInfo>> GetUsersByIdsAsync(
+        IReadOnlyList<Guid> userIds,
+        string bearerToken,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<UserLookupInfo>>(
+            userIds.Select(id => new UserLookupInfo(id, $"{id}@example.com", "Test User")).ToList());
 }

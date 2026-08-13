@@ -1,8 +1,20 @@
+using Microsoft.EntityFrameworkCore;
+using OnlineExamSystem.Notification.Infrastructure.Email;
+using OnlineExamSystem.Notification.Infrastructure.Persistence;
 using OnlineExamSystem.NotificationService.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
+
 builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
+
+builder.Services.AddDbContext<NotificationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationDb")));
+builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
+builder.Services.AddScoped<NotificationPersistenceService>();
+
 builder.Services.AddHostedService<UserRegisteredConsumer>();
+builder.Services.AddHostedService<ExamAssignedConsumer>();
 
 var host = builder.Build();
 host.Run();

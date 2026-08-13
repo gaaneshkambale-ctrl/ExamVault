@@ -12,7 +12,11 @@ public class CreateAssignmentHandlerTests
     private static CreateAssignmentHandler CreateHandler(
         FakeExamRepository repository,
         IUserLookupClient? userLookupClient = null) =>
-        new(repository, userLookupClient ?? new FakeUserLookupClient(result: null), new CreateAssignmentValidator());
+        new(
+            repository,
+            userLookupClient ?? new FakeUserLookupClient(result: null),
+            new CreateAssignmentValidator(),
+            new FakeEventPublisher());
 
     private static CreateAssignmentCommand StudentsCommand(Guid examId, params Guid[] userIds) => new(
         examId,
