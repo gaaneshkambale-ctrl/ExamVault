@@ -1,0 +1,48 @@
+using Microsoft.EntityFrameworkCore;
+using OnlineExamSystem.Submission.Application.Interfaces;
+using OnlineExamSystem.Submission.Domain.Entities;
+using OnlineExamSystem.Submission.Domain.Enums;
+using OnlineExamSystem.Submission.Infrastructure.Persistence;
+
+namespace OnlineExamSystem.Submission.Infrastructure.Repositories;
+
+public class SubmissionRepository : ISubmissionRepository
+{
+    private readonly SubmissionDbContext _dbContext;
+
+    public SubmissionRepository(SubmissionDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    public Task<ExamAttempt?> GetInProgressAttemptAsync(
+        Guid examId,
+        Guid userId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.ExamAttempts.FirstOrDefaultAsync(
+            a => a.ExamId == examId && a.UserId == userId && a.Status == AttemptStatus.InProgress,
+            cancellationToken);
+
+    public Task<int> CountAttemptsAsync(Guid examId, Guid userId, CancellationToken cancellationToken = default) =>
+        _dbContext.ExamAttempts.CountAsync(a => a.ExamId == examId && a.UserId == userId, cancellationToken);
+
+    public async Task AddAttemptAsync(ExamAttempt attempt, CancellationToken cancellationToken = default) =>
+        await _dbContext.ExamAttempts.AddAsync(attempt, cancellationToken);
+
+    public Task<ExamAttempt?> GetAttemptByIdAsync(Guid attemptId, CancellationToken cancellationToken = default) =>
+        _dbContext.ExamAttempts.FirstOrDefaultAsync(a => a.Id == attemptId, cancellationToken);
+
+    public Task<AttemptAnswer?> GetAnswerAsync(
+        Guid attemptId,
+        Guid questionId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.AttemptAnswers.FirstOrDefaultAsync(
+            a => a.AttemptId == attemptId && a.QuestionId == questionId,
+            cancellationToken);
+
+    public async Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default) =>
+        await _dbContext.AttemptAnswers.AddAsync(answer, cancellationToken);
+
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.SaveChangesAsync(cancellationToken);
+}

@@ -1,9 +1,18 @@
-import { useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
+import { startAttempt } from '../../api/submissionApi';
 import type { ExamType } from '../../types/exam';
+
+function extractStartError(error: unknown): string {
+  if (isAxiosError(error) && typeof error.response?.data?.message === 'string') {
+    return error.response.data.message;
+  }
+  return 'Something went wrong starting the exam. Please try again.';
+}
 
 const examTypeLabel: Record<ExamType, string> = {
   Manual: 'Manual',
@@ -21,8 +30,15 @@ function Field({ label, value }: { label: string; value: string }) {
 
 export default function ExamDetails() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data: exam, isLoading, isError } = useExam(id);
-  const [showStartInfo, setShowStartInfo] = useState(false);
+
+  const startMutation = useMutation({
+    mutationFn: () => startAttempt(id!),
+    onSuccess: (attempt) => {
+      navigate(`/exams/${id}/take`, { state: { attemptId: attempt.id } });
+    },
+  });
 
   return (
     <StudentLayout active="My Exams">
@@ -96,14 +112,26 @@ export default function ExamDetails() {
                   You can start the exam only once. Make sure you are ready.
                 </Alert>
 
-                {showStartInfo && (
-                  <Alert variant="info" className="small mb-3">
-                    Starting an exam isn't connected yet — that's Day 32's job.
+                {startMutation.isError && (
+                  <Alert variant="danger" className="small mb-3">
+                    {extractStartError(startMutation.error)}
                   </Alert>
                 )}
 
-                <Button variant="primary" className="w-100" onClick={() => setShowStartInfo(true)}>
-                  Start Exam Now
+                <Button
+                  variant="primary"
+                  className="w-100"
+                  disabled={startMutation.isPending}
+                  onClick={() => startMutation.mutate()}
+                >
+                  {startMutation.isPending ? (
+                    <>
+                      <Spinner animation="border" size="sm" className="me-2" />
+                      Starting...
+                    </>
+                  ) : (
+                    'Start Exam Now'
+                  )}
                 </Button>
               </Card.Body>
             </Card>

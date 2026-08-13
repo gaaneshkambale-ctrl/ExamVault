@@ -15,7 +15,7 @@ namespace OnlineExamSystem.Question.API.Controllers;
 
 [ApiController]
 [Route("api/questions")]
-[Authorize(Roles = "Admin")]
+[Authorize]
 public class QuestionsController : ControllerBase
 {
     private readonly CreateQuestionHandler _createQuestionHandler;
@@ -42,6 +42,7 @@ public class QuestionsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(CreateQuestionRequest request, CancellationToken cancellationToken)
     {
         var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -76,14 +77,14 @@ public class QuestionsController : ControllerBase
             question.Id,
             request.ExamId,
             createdByUserId);
-        return StatusCode(StatusCodes.Status201Created, ToResponse(question, result.Options));
+        return StatusCode(StatusCodes.Status201Created, ToResponse(question, result.Options, revealAnswers: true));
     }
 
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] Guid examId, CancellationToken cancellationToken)
     {
         var questions = await _listQuestionsHandler.HandleAsync(new ListQuestionsQuery(examId), cancellationToken);
-        return Ok(questions.Select(q => ToResponse(q.Question, q.Options)));
+        return Ok(questions.Select(q => ToResponse(q.Question, q.Options, RevealAnswers)));
     }
 
     [HttpGet("{id:guid}")]
@@ -95,10 +96,11 @@ public class QuestionsController : ControllerBase
             return NotFound(new { message = "Question not found." });
         }
 
-        return Ok(ToResponse(result.Question, result.Options));
+        return Ok(ToResponse(result.Question, result.Options, RevealAnswers));
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(Guid id, UpdateQuestionRequest request, CancellationToken cancellationToken)
     {
         var command = new UpdateQuestionCommand(
@@ -131,10 +133,11 @@ public class QuestionsController : ControllerBase
         }
 
         _logger.LogInformation("Question {QuestionId} updated.", id);
-        return Ok(ToResponse(result.Question!, result.Options));
+        return Ok(ToResponse(result.Question!, result.Options, revealAnswers: true));
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await _deleteQuestionHandler.HandleAsync(new DeleteQuestionCommand(id), cancellationToken);
@@ -148,7 +151,15 @@ public class QuestionsController : ControllerBase
         return NoContent();
     }
 
-    private static QuestionResponse ToResponse(ExamQuestion question, IReadOnlyList<QuestionOption> options) =>
+    // Admin sees real IsCorrect flags; any other authenticated caller (a student
+    // taking an exam) gets them masked so the correct answer can't be read off
+    // the network response while GET /api/questions is open to any authenticated role.
+    private bool RevealAnswers => User.IsInRole("Admin");
+
+    private static QuestionResponse ToResponse(
+        ExamQuestion question,
+        IReadOnlyList<QuestionOption> options,
+        bool revealAnswers) =>
         new(
             question.Id,
             question.ExamId,
@@ -158,7 +169,11 @@ public class QuestionsController : ControllerBase
             question.Difficulty.ToString(),
             question.ShuffleOptions,
             options
-                .Select(o => new QuestionOptionResponse(o.Id, o.OptionText, o.IsCorrect, o.DisplayOrder))
+                .Select(o => new QuestionOptionResponse(
+                    o.Id,
+                    o.OptionText,
+                    revealAnswers && o.IsCorrect,
+                    o.DisplayOrder))
                 .ToList(),
             question.CreatedAtUtc);
 }

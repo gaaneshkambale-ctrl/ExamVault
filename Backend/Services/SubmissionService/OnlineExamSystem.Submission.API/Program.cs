@@ -1,3 +1,15 @@
+using System.Text;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
+using OnlineExamSystem.Submission.Application.Attempts.Start;
+using OnlineExamSystem.Submission.Application.Interfaces;
+using OnlineExamSystem.Submission.Infrastructure;
+using OnlineExamSystem.Submission.Infrastructure.Persistence;
+using OnlineExamSystem.Submission.Infrastructure.Repositories;
+
 namespace OnlineExamSystem.Submission.API;
 
 public class Program
@@ -13,6 +25,44 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
+        builder.Services.AddDbContext<SubmissionDbContext>(options =>
+            options.UseSqlServer(builder.Configuration.GetConnectionString("SubmissionDb")));
+        builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
+
+        var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IExamLookupClient, ExamServiceClient>(client =>
+            client.BaseAddress = new Uri(examServiceBaseUrl));
+
+        builder.Services.AddScoped<IValidator<StartAttemptCommand>, StartAttemptValidator>();
+        builder.Services.AddScoped<StartAttemptHandler>();
+        builder.Services.AddScoped<IValidator<SaveAnswerCommand>, SaveAnswerValidator>();
+        builder.Services.AddScoped<SaveAnswerHandler>();
+
+        var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+            ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
+        var jwtAudience = builder.Configuration["Jwt:Audience"]
+            ?? throw new InvalidOperationException("Missing \"Jwt:Audience\" configuration.");
+        var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
+            ?? throw new InvalidOperationException("Missing \"Jwt:SigningKey\" configuration.");
+
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtIssuer,
+                    ValidateAudience = true,
+                    ValidAudience = jwtAudience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero,
+                };
+            });
+        builder.Services.AddAuthorization();
+
         var app = builder.Build();
 
         // Configure the HTTP request pipeline.
@@ -24,6 +74,7 @@ public class Program
 
         app.UseHttpsRedirection();
 
+        app.UseAuthentication();
         app.UseAuthorization();
 
         app.MapControllers();

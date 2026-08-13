@@ -93,6 +93,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Submission
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Submission.Infrastructure", "Backend\Services\SubmissionService\OnlineExamSystem.Submission.Infrastructure\OnlineExamSystem.Submission.Infrastructure.csproj", "{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SubmissionService", "SubmissionService", "{DDBD4213-066E-4DA7-8C2D-43AFA067B80F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Submission.Application.Tests", "Tests\SubmissionService\OnlineExamSystem.Submission.Application.Tests\OnlineExamSystem.Submission.Application.Tests.csproj", "{B491374E-EE22-44C7-B928-8111B6330FDE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -218,6 +222,10 @@ Global
 		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B491374E-EE22-44C7-B928-8111B6330FDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B491374E-EE22-44C7-B928-8111B6330FDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B491374E-EE22-44C7-B928-8111B6330FDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B491374E-EE22-44C7-B928-8111B6330FDE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8314B0DE-3264-488A-9C66-BF410203CC19} = {24F021E6-C582-43B4-8E9C-FA50BD9C1458}
@@ -260,5 +268,7 @@ Global
 		{40DF5595-0522-4EF2-8ABF-F6B32E64C239} = {ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}
 		{E99B39F5-4582-4868-9F54-768D8565BCE5} = {ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}
 		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386} = {ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}
+		{DDBD4213-066E-4DA7-8C2D-43AFA067B80F} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
+		{B491374E-EE22-44C7-B928-8111B6330FDE} = {DDBD4213-066E-4DA7-8C2D-43AFA067B80F}
 	EndGlobalSection
 EndGlobal

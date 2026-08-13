@@ -946,7 +946,7 @@ for `Admin` and `/profile` for `Student`.
 ## Phase 7 Progress
 
 - [x] Day 31 — Submission Service skeleton and student-side shell
-- [ ] Day 32 — Attempt persistence, start exam, and answer saving
+- [x] Day 32 — Attempt persistence, start exam, and answer saving
 - [ ] Day 33 — Review, submit, auto-submit timer, and gate
 
 ### Day 31 Notes
@@ -1013,5 +1013,85 @@ for `Admin` and `/profile` for `Student`.
   afterward. `dotnet build`/`dotnet test` all green (100/100 unaffected
   across User/Exam/Question/AI). `npm run build`/`lint`/`test` (25/25)
   all green
+
+### Day 32 Notes
+
+- New `SubmissionDbContext` (`ExamAttempts`/`AttemptAnswers` tables,
+  `ExamVault.SubmissionDb`, unique index on
+  `AttemptId`+`QuestionId`, cascade delete from attempt to its
+  answers) and `SubmissionRepository`. Initial EF Core migration
+  applied
+- Scope gap found and fixed: `StartAttemptHandler` needs the exam's
+  `MaxAttempts`/`StartAtUtc`/`EndAtUtc` to validate a start request,
+  but Submission Service doesn't own that data — no service in this
+  codebase had called another service internally before (AI Service's
+  HttpClient call is to an external n8n webhook, not a sibling
+  service). New `IExamLookupClient` interface (`Submission.Application`)
+  + `ExamServiceClient` (`Submission.Infrastructure`) calls Exam
+  Service's existing `GET /api/exams/{id}` directly on `:5020`
+  (service-to-service, not through the Gateway), forwarding the
+  caller's own JWT as the bearer token rather than introducing a
+  separate service-account/client-credentials flow — kept minimal
+  since the calling student is already authenticated
+- `StartAttemptHandler`: returns the existing `InProgress` attempt
+  first (accidental-refresh safety net, checked before anything else),
+  else validates the scheduling window and `MaxAttempts` (counts all
+  prior attempts for that Exam+User) against a fresh Exam Service
+  lookup, else creates a new attempt with `AttemptNumber` =
+  count + 1. `SaveAnswerHandler`: checks the attempt belongs to the
+  calling user (403 if not) and is still `InProgress` (409 if not),
+  then upserts one `AttemptAnswer` row per question. New `POST
+  /api/submissions/start` and `PUT /api/submissions/{attemptId}/answers`
+  on `SubmissionsController`, `[Authorize]` (any role) — the first
+  Student-facing write endpoints in the system. Gateway route added
+  for `/api/submissions/{**catch-all}` → `:5050`
+- Second scope gap found and fixed, this one a real data-leak risk:
+  Take Exam needs `GET /api/questions?examId=` for a student, but
+  `QuestionsController` was class-level `[Authorize(Roles = "Admin")]`
+  since Phase 6 — and its `QuestionOptionResponse` includes
+  `IsCorrect`. Simply opening the endpoint to any authenticated role
+  (the same fix pattern as Day 31's `ExamsController`) would have let
+  any student read every question's correct answer straight out of
+  the network response, bypassing the UI entirely. Fixed by also
+  masking `IsCorrect` to `false` for non-Admin callers
+  (`User.IsInRole("Admin")` gates a new `revealAnswers` parameter on
+  the controller's `ToResponse` mapping) — verified directly by
+  comparing the same exam's raw JSON response between a Student token
+  (all `false`) and an Admin token (real values) before calling this
+  done
+- New `Submission.Application.Tests` project (`FakeSubmissionRepository`
+  + `FakeExamLookupClient`, mirroring the Fake-per-external-dependency
+  pattern from AI's tests): 5 `StartAttemptHandler` tests (valid
+  request, existing-InProgress-returned-not-duplicated, max attempts
+  exceeded, outside window before start, outside window after end) +
+  4 `SaveAnswerHandler` tests (valid create, valid update, not
+  in-progress, wrong user) — 9/9 new, backend total 109/109
+- Frontend: Exam Details' Start Exam Now now calls the real start
+  endpoint and navigates to Take Exam with the new attempt's id in
+  router state; Take Exam falls back to calling start itself on mount
+  if that state is missing (direct navigation/refresh) — safe because
+  the endpoint is idempotent, which is exactly what the safety net
+  exists for. Take Exam now renders real questions via the existing
+  `useQuestions(examId)` hook, applies `ShuffleQuestions`/
+  `ShuffleOptions` client-side (first real use of those Phase 5
+  fields), and saves every option selection and Mark for Review
+  toggle immediately plus again on Previous/Next. The question
+  navigator's four states are now driven by real local answer state
+  (`selectedOptionId`/`isMarkedForReview`) plus a client-only
+  `visited` set — "Not Visited" is deliberately never persisted,
+  matching the plan's scope note
+- Verified end-to-end in a real browser: registered a throwaway
+  Student, published a real exam (11 real questions) as a throwaway
+  Admin, clicked Start Exam Now, confirmed a real `InProgress`
+  `ExamAttempt` row was created in `ExamVault.SubmissionDb`, answered
+  one question and marked a second for review without answering it,
+  confirmed both `AttemptAnswer` rows persisted with the right values
+  and the navigator showed green/orange/gray correctly. Confirmed via
+  curl: calling start twice returns the identical attempt (no
+  duplicate row), a Student gets 403 on `POST /api/questions`, editing
+  another user's attempt returns 403, and no token gets 401. Cleaned
+  up all throwaway accounts/attempts and reverted the exam to Draft
+  afterward. `dotnet build`/`dotnet test` 109/109 green; `npm run
+  build`/`lint`/`test` (25/25) all green
 
 **AI Milestone is complete. Phase 7 (Submission Service, Days 31-33) is unlocked.**
