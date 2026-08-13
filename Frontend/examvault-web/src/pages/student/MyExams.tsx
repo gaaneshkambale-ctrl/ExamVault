@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
+import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
@@ -177,9 +177,9 @@ export default function MyExams() {
                         </Link>
                       )}
                       {exam.rowStatus === 'Completed' && (
-                        <Button variant="outline-secondary" size="sm" disabled>
+                        <Link to={`/results/${exam.id}`} className="btn btn-outline-secondary btn-sm">
                           View Result
-                        </Button>
+                        </Link>
                       )}
                     </td>
                   </tr>

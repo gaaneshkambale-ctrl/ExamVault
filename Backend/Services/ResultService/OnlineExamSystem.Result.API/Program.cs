@@ -1,0 +1,85 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Result.Application.GetResult;
+using OnlineExamSystem.Result.Application.Interfaces;
+using OnlineExamSystem.Result.Infrastructure;
+
+namespace OnlineExamSystem.Result.API;
+
+public class Program
+{
+    public static void Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
+
+        // Add services to the container.
+
+        builder.Services.AddControllers();
+        // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen();
+
+        // No DbContext/repository registrations here - Result Service owns no
+        // database, it computes results on demand from the services that do.
+
+        var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IExamLookupClient, ExamServiceClient>(client =>
+            client.BaseAddress = new Uri(examServiceBaseUrl));
+
+        var questionServiceBaseUrl = builder.Configuration["Services:QuestionServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:QuestionServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IQuestionAnswerKeyClient, QuestionServiceClient>(client =>
+            client.BaseAddress = new Uri(questionServiceBaseUrl));
+
+        var submissionServiceBaseUrl = builder.Configuration["Services:SubmissionServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:SubmissionServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<ISubmissionLookupClient, SubmissionServiceClient>(client =>
+            client.BaseAddress = new Uri(submissionServiceBaseUrl));
+
+        builder.Services.AddScoped<GetResultHandler>();
+
+        var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+            ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
+        var jwtAudience = builder.Configuration["Jwt:Audience"]
+            ?? throw new InvalidOperationException("Missing \"Jwt:Audience\" configuration.");
+        var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
+            ?? throw new InvalidOperationException("Missing \"Jwt:SigningKey\" configuration.");
+
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtIssuer,
+                    ValidateAudience = true,
+                    ValidAudience = jwtAudience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero,
+                };
+            });
+        builder.Services.AddAuthorization();
+
+        var app = builder.Build();
+
+        // Configure the HTTP request pipeline.
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
+
+        app.UseHttpsRedirection();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.MapControllers();
+
+        app.Run();
+    }
+}

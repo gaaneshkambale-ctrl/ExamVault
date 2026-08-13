@@ -97,6 +97,20 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SubmissionService", "Submis
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Submission.Application.Tests", "Tests\SubmissionService\OnlineExamSystem.Submission.Application.Tests\OnlineExamSystem.Submission.Application.Tests.csproj", "{B491374E-EE22-44C7-B928-8111B6330FDE}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ResultService", "ResultService", "{FFF7CF0D-F863-446A-A041-9BE19D5C80AF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Result.Domain", "Backend\Services\ResultService\OnlineExamSystem.Result.Domain\OnlineExamSystem.Result.Domain.csproj", "{43870A3E-249A-47D8-B14B-FFDAB22A124D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Result.Application", "Backend\Services\ResultService\OnlineExamSystem.Result.Application\OnlineExamSystem.Result.Application.csproj", "{A6B8712A-D896-439B-B67E-33EEA5CAD797}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Result.Infrastructure", "Backend\Services\ResultService\OnlineExamSystem.Result.Infrastructure\OnlineExamSystem.Result.Infrastructure.csproj", "{6DD8FBB6-80FD-4468-A2CA-5DC5BC28C18E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Result.API", "Backend\Services\ResultService\OnlineExamSystem.Result.API\OnlineExamSystem.Result.API.csproj", "{F7E63D96-6CBF-499E-B81C-98F7F9D7DB37}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ResultService", "ResultService", "{41B73F65-F43A-4010-A397-38B228526D7E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Result.Application.Tests", "Tests\ResultService\OnlineExamSystem.Result.Application.Tests\OnlineExamSystem.Result.Application.Tests.csproj", "{91D96E06-ED78-4A14-88D8-B635E38E590F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -226,6 +240,26 @@ Global
 		{B491374E-EE22-44C7-B928-8111B6330FDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B491374E-EE22-44C7-B928-8111B6330FDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B491374E-EE22-44C7-B928-8111B6330FDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{43870A3E-249A-47D8-B14B-FFDAB22A124D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43870A3E-249A-47D8-B14B-FFDAB22A124D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43870A3E-249A-47D8-B14B-FFDAB22A124D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43870A3E-249A-47D8-B14B-FFDAB22A124D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A6B8712A-D896-439B-B67E-33EEA5CAD797}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6B8712A-D896-439B-B67E-33EEA5CAD797}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6B8712A-D896-439B-B67E-33EEA5CAD797}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6B8712A-D896-439B-B67E-33EEA5CAD797}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6DD8FBB6-80FD-4468-A2CA-5DC5BC28C18E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DD8FBB6-80FD-4468-A2CA-5DC5BC28C18E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DD8FBB6-80FD-4468-A2CA-5DC5BC28C18E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DD8FBB6-80FD-4468-A2CA-5DC5BC28C18E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F7E63D96-6CBF-499E-B81C-98F7F9D7DB37}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F7E63D96-6CBF-499E-B81C-98F7F9D7DB37}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F7E63D96-6CBF-499E-B81C-98F7F9D7DB37}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F7E63D96-6CBF-499E-B81C-98F7F9D7DB37}.Release|Any CPU.Build.0 = Release|Any CPU
+		{91D96E06-ED78-4A14-88D8-B635E38E590F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{91D96E06-ED78-4A14-88D8-B635E38E590F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{91D96E06-ED78-4A14-88D8-B635E38E590F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{91D96E06-ED78-4A14-88D8-B635E38E590F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{8314B0DE-3264-488A-9C66-BF410203CC19} = {24F021E6-C582-43B4-8E9C-FA50BD9C1458}
@@ -270,5 +304,12 @@ Global
 		{3AC4A3B8-F7F5-40B5-8E3B-2BF903D01386} = {ACE0E6BE-73A1-4B96-BCDF-DEE7B488BD0C}
 		{DDBD4213-066E-4DA7-8C2D-43AFA067B80F} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
 		{B491374E-EE22-44C7-B928-8111B6330FDE} = {DDBD4213-066E-4DA7-8C2D-43AFA067B80F}
+		{FFF7CF0D-F863-446A-A041-9BE19D5C80AF} = {15602C65-C8E6-4555-B25F-9E1B60B58078}
+		{43870A3E-249A-47D8-B14B-FFDAB22A124D} = {FFF7CF0D-F863-446A-A041-9BE19D5C80AF}
+		{A6B8712A-D896-439B-B67E-33EEA5CAD797} = {FFF7CF0D-F863-446A-A041-9BE19D5C80AF}
+		{6DD8FBB6-80FD-4468-A2CA-5DC5BC28C18E} = {FFF7CF0D-F863-446A-A041-9BE19D5C80AF}
+		{F7E63D96-6CBF-499E-B81C-98F7F9D7DB37} = {FFF7CF0D-F863-446A-A041-9BE19D5C80AF}
+		{41B73F65-F43A-4010-A397-38B228526D7E} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
+		{91D96E06-ED78-4A14-88D8-B635E38E590F} = {41B73F65-F43A-4010-A397-38B228526D7E}
 	EndGlobalSection
 EndGlobal

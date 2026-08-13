@@ -26,6 +26,8 @@ import StudentDashboard from '../pages/student/StudentDashboard';
 import MyExams from '../pages/student/MyExams';
 import StudentExamDetails from '../pages/student/ExamDetails';
 import TakeExam from '../pages/student/TakeExam';
+import MyResults from '../pages/student/MyResults';
+import ResultDetails from '../pages/student/ResultDetails';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -255,6 +257,22 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <TakeExam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/results"
+        element={
+          <ProtectedRoute>
+            <MyResults />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/results/:examId"
+        element={
+          <ProtectedRoute>
+            <ResultDetails />
           </ProtectedRoute>
         }
       />

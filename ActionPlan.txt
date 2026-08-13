@@ -40,7 +40,7 @@ is COMPLETE (gate passed). Phase 5 (Exam Service, Days 19-22) is COMPLETE
 (gate passed). Phase 6 (Question Service, Days 23-26) is COMPLETE (gate
 passed). AI Milestone (Days 27-30) is COMPLETE (gate passed). Phase 7
 (Submission Service, Days 31-33) is COMPLETE (gate passed). Phase 8
-(Result Service, Days 34-36) is unlocked and next.
+(Result Service, Days 34-36) is IN PROGRESS - Day 34 DONE, Day 35 next.
 
 DAY 1 — PHASE 0: REPOSITORY & TOOLING SETUP  (TODAY)
 ------------------------------------------------------
@@ -975,9 +975,177 @@ MaxAttempts enforcement) works end-to-end through the Gateway with real
 JWTs, with no scoring/result logic and no My Certificates screen
 implemented yet. -> Phase 7 complete, Phase 8 unlocked.
 
+WIREFRAME SCOPE NOTE FOR PHASE 8
+-------------------------------------
+StudentWireframe.png screens 7 (My Results) and 8 (Result Details) are
+Phase 8's layout reference, and this phase also finally wires the Day
+33 My Exams "View Result" action (visibly disabled since Phase 7) and
+the Day 31 Student Dashboard's Average Score / Recent Results /
+Performance Overview widgets (empty placeholders since Phase 7) to
+real data now that a score exists to show. Screen 9 (My Certificates)
+stays exactly as flagged in Phase 7's scope note - an explicit open
+gap, not built here either.
+
+DECISIONS LOCKED IN FOR PHASE 8
+------------------------------------
+- Result Service owns no database at all, the same design already used
+  for AI Service (Day 27) - it computes a result on demand by
+  orchestrating read-only calls to the services that already own the
+  real data (Submission Service for the attempt/answers, Question
+  Service for the answer key, Exam Service for pass-mark/total-mark
+  metadata), rather than storing a second, syncable copy of a score
+  anywhere. If a question or an attempt's answers ever changed, a
+  stored score could silently go stale - computing it fresh every time
+  avoids that class of bug entirely.
+- Question Service's existing GET /api/questions endpoint masks
+  IsCorrect to false for non-Admin callers (the Day 32 fix, so a
+  student can't read answers through Take Exam). Result Service needs
+  the real answer key to grade anything, so I am adding a second,
+  internal-only endpoint to Question.API that returns unmasked
+  correct-answer data. The Gateway's existing questions-route already
+  proxies everything under /api/questions/{**catch-all} to Question
+  API, so nesting the new endpoint under /api/questions would still
+  let a browser reach it through the Gateway despite my intent -
+  instead it lives outside /api entirely (GET
+  /internal/questions/answer-key), a path the Gateway has no route
+  for at all, so a request to it through the Gateway (:5000) 404s
+  before ever reaching Question API. Only another backend service
+  calling Question API directly on its own port (:5030) can reach it.
+  This preserves the Day 32 invariant (students never see correct
+  answers before/without submitting) while still giving Result
+  Service what it needs to grade.
+- Result Service reuses Submission Service's existing GET
+  /api/submissions/mine?examId= (Day 33) for the attempt/answers,
+  rather than adding a new by-attemptId endpoint - "mine" already
+  returns exactly the caller's own most recent Submitted/AutoSubmitted
+  attempt with the "can't see another user's attempt" guarantee built
+  in by construction. This means Result Details shows the most recent
+  attempt only; if MaxAttempts allows more than one attempt on an
+  exam, older attempts are not individually viewable. This is the same
+  kind of accepted, explicitly-flagged simplification as Day 33's
+  "no visible retake action" gap, not a silent limitation.
+- Whether a student sees a score at all, and whether they see which
+  answers were right/wrong, is controlled by the assignment's
+  ShowResultsAfterSubmit and ShowCorrectAnswers settings (added by the
+  exam-assignment feature after Phase 7, the more specific/authoritative
+  per-assignment settings) rather than the older Phase 5 exam-level
+  ShowResult/ShowCorrectAnswers fields, which were never wired to
+  anything real and stay that way - a known duplication, not resolved
+  in this phase since it was not asked for.
+
+DAY 34 — PHASE 8: RESULT SERVICE SKELETON, ANSWER-KEY ENDPOINT, AND SCORING
+--------------------------------------------------------------------------
+Backend:
+- I am creating the Result service projects (OnlineExamSystem.Result.API,
+  .Application, .Domain, .Infrastructure), mirroring AI Service's
+  DB-less project layout (no DbContext, no migration, no database) and
+  project-reference rules, and adding them to ExamVault.sln. .Domain
+  holds plain result/DTO classes only (ResultSummary, QuestionResult),
+  the same non-BaseEntity style AI's DraftQuestion used since nothing
+  here is persisted.
+- I am adding a new internal endpoint to Question.API,
+  GET /internal/questions/answer-key?examId={id} (deliberately outside
+  /api so the Gateway's existing /api/questions/{**catch-all} route
+  can't accidentally proxy it), returning every question's real
+  IsCorrect/options unmasked - unreachable except by another backend
+  service calling :5030 directly.
+- I am adding IQuestionAnswerKeyClient (Result.Application/.Infrastructure)
+  calling Question Service directly on :5030, and IExamLookupClient
+  calling Exam Service's existing GET /api/exams/{id} directly on :5020
+  (forwarding the caller's own JWT, same shape as Submission Service's
+  Day 32 ExamServiceClient) for PassingMarks/TotalMarks.
+- I am adding GetResultHandler: calls Submission Service's existing
+  GET /api/submissions/mine?examId= (forwarding the caller's JWT) for
+  the attempt/answers, rejects (404) if no Submitted/AutoSubmitted
+  attempt exists yet, then joins the answers against the answer-key
+  client's data to compute per-question correctness, a TotalScore
+  (sum of marks for correct answers), and Passed (TotalScore >=
+  exam.PassingMarks).
+- I am adding GET /api/results?examId={id} to Result.API, [Authorize]
+  (any authenticated role, same as every Student-facing endpoint since
+  Phase 7), plus the Gateway route (/api/results/{**catch-all} ->
+  Result API on :5060) - the answer-key endpoint above is the one
+  deliberate exception that stays off the Gateway.
+- I am writing unit tests for GetResultHandler (no submitted attempt
+  yet, correct scoring math, Passed/Failed boundary at exactly
+  PassingMarks).
+Frontend:
+- I am enabling My Exams' "View Result" action (Day 33 left it visibly
+  disabled) to link to a new Result Details route, and adding a
+  basic My Results list page (StudentWireframe.png screen 7: exam
+  title, score, percentage, pass/fail badge, submitted date) reading
+  the new endpoint per completed exam.
+Day complete when: a submitted attempt's real score (correct answers
+weighted by marks, compared against the exam's passing marks) is
+computed end-to-end through Gateway -> Result API -> Submission API +
+Exam API + Question API's internal endpoint, and My Exams' View Result
+is a real, working link instead of a disabled button.
+
+DAY 35 — PHASE 8: RESULT DETAILS AND DASHBOARD WIDGETS
+--------------------------------------------------------------------------
+Backend:
+- I am extending GetResultHandler's response with the full per-question
+  breakdown (question text, options, the student's selected option,
+  the correct option, marks awarded) needed for Result Details -
+  gated by the assignment's ShowCorrectAnswers setting: when false,
+  the response still includes the total score but omits which specific
+  options were right/wrong, mirroring how Question Service already
+  masks IsCorrect for a different audience (students before
+  submitting) - here it is the assignment setting, not the role, doing
+  the gating.
+- I am writing unit tests for the ShowCorrectAnswers on/off branches.
+Frontend:
+- I am building the Result Details page (StudentWireframe.png screen
+  8): score summary card, then a per-question list showing the
+  student's answer against the correct one (or just the score, when
+  ShowCorrectAnswers is off for that assignment) with correct/incorrect
+  styling.
+- I am wiring the Student Dashboard's Average Score stat (Day 31
+  static zero) to a real average across the student's completed
+  results, and the Recent Results list + Performance Overview chart
+  (Day 31 empty placeholders) to real data from the same endpoint used
+  by My Results.
+Day complete when: Result Details shows a real per-question
+correct/incorrect breakdown respecting the assignment's
+ShowCorrectAnswers setting, and the Student Dashboard's score-related
+widgets show real numbers instead of static zeros/empty placeholders.
+
+DAY 36 — PHASE 8: POLISH, VERIFICATION, AND GATE
+--------------------------------------------------------------------------
+Backend:
+- I am adding loading/error/empty states around the results endpoints
+  (no attempt yet, exam has no passing-marks concept edge cases).
+- I am re-running the full backend test suite to confirm the new
+  Result.Application.Tests project and every prior service's tests
+  still pass together.
+Frontend:
+- I am polishing My Results and Result Details to the same visual
+  standard as the rest of the student UI (matching the Day 30/33
+  polish passes for the Admin and student-submission screens).
+Verification:
+- I am re-verifying end-to-end in the browser: log in as Student ->
+  submit an exam -> My Exams' Completed tab shows a working View
+  Result link -> My Results lists it with a real score and pass/fail
+  -> Result Details shows the real per-question breakdown -> Student
+  Dashboard's Average Score/Recent Results/Performance Overview all
+  reflect it. I am also verifying a student cannot fetch another
+  student's result (403/404), the Question Service answer-key endpoint
+  is not reachable through the Gateway at all, and toggling an
+  assignment's ShowCorrectAnswers off hides the per-question breakdown
+  while still showing the total score.
+- I am updating README (Phase 8 Progress section), api-contracts.md
+  (the new /api/results contract and the internal-only Question
+  answer-key endpoint, clearly marked as not Gateway-routed), and
+  running the full verification suite (dotnet build/test, npm run
+  build/lint/test).
+Day complete when: the full Student flow (submit -> My Results ->
+Result Details -> Dashboard widgets) works end-to-end through the
+Gateway with real JWTs, grading logic is correct and covered by tests,
+and the answer-key data path is provably unreachable by a student's
+browser. -> Phase 8 complete, Phase 9 unlocked.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-Phase 8 (Days 34-36)  I build the Result Service and the Result UI.
 Phase 9 (Days 37-38)  I build the Notification Service.
 Phase 10 (Days 39-42) I containerize everything with Docker, deploy to Azure,
                        and set up CI/CD.
