@@ -171,7 +171,15 @@ export default function Assignments() {
                       <Badge bg={statusVariant[row.status]}>{row.status}</Badge>
                     </td>
                     <td className="pe-4">
-                      <DeleteAssignmentButton assignmentId={row.id} />
+                      <div className="d-flex gap-2">
+                        <Link
+                          to={`/admin/assignments/${row.id}/edit`}
+                          className="btn btn-outline-primary btn-sm"
+                        >
+                          Edit
+                        </Link>
+                        <DeleteAssignmentButton assignmentId={row.id} />
+                      </div>
                     </td>
                   </tr>
                 ))}

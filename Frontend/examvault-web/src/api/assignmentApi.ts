@@ -5,6 +5,7 @@ import type {
   CreateAssignmentRequest,
   ExamAssignmentResponse,
   MyAssignmentResponse,
+  UpdateAssignmentRequest,
 } from '../types/assignment';
 
 export async function listAllAssignments(): Promise<AssignmentListItemResponse[]> {
@@ -26,6 +27,14 @@ export async function getAssignment(id: string): Promise<ExamAssignmentResponse>
 
 export async function createAssignment(request: CreateAssignmentRequest): Promise<ExamAssignmentResponse> {
   const { data } = await apiClient.post<ExamAssignmentResponse>('/api/assignments', request);
+  return data;
+}
+
+export async function updateAssignment(
+  id: string,
+  request: UpdateAssignmentRequest,
+): Promise<ExamAssignmentResponse> {
+  const { data } = await apiClient.put<ExamAssignmentResponse>(`/api/assignments/${id}`, request);
   return data;
 }
 

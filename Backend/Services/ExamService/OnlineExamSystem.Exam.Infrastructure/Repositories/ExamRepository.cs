@@ -94,6 +94,23 @@ public class ExamRepository : IExamRepository
         CancellationToken cancellationToken = default) =>
         _dbContext.ExamAssignments.FirstOrDefaultAsync(a => a.Id == assignmentId, cancellationToken);
 
+    public async Task ReplaceAssignmentTargetsAsync(
+        Guid assignmentId,
+        IReadOnlyList<Guid> targetUserIds,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await _dbContext.ExamAssignmentTargets
+            .Where(t => t.ExamAssignmentId == assignmentId)
+            .ToListAsync(cancellationToken);
+        _dbContext.ExamAssignmentTargets.RemoveRange(existing);
+
+        var targets = targetUserIds
+            .Distinct()
+            .Select(userId => new ExamAssignmentTarget { ExamAssignmentId = assignmentId, UserId = userId })
+            .ToList();
+        await _dbContext.ExamAssignmentTargets.AddRangeAsync(targets, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Guid>> GetAssignmentTargetUserIdsAsync(
         Guid assignmentId,
         CancellationToken cancellationToken = default) =>

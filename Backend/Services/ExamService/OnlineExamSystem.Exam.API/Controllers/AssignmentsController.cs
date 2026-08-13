@@ -7,6 +7,7 @@ using OnlineExamSystem.Exam.Application.Assignments.Delete;
 using OnlineExamSystem.Exam.Application.Assignments.GetById;
 using OnlineExamSystem.Exam.Application.Assignments.List;
 using OnlineExamSystem.Exam.Application.Assignments.Mine;
+using OnlineExamSystem.Exam.Application.Assignments.Update;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
@@ -19,6 +20,7 @@ namespace OnlineExamSystem.Exam.API.Controllers;
 public class AssignmentsController : ControllerBase
 {
     private readonly CreateAssignmentHandler _createAssignmentHandler;
+    private readonly UpdateAssignmentHandler _updateAssignmentHandler;
     private readonly ListAllAssignmentsHandler _listAllAssignmentsHandler;
     private readonly ListAssignmentsForExamHandler _listAssignmentsForExamHandler;
     private readonly GetAssignmentHandler _getAssignmentHandler;
@@ -28,6 +30,7 @@ public class AssignmentsController : ControllerBase
 
     public AssignmentsController(
         CreateAssignmentHandler createAssignmentHandler,
+        UpdateAssignmentHandler updateAssignmentHandler,
         ListAllAssignmentsHandler listAllAssignmentsHandler,
         ListAssignmentsForExamHandler listAssignmentsForExamHandler,
         GetAssignmentHandler getAssignmentHandler,
@@ -36,6 +39,7 @@ public class AssignmentsController : ControllerBase
         ILogger<AssignmentsController> logger)
     {
         _createAssignmentHandler = createAssignmentHandler;
+        _updateAssignmentHandler = updateAssignmentHandler;
         _listAllAssignmentsHandler = listAllAssignmentsHandler;
         _listAssignmentsForExamHandler = listAssignmentsForExamHandler;
         _getAssignmentHandler = getAssignmentHandler;
@@ -120,6 +124,57 @@ public class AssignmentsController : ControllerBase
         return StatusCode(
             StatusCodes.Status201Created,
             ToResponse(result.Assignment!, result.TargetUserIds));
+    }
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Update(Guid id, UpdateAssignmentRequest request, CancellationToken cancellationToken)
+    {
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+
+        var command = new UpdateAssignmentCommand(
+            id,
+            request.TargetType,
+            request.UserIds,
+            request.GroupId,
+            request.StartAtUtc,
+            request.EndAtUtc,
+            request.TimeZoneId,
+            request.MaxAttempts,
+            request.AllowLateJoin,
+            request.GraceTimeMinutes,
+            request.ShowInstructions,
+            request.ShowResultsAfterSubmit,
+            request.ShowCorrectAnswers,
+            request.AllowReviewAfterSubmit,
+            request.AutoSubmitOnTimeOver,
+            request.EnableProctoring,
+            bearerToken);
+
+        var result = await _updateAssignmentHandler.HandleAsync(command, cancellationToken);
+
+        if (result.ValidationErrors.Any())
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Assignment not found." });
+        }
+
+        if (result.IsGroupNotFound)
+        {
+            return NotFound(new { message = "Group not found." });
+        }
+
+        _logger.LogInformation("Assignment {AssignmentId} updated.", id);
+        return Ok(ToResponse(result.Assignment!, result.TargetUserIds));
     }
 
     [HttpGet]

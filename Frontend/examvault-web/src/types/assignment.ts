@@ -19,6 +19,24 @@ export interface CreateAssignmentRequest {
   enableProctoring: boolean;
 }
 
+export interface UpdateAssignmentRequest {
+  targetType: AssignmentTargetType;
+  userIds: string[] | null;
+  groupId: string | null;
+  startAtUtc: string;
+  endAtUtc: string;
+  timeZoneId: string;
+  maxAttempts: number;
+  allowLateJoin: boolean;
+  graceTimeMinutes: number;
+  showInstructions: boolean;
+  showResultsAfterSubmit: boolean;
+  showCorrectAnswers: boolean;
+  allowReviewAfterSubmit: boolean;
+  autoSubmitOnTimeOver: boolean;
+  enableProctoring: boolean;
+}
+
 export interface ExamAssignmentResponse {
   id: string;
   assignmentNumber: number;

@@ -131,6 +131,14 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/admin/assignments/:id/edit"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AssignExam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/exams"
         element={
           <ProtectedRoute roles={['Admin']}>

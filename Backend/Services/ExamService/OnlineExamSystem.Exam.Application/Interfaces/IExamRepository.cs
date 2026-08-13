@@ -30,6 +30,12 @@ public interface IExamRepository
 
     Task<ExamAssignment?> GetAssignmentByIdAsync(Guid assignmentId, CancellationToken cancellationToken = default);
 
+    /// <summary>Replaces every target row for this assignment with the given set of user ids.</summary>
+    Task ReplaceAssignmentTargetsAsync(
+        Guid assignmentId,
+        IReadOnlyList<Guid> targetUserIds,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Guid>> GetAssignmentTargetUserIdsAsync(
         Guid assignmentId,
         CancellationToken cancellationToken = default);

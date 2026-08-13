@@ -8,6 +8,7 @@ using OnlineExamSystem.Exam.Application.Assignments.Delete;
 using OnlineExamSystem.Exam.Application.Assignments.GetById;
 using OnlineExamSystem.Exam.Application.Assignments.List;
 using OnlineExamSystem.Exam.Application.Assignments.Mine;
+using OnlineExamSystem.Exam.Application.Assignments.Update;
 using OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 using OnlineExamSystem.Exam.Application.Exams.Create;
 using OnlineExamSystem.Exam.Application.Exams.Delete;
@@ -54,6 +55,8 @@ public class Program
 
         builder.Services.AddScoped<IValidator<CreateAssignmentCommand>, CreateAssignmentValidator>();
         builder.Services.AddScoped<CreateAssignmentHandler>();
+        builder.Services.AddScoped<IValidator<UpdateAssignmentCommand>, UpdateAssignmentValidator>();
+        builder.Services.AddScoped<UpdateAssignmentHandler>();
         builder.Services.AddScoped<ListAllAssignmentsHandler>();
         builder.Services.AddScoped<ListAssignmentsForExamHandler>();
         builder.Services.AddScoped<GetAssignmentHandler>();

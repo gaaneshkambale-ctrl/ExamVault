@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Alert, Button, Card, Col, Form, ListGroup, Nav, Row, Spinner, Table } from 'react-bootstrap';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
-import { createAssignment } from '../../api/assignmentApi';
+import { createAssignment, updateAssignment } from '../../api/assignmentApi';
+import { useAssignment } from '../../hooks/useAssignments';
 import { useExams } from '../../hooks/useExams';
 import { useGroups } from '../../hooks/useGroups';
 import { useUsers } from '../../hooks/useUsers';
@@ -43,7 +44,12 @@ function extractServerError(error: unknown): string {
 
 export default function AssignExam() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const { id: assignmentId } = useParams<{ id: string }>();
+  const isEditMode = !!assignmentId;
+  const { data: existingAssignment, isLoading: assignmentLoading, isError: assignmentError } =
+    useAssignment(assignmentId);
   const { data: exams, isLoading: examsLoading } = useExams();
   const { data: groups } = useGroups();
   const { data: users } = useUsers();
@@ -51,6 +57,7 @@ export default function AssignExam() {
   const [step, setStep] = useState<WizardStep>(1);
   const [examSearch, setExamSearch] = useState('');
   const [selectedExamId, setSelectedExamId] = useState<string | null>(searchParams.get('examId'));
+  const [prefilled, setPrefilled] = useState(false);
 
   const [targetType, setTargetType] = useState<AssignmentTargetType>('Students');
   const [studentSearch, setStudentSearch] = useState('');
@@ -77,12 +84,43 @@ export default function AssignExam() {
   const [createdAssignment, setCreatedAssignment] = useState<ExamAssignmentResponse | null>(null);
   const [submitError, setSubmitError] = useState('');
 
+  useEffect(() => {
+    if (!isEditMode || !existingAssignment || prefilled) {
+      return;
+    }
+    setSelectedExamId(existingAssignment.examId);
+    setTargetType(existingAssignment.targetType);
+    setSelectedStudentIds(
+      existingAssignment.targetType === 'Students' ? existingAssignment.targetUserIds : [],
+    );
+    setSelectedGroupId(existingAssignment.groupId);
+    setStartAtLocal(toDatetimeLocalValue(new Date(existingAssignment.startAtUtc)));
+    setEndAtLocal(toDatetimeLocalValue(new Date(existingAssignment.endAtUtc)));
+    setTimeZoneId(existingAssignment.timeZoneId);
+    setMaxAttempts(existingAssignment.maxAttempts);
+    setAllowLateJoin(existingAssignment.allowLateJoin);
+    setGraceTimeMinutes(existingAssignment.graceTimeMinutes);
+    setShowInstructions(existingAssignment.showInstructions);
+    setShowResultsAfterSubmit(existingAssignment.showResultsAfterSubmit);
+    setShowCorrectAnswers(existingAssignment.showCorrectAnswers);
+    setAllowReviewAfterSubmit(existingAssignment.allowReviewAfterSubmit);
+    setAutoSubmitOnTimeOver(existingAssignment.autoSubmitOnTimeOver);
+    setEnableProctoring(existingAssignment.enableProctoring);
+    setStep(2);
+    setPrefilled(true);
+  }, [isEditMode, existingAssignment, prefilled]);
+
   const students = useMemo(() => (users ?? []).filter((u) => u.role === 'Student'), [users]);
   // Only Published exams are assignable - an assignment on a Draft/Archived
   // exam would be silently invisible to students, so it's excluded here
   // rather than allowed through and failing at submit time.
   const publishableExams = useMemo(() => (exams ?? []).filter((e) => e.status === 'Published'), [exams]);
-  const selectedExam = publishableExams.find((e) => e.id === selectedExamId) ?? null;
+  // In edit mode the exam is locked and may no longer be Published (status
+  // can change after the assignment was created), so look it up from the
+  // unfiltered list rather than publishableExams.
+  const selectedExam = isEditMode
+    ? (exams ?? []).find((e) => e.id === selectedExamId) ?? null
+    : publishableExams.find((e) => e.id === selectedExamId) ?? null;
   const selectedGroup = (groups ?? []).find((g) => g.id === selectedGroupId) ?? null;
 
   const filteredExams = publishableExams.filter((e) =>
@@ -130,9 +168,40 @@ export default function AssignExam() {
     onSuccess: (assignment) => {
       setSubmitError('');
       setCreatedAssignment(assignment);
+      queryClient.invalidateQueries({ queryKey: ['assignments'] });
     },
     onError: (error) => setSubmitError(extractServerError(error)),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      updateAssignment(assignmentId!, {
+        targetType,
+        userIds: targetType === 'Students' ? selectedStudentIds : null,
+        groupId: targetType === 'Batch' ? selectedGroupId : null,
+        startAtUtc: new Date(startAtLocal).toISOString(),
+        endAtUtc: new Date(endAtLocal).toISOString(),
+        timeZoneId,
+        maxAttempts,
+        allowLateJoin,
+        graceTimeMinutes,
+        showInstructions,
+        showResultsAfterSubmit,
+        showCorrectAnswers,
+        allowReviewAfterSubmit,
+        autoSubmitOnTimeOver,
+        enableProctoring,
+      }),
+    onSuccess: (assignment) => {
+      setSubmitError('');
+      setCreatedAssignment(assignment);
+      queryClient.invalidateQueries({ queryKey: ['assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['assignments', assignmentId] });
+    },
+    onError: (error) => setSubmitError(extractServerError(error)),
+  });
+
+  const saveMutation = isEditMode ? updateMutation : createMutation;
 
   const canProceedFromStep1 = !!selectedExam;
   const canProceedFromStep2 =
@@ -157,6 +226,27 @@ export default function AssignExam() {
     { step: 4, label: 'Review & Confirm' },
   ];
 
+  if (isEditMode && (assignmentLoading || !prefilled) && !assignmentError) {
+    return (
+      <AdminLayout active="Assignments">
+        <div className="d-flex justify-content-center py-5">
+          <Spinner animation="border" />
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (isEditMode && assignmentError) {
+    return (
+      <AdminLayout active="Assignments">
+        <div className="text-center text-muted py-5">
+          Couldn't load this assignment.{' '}
+          <Link to="/admin/assignments">Back to Assignments</Link>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   if (createdAssignment) {
     return (
       <AdminLayout active="Assignments">
@@ -168,8 +258,14 @@ export default function AssignExam() {
             >
               &#10003;
             </div>
-            <h2 className="h5 fw-bold mb-1">Exam Assigned Successfully!</h2>
-            <p className="text-muted mb-4">The exam has been assigned to the selected students.</p>
+            <h2 className="h5 fw-bold mb-1">
+              {isEditMode ? 'Assignment Updated Successfully!' : 'Exam Assigned Successfully!'}
+            </h2>
+            <p className="text-muted mb-4">
+              {isEditMode
+                ? 'The assignment has been updated.'
+                : 'The exam has been assigned to the selected students.'}
+            </p>
 
             <div className="text-start border rounded-3 p-3 mb-4">
               <Row className="mb-2">
@@ -217,9 +313,11 @@ export default function AssignExam() {
             </div>
 
             <div className="d-flex gap-2 justify-content-center">
-              <Button variant="outline-secondary" onClick={resetWizard}>
-                Assign Another Exam
-              </Button>
+              {!isEditMode && (
+                <Button variant="outline-secondary" onClick={resetWizard}>
+                  Assign Another Exam
+                </Button>
+              )}
               <Button variant="primary" onClick={() => navigate('/admin/assignments')}>
                 View Assignments
               </Button>
@@ -232,8 +330,12 @@ export default function AssignExam() {
 
   return (
     <AdminLayout active="Assignments">
-      <h1 className="h4 fw-bold mb-1 text-primary">Assign Exam</h1>
-      <p className="text-muted mb-4">Assign an exam to students or batches.</p>
+      <h1 className="h4 fw-bold mb-1 text-primary">{isEditMode ? 'Edit Assignment' : 'Assign Exam'}</h1>
+      <p className="text-muted mb-4">
+        {isEditMode
+          ? 'Update the target, schedule, or settings for this assignment.'
+          : 'Assign an exam to students or batches.'}
+      </p>
 
       <Nav variant="pills" className="mb-4 gap-2">
         {stepLabels.map(({ step: s, label }) => (
@@ -249,7 +351,20 @@ export default function AssignExam() {
 
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-4">
-          {step === 1 && (
+          {step === 1 && isEditMode && (
+            <>
+              <h2 className="h6 fw-bold mb-3">Exam</h2>
+              <Alert variant="secondary" className="mb-0">
+                <div className="fw-medium">{selectedExam?.title}</div>
+                <div className="small text-muted mt-1">
+                  The exam for an assignment can't be changed after it's created. Delete this
+                  assignment and create a new one to assign a different exam.
+                </div>
+              </Alert>
+            </>
+          )}
+
+          {step === 1 && !isEditMode && (
             <>
               <h2 className="h6 fw-bold mb-3">Select Exam</h2>
               <Form.Control
@@ -714,8 +829,14 @@ export default function AssignExam() {
             </Button>
           )}
           {step === 4 && (
-            <Button variant="success" disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
-              {createMutation.isPending ? 'Assigning...' : 'Confirm & Assign'}
+            <Button variant="success" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+              {saveMutation.isPending
+                ? isEditMode
+                  ? 'Saving...'
+                  : 'Assigning...'
+                : isEditMode
+                  ? 'Save Changes'
+                  : 'Confirm & Assign'}
             </Button>
           )}
         </div>
