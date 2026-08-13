@@ -115,6 +115,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Notificati
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Notification.Infrastructure", "Backend\Services\NotificationService\OnlineExamSystem.Notification.Infrastructure\OnlineExamSystem.Notification.Infrastructure.csproj", "{FAAFEF2E-0072-4FD2-B8BB-8AE1A6452492}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Notification.API", "Backend\Services\NotificationService\OnlineExamSystem.Notification.API\OnlineExamSystem.Notification.API.csproj", "{ACCDFB12-C9E4-4EE5-BC47-605CAA0F7CCB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "NotificationService", "NotificationService", "{1941A008-7237-4B9D-9311-89C3AC2CA521}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Notification.Application.Tests", "Tests\NotificationService\OnlineExamSystem.Notification.Application.Tests\OnlineExamSystem.Notification.Application.Tests.csproj", "{8C211377-FCA2-4C0F-9D68-48452769ACE5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -272,6 +278,14 @@ Global
 		{FAAFEF2E-0072-4FD2-B8BB-8AE1A6452492}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FAAFEF2E-0072-4FD2-B8BB-8AE1A6452492}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FAAFEF2E-0072-4FD2-B8BB-8AE1A6452492}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ACCDFB12-C9E4-4EE5-BC47-605CAA0F7CCB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ACCDFB12-C9E4-4EE5-BC47-605CAA0F7CCB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ACCDFB12-C9E4-4EE5-BC47-605CAA0F7CCB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ACCDFB12-C9E4-4EE5-BC47-605CAA0F7CCB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8C211377-FCA2-4C0F-9D68-48452769ACE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8C211377-FCA2-4C0F-9D68-48452769ACE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8C211377-FCA2-4C0F-9D68-48452769ACE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8C211377-FCA2-4C0F-9D68-48452769ACE5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{EA94BD2C-1BF8-4F4E-B5A2-F52671C58F91} = {0D688ED2-200F-4388-9FAA-BF16136BEDCC}
@@ -325,7 +339,8 @@ Global
 		{F7E63D96-6CBF-499E-B81C-98F7F9D7DB37} = {FFF7CF0D-F863-446A-A041-9BE19D5C80AF}
 		{41B73F65-F43A-4010-A397-38B228526D7E} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
 		{91D96E06-ED78-4A14-88D8-B635E38E590F} = {41B73F65-F43A-4010-A397-38B228526D7E}
-		{EA94BD2C-1BF8-4F4E-B5A2-F52671C58F91} = {0D688ED2-200F-4388-9FAA-BF16136BEDCC}
-		{FAAFEF2E-0072-4FD2-B8BB-8AE1A6452492} = {0D688ED2-200F-4388-9FAA-BF16136BEDCC}
+		{ACCDFB12-C9E4-4EE5-BC47-605CAA0F7CCB} = {0D688ED2-200F-4388-9FAA-BF16136BEDCC}
+		{1941A008-7237-4B9D-9311-89C3AC2CA521} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
+		{8C211377-FCA2-4C0F-9D68-48452769ACE5} = {1941A008-7237-4B9D-9311-89C3AC2CA521}
 	EndGlobalSection
 EndGlobal

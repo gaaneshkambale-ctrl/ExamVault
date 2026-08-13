@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OnlineExamSystem.Notification.Domain\OnlineExamSystem.Notification.Domain.csproj" />
+    <ProjectReference Include="..\OnlineExamSystem.Notification.Application\OnlineExamSystem.Notification.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

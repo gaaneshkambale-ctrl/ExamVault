@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using OnlineExamSystem.Notification.Application.Interfaces;
 using OnlineExamSystem.Notification.Domain.Enums;
-using OnlineExamSystem.Notification.Infrastructure.Persistence;
 using OnlineExamSystem.Shared.Events.User;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -63,7 +63,7 @@ public class UserRegisteredConsumer : BackgroundService
                 userRegistered.UserId, userRegistered.Email, userRegistered.FullName);
 
             using var scope = _scopeFactory.CreateScope();
-            var persistenceService = scope.ServiceProvider.GetRequiredService<NotificationPersistenceService>();
+            var persistenceService = scope.ServiceProvider.GetRequiredService<INotificationPersistenceService>();
 
             await persistenceService.CreateNotificationsAsync(
                 batchId: Guid.NewGuid(),

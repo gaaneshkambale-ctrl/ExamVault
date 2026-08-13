@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using OnlineExamSystem.Notification.Application.Interfaces;
 using OnlineExamSystem.Notification.Domain.Enums;
 using OnlineExamSystem.Notification.Infrastructure.Email;
 using NotificationEntity = OnlineExamSystem.Notification.Domain.Entities.Notification;
 
 namespace OnlineExamSystem.Notification.Infrastructure.Persistence;
 
-public class NotificationPersistenceService
+public class NotificationPersistenceService : INotificationPersistenceService
 {
     private readonly NotificationDbContext _dbContext;
     private readonly IEmailDispatcher _emailDispatcher;
