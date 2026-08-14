@@ -1,4 +1,4 @@
-import { Dropdown, Container, Navbar } from 'react-bootstrap';
+import { Dropdown, Container, Nav, Navbar } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import BrandMark from './BrandMark';
 import { useAuth } from '../hooks/useAuth';
@@ -20,7 +20,16 @@ export default function NavBar() {
           ExamVault
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="main-nav" />
-        <Navbar.Collapse id="main-nav" className="justify-content-end">
+        <Navbar.Collapse id="main-nav" className="justify-content-between">
+          <Nav className="mx-auto gap-3">
+            <Nav.Link as={Link} to="/" className="fw-medium text-dark">
+              Home
+            </Nav.Link>
+            <Nav.Link href="#features" className="fw-medium text-dark">
+              Features
+            </Nav.Link>
+          </Nav>
+
           {isAuthenticated && user ? (
             <Dropdown align="end">
               <Dropdown.Toggle
@@ -46,11 +55,11 @@ export default function NavBar() {
             </Dropdown>
           ) : (
             <div className="d-flex gap-2">
-              <Link to="/login" className="btn btn-outline-secondary">
+              <Link to="/login" className="btn btn-outline-primary">
                 Login
               </Link>
               <Link to="/register" className="btn btn-primary">
-                Register
+                Get Started
               </Link>
             </div>
           )}
