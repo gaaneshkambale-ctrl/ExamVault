@@ -65,3 +65,13 @@ export async function resetUserPassword(id: string, request: ResetPasswordReques
 export async function deleteUser(id: string): Promise<void> {
   await apiClient.delete(`/api/users/${id}`);
 }
+
+export async function deactivateUser(id: string): Promise<UserListItem> {
+  const { data } = await apiClient.post<UserListItem>(`/api/users/${id}/deactivate`);
+  return data;
+}
+
+export async function activateUser(id: string): Promise<UserListItem> {
+  const { data } = await apiClient.post<UserListItem>(`/api/users/${id}/activate`);
+  return data;
+}

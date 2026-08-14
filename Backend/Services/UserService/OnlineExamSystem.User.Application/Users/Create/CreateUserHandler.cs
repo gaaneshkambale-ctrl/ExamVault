@@ -44,6 +44,8 @@ public class CreateUserHandler
             FullName = command.FullName,
             Email = command.Email,
             Role = Enum.Parse<UserRole>(command.Role, ignoreCase: true),
+            IsActive = command.IsActive,
+            PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim(),
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, command.Password);
 

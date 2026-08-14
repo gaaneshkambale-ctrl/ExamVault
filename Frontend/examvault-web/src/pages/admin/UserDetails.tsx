@@ -3,6 +3,7 @@ import { Badge, Card, Col, Nav, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteUserButton from '../../components/DeleteUserButton';
+import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
 import { useUser } from '../../hooks/useUsers';
 import type { UserRole } from '../../types/user';
 
@@ -37,8 +38,9 @@ export default function UserDetails() {
           <p className="text-muted mb-0">View complete information about the user.</p>
         </div>
         <div className="d-flex gap-2">
-          {id && (
+          {id && user && (
             <>
+              <ToggleUserActiveButton userId={id} isActive={user.isActive} />
               <DeleteUserButton userId={id} onDeleted={() => navigate('/admin/users')} />
               <Link to={`/admin/users/${id}/reset-password`} className="btn btn-outline-secondary">
                 Reset Password
@@ -75,7 +77,12 @@ export default function UserDetails() {
                   <h2 className="h5 fw-bold mb-1">{user.fullName}</h2>
                   <p className="text-muted mb-0">{user.email}</p>
                 </div>
-                <Badge bg={roleVariant[user.role]}>{user.role}</Badge>
+                <div className="d-flex flex-column gap-2 align-items-end">
+                  <Badge bg={roleVariant[user.role]}>{user.role}</Badge>
+                  <Badge bg={user.isActive ? 'success' : 'secondary'}>
+                    {user.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
               </div>
 
               <Nav variant="tabs" className="mb-4">
@@ -92,6 +99,7 @@ export default function UserDetails() {
                 <Row>
                   <Field label="Full Name" value={user.fullName} />
                   <Field label="Email" value={user.email} />
+                  <Field label="Phone Number" value={user.phoneNumber ?? '—'} />
                   <Field label="Role" value={user.role} />
                   <Field label="Joined On" value={new Date(user.createdAtUtc).toLocaleString()} />
                 </Row>

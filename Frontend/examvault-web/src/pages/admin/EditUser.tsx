@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
+import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
 import { updateUser } from '../../api/userApi';
 import { useUser } from '../../hooks/useUsers';
 import type { UpdateUserRequest, UserRole } from '../../types/user';
@@ -34,7 +35,12 @@ export default function EditUser() {
 
   useEffect(() => {
     if (user) {
-      setForm({ fullName: user.fullName, email: user.email, role: user.role });
+      setForm({
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        phoneNumber: user.phoneNumber ?? '',
+      });
     }
   }, [user]);
 
@@ -141,7 +147,33 @@ export default function EditUser() {
                     </Form.Select>
                   </Form.Group>
                 </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-4" controlId="editUserPhoneNumber">
+                    <Form.Label className="fw-bold">Phone Number</Form.Label>
+                    <Form.Control
+                      type="tel"
+                      placeholder="Enter phone number (optional)"
+                      value={form.phoneNumber}
+                      onChange={(e) => updateField('phoneNumber', e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
               </Row>
+
+              <h2 className="h6 fw-bold mb-3">Account Status</h2>
+              <div className="d-flex align-items-center justify-content-between border rounded-3 p-3 mb-4">
+                <div className="d-flex align-items-center gap-3">
+                  <Badge bg={user.isActive ? 'success' : 'secondary'}>
+                    {user.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                  <span className="text-muted small">
+                    {user.isActive
+                      ? 'This user can currently log in.'
+                      : 'This user cannot log in until reactivated.'}
+                  </span>
+                </div>
+                <ToggleUserActiveButton userId={user.id} isActive={user.isActive} />
+              </div>
 
               <div className="d-flex justify-content-end gap-2">
                 <Link to="/admin/users" className="btn btn-outline-secondary">

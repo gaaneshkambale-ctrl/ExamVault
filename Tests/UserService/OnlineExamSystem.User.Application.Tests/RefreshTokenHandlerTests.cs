@@ -15,9 +15,10 @@ public class RefreshTokenHandlerTests
     private static async Task<(AppUser User, string RawToken)> SeedUserWithRefreshToken(
         FakeUserRepository repository,
         DateTime? expiresAtUtc = null,
-        DateTime? revokedAtUtc = null)
+        DateTime? revokedAtUtc = null,
+        bool isActive = true)
     {
-        var user = new AppUser { FullName = "Jane Doe", Email = "jane@example.com" };
+        var user = new AppUser { FullName = "Jane Doe", Email = "jane@example.com", IsActive = isActive };
         await repository.AddAsync(user);
 
         var rawToken = Jwt.GenerateRefreshToken();
@@ -77,6 +78,18 @@ public class RefreshTokenHandlerTests
     {
         var repository = new FakeUserRepository();
         var (_, rawToken) = await SeedUserWithRefreshToken(repository, revokedAtUtc: DateTime.UtcNow);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new RefreshTokenCommand(rawToken));
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task Refresh_token_for_deactivated_user_is_rejected()
+    {
+        var repository = new FakeUserRepository();
+        var (_, rawToken) = await SeedUserWithRefreshToken(repository, isActive: false);
         var handler = CreateHandler(repository);
 
         var result = await handler.HandleAsync(new RefreshTokenCommand(rawToken));

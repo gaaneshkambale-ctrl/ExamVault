@@ -11,6 +11,7 @@ using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
+using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Domain.Entities;
@@ -31,6 +32,7 @@ public class UsersController : ControllerBase
     private readonly LoginUserHandler _loginUserHandler;
     private readonly RefreshTokenHandler _refreshTokenHandler;
     private readonly LogoutHandler _logoutHandler;
+    private readonly SetUserActiveStatusHandler _setUserActiveStatusHandler;
     private readonly ILogger<UsersController> _logger;
 
     public UsersController(
@@ -44,6 +46,7 @@ public class UsersController : ControllerBase
         LoginUserHandler loginUserHandler,
         RefreshTokenHandler refreshTokenHandler,
         LogoutHandler logoutHandler,
+        SetUserActiveStatusHandler setUserActiveStatusHandler,
         ILogger<UsersController> logger)
     {
         _registerUserHandler = registerUserHandler;
@@ -56,6 +59,7 @@ public class UsersController : ControllerBase
         _loginUserHandler = loginUserHandler;
         _refreshTokenHandler = refreshTokenHandler;
         _logoutHandler = logoutHandler;
+        _setUserActiveStatusHandler = setUserActiveStatusHandler;
         _logger = logger;
     }
 
@@ -95,6 +99,14 @@ public class UsersController : ControllerBase
     {
         var command = new LoginUserCommand(request.Email, request.Password);
         var result = await _loginUserHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsAccountDeactivated)
+        {
+            _logger.LogWarning("Login blocked for deactivated account {Email}.", request.Email);
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = "Your account has been deactivated. Contact an administrator." });
+        }
 
         if (!result.Success)
         {
@@ -143,7 +155,13 @@ public class UsersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateUserRequest request, CancellationToken cancellationToken)
     {
-        var command = new CreateUserCommand(request.FullName, request.Email, request.Password, request.Role);
+        var command = new CreateUserCommand(
+            request.FullName,
+            request.Email,
+            request.Password,
+            request.Role,
+            request.IsActive,
+            request.PhoneNumber);
         var result = await _createUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.EmailAlreadyExists)
@@ -174,7 +192,7 @@ public class UsersController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateUserRequest request, CancellationToken cancellationToken)
     {
-        var command = new UpdateUserCommand(id, request.FullName, request.Email, request.Role);
+        var command = new UpdateUserCommand(id, request.FullName, request.Email, request.Role, request.PhoneNumber);
         var result = await _updateUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
@@ -223,6 +241,46 @@ public class UsersController : ControllerBase
 
         _logger.LogInformation("User {UserId} deleted by admin {AdminId}.", id, currentUserId);
         return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/deactivate")]
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
+    {
+        var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (id == currentUserId)
+        {
+            return Conflict(new { message = "You cannot deactivate your own account." });
+        }
+
+        var result = await _setUserActiveStatusHandler.HandleAsync(
+            new SetUserActiveStatusCommand(id, false),
+            cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        _logger.LogInformation("User {UserId} deactivated by admin {AdminId}.", id, currentUserId);
+        return Ok(ToResponse(result.User!));
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/activate")]
+    public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _setUserActiveStatusHandler.HandleAsync(
+            new SetUserActiveStatusCommand(id, true),
+            cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        _logger.LogInformation("User {UserId} reactivated by admin.", id);
+        return Ok(ToResponse(result.User!));
     }
 
     [Authorize(Roles = "Admin")]
@@ -283,5 +341,5 @@ public class UsersController : ControllerBase
     }
 
     private static UserListItemResponse ToResponse(AppUser user) =>
-        new(user.Id, user.FullName, user.Email, user.Role.ToString(), user.CreatedAtUtc);
+        new(user.Id, user.FullName, user.Email, user.Role.ToString(), user.CreatedAtUtc, user.IsActive, user.PhoneNumber);
 }

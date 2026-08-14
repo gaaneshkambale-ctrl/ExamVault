@@ -8,11 +8,18 @@ import AdminLayout from '../../layouts/AdminLayout';
 import { createUser } from '../../api/userApi';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 
-const initialFormState: CreateUserRequest = {
+interface CreateUserFormState extends CreateUserRequest {
+  confirmPassword: string;
+}
+
+const initialFormState: CreateUserFormState = {
   fullName: '',
   email: '',
   password: '',
+  confirmPassword: '',
   role: 'Student',
+  isActive: true,
+  phoneNumber: '',
 };
 
 function extractServerError(error: unknown): string {
@@ -31,19 +38,19 @@ function extractServerError(error: unknown): string {
 export default function CreateUser() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<CreateUserRequest>(initialFormState);
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateUserRequest, string>>>({});
+  const [form, setForm] = useState<CreateUserFormState>(initialFormState);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateUserFormState, string>>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
 
-  const updateField = <K extends keyof CreateUserRequest>(field: K, value: CreateUserRequest[K]) => {
+  const updateField = <K extends keyof CreateUserFormState>(field: K, value: CreateUserFormState[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    const errors: Partial<Record<keyof CreateUserRequest, string>> = {};
+    const errors: Partial<Record<keyof CreateUserFormState, string>> = {};
     if (!form.fullName.trim()) {
       errors.fullName = 'Full name is required.';
     }
@@ -53,6 +60,9 @@ export default function CreateUser() {
     if (!form.password) {
       errors.password = 'Password is required.';
     }
+    if (form.confirmPassword !== form.password) {
+      errors.confirmPassword = 'Passwords do not match.';
+    }
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       return;
@@ -61,7 +71,8 @@ export default function CreateUser() {
     setStatus('loading');
     setServerError('');
     try {
-      await createUser(form);
+      const { confirmPassword: _confirmPassword, ...request } = form;
+      await createUser(request);
       queryClient.invalidateQueries({ queryKey: ['users'] });
       navigate('/admin/users');
     } catch (error) {
@@ -127,6 +138,22 @@ export default function CreateUser() {
                 </Form.Group>
               </Col>
               <Col md={6}>
+                <Form.Group className="mb-4" controlId="createUserConfirmPassword">
+                  <Form.Label className="fw-bold">Confirm Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    placeholder="Re-enter password"
+                    value={form.confirmPassword}
+                    onChange={(e) => updateField('confirmPassword', e.target.value)}
+                    isInvalid={!!fieldErrors.confirmPassword}
+                  />
+                  <Form.Control.Feedback type="invalid">{fieldErrors.confirmPassword}</Form.Control.Feedback>
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Row>
+              <Col md={6}>
                 <Form.Group className="mb-4" controlId="createUserRole">
                   <Form.Label className="fw-bold">Role</Form.Label>
                   <Form.Select
@@ -138,7 +165,32 @@ export default function CreateUser() {
                   </Form.Select>
                 </Form.Group>
               </Col>
+              <Col md={6}>
+                <Form.Group className="mb-4" controlId="createUserPhoneNumber">
+                  <Form.Label className="fw-bold">Phone Number</Form.Label>
+                  <Form.Control
+                    type="tel"
+                    placeholder="Enter phone number (optional)"
+                    value={form.phoneNumber}
+                    onChange={(e) => updateField('phoneNumber', e.target.value)}
+                    isInvalid={!!fieldErrors.phoneNumber}
+                  />
+                  <Form.Control.Feedback type="invalid">{fieldErrors.phoneNumber}</Form.Control.Feedback>
+                </Form.Group>
+              </Col>
             </Row>
+
+            <Form.Group className="mb-4" controlId="createUserIsActive">
+              <Form.Check
+                type="switch"
+                label="Active"
+                checked={form.isActive}
+                onChange={(e) => updateField('isActive', e.target.checked)}
+              />
+              <Form.Text className="text-muted">
+                Inactive users cannot log in until an admin reactivates them.
+              </Form.Text>
+            </Form.Group>
 
             <div className="d-flex justify-content-end gap-2">
               <Button variant="outline-secondary" onClick={() => navigate('/admin/users')}>

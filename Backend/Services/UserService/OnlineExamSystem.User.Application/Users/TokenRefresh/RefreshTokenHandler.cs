@@ -26,7 +26,7 @@ public class RefreshTokenHandler
         }
 
         var user = await _userRepository.GetByIdAsync(storedToken.UserId, cancellationToken);
-        if (user is null)
+        if (user is null || !user.IsActive)
         {
             return RefreshTokenResult.Invalid();
         }

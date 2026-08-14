@@ -46,6 +46,11 @@ public class LoginUserHandler
             return LoginUserResult.InvalidCredentials();
         }
 
+        if (!user.IsActive)
+        {
+            return LoginUserResult.AccountDeactivated();
+        }
+
         var accessToken = _jwtTokenService.GenerateAccessToken(user);
         var refreshToken = _jwtTokenService.GenerateRefreshToken();
 

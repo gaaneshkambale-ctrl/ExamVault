@@ -8,6 +8,8 @@ public class FakeUserRepository : IUserRepository
     private readonly List<AppUser> _users = [];
     private readonly List<RefreshToken> _refreshTokens = [];
 
+    public IReadOnlyList<RefreshToken> RefreshTokens => _refreshTokens;
+
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Id == id));
 
@@ -37,6 +39,15 @@ public class FakeUserRepository : IUserRepository
 
     public Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
         Task.FromResult(_refreshTokens.FirstOrDefault(t => t.TokenHash == tokenHash));
+
+    public Task RevokeAllRefreshTokensForUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        foreach (var token in _refreshTokens.Where(t => t.UserId == userId && t.RevokedAtUtc == null))
+        {
+            token.RevokedAtUtc = DateTime.UtcNow;
+        }
+        return Task.CompletedTask;
+    }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

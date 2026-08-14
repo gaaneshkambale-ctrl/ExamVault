@@ -20,6 +20,7 @@ using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
+using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Domain.Entities;
@@ -64,6 +65,7 @@ public class Program
         builder.Services.AddScoped<LoginUserHandler>();
         builder.Services.AddScoped<RefreshTokenHandler>();
         builder.Services.AddScoped<LogoutHandler>();
+        builder.Services.AddScoped<SetUserActiveStatusHandler>();
 
         builder.Services.AddScoped<IValidator<CreateGroupCommand>, CreateGroupValidator>();
         builder.Services.AddScoped<CreateGroupHandler>();

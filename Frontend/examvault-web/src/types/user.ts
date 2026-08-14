@@ -41,6 +41,8 @@ export interface UserListItem {
   email: string;
   role: UserRole;
   createdAtUtc: string;
+  isActive: boolean;
+  phoneNumber: string | null;
 }
 
 export interface CreateUserRequest {
@@ -48,12 +50,15 @@ export interface CreateUserRequest {
   email: string;
   password: string;
   role: UserRole;
+  isActive: boolean;
+  phoneNumber: string;
 }
 
 export interface UpdateUserRequest {
   fullName: string;
   email: string;
   role: UserRole;
+  phoneNumber: string;
 }
 
 export interface ResetPasswordRequest {

@@ -41,6 +41,7 @@ public class UpdateUserHandler
         user.FullName = command.FullName;
         user.Email = command.Email;
         user.Role = Enum.Parse<UserRole>(command.Role, ignoreCase: true);
+        user.PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim();
 
         await _userRepository.SaveChangesAsync(cancellationToken);
 

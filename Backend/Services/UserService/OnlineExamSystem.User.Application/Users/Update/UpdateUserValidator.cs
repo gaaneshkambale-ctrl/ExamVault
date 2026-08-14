@@ -19,5 +19,10 @@ public class UpdateUserValidator : AbstractValidator<UpdateUserCommand>
         RuleFor(x => x.Role)
             .NotEmpty()
             .IsEnumName(typeof(UserRole), caseSensitive: false);
+
+        RuleFor(x => x.PhoneNumber)
+            .Matches(@"^[0-9+\-\s()]{7,20}$")
+            .WithMessage("Enter a valid phone number.")
+            .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber));
     }
 }
