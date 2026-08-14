@@ -138,6 +138,40 @@ export default function LoginForm() {
           )}
         </Button>
       </Form>
+
+      <div className="d-flex align-items-center gap-3 my-4">
+        <hr className="flex-grow-1 m-0" />
+        <span className="text-muted small">or</span>
+        <hr className="flex-grow-1 m-0" />
+      </div>
+
+      <Button
+        variant="outline-secondary"
+        className="w-100 d-flex align-items-center justify-content-center gap-2"
+        disabled
+        title="Google sign-in isn't connected yet"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24">
+          <path
+            fill="#4285F4"
+            d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.54 5.54 0 01-2.4 3.64v3h3.88c2.27-2.09 3.57-5.17 3.57-8.83z"
+          />
+          <path
+            fill="#34A853"
+            d="M12 24c3.24 0 5.96-1.07 7.95-2.9l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0012 24z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M5.27 14.29a7.2 7.2 0 010-4.58V6.6H1.27a12 12 0 000 10.8l4-3.11z"
+          />
+          <path
+            fill="#EA4335"
+            d="M12 4.75c1.76 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.6l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"
+          />
+        </svg>
+        Continue with Google
+      </Button>
+
       <div className="mt-4 text-center">
         <span className="text-muted">
           Don't have an account? <Link to="/register">Register</Link>
