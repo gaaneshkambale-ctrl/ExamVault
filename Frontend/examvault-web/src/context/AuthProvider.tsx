@@ -42,10 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setAuthFailureHandler(null);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, rememberMe = true) => {
     const response = await loginUser({ email, password });
     setAxiosAccessToken(response.accessToken);
-    setRefreshToken(response.refreshToken);
+    setRefreshToken(response.refreshToken, rememberMe);
     setUser(response.user);
     return response.user;
   };

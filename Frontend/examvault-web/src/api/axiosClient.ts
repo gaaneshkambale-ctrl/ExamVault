@@ -10,13 +10,25 @@ export function setAccessToken(token: string | null) {
 }
 
 export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  return localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) ?? sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
 }
 
-export function setRefreshToken(token: string | null) {
-  if (token) {
+/**
+ * remember=true persists the token across browser restarts (localStorage);
+ * remember=false keeps it only for the current tab session (sessionStorage),
+ * driven by the login form's "Remember me" checkbox.
+ */
+export function setRefreshToken(token: string | null, remember = true) {
+  if (!token) {
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    return;
+  }
+  if (remember) {
     localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
+    sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   } else {
+    sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
     localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   }
 }
@@ -44,13 +56,14 @@ async function refreshAccessTokenSilently(): Promise<string | null> {
     return null;
   }
 
+  const remember = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) !== null;
   try {
     const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
       `${import.meta.env.VITE_API_BASE_URL}/api/users/refresh-token`,
       { refreshToken },
     );
     accessToken = data.accessToken;
-    setRefreshToken(data.refreshToken);
+    setRefreshToken(data.refreshToken, remember);
     return data.accessToken;
   } catch {
     setRefreshToken(null);
