@@ -49,6 +49,14 @@ public class SubmissionRepository : ISubmissionRepository
             a => a.AttemptId == attemptId && a.QuestionId == questionId,
             cancellationToken);
 
+    public async Task<IReadOnlyList<ExamAttempt>> GetAttemptsByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.ExamAttempts
+            .Where(a => a.UserId == userId)
+            .OrderByDescending(a => a.StartedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<AttemptAnswer>> GetAnswersByAttemptIdAsync(
         Guid attemptId,
         CancellationToken cancellationToken = default) =>

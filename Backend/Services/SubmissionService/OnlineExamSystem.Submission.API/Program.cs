@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
+using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
@@ -45,6 +46,7 @@ public class Program
         builder.Services.AddScoped<SubmitAttemptHandler>();
         builder.Services.AddScoped<GetMyAttemptHandler>();
         builder.Services.AddScoped<ListAttemptsByExamHandler>();
+        builder.Services.AddScoped<ListAttemptsByUserHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

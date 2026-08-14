@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
+using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
@@ -22,6 +23,7 @@ public class SubmissionsController : ControllerBase
     private readonly SubmitAttemptHandler _submitAttemptHandler;
     private readonly GetMyAttemptHandler _getMyAttemptHandler;
     private readonly ListAttemptsByExamHandler _listAttemptsByExamHandler;
+    private readonly ListAttemptsByUserHandler _listAttemptsByUserHandler;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -30,6 +32,7 @@ public class SubmissionsController : ControllerBase
         SubmitAttemptHandler submitAttemptHandler,
         GetMyAttemptHandler getMyAttemptHandler,
         ListAttemptsByExamHandler listAttemptsByExamHandler,
+        ListAttemptsByUserHandler listAttemptsByUserHandler,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
@@ -37,6 +40,7 @@ public class SubmissionsController : ControllerBase
         _submitAttemptHandler = submitAttemptHandler;
         _getMyAttemptHandler = getMyAttemptHandler;
         _listAttemptsByExamHandler = listAttemptsByExamHandler;
+        _listAttemptsByUserHandler = listAttemptsByUserHandler;
         _logger = logger;
     }
 
@@ -202,6 +206,17 @@ public class SubmissionsController : ControllerBase
                 ToResponse(a.Attempt),
                 a.Answers.Select(ToResponse).ToList()))
             .ToList());
+    }
+
+    [HttpGet("by-user/{userId:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ByUser(Guid userId, CancellationToken cancellationToken)
+    {
+        var attempts = await _listAttemptsByUserHandler.HandleAsync(
+            new ListAttemptsByUserQuery(userId),
+            cancellationToken);
+
+        return Ok(attempts.Select(ToResponse).ToList());
     }
 
     private static ExamAttemptResponse ToResponse(ExamAttempt attempt) =>

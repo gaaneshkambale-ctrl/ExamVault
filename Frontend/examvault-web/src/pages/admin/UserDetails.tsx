@@ -4,8 +4,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteUserButton from '../../components/DeleteUserButton';
 import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
+import { useExams } from '../../hooks/useExams';
+import { useUserAttempts } from '../../hooks/useSubmissions';
 import { useUser, useUserSessions } from '../../hooks/useUsers';
-import type { UserRole, UserSessionStatus } from '../../types/user';
+import type { UserListItem, UserRole, UserSession, UserSessionStatus } from '../../types/user';
+import type { ExamAttemptResponse } from '../../types/submission';
 
 const roleVariant: Record<UserRole, string> = {
   Admin: 'primary',
@@ -20,6 +23,68 @@ const sessionStatusVariant: Record<UserSessionStatus, string> = {
 
 const tabs = ['Profile', 'Activity', 'Exam History', 'Logs'] as const;
 type Tab = (typeof tabs)[number];
+
+interface ActivityEntry {
+  id: string;
+  timestampUtc: string;
+  badge: string;
+  badgeVariant: string;
+  description: string;
+}
+
+function buildActivityFeed(
+  user: UserListItem,
+  sessions: UserSession[] | undefined,
+  attempts: ExamAttemptResponse[] | undefined,
+  examTitleById: Map<string, string>,
+): ActivityEntry[] {
+  const entries: ActivityEntry[] = [
+    {
+      id: 'account-created',
+      timestampUtc: user.createdAtUtc,
+      badge: 'Account',
+      badgeVariant: 'primary',
+      description: 'Account created',
+    },
+  ];
+
+  for (const session of sessions ?? []) {
+    entries.push({
+      id: `login-${session.id}`,
+      timestampUtc: session.issuedAtUtc,
+      badge: 'Login',
+      badgeVariant: 'info',
+      description: 'Logged in',
+    });
+  }
+
+  for (const attempt of attempts ?? []) {
+    const examTitle = examTitleById.get(attempt.examId) ?? 'an exam';
+    entries.push({
+      id: `attempt-started-${attempt.id}`,
+      timestampUtc: attempt.startedAtUtc,
+      badge: 'Exam',
+      badgeVariant: 'secondary',
+      description: `Started "${examTitle}" (attempt ${attempt.attemptNumber})`,
+    });
+    if (attempt.submittedAtUtc) {
+      entries.push({
+        id: `attempt-submitted-${attempt.id}`,
+        timestampUtc: attempt.submittedAtUtc,
+        badge: attempt.status === 'AutoSubmitted' ? 'Auto-Submit' : 'Exam',
+        badgeVariant: 'success',
+        description:
+          attempt.status === 'AutoSubmitted'
+            ? `Auto-submitted "${examTitle}" (time expired)`
+            : `Submitted "${examTitle}"`,
+      });
+    }
+  }
+
+  return entries.sort(
+    (a, b) => new Date(b.timestampUtc).getTime() - new Date(a.timestampUtc).getTime(),
+  );
+}
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -39,7 +104,19 @@ export default function UserDetails() {
     data: sessions,
     isLoading: sessionsLoading,
     isError: sessionsError,
-  } = useUserSessions(id, activeTab === 'Logs');
+  } = useUserSessions(id, activeTab === 'Logs' || activeTab === 'Activity');
+  const {
+    data: attempts,
+    isLoading: attemptsLoading,
+    isError: attemptsError,
+  } = useUserAttempts(id, activeTab === 'Activity');
+  const { data: exams } = useExams(activeTab === 'Activity');
+  const examTitleById = new Map((exams ?? []).map((exam) => [exam.id, exam.title]));
+  const activityFeed = user
+    ? buildActivityFeed(user, sessions, attempts, examTitleById)
+    : [];
+  const activityLoading = sessionsLoading || attemptsLoading;
+  const activityError = sessionsError || attemptsError;
 
   return (
     <AdminLayout active="Users">
@@ -163,9 +240,47 @@ export default function UserDetails() {
                 </>
               )}
 
-              {(activeTab === 'Activity' || activeTab === 'Exam History') && (
+              {activeTab === 'Activity' && (
+                <>
+                  {activityLoading && (
+                    <div className="d-flex justify-content-center py-5">
+                      <Spinner animation="border" />
+                    </div>
+                  )}
+
+                  {!activityLoading && activityError && (
+                    <div className="text-center text-danger py-5">
+                      Couldn't load activity for this user.
+                    </div>
+                  )}
+
+                  {!activityLoading && !activityError && activityFeed.length === 0 && (
+                    <div className="text-center text-muted py-5">No activity recorded for this user yet.</div>
+                  )}
+
+                  {!activityLoading && !activityError && activityFeed.length > 0 && (
+                    <div className="d-flex flex-column gap-3">
+                      {activityFeed.map((entry) => (
+                        <div key={entry.id} className="d-flex align-items-start gap-3">
+                          <Badge bg={entry.badgeVariant} style={{ minWidth: 90 }}>
+                            {entry.badge}
+                          </Badge>
+                          <div className="flex-grow-1">
+                            <div>{entry.description}</div>
+                            <div className="text-muted small">
+                              {new Date(entry.timestampUtc).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {activeTab === 'Exam History' && (
                 <div className="text-center text-muted py-5">
-                  {activeTab} isn't tracked yet — there's no data source for it in ExamVault today.
+                  Exam History isn't tracked yet — there's no data source for it in ExamVault today.
                 </div>
               )}
             </>

@@ -65,6 +65,15 @@ public class FakeSubmissionRepository : ISubmissionRepository
                     && (a.Status == AttemptStatus.Submitted || a.Status == AttemptStatus.AutoSubmitted))
                 .ToList());
 
+    public Task<IReadOnlyList<ExamAttempt>> GetAttemptsByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamAttempt>>(
+            _attempts
+                .Where(a => a.UserId == userId)
+                .OrderByDescending(a => a.StartedAtUtc)
+                .ToList());
+
     public Task<ILookup<Guid, AttemptAnswer>> GetAnswersByAttemptIdsAsync(
         IReadOnlyList<Guid> attemptIds,
         CancellationToken cancellationToken = default) =>

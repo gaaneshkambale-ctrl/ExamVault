@@ -33,6 +33,10 @@ public interface ISubmissionRepository
         Guid examId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<ExamAttempt>> GetAttemptsByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
     Task<ILookup<Guid, AttemptAnswer>> GetAnswersByAttemptIdsAsync(
         IReadOnlyList<Guid> attemptIds,
         CancellationToken cancellationToken = default);

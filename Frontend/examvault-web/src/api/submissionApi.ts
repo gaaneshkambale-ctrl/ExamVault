@@ -47,3 +47,8 @@ export async function getMyAttempt(examId: string): Promise<AttemptWithAnswersRe
     throw error;
   }
 }
+
+export async function getUserAttempts(userId: string): Promise<ExamAttemptResponse[]> {
+  const { data } = await apiClient.get<ExamAttemptResponse[]>(`/api/submissions/by-user/${userId}`);
+  return data;
+}
