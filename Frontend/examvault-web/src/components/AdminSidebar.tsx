@@ -1,7 +1,6 @@
-import { Dropdown } from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import BrandMark from './BrandMark';
-import { useAuth } from '../hooks/useAuth';
 
 export type AdminNavItem =
   | 'Dashboard'
@@ -67,19 +66,25 @@ interface AdminSidebarProps {
   active: AdminNavItem;
 }
 
-function getInitials(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/);
-  const initials = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.[0] ?? '?';
-  return initials.toUpperCase();
+function isSectionActive(item: NavItem, active: AdminNavItem): boolean {
+  return item.label === active || (item.children?.some((child) => child.label === active) ?? false);
 }
 
 export default function AdminSidebar({ active }: AdminSidebarProps) {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const [openSections, setOpenSections] = useState<Set<AdminNavItem>>(
+    () => new Set(navItems.filter((item) => item.children && isSectionActive(item, active)).map((item) => item.label)),
+  );
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/');
+  const toggleSection = (label: AdminNavItem) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
   };
 
   return (
@@ -92,80 +97,82 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
         ExamVault
       </div>
       <nav className="d-flex flex-column gap-1 flex-grow-1">
-        {navItems.map((item) => (
-          <div key={item.label}>
-            {item.path ? (
-              <Link
-                to={item.path}
-                className="px-3 py-2 rounded-2 text-decoration-none d-block"
-                style={
-                  item.label === active
-                    ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
-                    : { color: '#94a3b8' }
-                }
-              >
-                {item.label}
-              </Link>
-            ) : (
-              <span className="px-3 py-2 rounded-2 d-block" style={{ color: '#475569' }}>
-                {item.label}
-              </span>
-            )}
-            {item.children && (
-              <div className="d-flex flex-column gap-1 mt-1">
-                {item.children.map((child) => (
+        {navItems.map((item) => {
+          const isOpen = item.children ? openSections.has(item.label) : false;
+          return (
+            <div key={item.label}>
+              {item.path ? (
+                <div
+                  className="d-flex align-items-center rounded-2"
+                  style={
+                    item.label === active
+                      ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
+                      : { color: '#94a3b8' }
+                  }
+                >
                   <Link
-                    key={child.label}
-                    to={child.path}
-                    className="py-1 rounded-2 text-decoration-none small d-block"
-                    style={{
-                      paddingLeft: '2.25rem',
-                      paddingRight: '0.75rem',
-                      ...(child.label === active
-                        ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
-                        : { color: '#94a3b8' }),
-                    }}
+                    to={item.path}
+                    className="px-3 py-2 text-decoration-none flex-grow-1"
+                    style={{ color: 'inherit' }}
                   >
-                    {child.label}
+                    {item.label}
                   </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                  {item.children && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(item.label)}
+                      aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${item.label}`}
+                      className="btn btn-sm p-0 border-0 bg-transparent d-flex align-items-center justify-content-center me-2"
+                      style={{ color: 'inherit', width: 20, height: 20 }}
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{
+                          transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                          transition: 'transform 0.15s ease',
+                        }}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <span className="px-3 py-2 rounded-2 d-block" style={{ color: '#475569' }}>
+                  {item.label}
+                </span>
+              )}
+              {item.children && isOpen && (
+                <div className="d-flex flex-column gap-1 mt-1">
+                  {item.children.map((child) => (
+                    <Link
+                      key={child.label}
+                      to={child.path}
+                      className="py-1 rounded-2 text-decoration-none small d-block"
+                      style={{
+                        paddingLeft: '2.25rem',
+                        paddingRight: '0.75rem',
+                        ...(child.label === active
+                          ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
+                          : { color: '#94a3b8' }),
+                      }}
+                    >
+                      {child.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
-
-      {user && (
-        <Dropdown drop="up">
-          <Dropdown.Toggle
-            as="div"
-            bsPrefix="admin-sidebar-profile"
-            className="d-flex align-items-center gap-2 px-2 py-2 rounded-2"
-            style={{ cursor: 'pointer' }}
-          >
-            <div
-              className="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0 fw-bold"
-              style={{ width: 36, height: 36, fontSize: 14 }}
-            >
-              {getInitials(user.fullName)}
-            </div>
-            <div className="flex-grow-1 overflow-hidden">
-              <div className="text-truncate small fw-medium">{user.fullName}</div>
-              <div className="text-truncate small" style={{ color: '#94a3b8' }}>
-                {user.role}
-              </div>
-            </div>
-            <span style={{ color: '#94a3b8' }}>&#9662;</span>
-          </Dropdown.Toggle>
-
-          <Dropdown.Menu>
-            <Dropdown.Item as={Link} to="/profile">
-              Profile
-            </Dropdown.Item>
-            <Dropdown.Item onClick={() => void handleLogout()}>Logout</Dropdown.Item>
-          </Dropdown.Menu>
-        </Dropdown>
-      )}
     </aside>
   );
 }
