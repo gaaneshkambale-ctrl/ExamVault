@@ -27,6 +27,18 @@ export default function NavBar() {
             <Nav.Link href="#features" className="fw-medium text-dark">
               Features
             </Nav.Link>
+            <Nav.Link as={Link} to="/exams" className="fw-medium text-dark">
+              Exams
+            </Nav.Link>
+            <Nav.Link as={Link} to="/pricing" className="fw-medium text-dark">
+              Pricing
+            </Nav.Link>
+            <Nav.Link as={Link} to="/about" className="fw-medium text-dark">
+              About Us
+            </Nav.Link>
+            <Nav.Link as={Link} to="/contact" className="fw-medium text-dark">
+              Contact
+            </Nav.Link>
           </Nav>
 
           {isAuthenticated && user ? (

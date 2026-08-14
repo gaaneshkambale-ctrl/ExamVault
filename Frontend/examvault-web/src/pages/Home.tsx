@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Button, Card, Col, Container, Row } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
+import Footer from '../components/Footer';
 import AuthModal from '../components/AuthModal';
 import type { AuthMode } from '../components/AuthModal';
 
@@ -330,6 +331,8 @@ export default function Home() {
           </Container>
         </div>
       </Container>
+
+      <Footer />
 
       {mode && <AuthModal mode={mode} onClose={() => navigate('/')} />}
     </div>
