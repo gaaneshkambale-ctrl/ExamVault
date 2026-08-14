@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { useQueries } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { useExams } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
-import { getExamResultsForAdmin } from '../../api/resultApi';
+import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { getGrade } from '../../types/result';
 import type { AdminAttemptResultResponse } from '../../types/result';
 
@@ -31,20 +30,12 @@ export default function AdminResults() {
     return map;
   }, [users]);
 
-  const resultQueries = useQueries({
-    queries: (exams ?? []).map((exam) => ({
-      queryKey: ['results', 'byExam', exam.id],
-      queryFn: () => getExamResultsForAdmin(exam.id),
-      enabled: !!exams,
-    })),
-  });
-
-  const isLoadingResults = (exams ?? []).length > 0 && resultQueries.some((q) => q.isLoading);
+  const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(exams);
   const loading = isLoadingExams || isLoadingUsers || isLoadingResults;
 
-  const rows: AdminAttemptResultResponse[] = resultQueries
-    .flatMap((q) => q.data ?? [])
-    .sort((a, b) => new Date(b.submittedAtUtc).getTime() - new Date(a.submittedAtUtc).getTime());
+  const rows: AdminAttemptResultResponse[] = [...allResults].sort(
+    (a, b) => new Date(b.submittedAtUtc).getTime() - new Date(a.submittedAtUtc).getTime(),
+  );
 
   const filteredRows = rows.filter((result) => {
     if (examFilter !== 'All' && result.examId !== examFilter) {

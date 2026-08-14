@@ -3,11 +3,17 @@ import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import ExamsTrendChart from '../../components/ExamsTrendChart';
+import PassRateDonutChart from '../../components/PassRateDonutChart';
+import NotificationTypeBadge from '../../components/notifications/NotificationTypeBadge';
 import { useAuth } from '../../hooks/useAuth';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { useUsers } from '../../hooks/useUsers';
-import type { ExamResponse, ExamStatus } from '../../types/exam';
+import { useAssignments } from '../../hooks/useAssignments';
+import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
+import { useNotificationHistory } from '../../hooks/useNotifications';
+import { getAssignmentStatus } from '../../types/assignment';
+import type { ExamStatus } from '../../types/exam';
 
 const statusVariant: Record<ExamStatus, string> = {
   Draft: 'secondary',
@@ -16,6 +22,8 @@ const statusVariant: Record<ExamStatus, string> = {
 };
 
 const RECENT_EXAMS_COUNT = 5;
+const UPCOMING_EXAMS_COUNT = 5;
+const RECENT_NOTIFICATIONS_COUNT = 5;
 const PERIOD_OPTIONS = [3, 6, 12] as const;
 
 function UsersIcon() {
@@ -59,6 +67,32 @@ function PublishedIcon() {
   );
 }
 
+function AttemptsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 3v18h18" />
+      <path d="M7 15l4-6 3 3 5-8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AverageIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 2l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 15.9 6.4 19.1l1.4-6.3-4.8-4.3 6.4-.6L12 2z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PassRateIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" strokeLinejoin="round" />
+      <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function monthKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}`;
 }
@@ -69,7 +103,7 @@ function countCreatedInMonth(dates: string[], monthsAgo: number): number {
   return dates.filter((d) => monthKey(new Date(d)) === monthKey(target)).length;
 }
 
-function buildMonthlyTrend(exams: ExamResponse[], months: number) {
+function buildMonthlyTrend(dates: string[], months: number) {
   const now = new Date();
   const buckets = Array.from({ length: months }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
@@ -78,13 +112,24 @@ function buildMonthlyTrend(exams: ExamResponse[], months: number) {
 
   return buckets.map(({ key, label }) => ({
     label,
-    value: exams.filter((exam) => monthKey(new Date(exam.createdOn)) === key).length,
+    value: dates.filter((d) => monthKey(new Date(d)) === key).length,
   }));
+}
+
+function timeAgo(isoDate: string): string {
+  const seconds = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 interface StatCardProps {
   label: string;
-  value: number;
+  value: string;
   icon: React.ReactNode;
   variant: string;
   isLoading: boolean;
@@ -124,24 +169,60 @@ export default function AdminDashboard() {
   const isAdmin = user?.role === 'Admin';
   const { data: exams, isLoading: isLoadingExams } = useExams(isAdmin);
   const { data: users, isLoading: isLoadingUsers } = useUsers(isAdmin);
+  const { data: assignments, isLoading: isLoadingAssignments } = useAssignments(isAdmin);
   const questionCounts = useQuestionCountsByExam(isAdmin ? exams?.map((e) => e.id) : undefined);
+  const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(isAdmin ? exams : undefined);
+  const { data: notificationHistory, isLoading: isLoadingNotifications } = useNotificationHistory(
+    undefined,
+    1,
+    RECENT_NOTIFICATIONS_COUNT,
+  );
   const [trendMonths, setTrendMonths] = useState<(typeof PERIOD_OPTIONS)[number]>(6);
 
   // exam.totalQuestions is a legacy field that's never kept in sync with
   // Question Service, so it's always 0 - use the real live counts instead.
   const totalQuestions = exams?.reduce((sum, exam) => sum + (questionCounts[exam.id] ?? 0), 0) ?? 0;
   const publishedExams = exams?.filter((exam) => exam.status === 'Published').length ?? 0;
+  const draftExams = exams?.filter((exam) => exam.status === 'Draft').length ?? 0;
 
   const newUsersThisMonth = users ? countCreatedInMonth(users.map((u) => u.createdAtUtc), 0) : 0;
   const newExamsThisMonth = exams ? countCreatedInMonth(exams.map((e) => e.createdOn), 0) : 0;
+
+  const passedCount = allResults.filter((r) => r.passed).length;
+  const failedCount = allResults.length - passedCount;
+  const averageScore =
+    allResults.length === 0
+      ? 0
+      : Math.round(
+          allResults.reduce((sum, r) => sum + (r.totalMarks > 0 ? (r.totalScore / r.totalMarks) * 100 : 0), 0) /
+            allResults.length,
+        );
+  const passRate = allResults.length === 0 ? 0 : Math.round((passedCount / allResults.length) * 100);
 
   const recentExams = [...(exams ?? [])]
     .sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime())
     .slice(0, RECENT_EXAMS_COUNT);
 
-  const trendData = useMemo(
-    () => buildMonthlyTrend(exams ?? [], trendMonths),
-    [exams, trendMonths],
+  const upcomingAssignments = [...(assignments ?? [])]
+    .map((a) => ({ ...a, status: getAssignmentStatus(a.startAtUtc, a.endAtUtc) }))
+    .filter((a) => a.status === 'Upcoming' || a.status === 'Active')
+    .sort((a, b) => new Date(a.startAtUtc).getTime() - new Date(b.startAtUtc).getTime())
+    .slice(0, UPCOMING_EXAMS_COUNT);
+
+  const scheduledExamsCount = (assignments ?? []).filter(
+    (a) => getAssignmentStatus(a.startAtUtc, a.endAtUtc) === 'Upcoming',
+  ).length;
+
+  const completedAttemptsTrend = useMemo(
+    () => buildMonthlyTrend(allResults.map((r) => r.submittedAtUtc), trendMonths),
+    [allResults, trendMonths],
+  );
+
+  const studentsCount = users?.filter((u) => u.role === 'Student').length ?? 0;
+  const adminsCount = users?.filter((u) => u.role === 'Admin').length ?? 0;
+  const userRegistrationTrend = useMemo(
+    () => buildMonthlyTrend((users ?? []).map((u) => u.createdAtUtc), trendMonths),
+    [users, trendMonths],
   );
 
   return (
@@ -164,7 +245,7 @@ export default function AdminDashboard() {
           <Row className="g-3 mb-4">
             <StatCard
               label="Total Users"
-              value={users?.length ?? 0}
+              value={String(users?.length ?? 0)}
               icon={<UsersIcon />}
               variant="primary"
               isLoading={isLoadingUsers}
@@ -172,7 +253,7 @@ export default function AdminDashboard() {
             />
             <StatCard
               label="Total Exams"
-              value={exams?.length ?? 0}
+              value={String(exams?.length ?? 0)}
               icon={<ExamsIcon />}
               variant="warning"
               isLoading={isLoadingExams}
@@ -180,22 +261,107 @@ export default function AdminDashboard() {
             />
             <StatCard
               label="Total Questions"
-              value={totalQuestions}
+              value={String(totalQuestions)}
               icon={<QuestionsIcon />}
               variant="info"
               isLoading={isLoadingExams}
             />
             <StatCard
               label="Published Exams"
-              value={publishedExams}
+              value={String(publishedExams)}
               icon={<PublishedIcon />}
               variant="success"
               isLoading={isLoadingExams}
             />
+            <StatCard
+              label="Total Attempts"
+              value={String(allResults.length)}
+              icon={<AttemptsIcon />}
+              variant="primary"
+              isLoading={isLoadingResults}
+            />
+            <StatCard
+              label="Average Score"
+              value={allResults.length === 0 ? '—' : `${averageScore}%`}
+              icon={<AverageIcon />}
+              variant="warning"
+              isLoading={isLoadingResults}
+            />
+            <StatCard
+              label="Pass Rate"
+              value={allResults.length === 0 ? '—' : `${passRate}%`}
+              icon={<PassRateIcon />}
+              variant="success"
+              isLoading={isLoadingResults}
+            />
           </Row>
 
-          <Row className="g-3">
+          <Row className="g-3 mb-3">
             <Col xs={12} lg={7}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h2 className="h6 fw-bold mb-0">Completed Attempts</h2>
+                    <Form.Select
+                      size="sm"
+                      style={{ width: 'auto' }}
+                      value={trendMonths}
+                      onChange={(e) => setTrendMonths(Number(e.target.value) as (typeof PERIOD_OPTIONS)[number])}
+                    >
+                      {PERIOD_OPTIONS.map((months) => (
+                        <option key={months} value={months}>
+                          Last {months} months
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </div>
+
+                  {isLoadingResults ? (
+                    <div className="d-flex justify-content-center py-5">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  ) : (
+                    <ExamsTrendChart data={completedAttemptsTrend} />
+                  )}
+                  <p className="text-muted small mb-0 mt-2">Exam attempts submitted per month.</p>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col xs={12} lg={5}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body>
+                  <h2 className="h6 fw-bold mb-3">Results Overview</h2>
+                  {isLoadingResults ? (
+                    <div className="d-flex justify-content-center py-5">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  ) : (
+                    <>
+                      <PassRateDonutChart passed={passedCount} failed={failedCount} />
+                      <div className="mt-3">
+                        <div className="d-flex justify-content-between border-bottom py-2">
+                          <span className="text-muted small">Average Score</span>
+                          <span className="fw-medium">{allResults.length === 0 ? '—' : `${averageScore}%`}</span>
+                        </div>
+                        <div className="d-flex justify-content-between border-bottom py-2">
+                          <span className="text-muted small">Passed</span>
+                          <span className="fw-medium text-success">{passedCount}</span>
+                        </div>
+                        <div className="d-flex justify-content-between py-2">
+                          <span className="text-muted small">Failed</span>
+                          <span className="fw-medium text-danger">{failedCount}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+
+          <Row className="g-3 mb-3">
+            <Col xs={12} lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className={recentExams.length === 0 ? '' : 'p-0'}>
                   <div className="d-flex justify-content-between align-items-center p-4 pb-3">
@@ -249,33 +415,192 @@ export default function AdminDashboard() {
               </Card>
             </Col>
 
-            <Col xs={12} lg={5}>
+            <Col xs={12} lg={6}>
               <Card className="border-0 shadow-sm h-100">
-                <Card.Body>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h2 className="h6 fw-bold mb-0">Exams Overview</h2>
-                    <Form.Select
-                      size="sm"
-                      style={{ width: 'auto' }}
-                      value={trendMonths}
-                      onChange={(e) => setTrendMonths(Number(e.target.value) as (typeof PERIOD_OPTIONS)[number])}
-                    >
-                      {PERIOD_OPTIONS.map((months) => (
-                        <option key={months} value={months}>
-                          Last {months} months
-                        </option>
-                      ))}
-                    </Form.Select>
+                <Card.Body className={upcomingAssignments.length === 0 ? '' : 'p-0'}>
+                  <div className="d-flex justify-content-between align-items-center p-4 pb-3">
+                    <h2 className="h6 fw-bold mb-0">Upcoming Exams</h2>
+                    <Link to="/admin/assignments" className="small">
+                      View all
+                    </Link>
                   </div>
 
-                  {isLoadingExams ? (
-                    <div className="d-flex justify-content-center py-5">
+                  {isLoadingAssignments && (
+                    <div className="d-flex justify-content-center py-4">
                       <Spinner animation="border" size="sm" />
                     </div>
-                  ) : (
-                    <ExamsTrendChart data={trendData} />
                   )}
-                  <p className="text-muted small mb-0 mt-2">Exams created per month.</p>
+
+                  {!isLoadingAssignments && upcomingAssignments.length === 0 && (
+                    <div className="text-center text-muted py-5">No upcoming or active assignments.</div>
+                  )}
+
+                  {!isLoadingAssignments && upcomingAssignments.length > 0 && (
+                    <Table responsive hover className="mb-0 align-middle">
+                      <thead className="text-muted small text-uppercase">
+                        <tr>
+                          <th className="ps-4">Exam Title</th>
+                          <th>Start Date</th>
+                          <th>Candidates</th>
+                          <th className="pe-4">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {upcomingAssignments.map((a) => (
+                          <tr key={a.id}>
+                            <td className="ps-4 fw-medium">{a.examTitle}</td>
+                            <td>{new Date(a.startAtUtc).toLocaleString()}</td>
+                            <td>{a.targetCount}</td>
+                            <td className="pe-4">
+                              <Badge bg={a.status === 'Active' ? 'success' : 'primary'}>{a.status}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+
+          <Row className="g-3 mb-3">
+            <Col xs={12} lg={6}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body className="p-0">
+                  <div className="p-4 pb-3">
+                    <h2 className="h6 fw-bold mb-0">Pending Actions</h2>
+                  </div>
+                  <Table hover className="mb-0 align-middle">
+                    <tbody>
+                      <tr>
+                        <td className="ps-4">Draft Exams</td>
+                        <td>
+                          <Badge bg="secondary">{isLoadingExams ? '—' : draftExams}</Badge>
+                        </td>
+                        <td className="pe-4 text-end">
+                          <Link to="/admin/exams?status=Draft" className="btn btn-outline-secondary btn-sm">
+                            Review
+                          </Link>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="ps-4">Scheduled Exams</td>
+                        <td>
+                          <Badge bg="primary">{isLoadingAssignments ? '—' : scheduledExamsCount}</Badge>
+                        </td>
+                        <td className="pe-4 text-end">
+                          <Link to="/admin/assignments" className="btn btn-outline-secondary btn-sm">
+                            View
+                          </Link>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </Table>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col xs={12} lg={6}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body className={(notificationHistory?.items.length ?? 0) === 0 ? '' : 'p-0'}>
+                  <div className="d-flex justify-content-between align-items-center p-4 pb-3">
+                    <h2 className="h6 fw-bold mb-0">Recent Notifications</h2>
+                    <Link to="/admin/notifications/history" className="small">
+                      View all
+                    </Link>
+                  </div>
+
+                  {isLoadingNotifications && (
+                    <div className="d-flex justify-content-center py-4">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  )}
+
+                  {!isLoadingNotifications && (notificationHistory?.items.length ?? 0) === 0 && (
+                    <div className="text-center text-muted py-5">No notifications sent yet.</div>
+                  )}
+
+                  {!isLoadingNotifications && (notificationHistory?.items.length ?? 0) > 0 && (
+                    <div className="px-4 pb-2">
+                      {notificationHistory!.items.map((batch) => (
+                        <Link
+                          key={batch.batchId}
+                          to={`/admin/notifications/history/${batch.batchId}`}
+                          className="d-flex align-items-start justify-content-between gap-2 py-2 border-bottom text-decoration-none text-body"
+                        >
+                          <div>
+                            <div className="small fw-medium">{batch.title}</div>
+                            <NotificationTypeBadge type={batch.type} />
+                          </div>
+                          <span className="text-muted small text-nowrap">{timeAgo(batch.sentAtUtc)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+
+          <Row className="g-3 mb-3">
+            <Col xs={12}>
+              <Card className="border-0 shadow-sm">
+                <Card.Body>
+                  <h2 className="h6 fw-bold mb-3">User Overview</h2>
+                  <Row className="g-4 align-items-center">
+                    <Col xs={12} md={4}>
+                      <div className="d-flex justify-content-between border-bottom py-2">
+                        <span className="text-muted small">Students</span>
+                        <span className="fw-medium">{isLoadingUsers ? '—' : studentsCount}</span>
+                      </div>
+                      <div className="d-flex justify-content-between border-bottom py-2">
+                        <span className="text-muted small">Admins</span>
+                        <span className="fw-medium">{isLoadingUsers ? '—' : adminsCount}</span>
+                      </div>
+                      <div className="d-flex justify-content-between py-2">
+                        <span className="text-muted small">New Users This Month</span>
+                        <span className="fw-medium">{isLoadingUsers ? '—' : newUsersThisMonth}</span>
+                      </div>
+                    </Col>
+                    <Col xs={12} md={8}>
+                      <p className="text-muted small mb-2">User Registration Trend</p>
+                      {isLoadingUsers ? (
+                        <div className="d-flex justify-content-center py-5">
+                          <Spinner animation="border" size="sm" />
+                        </div>
+                      ) : (
+                        <ExamsTrendChart data={userRegistrationTrend} />
+                      )}
+                    </Col>
+                  </Row>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+
+          <Row className="g-3">
+            <Col xs={12}>
+              <Card className="border-0 shadow-sm">
+                <Card.Body>
+                  <h2 className="h6 fw-bold mb-3">Quick Actions</h2>
+                  <div className="d-flex flex-wrap gap-2">
+                    <Link to="/admin/exams/create" className="btn btn-outline-primary">
+                      + Create Exam
+                    </Link>
+                    <Link to="/admin/questions" className="btn btn-outline-primary">
+                      + Add Question
+                    </Link>
+                    <Link to="/admin/assignments/new" className="btn btn-outline-primary">
+                      Assign Exam
+                    </Link>
+                    <Link to="/admin/notifications/create" className="btn btn-outline-primary">
+                      Create Notification
+                    </Link>
+                    <Link to="/admin/reports" className="btn btn-outline-primary">
+                      View Reports
+                    </Link>
+                  </div>
                 </Card.Body>
               </Card>
             </Col>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Badge, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteExamButton from '../../components/DeleteExamButton';
 import { useExams } from '../../hooks/useExams';
@@ -87,12 +87,18 @@ function StatCard({ label, value, variant, icon }: StatCardProps) {
 
 const PAGE_SIZE = 6;
 
+const VALID_STATUSES: ExamStatus[] = ['Draft', 'Published', 'Archived'];
+
 export default function ManageExams() {
   const { data: exams, isLoading, isError } = useExams();
   const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
+  const [searchParams] = useSearchParams();
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<'All' | ExamType>('All');
-  const [statusFilter, setStatusFilter] = useState<'All' | ExamStatus>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | ExamStatus>(() => {
+    const fromUrl = searchParams.get('status');
+    return VALID_STATUSES.includes(fromUrl as ExamStatus) ? (fromUrl as ExamStatus) : 'All';
+  });
   const [page, setPage] = useState(1);
 
   const counts = {
