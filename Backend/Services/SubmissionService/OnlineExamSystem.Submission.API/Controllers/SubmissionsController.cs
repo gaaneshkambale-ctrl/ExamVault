@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
@@ -20,6 +21,7 @@ public class SubmissionsController : ControllerBase
     private readonly SaveAnswerHandler _saveAnswerHandler;
     private readonly SubmitAttemptHandler _submitAttemptHandler;
     private readonly GetMyAttemptHandler _getMyAttemptHandler;
+    private readonly ListAttemptsByExamHandler _listAttemptsByExamHandler;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -27,12 +29,14 @@ public class SubmissionsController : ControllerBase
         SaveAnswerHandler saveAnswerHandler,
         SubmitAttemptHandler submitAttemptHandler,
         GetMyAttemptHandler getMyAttemptHandler,
+        ListAttemptsByExamHandler listAttemptsByExamHandler,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
         _saveAnswerHandler = saveAnswerHandler;
         _submitAttemptHandler = submitAttemptHandler;
         _getMyAttemptHandler = getMyAttemptHandler;
+        _listAttemptsByExamHandler = listAttemptsByExamHandler;
         _logger = logger;
     }
 
@@ -183,6 +187,21 @@ public class SubmissionsController : ControllerBase
         return Ok(new AttemptWithAnswersResponse(
             ToResponse(result.Attempt),
             result.Answers.Select(ToResponse).ToList()));
+    }
+
+    [HttpGet("by-exam/{examId:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ByExam(Guid examId, CancellationToken cancellationToken)
+    {
+        var attempts = await _listAttemptsByExamHandler.HandleAsync(
+            new ListAttemptsByExamQuery(examId),
+            cancellationToken);
+
+        return Ok(attempts
+            .Select(a => new AttemptWithAnswersResponse(
+                ToResponse(a.Attempt),
+                a.Answers.Select(ToResponse).ToList()))
+            .ToList());
     }
 
     private static ExamAttemptResponse ToResponse(ExamAttempt attempt) =>

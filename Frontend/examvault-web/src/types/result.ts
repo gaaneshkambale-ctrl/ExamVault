@@ -26,6 +26,22 @@ export interface ResultSummaryResponse {
   questions: QuestionResultResponse[] | null;
 }
 
+// Admin-only: one row per student attempt on an exam, always carries the
+// per-question breakdown (no ShowCorrectAnswers gating - that only applies
+// to the student-facing "mine" result).
+export interface AdminAttemptResultResponse {
+  attemptId: string;
+  userId: string;
+  examId: string;
+  examTitle: string;
+  totalScore: number;
+  totalMarks: number;
+  passingMarks: number;
+  passed: boolean;
+  submittedAtUtc: string;
+  questions: QuestionResultResponse[];
+}
+
 export type Grade = 'A+' | 'A' | 'B' | 'C' | 'F';
 
 // A failed attempt is always graded F regardless of percentage, since

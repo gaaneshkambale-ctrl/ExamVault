@@ -56,6 +56,24 @@ public class SubmissionRepository : ISubmissionRepository
             .Where(a => a.AttemptId == attemptId)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<ExamAttempt>> GetSubmittedAttemptsByExamIdAsync(
+        Guid examId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.ExamAttempts
+            .Where(a => a.ExamId == examId
+                && (a.Status == AttemptStatus.Submitted || a.Status == AttemptStatus.AutoSubmitted))
+            .ToListAsync(cancellationToken);
+
+    public async Task<ILookup<Guid, AttemptAnswer>> GetAnswersByAttemptIdsAsync(
+        IReadOnlyList<Guid> attemptIds,
+        CancellationToken cancellationToken = default)
+    {
+        var answers = await _dbContext.AttemptAnswers
+            .Where(a => attemptIds.Contains(a.AttemptId))
+            .ToListAsync(cancellationToken);
+        return answers.ToLookup(a => a.AttemptId);
+    }
+
     public async Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default) =>
         await _dbContext.AttemptAnswers.AddAsync(answer, cancellationToken);
 

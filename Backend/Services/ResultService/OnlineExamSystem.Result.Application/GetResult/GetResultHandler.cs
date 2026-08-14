@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using OnlineExamSystem.Result.Application.Interfaces;
+using OnlineExamSystem.Result.Application.Scoring;
 using OnlineExamSystem.Result.Domain;
 
 namespace OnlineExamSystem.Result.Application.GetResult;
@@ -51,37 +52,9 @@ public class GetResultHandler
                 query.ExamId,
                 query.BearerToken,
                 cancellationToken);
-            var answerKeyByQuestionId = answerKey.ToDictionary(q => q.QuestionId);
             var selectedOptionByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId, a => a.SelectedOptionId);
 
-            var totalScore = 0;
-            var questionResults = new List<QuestionResult>();
-            foreach (var question in answerKey)
-            {
-                var correctOptionId = question.Options.FirstOrDefault(o => o.IsCorrect)?.OptionId;
-                selectedOptionByQuestionId.TryGetValue(question.QuestionId, out var selectedOptionId);
-                var isCorrect = selectedOptionId is not null && selectedOptionId == correctOptionId;
-                var marksAwarded = isCorrect ? question.Marks : 0;
-                totalScore += marksAwarded;
-
-                questionResults.Add(new QuestionResult
-                {
-                    QuestionId = question.QuestionId,
-                    QuestionText = question.QuestionText,
-                    Marks = question.Marks,
-                    MarksAwarded = marksAwarded,
-                    SelectedOptionId = selectedOptionId,
-                    IsCorrect = isCorrect,
-                    Options = question.Options
-                        .Select(o => new QuestionResultOption
-                        {
-                            OptionId = o.OptionId,
-                            OptionText = o.OptionText,
-                            IsCorrect = o.IsCorrect,
-                        })
-                        .ToList(),
-                });
-            }
+            var (totalScore, questionResults) = AttemptScorer.Score(answerKey, selectedOptionByQuestionId);
 
             var showCorrectAnswers = await _examLookupClient.GetShowCorrectAnswersAsync(
                 query.ExamId,

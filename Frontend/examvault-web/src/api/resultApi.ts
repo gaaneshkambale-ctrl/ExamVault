@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios';
 import apiClient from './axiosClient';
-import type { ResultSummaryResponse } from '../types/result';
+import type { AdminAttemptResultResponse, ResultSummaryResponse } from '../types/result';
 
 export async function getMyResult(examId: string): Promise<ResultSummaryResponse | null> {
   try {
@@ -14,4 +14,9 @@ export async function getMyResult(examId: string): Promise<ResultSummaryResponse
     }
     throw error;
   }
+}
+
+export async function getExamResultsForAdmin(examId: string): Promise<AdminAttemptResultResponse[]> {
+  const { data } = await apiClient.get<AdminAttemptResultResponse[]>(`/api/results/by-exam/${examId}`);
+  return data;
 }

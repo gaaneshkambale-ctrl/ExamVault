@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Result.Application.GetExamReport;
 using OnlineExamSystem.Result.Application.GetResult;
 using OnlineExamSystem.Result.Application.Interfaces;
 using OnlineExamSystem.Result.Infrastructure;
@@ -39,6 +40,7 @@ public class Program
             client.BaseAddress = new Uri(submissionServiceBaseUrl));
 
         builder.Services.AddScoped<GetResultHandler>();
+        builder.Services.AddScoped<GetExamReportHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

@@ -22,6 +22,9 @@ import ManageGroups from '../pages/admin/ManageGroups';
 import GroupDetails from '../pages/admin/GroupDetails';
 import Assignments from '../pages/admin/Assignments';
 import AssignExam from '../pages/admin/AssignExam';
+import AdminResults from '../pages/admin/AdminResults';
+import AdminReports from '../pages/admin/AdminReports';
+import ExamReportDetails from '../pages/admin/ExamReportDetails';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import MyExams from '../pages/student/MyExams';
 import StudentExamDetails from '../pages/student/ExamDetails';
@@ -185,6 +188,30 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <QuestionBank />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/results"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AdminResults />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AdminReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/:examId"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamReportDetails />
           </ProtectedRoute>
         }
       />

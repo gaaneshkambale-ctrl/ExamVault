@@ -49,8 +49,8 @@ const navItems: NavItem[] = [
   },
   { label: 'Questions', path: '/admin/questions' },
   { label: 'Categories', path: null },
-  { label: 'Results', path: null },
-  { label: 'Reports', path: null },
+  { label: 'Results', path: '/admin/results' },
+  { label: 'Reports', path: '/admin/reports' },
   {
     label: 'Notifications',
     path: '/admin/notifications',

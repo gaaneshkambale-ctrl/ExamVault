@@ -37,13 +37,35 @@ public class SubmissionServiceClient : ISubmissionLookupClient
             JsonOptions,
             cancellationToken) ?? throw new InvalidOperationException("Empty response from Submission Service.");
 
-        return new SubmissionLookupResult(
+        return ToResult(body);
+    }
+
+    public async Task<IReadOnlyList<SubmissionLookupResult>> GetAttemptsByExamAsync(
+        Guid examId,
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/submissions/by-exam/{examId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var body = await response.Content.ReadFromJsonAsync<List<AttemptWithAnswersApiResponse>>(
+            JsonOptions,
+            cancellationToken) ?? [];
+
+        return body.Select(ToResult).ToList();
+    }
+
+    private static SubmissionLookupResult ToResult(AttemptWithAnswersApiResponse body) =>
+        new(
             body.Attempt.Id,
+            body.Attempt.UserId,
             body.Attempt.ExamId,
             body.Attempt.Status,
             body.Attempt.SubmittedAtUtc,
             body.Answers.Select(a => new SubmissionAnswer(a.QuestionId, a.SelectedOptionId)).ToList());
-    }
 
     private sealed class AttemptWithAnswersApiResponse
     {
@@ -54,6 +76,7 @@ public class SubmissionServiceClient : ISubmissionLookupClient
     private sealed class ExamAttemptApiResponse
     {
         public Guid Id { get; init; }
+        public Guid UserId { get; init; }
         public Guid ExamId { get; init; }
         public string Status { get; init; } = string.Empty;
         public DateTime? SubmittedAtUtc { get; init; }

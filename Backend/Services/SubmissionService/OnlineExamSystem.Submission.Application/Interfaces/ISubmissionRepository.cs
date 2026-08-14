@@ -29,6 +29,14 @@ public interface ISubmissionRepository
         Guid attemptId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<ExamAttempt>> GetSubmittedAttemptsByExamIdAsync(
+        Guid examId,
+        CancellationToken cancellationToken = default);
+
+    Task<ILookup<Guid, AttemptAnswer>> GetAnswersByAttemptIdsAsync(
+        IReadOnlyList<Guid> attemptIds,
+        CancellationToken cancellationToken = default);
+
     Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default);
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
