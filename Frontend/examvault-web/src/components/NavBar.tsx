@@ -15,9 +15,8 @@ export default function NavBar() {
   return (
     <Navbar bg="white" expand="md" className="border-bottom py-3">
       <Container>
-        <Navbar.Brand as={Link} to="/" className="d-flex align-items-center gap-2 fw-bold">
-          <BrandMark />
-          ExamVault
+        <Navbar.Brand as={Link} to="/" className="d-flex align-items-center">
+          <BrandMark variant="full" size={40} />
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="main-nav" />
         <Navbar.Collapse id="main-nav" className="justify-content-between">
