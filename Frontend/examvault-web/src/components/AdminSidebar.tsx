@@ -59,7 +59,7 @@ const navItems: NavItem[] = [
       { label: 'Notification Settings', path: '/notifications/settings' },
     ],
   },
-  { label: 'Settings', path: null },
+  { label: 'Settings', path: '/admin/settings' },
 ];
 
 const iconPaths: Partial<Record<AdminNavItem, ReactNode>> = {

@@ -189,8 +189,11 @@ ADMIN SIDE
     student side (same page, same account-level preferences). Email is
     delivered via an n8n workflow over Gmail; SMS is not supported at all.
 
-32. Settings (placeholder - not built yet)
-    Sidebar label only, greyed out.
+32. Settings
+    Account settings for the logged-in Admin: Change Password (sets a
+    new password immediately, no current-password re-entry required
+    since the request is already authenticated), and a link to
+    Notification Settings.
 
 33. Profile (Admin)
     View/update the Admin's own name/email/role display, avatar

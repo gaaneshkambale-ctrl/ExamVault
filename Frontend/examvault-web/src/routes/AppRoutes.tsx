@@ -24,6 +24,7 @@ import Assignments from '../pages/admin/Assignments';
 import AssignExam from '../pages/admin/AssignExam';
 import AdminResults from '../pages/admin/AdminResults';
 import AdminReports from '../pages/admin/AdminReports';
+import AdminSettings from '../pages/admin/AdminSettings';
 import ExamReportDetails from '../pages/admin/ExamReportDetails';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import MyExams from '../pages/student/MyExams';
@@ -372,6 +373,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <AdminNotifications />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AdminSettings />
           </ProtectedRoute>
         }
       />
