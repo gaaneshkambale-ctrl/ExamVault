@@ -1,13 +1,66 @@
 :root {
   color-scheme: light dark;
 
-  /* Brand palette, matched to the wireframe (indigo primary) */
+  /* Brand palette, matched to the wireframe (indigo primary) - unchanged */
   --bs-primary: #4f46e5;
   --bs-primary-rgb: 79, 70, 229;
   --bs-link-color: #4f46e5;
   --bs-link-color-rgb: 79, 70, 229;
   --bs-link-hover-color: #4338ca;
   --bs-link-hover-color-rgb: 67, 56, 202;
+
+  /* Modernized type + shape scale */
+  --bs-body-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bs-border-radius-sm: 0.5rem;
+  --bs-border-radius: 0.75rem;
+  --bs-border-radius-lg: 1rem;
+  --bs-border-radius-xl: 1.25rem;
+  --bs-border-radius-2xl: 1.5rem;
+  --bs-border-radius-pill: 50rem;
+
+  /* Softer, more layered elevation than Bootstrap's stock shadows */
+  --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-soft-hover: 0 2px 4px rgba(15, 23, 42, 0.05), 0 12px 28px rgba(15, 23, 42, 0.09);
+}
+
+body {
+  margin: 0;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.01em;
+}
+
+/* Cards - the single highest-leverage change, since every page wraps its
+   content in <Card className="border-0 shadow-sm">. Softening this one
+   class visually modernizes nearly the whole app at once. */
+.card {
+  border-radius: var(--bs-border-radius-lg);
+}
+
+.shadow-sm {
+  box-shadow: var(--shadow-soft) !important;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card.shadow-sm:hover {
+  box-shadow: var(--shadow-soft-hover) !important;
+}
+
+/* Buttons */
+.btn {
+  border-radius: var(--bs-border-radius);
+  font-weight: 500;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.btn-sm {
+  border-radius: var(--bs-border-radius-sm);
 }
 
 .btn-primary {
@@ -18,8 +71,90 @@
   --bs-btn-active-bg: #4338ca;
   --bs-btn-active-border-color: #4338ca;
   --bs-btn-focus-shadow-rgb: 79, 70, 229;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.1);
 }
 
-body {
-  margin: 0;
+.btn-primary:hover,
+.btn-primary:focus {
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+}
+
+.btn:active {
+  transform: translateY(0.5px);
+}
+
+/* Form controls */
+.form-control,
+.form-select {
+  border-radius: var(--bs-border-radius-sm);
+  border-color: #e2e8f0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 0.2rem rgba(79, 70, 229, 0.15);
+}
+
+/* Badges - a touch more breathing room reads less "stock Bootstrap" */
+.badge {
+  border-radius: var(--bs-border-radius-pill);
+  padding-left: 0.65em;
+  padding-right: 0.65em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Tables */
+.table thead th {
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: #f8f9ff;
+}
+
+/* Dropdown menus */
+.dropdown-menu {
+  border-radius: var(--bs-border-radius);
+  border: 1px solid #eef0f4;
+  box-shadow: var(--shadow-soft-hover);
+  padding: 0.5rem;
+}
+
+.dropdown-item {
+  border-radius: var(--bs-border-radius-sm);
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Modals */
+.modal-content {
+  border-radius: var(--bs-border-radius-lg);
+  border: none;
+  box-shadow: var(--shadow-soft-hover);
+}
+
+/* Scrollbar polish */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: content-box;
 }
