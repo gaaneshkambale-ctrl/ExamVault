@@ -29,7 +29,8 @@ interface ActivityEntry {
   timestampUtc: string;
   badge: string;
   badgeVariant: string;
-  description: string;
+  activity: string;
+  details: string;
 }
 
 function buildActivityFeed(
@@ -44,7 +45,8 @@ function buildActivityFeed(
       timestampUtc: user.createdAtUtc,
       badge: 'Account',
       badgeVariant: 'primary',
-      description: 'Account created',
+      activity: 'Account Created',
+      details: `Account created for ${user.email}`,
     },
   ];
 
@@ -54,7 +56,8 @@ function buildActivityFeed(
       timestampUtc: session.issuedAtUtc,
       badge: 'Login',
       badgeVariant: 'info',
-      description: 'Logged in',
+      activity: 'Logged In',
+      details: `Session valid until ${new Date(session.expiresAtUtc).toLocaleString()}`,
     });
   }
 
@@ -65,18 +68,18 @@ function buildActivityFeed(
       timestampUtc: attempt.startedAtUtc,
       badge: 'Exam',
       badgeVariant: 'secondary',
-      description: `Started "${examTitle}" (attempt ${attempt.attemptNumber})`,
+      activity: 'Exam Started',
+      details: `"${examTitle}" — attempt ${attempt.attemptNumber}`,
     });
     if (attempt.submittedAtUtc) {
+      const isAutoSubmitted = attempt.status === 'AutoSubmitted';
       entries.push({
         id: `attempt-submitted-${attempt.id}`,
         timestampUtc: attempt.submittedAtUtc,
-        badge: attempt.status === 'AutoSubmitted' ? 'Auto-Submit' : 'Exam',
+        badge: isAutoSubmitted ? 'Auto-Submit' : 'Exam',
         badgeVariant: 'success',
-        description:
-          attempt.status === 'AutoSubmitted'
-            ? `Auto-submitted "${examTitle}" (time expired)`
-            : `Submitted "${examTitle}"`,
+        activity: isAutoSubmitted ? 'Exam Auto-Submitted' : 'Exam Submitted',
+        details: isAutoSubmitted ? `"${examTitle}" — time expired` : `"${examTitle}"`,
       });
     }
   }
@@ -259,21 +262,28 @@ export default function UserDetails() {
                   )}
 
                   {!activityLoading && !activityError && activityFeed.length > 0 && (
-                    <div className="d-flex flex-column gap-3">
-                      {activityFeed.map((entry) => (
-                        <div key={entry.id} className="d-flex align-items-start gap-3">
-                          <Badge bg={entry.badgeVariant} style={{ minWidth: 90 }}>
-                            {entry.badge}
-                          </Badge>
-                          <div className="flex-grow-1">
-                            <div>{entry.description}</div>
-                            <div className="text-muted small">
-                              {new Date(entry.timestampUtc).toLocaleString()}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <Table responsive hover className="align-middle">
+                      <thead>
+                        <tr>
+                          <th>Type</th>
+                          <th>Activity</th>
+                          <th>Details</th>
+                          <th>Date &amp; Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activityFeed.map((entry) => (
+                          <tr key={entry.id}>
+                            <td>
+                              <Badge bg={entry.badgeVariant}>{entry.badge}</Badge>
+                            </td>
+                            <td>{entry.activity}</td>
+                            <td className="text-muted">{entry.details}</td>
+                            <td>{new Date(entry.timestampUtc).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
                   )}
                 </>
               )}
