@@ -43,6 +43,14 @@ public class UserRepository : IUserRepository
             .Where(t => t.UserId == userId && t.RevokedAtUtc == null)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, DateTime.UtcNow), cancellationToken);
 
+    public async Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.RefreshTokens
+            .Where(t => t.UserId == userId)
+            .OrderByDescending(t => t.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

@@ -49,5 +49,9 @@ public class FakeUserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
+    public Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<RefreshToken>>(
+            _refreshTokens.Where(t => t.UserId == userId).OrderByDescending(t => t.CreatedAtUtc).ToList());
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

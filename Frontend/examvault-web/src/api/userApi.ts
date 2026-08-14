@@ -10,6 +10,7 @@ import type {
   UpdateUserRequest,
   UserListItem,
   UserProfile,
+  UserSession,
 } from '../types/user';
 
 export async function registerUser(request: RegisterRequest): Promise<RegisterResponse> {
@@ -73,5 +74,10 @@ export async function deactivateUser(id: string): Promise<UserListItem> {
 
 export async function activateUser(id: string): Promise<UserListItem> {
   const { data } = await apiClient.post<UserListItem>(`/api/users/${id}/activate`);
+  return data;
+}
+
+export async function getUserSessions(id: string): Promise<UserSession[]> {
+  const { data } = await apiClient.get<UserSession[]>(`/api/users/${id}/sessions`);
   return data;
 }

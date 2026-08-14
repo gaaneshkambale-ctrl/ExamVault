@@ -16,6 +16,7 @@ using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
 using OnlineExamSystem.User.Application.Users.GetProfile;
 using OnlineExamSystem.User.Application.Users.List;
+using OnlineExamSystem.User.Application.Users.ListSessions;
 using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
@@ -66,6 +67,7 @@ public class Program
         builder.Services.AddScoped<RefreshTokenHandler>();
         builder.Services.AddScoped<LogoutHandler>();
         builder.Services.AddScoped<SetUserActiveStatusHandler>();
+        builder.Services.AddScoped<ListUserSessionsHandler>();
 
         builder.Services.AddScoped<IValidator<CreateGroupCommand>, CreateGroupValidator>();
         builder.Services.AddScoped<CreateGroupHandler>();

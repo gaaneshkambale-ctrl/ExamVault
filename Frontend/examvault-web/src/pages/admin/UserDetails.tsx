@@ -1,15 +1,21 @@
 import { useState } from 'react';
-import { Badge, Card, Col, Nav, Row, Spinner } from 'react-bootstrap';
+import { Badge, Card, Col, Nav, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteUserButton from '../../components/DeleteUserButton';
 import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
-import { useUser } from '../../hooks/useUsers';
-import type { UserRole } from '../../types/user';
+import { useUser, useUserSessions } from '../../hooks/useUsers';
+import type { UserRole, UserSessionStatus } from '../../types/user';
 
 const roleVariant: Record<UserRole, string> = {
   Admin: 'primary',
   Student: 'secondary',
+};
+
+const sessionStatusVariant: Record<UserSessionStatus, string> = {
+  Active: 'success',
+  Expired: 'secondary',
+  Revoked: 'danger',
 };
 
 const tabs = ['Profile', 'Activity', 'Exam History', 'Logs'] as const;
@@ -29,6 +35,11 @@ export default function UserDetails() {
   const navigate = useNavigate();
   const { data: user, isLoading, isError } = useUser(id);
   const [activeTab, setActiveTab] = useState<Tab>('Profile');
+  const {
+    data: sessions,
+    isLoading: sessionsLoading,
+    isError: sessionsError,
+  } = useUserSessions(id, activeTab === 'Logs');
 
   return (
     <AdminLayout active="Users">
@@ -105,7 +116,54 @@ export default function UserDetails() {
                 </Row>
               )}
 
-              {activeTab !== 'Profile' && (
+              {activeTab === 'Logs' && (
+                <>
+                  {sessionsLoading && (
+                    <div className="d-flex justify-content-center py-5">
+                      <Spinner animation="border" />
+                    </div>
+                  )}
+
+                  {sessionsError && (
+                    <div className="text-center text-danger py-5">
+                      Couldn't load login/session history for this user.
+                    </div>
+                  )}
+
+                  {sessions && sessions.length === 0 && (
+                    <div className="text-center text-muted py-5">
+                      No login sessions recorded for this user yet.
+                    </div>
+                  )}
+
+                  {sessions && sessions.length > 0 && (
+                    <Table responsive hover className="align-middle">
+                      <thead>
+                        <tr>
+                          <th>Issued On</th>
+                          <th>Expires On</th>
+                          <th>Revoked On</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sessions.map((session) => (
+                          <tr key={session.id}>
+                            <td>{new Date(session.issuedAtUtc).toLocaleString()}</td>
+                            <td>{new Date(session.expiresAtUtc).toLocaleString()}</td>
+                            <td>{session.revokedAtUtc ? new Date(session.revokedAtUtc).toLocaleString() : '—'}</td>
+                            <td>
+                              <Badge bg={sessionStatusVariant[session.status]}>{session.status}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
+                </>
+              )}
+
+              {(activeTab === 'Activity' || activeTab === 'Exam History') && (
                 <div className="text-center text-muted py-5">
                   {activeTab} isn't tracked yet — there's no data source for it in ExamVault today.
                 </div>

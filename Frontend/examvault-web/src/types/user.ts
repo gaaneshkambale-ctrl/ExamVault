@@ -64,3 +64,13 @@ export interface UpdateUserRequest {
 export interface ResetPasswordRequest {
   newPassword: string;
 }
+
+export type UserSessionStatus = 'Active' | 'Expired' | 'Revoked';
+
+export interface UserSession {
+  id: string;
+  issuedAtUtc: string;
+  expiresAtUtc: string;
+  revokedAtUtc: string | null;
+  status: UserSessionStatus;
+}

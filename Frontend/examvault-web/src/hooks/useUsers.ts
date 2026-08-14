@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getUser, listUsers } from '../api/userApi';
+import { getUser, getUserSessions, listUsers } from '../api/userApi';
 
 export function useUsers(enabled = true) {
   return useQuery({
@@ -14,5 +14,13 @@ export function useUser(id: string | undefined) {
     queryKey: ['users', id],
     queryFn: () => getUser(id!),
     enabled: !!id,
+  });
+}
+
+export function useUserSessions(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['users', id, 'sessions'],
+    queryFn: () => getUserSessions(id!),
+    enabled: !!id && enabled,
   });
 }

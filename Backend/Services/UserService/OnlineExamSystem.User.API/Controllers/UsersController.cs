@@ -7,6 +7,7 @@ using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
 using OnlineExamSystem.User.Application.Users.GetProfile;
 using OnlineExamSystem.User.Application.Users.List;
+using OnlineExamSystem.User.Application.Users.ListSessions;
 using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
@@ -33,6 +34,7 @@ public class UsersController : ControllerBase
     private readonly RefreshTokenHandler _refreshTokenHandler;
     private readonly LogoutHandler _logoutHandler;
     private readonly SetUserActiveStatusHandler _setUserActiveStatusHandler;
+    private readonly ListUserSessionsHandler _listUserSessionsHandler;
     private readonly ILogger<UsersController> _logger;
 
     public UsersController(
@@ -47,6 +49,7 @@ public class UsersController : ControllerBase
         RefreshTokenHandler refreshTokenHandler,
         LogoutHandler logoutHandler,
         SetUserActiveStatusHandler setUserActiveStatusHandler,
+        ListUserSessionsHandler listUserSessionsHandler,
         ILogger<UsersController> logger)
     {
         _registerUserHandler = registerUserHandler;
@@ -60,6 +63,7 @@ public class UsersController : ControllerBase
         _refreshTokenHandler = refreshTokenHandler;
         _logoutHandler = logoutHandler;
         _setUserActiveStatusHandler = setUserActiveStatusHandler;
+        _listUserSessionsHandler = listUserSessionsHandler;
         _logger = logger;
     }
 
@@ -324,6 +328,14 @@ public class UsersController : ControllerBase
         return Ok(ToResponse(user));
     }
 
+    [Authorize(Roles = "Admin")]
+    [HttpGet("{id:guid}/sessions")]
+    public async Task<IActionResult> ListSessions(Guid id, CancellationToken cancellationToken)
+    {
+        var sessions = await _listUserSessionsHandler.HandleAsync(new ListUserSessionsQuery(id), cancellationToken);
+        return Ok(sessions.Select(ToResponse));
+    }
+
     [Authorize]
     [HttpGet("me")]
     public async Task<IActionResult> GetMe(CancellationToken cancellationToken)
@@ -342,4 +354,15 @@ public class UsersController : ControllerBase
 
     private static UserListItemResponse ToResponse(AppUser user) =>
         new(user.Id, user.FullName, user.Email, user.Role.ToString(), user.CreatedAtUtc, user.IsActive, user.PhoneNumber);
+
+    private static UserSessionResponse ToResponse(RefreshToken token)
+    {
+        var status = token.RevokedAtUtc is not null
+            ? "Revoked"
+            : token.ExpiresAtUtc <= DateTime.UtcNow
+                ? "Expired"
+                : "Active";
+
+        return new UserSessionResponse(token.Id, token.CreatedAtUtc, token.ExpiresAtUtc, token.RevokedAtUtc, status);
+    }
 }
