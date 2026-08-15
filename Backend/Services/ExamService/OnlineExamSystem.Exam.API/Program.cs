@@ -17,6 +17,8 @@ using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Exams.Update;
 using OnlineExamSystem.Exam.API.Jobs;
 using OnlineExamSystem.Exam.Application.Interfaces;
+using OnlineExamSystem.Exam.Application.Reminders.GetReminderSettings;
+using OnlineExamSystem.Exam.Application.Reminders.UpdateReminderSettings;
 using OnlineExamSystem.Exam.Infrastructure;
 using OnlineExamSystem.Exam.Infrastructure.Messaging;
 using OnlineExamSystem.Exam.Infrastructure.Persistence;
@@ -67,6 +69,9 @@ public class Program
         builder.Services.AddScoped<GetAssignmentHandler>();
         builder.Services.AddScoped<DeleteAssignmentHandler>();
         builder.Services.AddScoped<GetMyAssignmentForExamHandler>();
+
+        builder.Services.AddScoped<GetReminderSettingsHandler>();
+        builder.Services.AddScoped<UpdateReminderSettingsHandler>();
 
         builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
         builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();

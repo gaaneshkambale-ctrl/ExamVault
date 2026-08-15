@@ -55,10 +55,19 @@ public class ExamReminderCheckService : BackgroundService
         var examRepository = scope.ServiceProvider.GetRequiredService<IExamRepository>();
         var userLookupClient = scope.ServiceProvider.GetRequiredService<IInternalUserLookupClient>();
 
+        var settings = await examRepository.GetOrCreateReminderSettingsAsync(cancellationToken);
         var now = DateTime.UtcNow;
 
         foreach (var (window, lead) in Windows)
         {
+            var windowEnabled = window == DomainReminderWindow.TwentyFourHour
+                ? settings.Enable24HourReminder
+                : settings.Enable1HourReminder;
+            if (!windowEnabled)
+            {
+                continue;
+            }
+
             var assignments = await examRepository.GetAssignmentsStartingWithinAsync(
                 now, now + lead, cancellationToken);
 

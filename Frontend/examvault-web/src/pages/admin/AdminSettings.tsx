@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { resetUserPassword } from '../../api/userApi';
+import { getReminderSettings, updateReminderSettings } from '../../api/examApi';
 import { useAuth } from '../../hooks/useAuth';
 
 const requirements: Array<{ label: string; test: (value: string) => boolean }> = [
@@ -32,6 +33,49 @@ export default function AdminSettings() {
   const [fieldError, setFieldError] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
+
+  const [enable24HourReminder, setEnable24HourReminder] = useState(true);
+  const [enable1HourReminder, setEnable1HourReminder] = useState(true);
+  const [reminderStatus, setReminderStatus] = useState<'idle' | 'loading' | 'saving' | 'success' | 'error'>('idle');
+
+  useEffect(() => {
+    setReminderStatus('loading');
+    getReminderSettings()
+      .then((settings) => {
+        setEnable24HourReminder(settings.enable24HourReminder);
+        setEnable1HourReminder(settings.enable1HourReminder);
+        setReminderStatus('idle');
+      })
+      .catch(() => setReminderStatus('error'));
+  }, []);
+
+  useEffect(() => {
+    if (status !== 'success') {
+      return;
+    }
+    const timer = setTimeout(() => setStatus('idle'), 3500);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  useEffect(() => {
+    if (reminderStatus !== 'success') {
+      return;
+    }
+    const timer = setTimeout(() => setReminderStatus('idle'), 3500);
+    return () => clearTimeout(timer);
+  }, [reminderStatus]);
+
+  const handleSaveReminderSettings = async () => {
+    setReminderStatus('saving');
+    try {
+      const settings = await updateReminderSettings({ enable24HourReminder, enable1HourReminder });
+      setEnable24HourReminder(settings.enable24HourReminder);
+      setEnable1HourReminder(settings.enable1HourReminder);
+      setReminderStatus('success');
+    } catch {
+      setReminderStatus('error');
+    }
+  };
 
   if (!user) {
     return null;
@@ -140,7 +184,7 @@ export default function AdminSettings() {
         </Col>
 
         <Col xs={12} lg={5}>
-          <Card className="border-0 shadow-sm">
+          <Card className="border-0 shadow-sm mb-4">
             <Card.Body className="p-4">
               <h2 className="h6 fw-bold mb-2">Notification Settings</h2>
               <p className="text-muted small mb-3">
@@ -149,6 +193,61 @@ export default function AdminSettings() {
               <Link to="/notifications/settings" className="btn btn-outline-primary">
                 Manage Notification Settings
               </Link>
+            </Card.Body>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <Card.Body className="p-4">
+              <h2 className="h6 fw-bold mb-2">Exam Reminders</h2>
+              <p className="text-muted small mb-3">
+                Choose which automatic reminders are sent to students before their exam starts.
+                Applies to every exam.
+              </p>
+
+              {reminderStatus === 'success' && (
+                <Alert variant="success" className="py-2">
+                  Reminder settings saved.
+                </Alert>
+              )}
+              {reminderStatus === 'error' && (
+                <Alert variant="danger" className="py-2">
+                  Couldn't save reminder settings. Please try again.
+                </Alert>
+              )}
+
+              <Form.Check
+                type="checkbox"
+                id="reminder24h"
+                label="Send reminder 24 hours before exam"
+                checked={enable24HourReminder}
+                onChange={(e) => setEnable24HourReminder(e.target.checked)}
+                disabled={reminderStatus === 'loading'}
+                className="mb-2"
+              />
+              <Form.Check
+                type="checkbox"
+                id="reminder1h"
+                label="Send reminder 1 hour before exam"
+                checked={enable1HourReminder}
+                onChange={(e) => setEnable1HourReminder(e.target.checked)}
+                disabled={reminderStatus === 'loading'}
+                className="mb-3"
+              />
+
+              <Button
+                variant="primary"
+                onClick={handleSaveReminderSettings}
+                disabled={reminderStatus === 'loading' || reminderStatus === 'saving'}
+              >
+                {reminderStatus === 'saving' ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </Button>
             </Card.Body>
           </Card>
         </Col>

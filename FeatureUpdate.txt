@@ -290,3 +290,154 @@ VERIFICATION:
   preference off (not re-tested here since NotificationPersistenceService
   itself - which does the per-recipient EmailEnabled check - is existing,
   unchanged code already covered by Notification.Application.Tests).
+
+UPDATE (2026-08-15, later same day): the 1-hour window WAS separately
+verified live after all, using the browser walkthrough of the Admin
+Notification History page. The real "Java" assignment's StartAtUtc was
+temporarily moved to ~30 minutes out via direct SQL (same technique Day
+33 used to backdate an attempt's StartedAtUtc to test the auto-submit
+timer), Exam.API restarted (its do/while(PeriodicTimer) loop runs one
+check immediately on startup), and the 1-hour reminder fired correctly -
+"Your exam \"Java\" starts in 1 hour..." - Delivered, distinct from and
+without disturbing the already-logged 24-hour reminder for the same
+assignment/student. ExamReminderLogs confirmed exactly one row per
+window (Window=0 at 06:48:41, Window=1 at 07:01:35). StartAtUtc reverted
+to its real value (2026-08-15T14:28:00) afterward. Both windows are now
+fully proven live, not just unit-tested.
+
+Also confirmed live in the browser (logged in as Admin "Bhau Mane"):
+Admin > Notifications > History lists both reminders as separate rows
+(Type=Reminder, Status=Sent), and the batch-details drill-down for each
+shows the exact message text and a 1/1 Delivered, 0 Failed, 0 Pending
+recipients summary - matching the database exactly. Also incidentally
+reconfirmed cross-user isolation: "Bhau Mane"'s own /notifications page
+shows "No notifications yet" since neither reminder was addressed to
+that account.
+
+--------------------------------------------------------------------
+6. FEATURE (2026-08-15): make the 24h/1h reminder windows togglable
+   via a global Admin setting
+--------------------------------------------------------------------
+STATUS: DONE - IMPLEMENTED AND VERIFIED LIVE
+
+REQUEST: today the two reminder windows (24h, 1h) are hardcoded constants
+in ExamReminderCheckService.Windows - there is no way to disable one of
+them, or to see/change this from the app at all. User wants a real
+setting for this.
+
+DECISIONS CONFIRMED WITH THE USER:
+1. Scope: ONE GLOBAL setting, not per-exam - applies to every exam
+   assignment app-wide. (Per-exam configurability was considered and
+   explicitly not chosen.)
+2. Shape: toggle the two EXISTING windows on/off (two checkboxes: "Send
+   24-hour reminder" / "Send 1-hour reminder"), not fully custom hour
+   values. This keeps ReminderWindow as a fixed 2-value enum and the
+   whole range-check/dedupe/publish code path unchanged - only whether a
+   given tick even attempts a window changes.
+
+DESIGN:
+- New global settings row in Exam Service's own DB (it already owns the
+  reminder job) - a single-row table `ReminderSettings` (Id fixed to a
+  well-known GUID or just "the only row", Enable24HourReminder bool,
+  Enable1HourReminder bool). Both default to true, so a fresh deploy or
+  a database with no row yet behaves exactly like today (both windows
+  on) - no migration-time behavior change for existing installs.
+- New Admin-only endpoints on Exam.API: GET/PUT
+  `/api/exams/reminder-settings` (Gateway already proxies everything
+  under /api/exams/{**catch-all}, so no new Gateway route needed) -
+  [Authorize(Roles="Admin")], mirroring the existing thin
+  Command/Query+Handler shape used everywhere else in this codebase.
+- `ExamReminderCheckService` reads the current settings once per tick
+  (cheap single-row query, no caching needed at a 5-minute cadence) and
+  skips a window entirely if its toggle is off - e.g. if
+  Enable1HourReminder is false, the 1-hour window is never checked or
+  published for any assignment, app-wide, until turned back on.
+- Frontend: a new "Exam Reminders" section on the existing Admin
+  Settings page (/admin/settings, AdminSettings.tsx - currently just
+  Change Password + a link to Notification Settings) - two checkboxes
+  and a Save button calling the new PUT endpoint. Matches the plan's own
+  "Admin Settings page already exists, extend it" precedent rather than
+  creating a new settings page.
+
+NOT DECIDED YET / open follow-up, not blocking this plan: whether
+turning a window off should also delete or keep already-logged
+ExamReminderLog rows for that window - proposed default is to just leave
+them (a toggle only affects whether FUTURE ticks check that window; past
+history is left alone, same "never silently rewrite history" instinct as
+everywhere else in this app). Flagging rather than deciding unilaterally
+in case the user wants different behavior when they see it.
+
+NEXT STEP: implement top-down once this plan is confirmed - entity +
+migration -> repository/handler -> controller endpoints -> background
+job reads the setting -> frontend Admin Settings section -> verify live
+(toggle 1-hour off, confirm a real assignment's 1-hour window is skipped
+while 24-hour still fires; toggle back on, confirm it resumes).
+
+--------------------------------------------------------------------
+6b. IMPLEMENTATION + LIVE VERIFICATION (2026-08-15)
+--------------------------------------------------------------------
+Built exactly per the design above. One real naming collision hit during
+implementation: a new namespace `OnlineExamSystem.Exam.Application.
+ReminderSettings` (matching the folder name I first picked) turned out
+to be EXACTLY the same as the entity class name `ReminderSettings` -
+C#'s namespace lookup rules made any bare reference to the entity type
+from elsewhere in the Exam.Application tree ambiguous ("'ReminderSettings'
+is a namespace but is used like a type"). Fixed by renaming the folder/
+namespace to `Reminders` instead - a naming lesson, not a design change.
+
+FILES ADDED/CHANGED: Domain (ReminderSettings entity, single row, both
+flags default true), ExamDbContext (DbSet, migration
+AddReminderSettings), IExamRepository/ExamRepository
+(GetOrCreateReminderSettingsAsync - creates the default row on first
+read if none exists yet), Application (Reminders/GetReminderSettings +
+Reminders/UpdateReminderSettings query/command/handlers, no Result
+wrapper since neither can fail), Shared.Contracts
+(UpdateReminderSettingsRequest / ReminderSettingsResponse), new
+ReminderSettingsController (api/exams/reminder-settings,
+[Authorize(Roles="Admin")], GET+PUT - no new Gateway route needed, the
+existing api/exams/{**catch-all} route already proxies it),
+ExamReminderCheckService (reads settings once per tick, skips a window
+entirely - no query, no publish - if its flag is off), AdminSettings.tsx
+(new "Exam Reminders" card: two checkboxes + Save, matching the existing
+Change Password section's local-state style rather than introducing
+react-query for one small form).
+
+VERIFICATION:
+- dotnet build (full solution) and dotnet test (all 7 projects, 196/196)
+  both clean before and after every change; npm run build equivalent
+  (tsc --noEmit) and oxlint both clean on the frontend changes.
+- EF migration applied against the real ExamDb (ReminderSettings table
+  created).
+- Live browser verification (logged in as Admin "Bhau Mane"): the new
+  "Exam Reminders" card renders correctly on /admin/settings with both
+  checkboxes defaulting to checked; unchecking one and clicking Save
+  showed a real "Reminder settings saved." confirmation.
+- A real, reproducible-looking discrepancy showed up during manual
+  browser-automation testing (UI displayed 24h=on/1h=off after a
+  successful save, but the database showed the opposite) - investigated
+  rather than assumed away. Root-caused to the test methodology, not the
+  app: rapid, overlapping coordinate-based clicks (some of which likely
+  missed their target elements or fired stale requests) during manual
+  testing, not a real swap bug. Proven by re-running three fully
+  controlled tests (explicit checkbox state read -> single precise
+  toggle -> save -> direct SQL verification) that all matched exactly:
+  (true,true)->(1,1), (true,false)->(1,0), and a background-job check
+  with Enable1HourReminder=false correctly showing ZERO query activity
+  for the 1-hour window in Exam.API's logs (not even attempted, let alone
+  published) while the 24-hour window still evaluated normally. Lesson
+  for future browser-automation testing in this project: prefer
+  find()+ref-based clicks or direct JS execution over blind screen
+  coordinates, and always read the actual pre-toggle DOM state before
+  asserting what a save request will contain.
+- Test data hygiene: the real "Java" assignment's StartAtUtc was
+  temporarily moved for the background-job test (same technique as
+  section 5's earlier verification) and reverted afterward; the global
+  ReminderSettings row was left at (true,true) - the sensible default -
+  not at whatever state it was mid-test.
+- Follow-up UX fix bundled into the same session: the success alert on
+  both this new section AND the pre-existing Change Password section
+  never auto-dismissed (only cleared on the next interaction) - user
+  flagged it, fixed both with a 3.5s auto-dismiss timeout (useEffect +
+  setTimeout, cleaned up on unmount/re-trigger), verified live via a
+  scripted wait-for-appear-then-wait-past-timeout check confirming the
+  alert really disappears on its own.

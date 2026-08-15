@@ -73,5 +73,9 @@ public interface IExamRepository
         IReadOnlyList<Guid> userIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Returns the single global ReminderSettings row, creating it with both windows
+    /// enabled (the pre-existing default behavior) if it doesn't exist yet.</summary>
+    Task<ReminderSettings> GetOrCreateReminderSettingsAsync(CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

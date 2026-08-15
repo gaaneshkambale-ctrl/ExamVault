@@ -32,3 +32,8 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
   totalQuestions: number;
   createdOn: string;
 }
+
+export interface ReminderSettingsResponse {
+  enable24HourReminder: boolean;
+  enable1HourReminder: boolean;
+}

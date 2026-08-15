@@ -226,6 +226,19 @@ public class ExamRepository : IExamRepository
         await _dbContext.ExamReminderLogs.AddRangeAsync(entries, cancellationToken);
     }
 
+    public async Task<ReminderSettings> GetOrCreateReminderSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = await _dbContext.ReminderSettings.FirstOrDefaultAsync(cancellationToken);
+        if (settings is null)
+        {
+            settings = new ReminderSettings();
+            await _dbContext.ReminderSettings.AddAsync(settings, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return settings;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

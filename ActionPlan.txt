@@ -1471,6 +1471,35 @@ missed - no catch-up/backfill logic, since this is a convenience feature.
 Full design detail and the complete implementation/verification log are
 in FeatureUpdate.txt at the repo root.
 
+POST-PHASE-9 FEATURE (DONE, 2026-08-15): togglable 24h/1h reminder
+windows via a global Admin setting
+-----------------------------------------------------------------------
+IMPLEMENTED AND VERIFIED LIVE. The two reminder windows above were
+hardcoded constants with no way to disable one - user wanted a real
+setting. Decided: ONE global setting (not per-exam), toggling the two
+existing windows on/off (not custom hour values). New single-row
+`ReminderSettings` table in Exam Service's own DB (both flags default
+true, so nothing changes for existing installs until someone actually
+flips one), new Admin-only `GET`/`PUT /api/exams/reminder-settings` (no
+new Gateway route needed), `ExamReminderCheckService` now reads the
+setting each tick and skips a window entirely - no query, no publish -
+if its flag is off. Frontend: a new "Exam Reminders" card on the
+existing Admin Settings page (/admin/settings) with two checkboxes and a
+Save button.
+
+Verified live: toggling the 1-hour reminder off and restarting Exam.API
+showed ZERO query activity for the 1-hour window in its logs (skipped
+before ever checking) while the 24-hour window still evaluated normally;
+re-enabling it resumed normal behavior. A save-order discrepancy surfaced
+during manual browser-automation testing (UI showed one state, DB showed
+the inverse) was investigated and root-caused to overlapping/racing
+coordinate-based test clicks, not a real app bug - three fully controlled
+re-tests (explicit state read -> single precise toggle -> save -> direct
+DB check) all matched exactly. Also fixed, per user feedback found during
+this testing: the success alert on this new section AND the pre-existing
+Change Password section never auto-dismissed - both now clear after 3.5
+seconds. Full backend test suite stayed 196/196 green throughout.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
 Phase 10 (Days 40-43) I containerize everything with Docker, deploy to Azure,
