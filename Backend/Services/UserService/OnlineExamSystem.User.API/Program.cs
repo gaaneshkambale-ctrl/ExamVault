@@ -12,6 +12,7 @@ using OnlineExamSystem.User.Application.Groups.GetById;
 using OnlineExamSystem.User.Application.Groups.List;
 using OnlineExamSystem.User.Application.Groups.RemoveMember;
 using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
 using OnlineExamSystem.User.Application.Users.GetProfile;
@@ -27,6 +28,7 @@ using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Infrastructure.Authentication;
+using OnlineExamSystem.User.Infrastructure.Email;
 using OnlineExamSystem.User.Infrastructure.Messaging;
 using OnlineExamSystem.User.Infrastructure.Persistence;
 using OnlineExamSystem.User.Infrastructure.Repositories;
@@ -52,6 +54,9 @@ public class Program
         builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
+        builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
+        builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
+        builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
         builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
         builder.Services.AddScoped<RegisterUserHandler>();
         builder.Services.AddScoped<GetUserProfileHandler>();
@@ -64,6 +69,8 @@ public class Program
         builder.Services.AddScoped<DeleteUserHandler>();
         builder.Services.AddScoped<IValidator<ResetPasswordCommand>, ResetPasswordValidator>();
         builder.Services.AddScoped<ResetPasswordHandler>();
+        builder.Services.AddScoped<IValidator<ChangePasswordCommand>, ChangePasswordValidator>();
+        builder.Services.AddScoped<ChangePasswordHandler>();
         builder.Services.AddScoped<IValidator<LoginUserCommand>, LoginUserValidator>();
         builder.Services.AddScoped<LoginUserHandler>();
         builder.Services.AddScoped<RefreshTokenHandler>();

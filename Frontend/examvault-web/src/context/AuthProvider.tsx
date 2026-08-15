@@ -64,8 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const clearMustChangePassword = () => {
+    setUser((prev) => (prev ? { ...prev, mustChangePassword: false } : prev));
+  };
+
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isLoading, login, logout }),
+    () => ({ user, isAuthenticated: !!user, isLoading, login, logout, clearMustChangePassword }),
     [user, isLoading],
   );
 

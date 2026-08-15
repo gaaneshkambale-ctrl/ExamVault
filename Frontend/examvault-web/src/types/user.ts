@@ -15,6 +15,7 @@ export interface UserProfile {
   fullName: string;
   email: string;
   role: 'Student' | 'Admin';
+  mustChangePassword: boolean;
 }
 
 export interface LoginRequest {
@@ -48,7 +49,6 @@ export interface UserListItem {
 export interface CreateUserRequest {
   fullName: string;
   email: string;
-  password: string;
   role: UserRole;
   isActive: boolean;
   phoneNumber: string;
@@ -62,6 +62,11 @@ export interface UpdateUserRequest {
 }
 
 export interface ResetPasswordRequest {
+  newPassword: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
   newPassword: string;
 }
 

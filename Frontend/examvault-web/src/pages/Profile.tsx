@@ -68,7 +68,10 @@ export default function Profile() {
                   <ProfileField label="Email" value={user.email} />
                   <ProfileField label="Role" value={user.role} />
 
-                  <div className="text-end">
+                  <div className="d-flex justify-content-end gap-2">
+                    <Button variant="outline-primary" onClick={() => navigate('/change-password')}>
+                      Change Password
+                    </Button>
                     <Button variant="primary" disabled>
                       Update Profile
                     </Button>

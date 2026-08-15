@@ -8,15 +8,11 @@ import AdminLayout from '../../layouts/AdminLayout';
 import { createUser } from '../../api/userApi';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 
-interface CreateUserFormState extends CreateUserRequest {
-  confirmPassword: string;
-}
+type CreateUserFormState = CreateUserRequest;
 
 const initialFormState: CreateUserFormState = {
   fullName: '',
   email: '',
-  password: '',
-  confirmPassword: '',
   role: 'Student',
   isActive: true,
   phoneNumber: '',
@@ -57,12 +53,6 @@ export default function CreateUser() {
     if (!form.email.trim()) {
       errors.email = 'Email is required.';
     }
-    if (!form.password) {
-      errors.password = 'Password is required.';
-    }
-    if (form.confirmPassword !== form.password) {
-      errors.confirmPassword = 'Passwords do not match.';
-    }
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       return;
@@ -71,8 +61,7 @@ export default function CreateUser() {
     setStatus('loading');
     setServerError('');
     try {
-      const { confirmPassword: _confirmPassword, ...request } = form;
-      await createUser(request);
+      await createUser(form);
       queryClient.invalidateQueries({ queryKey: ['users'] });
       navigate('/admin/users');
     } catch (error) {
@@ -123,34 +112,10 @@ export default function CreateUser() {
               </Col>
             </Row>
 
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-4" controlId="createUserPassword">
-                  <Form.Label className="fw-bold">Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    placeholder="Enter password"
-                    value={form.password}
-                    onChange={(e) => updateField('password', e.target.value)}
-                    isInvalid={!!fieldErrors.password}
-                  />
-                  <Form.Control.Feedback type="invalid">{fieldErrors.password}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group className="mb-4" controlId="createUserConfirmPassword">
-                  <Form.Label className="fw-bold">Confirm Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    placeholder="Re-enter password"
-                    value={form.confirmPassword}
-                    onChange={(e) => updateField('confirmPassword', e.target.value)}
-                    isInvalid={!!fieldErrors.confirmPassword}
-                  />
-                  <Form.Control.Feedback type="invalid">{fieldErrors.confirmPassword}</Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-            </Row>
+            <Alert variant="info" className="py-2 small">
+              A temporary password will be generated and emailed to this address. The user
+              will be asked to set their own password the first time they log in.
+            </Alert>
 
             <Row>
               <Col md={6}>
@@ -179,18 +144,6 @@ export default function CreateUser() {
                 </Form.Group>
               </Col>
             </Row>
-
-            <Form.Group className="mb-4" controlId="createUserIsActive">
-              <Form.Check
-                type="switch"
-                label="Active"
-                checked={form.isActive}
-                onChange={(e) => updateField('isActive', e.target.checked)}
-              />
-              <Form.Text className="text-muted">
-                Inactive users cannot log in until an admin reactivates them.
-              </Form.Text>
-            </Form.Group>
 
             <div className="d-flex justify-content-end gap-2">
               <Button variant="outline-secondary" onClick={() => navigate('/admin/users')}>

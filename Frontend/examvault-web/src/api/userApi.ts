@@ -1,5 +1,6 @@
 import apiClient from './axiosClient';
 import type {
+  ChangePasswordRequest,
   CreateUserRequest,
   LoginRequest,
   LoginResponse,
@@ -61,6 +62,10 @@ export async function updateUser(id: string, request: UpdateUserRequest): Promis
 
 export async function resetUserPassword(id: string, request: ResetPasswordRequest): Promise<void> {
   await apiClient.put(`/api/users/${id}/reset-password`, request);
+}
+
+export async function changeMyPassword(request: ChangePasswordRequest): Promise<void> {
+  await apiClient.put('/api/users/me/password', request);
 }
 
 export async function deleteUser(id: string): Promise<void> {

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
+using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
 using OnlineExamSystem.User.Application.Users.GetProfile;
@@ -30,6 +31,7 @@ public class UsersController : ControllerBase
     private readonly UpdateUserHandler _updateUserHandler;
     private readonly DeleteUserHandler _deleteUserHandler;
     private readonly ResetPasswordHandler _resetPasswordHandler;
+    private readonly ChangePasswordHandler _changePasswordHandler;
     private readonly LoginUserHandler _loginUserHandler;
     private readonly RefreshTokenHandler _refreshTokenHandler;
     private readonly LogoutHandler _logoutHandler;
@@ -45,6 +47,7 @@ public class UsersController : ControllerBase
         UpdateUserHandler updateUserHandler,
         DeleteUserHandler deleteUserHandler,
         ResetPasswordHandler resetPasswordHandler,
+        ChangePasswordHandler changePasswordHandler,
         LoginUserHandler loginUserHandler,
         RefreshTokenHandler refreshTokenHandler,
         LogoutHandler logoutHandler,
@@ -59,6 +62,7 @@ public class UsersController : ControllerBase
         _updateUserHandler = updateUserHandler;
         _deleteUserHandler = deleteUserHandler;
         _resetPasswordHandler = resetPasswordHandler;
+        _changePasswordHandler = changePasswordHandler;
         _loginUserHandler = loginUserHandler;
         _refreshTokenHandler = refreshTokenHandler;
         _logoutHandler = logoutHandler;
@@ -120,7 +124,7 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} logged in successfully.", user.Id);
-        var profile = new UserProfileResponse(user.Id, user.FullName, user.Email, user.Role.ToString());
+        var profile = new UserProfileResponse(user.Id, user.FullName, user.Email, user.Role.ToString(), user.MustChangePassword);
         var response = new LoginResponse(profile, result.AccessToken!, result.RefreshToken!);
         return Ok(response);
     }
@@ -162,7 +166,6 @@ public class UsersController : ControllerBase
         var command = new CreateUserCommand(
             request.FullName,
             request.Email,
-            request.Password,
             request.Role,
             request.IsActive,
             request.PhoneNumber);
@@ -315,6 +318,37 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
+    [Authorize]
+    [HttpPut("me/password")]
+    public async Task<IActionResult> ChangeMyPassword(ChangePasswordRequest request, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var command = new ChangePasswordCommand(userId, request.CurrentPassword, request.NewPassword);
+        var result = await _changePasswordHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        if (result.IsCurrentPasswordWrong)
+        {
+            return BadRequest(new { message = "Current password is incorrect." });
+        }
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        _logger.LogInformation("User {UserId} changed their own password.", userId);
+        return NoContent();
+    }
+
     [Authorize(Roles = "Admin")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
@@ -348,7 +382,7 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "User not found." });
         }
 
-        var response = new UserProfileResponse(user.Id, user.FullName, user.Email, user.Role.ToString());
+        var response = new UserProfileResponse(user.Id, user.FullName, user.Email, user.Role.ToString(), user.MustChangePassword);
         return Ok(response);
     }
 

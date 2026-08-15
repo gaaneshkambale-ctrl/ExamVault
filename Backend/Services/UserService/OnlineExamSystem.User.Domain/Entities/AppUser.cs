@@ -11,4 +11,5 @@ public class AppUser : BaseEntity
     public UserRole Role { get; set; } = UserRole.Student;
     public bool IsActive { get; set; } = true;
     public string? PhoneNumber { get; set; }
+    public bool MustChangePassword { get; set; }
 }

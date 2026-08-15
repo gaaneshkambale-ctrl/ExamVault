@@ -441,3 +441,305 @@ VERIFICATION:
   setTimeout, cleaned up on unmount/re-trigger), verified live via a
   scripted wait-for-appear-then-wait-past-timeout check confirming the
   alert really disappears on its own.
+
+--------------------------------------------------------------------
+7. NEW FEATURE PLAN (2026-08-15): Admin invites a user by email only -
+   auto-generated password, emailed, forced reset on first login
+--------------------------------------------------------------------
+STATUS: PLANNED - NOT IMPLEMENTED YET
+
+REQUEST: Admin creates a user (today: Full Name/Email/Password/Confirm/
+Role/Phone/Active, Admin types the password). New flow: Admin no longer
+types a password - the system generates one, emails it to the user, the
+user logs in with that temporary password, and is forced to set a real
+password of their own choosing before they can reach their dashboard.
+
+--------------------------------------------------------------------
+7a. RESEARCH FINDINGS (2026-08-15, via a fork - facts, not assumptions)
+--------------------------------------------------------------------
+- AppUser (Domain/Entities/AppUser.cs) has no password-state flag at all
+  today - no MustChangePassword, nothing like it.
+- LoginUserResult only carries Success/IsAccountDeactivated/User/
+  AccessToken/RefreshToken - no signal a frontend could use to force a
+  reset flow.
+- The only existing "reset password" endpoint (PUT /api/users/{id}/
+  reset-password) is [Authorize(Roles="Admin")] ONLY - an Admin resetting
+  ANY user's password to a value THEY type, no old-password check, no
+  email sent. It is not self-service. A Student today has NO endpoint at
+  all to change their own password - a real, pre-existing gap this
+  feature will need to close as a side effect.
+- CreateUserCommand requires Password today (validated: 8+ chars, upper,
+  lower, digit) - Admin types and confirms it in CreateUser.tsx today.
+- Post-login redirect happens inline in LoginForm.tsx right after
+  login() resolves - purely role-based (Admin -> /admin/dashboard,
+  Student -> /dashboard). No intermediate gate exists today.
+- The login modal's "Forgot Password?" is a plain <span> with no onClick
+  and no href - confirmed completely dead, not wired to anything. No
+  forgot-password backend endpoint/token/email flow exists anywhere in
+  the codebase. Out of scope here (see 7d) but flagged as a natural
+  future use of the same "email a credential" plumbing this feature adds.
+- Every existing email goes out through NotificationPersistenceService +
+  N8nEmailDispatcher, and NotificationPersistenceService ALWAYS persists
+  the message body as a real, queryable Notification row (visible to the
+  recipient on their own /notifications page indefinitely, and to any
+  Admin drilling into Notification History). Reusing this pipeline
+  unmodified for a temporary password would leave that password sitting
+  in plaintext in the database forever, readable by the user any time
+  and by any Admin - a real security gap, not a stylistic one. This
+  feature must NOT go through NotificationPersistenceService.
+
+--------------------------------------------------------------------
+7b. DECISIONS (proposed defaults - flagged for the user to override,
+    not silently assumed)
+--------------------------------------------------------------------
+1. Applies uniformly to any role Admin creates (Student or Admin) - no
+   role-specific special-casing, since the mechanism doesn't need to
+   differ by role. [DEFAULT, override if you want this Student-only.]
+2. CreateUser.tsx drops the Password/Confirm Password fields entirely -
+   under this feature, Admin can no longer choose a user's initial
+   password by hand. [DEFAULT, override if you'd rather keep manual
+   password entry as an option alongside auto-generate.]
+3. The forced first-login password change requires re-entering the
+   current (temporary, emailed) password, not just picking a new one -
+   standard practice, prevents a leaked/observed access token being used
+   to silently change the password without knowing the current one.
+   [DEFAULT, override if you want it skippable.]
+4. Once built, the new self-service "change my own password" capability
+   is also reachable any time afterward from the user's own Profile page
+   - not just once during the forced flow - since Students otherwise
+   have literally no way to ever change their own password. [DEFAULT,
+   override if you want it forced-flow-only.]
+5. NOT a preference, a security decision: the temporary password is
+   delivered via a NEW, separate email path that never persists the
+   plaintext password anywhere in this app's own database - see 7c for
+   exactly how.
+
+--------------------------------------------------------------------
+7c. DESIGN
+--------------------------------------------------------------------
+BACKEND - User Service:
+- AppUser gains `MustChangePassword` (bool, default false) - new
+  migration on UserDb.
+- New `IPasswordGenerator` (Application interface) + implementation
+  (Infrastructure) - generates a random password that satisfies
+  CreateUserValidator's existing rules (8+ chars, upper, lower, digit),
+  built from `RandomNumberGenerator` (cryptographically secure), not
+  `Random`.
+- CreateUserCommand drops Password/ConfirmPassword - CreateUserHandler
+  generates the password via IPasswordGenerator, hashes+stores it, sets
+  MustChangePassword = true.
+- Email delivery: User Service gets its OWN small IEmailDispatcher/
+  N8nEmailDispatcher copy (its own HttpClient pointed at the same
+  N8n:WebhookUrl config) rather than routing the plaintext password
+  through Shared.Events/RabbitMQ to the Notification Worker. Rejected
+  alternative, and why: publishing a `UserInvitedEvent` carrying the
+  temp password would put that plaintext password onto the shared
+  RabbitMQ exchange (a durable, on-disk message until consumed) - a
+  larger blast radius than a direct, synchronous HTTP call from User
+  Service straight to the n8n webhook. This also matches the codebase's
+  own established "small per-service copy over shared abstraction"
+  precedent (already used for RabbitMqEventPublisher) and its existing
+  treatment of the n8n webhook URL itself as a credential (Day 37 note:
+  "possessing the URL alone is enough to invoke the workflow"). The
+  email is sent directly inside CreateUserHandler's flow (Type=Account
+  tone, matching the n8n AI-rewrite prompt's existing Account category) -
+  no Notification row is ever created for it.
+- LoginUserResult (and the UserProfileResponse the controller builds)
+  gain `MustChangePassword`, so the frontend gets the signal immediately
+  after a successful login.
+- New self-service endpoint: `PUT /api/users/me/password`
+  ([Authorize], any authenticated role, operates on the caller's own id
+  from the JWT - same CallerId-from-claims pattern already used in
+  NotificationsController) - ChangePasswordCommand(UserId,
+  CurrentPassword, NewPassword), handler verifies CurrentPassword via
+  IPasswordHasher.VerifyHashedPassword (rejects with a specific error if
+  wrong), then hashes+stores NewPassword and sets MustChangePassword =
+  false. The existing Admin-only PUT /api/users/{id}/reset-password stays
+  exactly as it is today (still useful e.g. if an invite email bounces).
+
+FRONTEND:
+- CreateUser.tsx: remove Password/Confirm Password fields + the
+  "password must contain" checklist; add a short note ("A temporary
+  password will be emailed to this address.").
+- Login response now carries mustChangePassword; LoginForm.tsx's
+  post-login redirect branches - if true, go to a new /change-password
+  page (state: {forced: true}) instead of the normal role-based
+  dashboard redirect.
+- New /change-password page (Current Password / New Password / Confirm)
+  calling the new self-service endpoint; on success, if reached via the
+  forced flow, continue on to the normal role-based dashboard; if
+  reached voluntarily later (e.g. from Profile), just confirm success
+  and stay.
+- ProtectedRoute.tsx (the existing central gate for every authenticated
+  route) gains a check: if user.mustChangePassword is true, redirect to
+  /change-password regardless of which URL was requested - closes the
+  gap where a user could otherwise type /dashboard directly and skip the
+  forced step entirely.
+- Profile page gains a "Change Password" section reusing the same new
+  endpoint, per decision 7b.4.
+
+--------------------------------------------------------------------
+7c-2. DESIGN GAP FOUND DURING IMPLEMENTATION: the shared n8n webhook
+      can't safely carry a password
+--------------------------------------------------------------------
+The only existing email path (the n8n webhook every other notification
+uses) runs every message through an AI Agent that rewrites the wording -
+already proven inconsistent in this project's own earlier testing (it
+has both echoed text verbatim when it should have rewritten it, and
+paraphrased when it shouldn't have). A temporary password is an exact
+string the user must retype correctly; letting an LLM "improve" it is
+not an acceptable risk for a credential, unlike a Reminder/Result/System
+message where minor paraphrasing is harmless.
+
+Confirmed with the user: add a SECOND webhook path in the same n8n
+workflow that skips the AI Agent entirely - Webhook -> Send Message
+(Gmail) directly. User Service builds the full, final email text itself
+(there's no AI step to add polish, so the body sent here is already
+complete - greeting, password, and sign-off included) and calls this new
+path instead of the shared `examvault/notify` one.
+
+NEW N8N NODES NEEDED (user adds these in their n8n canvas, same
+workflow, in addition to the existing 6 nodes - not a new workflow):
+
+  New Webhook node:
+    - HTTP Method: POST
+    - Path: examvault/notify-credential
+    - Response Mode: lastNode
+    (mirrors the existing "Notification Webhook" node's settings exactly,
+    just a different path so it doesn't collide)
+
+  New Gmail node, connected directly from the new Webhook node (NOT
+  through Build Email Content, NOT through AI Agent):
+    - sendTo: {{ $json.body.toEmail }}
+    - subject: {{ $json.body.subject }}
+    - emailType: text
+    - message: {{ $json.body.body }}
+    (same Gmail credential already configured on the existing "Send
+    Message (Gmail)" node)
+
+Resulting webhook URL (same n8n instance/domain as the existing one):
+  https://ganesh-kamble222.n8n-wsk.com/webhook/examvault/notify-credential
+
+User Service side: added its own IEmailDispatcher/N8nEmailDispatcher
+copy (User.Infrastructure/Email/) - a small per-service duplicate of
+Notification.Infrastructure's version, same "small per-service copy over
+shared abstraction" precedent already used for RabbitMqEventPublisher -
+pointed at the NEW notify-credential path via its own
+`N8n:WebhookUrl` user-secret on OnlineExamSystem.User.API (set to the
+URL above; not yet confirmed live since the n8n-side addition is the
+user's to make).
+
+STATUS: backend code assumes this URL is correct and will be built
+against it now. NOT YET VERIFIED LIVE - depends on the user adding the
+two n8n nodes above. Flagged clearly at the end of this feature's
+verification section (7g) as the one external dependency blocking a full
+live test.
+
+--------------------------------------------------------------------
+7d. EXPLICITLY OUT OF SCOPE
+--------------------------------------------------------------------
+- The dead "Forgot Password?" link is NOT being wired up here - that's a
+  related but separate feature (an EXISTING account self-recovering a
+  forgotten password via an emailed link/token, vs. this feature which
+  is Admin-initiated for a brand-new account). Flagged as a natural
+  future reuse of the same "email a credential, force a change" shape,
+  not built now since it wasn't asked for.
+- The existing Admin-only reset-password page/endpoint is untouched.
+
+--------------------------------------------------------------------
+7e. NEXT STEP
+--------------------------------------------------------------------
+STATUS: DONE - IMPLEMENTED AND VERIFIED LIVE (2026-08-15)
+
+Awaiting confirmation on the 7b decisions (or explicit overrides) before
+implementing top-down: migration -> password generator -> CreateUser
+flow + direct email send -> login response flag -> self-service
+change-password endpoint -> frontend (CreateUser form, forced-redirect
+gate, new change-password page, Profile section) -> live verification
+(create a real throwaway user, receive the real email, log in with the
+temp password, confirm forced redirect, change password, confirm normal
+dashboard access afterward and that the temp password no longer works).
+
+--------------------------------------------------------------------
+7f. IMPLEMENTATION NOTES
+--------------------------------------------------------------------
+- One real layering mistake caught mid-implementation: IEmailDispatcher
+  was first defined in User.Infrastructure (next to its N8nEmailDispatcher
+  implementation) instead of User.Application/Interfaces - Application
+  should define the interface, Infrastructure should only implement it
+  (same pattern IPasswordGenerator/IJwtTokenService already follow).
+  Fixed before it shipped, not left as a shortcut.
+- Built exactly per the design: AppUser.MustChangePassword (migration
+  AddMustChangePassword), IPasswordGenerator (RandomNumberGenerator-based,
+  excludes visually ambiguous characters I/O/l/1/0 for a password a human
+  has to retype from an email), User Service's own IEmailDispatcher/
+  N8nEmailDispatcher copy, CreateUserCommand/Validator/Handler
+  (Password/ConfirmPassword removed, generates + hashes + emails +
+  MustChangePassword=true), UserProfileResponse gained
+  MustChangePassword (both the login and /me endpoints), new
+  ChangePasswordCommand/Validator/Handler/`PUT /api/users/me/password`
+  (verifies CurrentPassword via IPasswordHasher, clears
+  MustChangePassword on success). Frontend: CreateUser.tsx form updated,
+  LoginForm.tsx branches to /change-password on mustChangePassword,
+  ProtectedRoute.tsx gates every route on it (excluding /change-password
+  itself to avoid a redirect loop), new ChangePassword.tsx page (dual
+  "forced" vs "voluntary" mode via router state), AuthContext gained
+  clearMustChangePassword() so the flag clears in memory immediately
+  after a successful change without needing a full profile refetch.
+- dotnet build/test (full solution, 196/196) and npm run
+  build-equivalent (tsc --noEmit + oxlint + 25/25 Vitest) all stayed
+  green throughout, checked after each stage, not just at the end.
+
+--------------------------------------------------------------------
+7g. LIVE VERIFICATION + A THIRD REAL BUG FOUND DURING TESTING
+--------------------------------------------------------------------
+Migration applied to the real UserDb. Full stack restarted. Then a real,
+three-part n8n misconfiguration saga unfolded while testing the actual
+invite flow through the live Admin UI (not just unit tests) - each part
+found and fixed in turn rather than assumed away:
+
+1. MY MISTAKE: set User.API's N8n:WebhookUrl secret to the same URL as
+   the shared /notify webhook (the one with the AI rewrite step) instead
+   of a dedicated bypass path - copy-paste error while setting up the
+   secret. Two real invite emails (accounts "Ashwini Kamble" and an
+   earlier "Test Invite") went out through the AI Agent before this was
+   caught, meaning their temporary passwords may have been altered by
+   the LLM - flagged directly to the user rather than silently ignored;
+   "Ashwini Kamble" was a real account the user created themselves (not
+   my test data), so it was left for the user to check/fix rather than
+   unilaterally modified.
+2. Fixed the secret to point at examvault/notify-credential, but the
+   fix didn't take effect - .NET user-secrets are only read at process
+   startup, not live-reloaded, so User.API needed an explicit restart.
+3. After restarting, the correct URL was called but n8n returned 404 -
+   the new Webhook+Gmail nodes hadn't actually been added on the n8n
+   side yet. Gave the user a complete, ready-to-import workflow JSON
+   (matching their actual live workflow, which had independently grown
+   an HTML/logo email template not reflected in this repo's checked-in
+   copy) with the two new nodes added. User imported it and confirmed
+   the workflow was Active.
+
+Retest after all three fixes: User.API log showed
+`POST .../notify-credential` -> `200`, confirming the invite email now
+bypasses the AI step entirely. Full flow then verified live end-to-end
+by the user themselves in the browser (typing the real password
+throughout, since Claude cannot enter passwords per its own operating
+rules): Admin created a throwaway "Test Invite" account with no password
+field -> real email arrived with a temporary password -> logging in with
+it redirected to the "Set a New Password" screen (not the dashboard) ->
+submitting current+new password succeeded -> landed on the normal
+dashboard afterward. Confirmed via direct SQL query that
+MustChangePassword flipped from 1 to 0 in the database, matching what
+the user experienced in the browser exactly.
+
+Checked-in workflow files (Documentation/n8n-notification-workflow.json,
+Backend/Services/NotificationService/workflow.txt) updated to match the
+now-confirmed-working live workflow, including the HTML/logo template
+that had evolved live but was never previously synced back to this repo.
+Throwaway "Test Invite" account deleted after verification, per this
+project's established cleanup discipline.
+
+KNOWN GAP, NOT ADDRESSED: the "Ashwini Kamble" account's temporary
+password went through the AI-rewrite path before the fix - if that
+account still can't log in, an Admin can use the existing (untouched)
+Admin-only reset-password page to set it a known password manually.

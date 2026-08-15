@@ -35,7 +35,11 @@ export default function LoginForm() {
     setErrorMessage('');
     try {
       const profile = await login(email, password, rememberMe);
-      navigate(profile.role === 'Admin' ? '/admin/dashboard' : '/dashboard');
+      if (profile.mustChangePassword) {
+        navigate('/change-password', { state: { forced: true } });
+      } else {
+        navigate(profile.role === 'Admin' ? '/admin/dashboard' : '/dashboard');
+      }
     } catch (error) {
       setStatus('error');
       setErrorMessage(extractServerError(error));

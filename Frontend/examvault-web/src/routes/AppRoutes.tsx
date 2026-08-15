@@ -4,6 +4,7 @@ import Pricing from '../pages/Pricing';
 import About from '../pages/About';
 import Contact from '../pages/Contact';
 import Profile from '../pages/Profile';
+import ChangePassword from '../pages/ChangePassword';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import ManageUsers from '../pages/admin/ManageUsers';
 import CreateUser from '../pages/admin/CreateUser';
@@ -59,6 +60,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <Profile />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute>
+            <ChangePassword />
           </ProtectedRoute>
         }
       />

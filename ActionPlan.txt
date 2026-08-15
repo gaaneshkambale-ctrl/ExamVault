@@ -1500,6 +1500,65 @@ this testing: the success alert on this new section AND the pre-existing
 Change Password section never auto-dismissed - both now clear after 3.5
 seconds. Full backend test suite stayed 196/196 green throughout.
 
+POST-PHASE-9 FEATURE (DONE, 2026-08-15): Admin-invited users get an
+auto-generated password by email, forced to change it on first login
+-----------------------------------------------------------------------
+IMPLEMENTED AND VERIFIED LIVE. Admin's Create User form no longer takes
+a password - the system generates one, emails it to the new user, sets
+a new `MustChangePassword` flag, and the user is forced to a "Set a New
+Password" screen (via a new self-service `PUT /api/users/me/password` -
+Students previously had no way to change their own password at all)
+before reaching their dashboard. Decisions locked in with the user:
+applies to any role, manual password entry removed entirely from Create
+User, the forced change requires re-entering the current/temporary
+password, and the new self-service change-password capability stays
+reachable afterward from Profile, not just during the forced flow.
+
+Design gap found and fixed before writing code: the only email pipeline
+in this app (the shared n8n webhook) runs every message through an AI
+Agent that rewrites wording - already proven inconsistent about verbatim
+text in this project's own earlier testing, unacceptable for a password
+the user must retype exactly. Fixed by adding a second n8n webhook path
+(examvault/notify-credential, Webhook -> Gmail directly, no AI step) and
+giving User Service its own small email-dispatcher copy pointed at it -
+matches this codebase's established "small per-service copy over shared
+abstraction" precedent rather than broadcasting a plaintext password
+onto the shared RabbitMQ exchange.
+
+Getting this actually working live surfaced a real three-part
+misconfiguration, each one found and fixed in turn rather than assumed
+away: (1) the new webhook secret was first set to the SAME url as the
+existing AI-rewrite webhook by mistake - two real invite emails went out
+through the wrong path before this was caught; (2) fixing the secret
+value didn't take effect until User Service was restarted, since .NET
+user-secrets only load at startup; (3) after restarting, n8n still
+returned 404 until the two new nodes were actually added on the n8n
+side. Final retest confirmed HTTP 200 on the correct path, and the full
+flow was verified live end-to-end by the user themselves in the browser
+(typing the real password throughout - Claude does not enter passwords):
+create user with no password -> real email with a temporary password
+arrives -> login redirects to Set a New Password instead of the
+dashboard -> submitting current+new password succeeds -> lands on the
+normal dashboard afterward. Confirmed via direct database query that
+MustChangePassword flipped from true to false, matching the browser
+experience exactly. Checked-in n8n workflow files updated to match the
+now-confirmed-working live workflow (which had also independently grown
+an HTML/logo email template not previously synced back to this repo).
+Full backend test suite (196/196) and frontend checks (tsc/oxlint/25
+Vitest tests) stayed green throughout. Full write-up, including the
+misconfiguration timeline, is in FeatureUpdate.txt.
+
+Known gap, not addressed: one real account ("Ashwini Kamble", created by
+the user themselves during testing, not throwaway data) had its invite
+email sent through the AI-rewrite path before the fix - if its temporary
+password doesn't work, the existing (untouched) Admin-only
+reset-password page can set it a known password manually.
+
+Explicitly out of scope, not built: the login modal's "Forgot Password?"
+link stays dead (confirmed not wired to anything anywhere in the
+codebase) - a related but separate self-service recovery feature for an
+EXISTING account, not built now since it wasn't asked for.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
 Phase 10 (Days 40-43) I containerize everything with Docker, deploy to Azure,

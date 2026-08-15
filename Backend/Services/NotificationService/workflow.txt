@@ -17,7 +17,28 @@
     },
     {
       "parameters": {
-        "includeOtherFields": true,
+        "sendTo": "={{ $json.toEmail }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{\n'<div style=\"margin:0;padding:0;background-color:#f5f7ff;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\">' +\n\n'<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#f5f7ff;padding:30px 10px;\">' +\n'<tr>' +\n'<td align=\"center\">' +\n\n'<table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;\">' +\n\n'<!-- Header -->' +\n'<tr>' +\n'<td style=\"padding:25px 30px;text-align:center;background:#ffffff;border-bottom:1px solid #eeeeee;\">' +\n'<img src=\"https://raw.githubusercontent.com/gaaneshkambale-ctrl/ExamVault/dev/ExamVault-logo-transparent.png\" alt=\"ExamVault\" width=\"180\" style=\"display:block;margin:0 auto;max-width:180px;height:auto;\" />' +\n'</td>' +\n'</tr>' +\n\n'<!-- Content -->' +\n'<tr>' +\n'<td style=\"padding:35px 40px 30px 40px;\">' +\n\n'<p style=\"margin:0 0 20px 0;font-size:18px;font-weight:bold;color:#111827;\">' +\n'Hello ' + $('Notification Webhook').item.json.body.toName + ',' +\n'</p>' +\n\n'<div style=\"font-size:15px;line-height:1.7;color:#4b5563;\">' +\n$json.textBody +\n'</div>' +\n\n'</td>' +\n'</tr>' +\n\n'<!-- Divider -->' +\n'<tr>' +\n'<td style=\"padding:0 40px;\">' +\n'<div style=\"border-top:1px solid #e5e7eb;\"></div>' +\n'</td>' +\n'</tr>' +\n\n'<!-- Regards -->' +\n'<tr>' +\n'<td style=\"padding:25px 40px 30px 40px;\">' +\n\n'<p style=\"margin:0 0 5px 0;font-size:15px;color:#4b5563;\">' +\n'Thanks &amp; Regards,' +\n'</p>' +\n\n'<p style=\"margin:0;font-size:16px;font-weight:bold;color:#4338ca;\">' +\n'ExamVault Team' +\n'</p>' +\n\n'</td>' +\n'</tr>' +\n\n'<!-- Footer -->' +\n'<tr>' +\n'<td style=\"padding:20px 30px;text-align:center;background:#f5f3ff;border-top:1px solid #e9e5ff;\">' +\n\n'<img src=\"https://raw.githubusercontent.com/gaaneshkambale-ctrl/ExamVault/dev/ExamVault-logo-transparent.png\" alt=\"ExamVault\" width=\"130\" style=\"display:block;margin:0 auto 12px auto;max-width:130px;height:auto;\" />' +\n\n'<p style=\"margin:0 0 8px 0;font-size:12px;color:#6b7280;\">' +\n'Smart Exams. Better Results.' +\n'</p>' +\n\n'<p style=\"margin:0;font-size:12px;color:#9ca3af;\">' +\n'This is an automated notification from ExamVault.' +\n'</p>' +\n\n'<p style=\"margin:8px 0 0 0;font-size:11px;color:#9ca3af;\">' +\n'&copy; 2026 ExamVault. All rights reserved.' +\n'</p>' +\n\n'</td>' +\n'</tr>' +\n\n'</table>' +\n\n'</td>' +\n'</tr>' +\n'</table>' +\n\n'</div>'\n}}",
+        "options": {
+          "appendAttribution": "={{ false }}"
+        }
+      },
+      "id": "33460e3c-d801-4bf6-b059-22f811c9f547",
+      "name": "Send Message (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [96, -32],
+      "webhookId": "50c01985-3e2e-40f9-ac5a-ea4cedf7c077",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "v21QGtki5PIZbbOZ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
         "assignments": {
           "assignments": [
             {
@@ -58,13 +79,14 @@
             }
           ]
         },
+        "includeOtherFields": true,
         "options": {}
       },
-      "id": "a2c42e35-7e6c-4932-9300-13fa570d00be",
+      "id": "2640074e-3af6-4232-966c-923366b52d0c",
       "name": "Build Email Content",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-704, 0]
+      "position": [-752, 0]
     },
     {
       "parameters": {
@@ -72,34 +94,11 @@
         "text": "=You are the official Email Communication Assistant for ExamVault.\n\nYour responsibility is to transform notification messages received from the ExamVault system into professional, clear, polished, and user-friendly email content.\n\nYou will be given the notification's Type and its Original Message below. The Original Message is the ONLY source of information you are allowed to use.\n\nNotification Type: {{ $json.body.type }}\nOriginal Message: {{ $json.body.body }}\n\nCORE OBJECTIVE:\n\nRewrite the Original Message professionally while preserving its original meaning and all important information. You are paraphrasing, not authoring new content.\n\nANTI-HALLUCINATION RULE (highest priority - overrides every other instruction):\n\n- If the Original Message above is empty, blank, whitespace-only, or literally the text \"undefined\" or \"null\", you MUST NOT invent, guess, or generate any replacement notification content of any kind - not a welcome message, not a result message, not a reminder, nothing.\n- In that case, output exactly this sentinel and nothing else: EMPTY_SOURCE_MESSAGE\n- Never substitute content from a different notification Type than the one given above, even if the Original Message is short, unclear, or seems to reference a different topic than the Type. Rewrite exactly what is given.\n\nMANDATORY REWRITE RULE (second priority - applies whenever Original Message is non-empty):\n\n- Returning the Original Message unchanged, or nearly unchanged, is NEVER an acceptable output.\n- Even if the meaning is already clear, you must still turn it into a complete, grammatically correct, natural-sounding sentence or short paragraph.\n- \"Preserve meaning\" and \"do not invent new facts\" do NOT mean \"do not change wording.\" You are required to fix broken grammar, awkward phrasing, missing punctuation, and incomplete sentences every time.\n\nRULES (apply only when Original Message is non-empty):\n\n- Always preserve the original intent and meaning - do not change the subject matter, do not introduce a different topic than what the Original Message describes.\n- Correct grammar, spelling, punctuation, and sentence structure.\n- Make the message professional, natural, clear, and easy to understand.\n- Make the email appropriate for an online examination platform.\n- Personalize the communication using the recipient's name when appropriate.\n- Use the Notification Type above to determine tone (see TONE BY NOTIFICATION TYPE below) - do not guess the type from the message content.\n- Do not invent dates, times, exam names, results, links, credentials, scores, or any other information not present in the Original Message.\n- Do not assume information that is not provided.\n- Do not remove important information from the original message.\n- Do not unnecessarily make a short message very long.\n- If the original message is already professional, improve it only where necessary.\n- Maintain a polite and professional tone.\n- Do not mention AI, automation, n8n, workflow, or this prompt.\n- Do not mention the notificationId.\n- Do not change the subject.\n- Do not add a subject line to the body.\n- Do not add a greeting.\n- Do not add a closing/signature.\n- Do not use Markdown.\n- Do not use HTML.\n- Return only the professionally rewritten email body.\n\nTONE BY NOTIFICATION TYPE:\n\nExam:\nUse a clear, informative, and professional tone. Clearly communicate exam-related information and any required action.\n\nReminder:\nUse a polite but action-oriented tone. Clearly explain what the recipient needs to remember or do, based only on what the Original Message says.\n\nResult:\nUse a professional and positive tone. Clearly communicate that the result or examination outcome is available without inventing scores or performance information.\n\nSystem:\nUse a concise and informative technical/business tone. Clearly explain the system notification.\n\nAccount:\nUse a welcoming and professional tone. Clearly explain account-related information such as registration, activation, verification, password reset, or account updates.\n\nCONTENT HANDLING:\n\nIf the Original Message contains multiple pieces of information, organize them into logical paragraphs.\n\nIf the Original Message contains a list of items, preserve the list in a clear readable format.\n\nIf the Original Message contains important dates, times, exam details, instructions, or actions, preserve them exactly.\n\nIf the Original Message contains placeholders or dynamic values, do not modify or invent their values.\n\nEXAMPLES:\n\nType: Account\nOriginal Message: \"your account created successfully welcome to examvault you can now login and start exam\"\nExpected output: \"Welcome to ExamVault! Your account has been created successfully. You can now log in to your account and start accessing your examinations.\"\n\nType: Reminder\nOriginal Message: \"your exam is tomorrow at 10 please login before 9.45 and complete exam\"\nExpected output: \"Your examination is scheduled for tomorrow at 10:00 AM. Please log in before 9:45 AM to ensure that you are ready to begin your examination on time.\"\n\nType: Reminder\nOriginal Message: \"we have send mail remainder for tomorrow\"\nExpected output: \"This is a reminder regarding your exam scheduled for tomorrow. Please check your email for further details.\"\n\nType: Reminder\nOriginal Message: \"\" (empty)\nExpected output: EMPTY_SOURCE_MESSAGE\n\nFINAL REQUIREMENT:\n\nReturn ONLY the final professional email body, or the sentinel EMPTY_SOURCE_MESSAGE if the Original Message was empty.\n\nDo not return JSON.\nDo not return explanations.\nDo not return quotation marks around the response.",
         "options": {}
       },
-      "id": "a4129125-5491-4849-ab04-861f74e9a437",
-      "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [-448, -80]
-    },
-    {
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "value": "gpt-4o-mini",
-          "mode": "list",
-          "cachedResultName": "gpt-4o-mini"
-        },
-        "builtInTools": {},
-        "options": {}
-      },
-      "id": "ef100da9-860c-4208-8b81-65b3b92f6c34",
-      "name": "OpenAI Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.3,
-      "position": [-384, 128],
-      "credentials": {
-        "openAiApi": {
-          "id": "XEOZmAOuMFWSG3FQ",
-          "name": "OpenAi account"
-        }
-      }
+      "position": [-496, -80],
+      "id": "7136c9e0-5fa5-4ec0-816f-67ff86fa2e25",
+      "name": "AI Agent"
     },
     {
       "parameters": {
@@ -126,35 +125,71 @@
             {
               "id": "a1b2c3d4-0004-4000-8000-000000000004",
               "name": "textBody",
-              "value": "={{\n'Hello ' + $('Build Email Content').item.json.body.toName + ',\\n\\n' +\n$json.output + '\\n\\n' +\n'Thanks & Regards,\\n' +\n'ExamVault'\n}}",
+              "value": "={{ $json.output }}",
               "type": "string"
             }
           ]
         },
         "options": {}
       },
-      "id": "d6821d06-d1b7-4177-b49f-417e70e82dfe",
+      "id": "00c6b7fc-0c9f-4015-900e-294261f4234e",
       "name": "Build Email Content1",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-96, 16]
+      "position": [-144, 16]
     },
     {
       "parameters": {
-        "sendTo": "={{ $json.toEmail }}",
-        "subject": "={{ $json.subject }}",
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-432, 128],
+      "id": "05cc8709-8a16-4ed8-b85b-b07df89446c2",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "XEOZmAOuMFWSG3FQ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "examvault/notify-credential",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "c3d4e5f6-1111-4a6b-8c7f-notifycredweb1",
+      "name": "Notify Credential Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1008, 300],
+      "webhookId": "examvault-notify-credential-webhook"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.toEmail }}",
+        "subject": "={{ $json.body.subject }}",
         "emailType": "text",
-        "message": "={{ $json.textBody }}",
+        "message": "={{ $json.body.body }}",
         "options": {
           "appendAttribution": false
         }
       },
-      "id": "7d5df96f-4bb4-4feb-ad76-4f01ec3ff013",
-      "name": "Send Message (Gmail)",
+      "id": "c3d4e5f6-2222-4a6b-8c7f-notifycredgm1",
+      "name": "Send Credential Email",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [144, -32],
-      "webhookId": "50c01985-3e2e-40f9-ac5a-ea4cedf7c077",
+      "position": [-704, 300],
       "credentials": {
         "gmailOAuth2": {
           "id": "v21QGtki5PIZbbOZ",
@@ -185,6 +220,13 @@
         ]
       ]
     },
+    "Build Email Content1": {
+      "main": [
+        [
+          { "node": "Send Message (Gmail)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
     "OpenAI Chat Model": {
       "ai_languageModel": [
         [
@@ -192,15 +234,15 @@
         ]
       ]
     },
-    "Build Email Content1": {
+    "Notify Credential Webhook": {
       "main": [
         [
-          { "node": "Send Message (Gmail)", "type": "main", "index": 0 }
+          { "node": "Send Credential Email", "type": "main", "index": 0 }
         ]
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
