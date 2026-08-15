@@ -1,5 +1,4 @@
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using OnlineExamSystem.Ai.Application.Generate;
@@ -11,6 +10,13 @@ namespace OnlineExamSystem.Ai.Infrastructure;
 public class N8nQuestionGenerator : IAiQuestionGenerator
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly (string Letter, Func<N8nGeneratedItem, string> Selector)[] OptionSelectors =
+    [
+        ("A", item => item.OptionA),
+        ("B", item => item.OptionB),
+        ("C", item => item.OptionC),
+        ("D", item => item.OptionD),
+    ];
 
     private readonly HttpClient _httpClient;
     private readonly string _webhookUrl;
@@ -28,99 +34,105 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
     {
         var payload = new
         {
-            chatInput = BuildPrompt(request),
-            sessionId = Guid.NewGuid().ToString(),
-            action = "sendMessage",
+            questionCount = request.QuestionCount,
+            complexity = string.Join(", ", request.DifficultyLevels),
+            subject = request.Topic,
+            questionTypes = string.Join(", ", request.QuestionTypes.Select(FormatQuestionTypeLabel)),
         };
 
         using var response = await _httpClient.PostAsJsonAsync(_webhookUrl, payload, cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var envelope = await response.Content.ReadFromJsonAsync<N8nChatResponse>(JsonOptions, cancellationToken)
-            ?? throw new InvalidOperationException("Empty response from AI provider.");
-
-        var items = JsonSerializer.Deserialize<List<N8nGeneratedItem>>(ExtractJsonArray(envelope.Output), JsonOptions)
+        var items = await response.Content.ReadFromJsonAsync<List<N8nGeneratedItem>>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("AI provider response was not a valid JSON array.");
 
-        return items.Select(item => new DraftQuestion
+        var fallbackDifficulty = request.DifficultyLevels.Count > 0 ? request.DifficultyLevels[0] : "Medium";
+
+        return items.Select(item =>
         {
-            QuestionType = item.Type,
-            QuestionText = item.Question,
-            Marks = 1,
-            Difficulty = item.Difficulty,
-            Options = item.Options
-                .Select(optionText => new DraftQuestionOption
-                {
-                    OptionText = optionText,
-                    IsCorrect = string.Equals(optionText, item.Answer, StringComparison.OrdinalIgnoreCase),
-                })
-                .ToList(),
+            // The workflow can return "Multiple" questions with several correct letters
+            // (e.g. CorrectOption: ["A","B","D"]), but this app only supports single-correct
+            // MCQ (Question Service enforces exactly one correct option). Only the first
+            // listed correct letter is kept; the rest are treated as incorrect.
+            var correctLetter = ExtractFirstCorrectLetter(item.CorrectOption);
+
+            var rawOptions = OptionSelectors
+                .Select(selector => (selector.Letter, Text: selector.Selector(item)))
+                .Where(option => !string.IsNullOrWhiteSpace(option.Text))
+                .ToList();
+
+            // A True/False question is a two-option item whose option texts are
+            // "true"/"false" (any casing). Question Service requires the option text
+            // to be exactly "True"/"False", so it's normalized here regardless of
+            // what casing the model returned.
+            var isTrueFalse = rawOptions.Count == 2
+                && rawOptions.Select(o => o.Text.Trim().ToLowerInvariant()).OrderBy(t => t)
+                    .SequenceEqual(["false", "true"]);
+
+            return new DraftQuestion
+            {
+                QuestionType = isTrueFalse ? "TrueFalse" : "MultipleChoice",
+                QuestionText = item.QuestionText,
+                Marks = 1,
+                Difficulty = fallbackDifficulty,
+                Options = rawOptions
+                    .Select(option => new DraftQuestionOption
+                    {
+                        OptionText = isTrueFalse
+                            ? (string.Equals(option.Text.Trim(), "true", StringComparison.OrdinalIgnoreCase) ? "True" : "False")
+                            : option.Text,
+                        IsCorrect = string.Equals(option.Letter, correctLetter, StringComparison.OrdinalIgnoreCase),
+                    })
+                    .ToList(),
+            };
         }).ToList();
     }
 
-    private static string BuildPrompt(GenerateQuestionsRequest request)
+    private static string FormatQuestionTypeLabel(string type) => type switch
     {
-        var typeLabels = request.QuestionTypes.Select(type => type switch
+        "MultipleChoice" => "Multiple Choice",
+        "TrueFalse" => "True/False",
+        _ => type,
+    };
+
+    private static string? ExtractFirstCorrectLetter(JsonElement correctOption)
+    {
+        var letters = new List<string>();
+
+        if (correctOption.ValueKind == JsonValueKind.String)
         {
-            "MultipleChoice" => "Multiple Choice",
-            "TrueFalse" => "True/False",
-            _ => type,
-        });
-
-        var typeInstruction = request.QuestionTypes.Count == 1
-            ? $"Use ONLY this question type: {string.Join(", ", typeLabels)}. Every question must be that type."
-            : $"Use a mix of these question types: {string.Join(", ", typeLabels)}.";
-
-        var difficultyInstruction = request.DifficultyLevels.Count == 1
-            ? $"Use ONLY this difficulty level: {string.Join(", ", request.DifficultyLevels)}. Every question must be that difficulty."
-            : $"Use a mix of these difficulty levels: {string.Join(", ", request.DifficultyLevels)}.";
-
-        var sb = new StringBuilder();
-        sb.Append($"Generate {request.QuestionCount} exam questions about: {request.Topic}. ");
-        sb.Append($"{typeInstruction} ");
-        sb.Append($"{difficultyInstruction} ");
-        sb.Append("For Multiple Choice questions provide exactly 4 options. ");
-        sb.Append("For True/False questions the options must be exactly [\"True\",\"False\"]. ");
-        if (!string.IsNullOrWhiteSpace(request.AdditionalInstructions))
-        {
-            sb.Append($"Additional instructions: {request.AdditionalInstructions}. ");
+            var value = correctOption.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                letters.Add(value.Trim());
+            }
         }
-        sb.Append("Reply with ONLY a JSON array, no markdown fences, no extra text. ");
-        sb.Append("Each item must have fields: type (\"MultipleChoice\" or \"TrueFalse\"), question, ");
-        sb.Append("options (array of strings), answer (the exact text of the correct option), ");
-        sb.Append("difficulty (\"Easy\", \"Medium\", or \"Hard\").");
-        return sb.ToString();
-    }
-
-    private static string ExtractJsonArray(string text)
-    {
-        var trimmed = text.Trim();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+        else if (correctOption.ValueKind == JsonValueKind.Array)
         {
-            return trimmed;
+            foreach (var element in correctOption.EnumerateArray())
+            {
+                if (element.ValueKind == JsonValueKind.String)
+                {
+                    var value = element.GetString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        letters.Add(value.Trim());
+                    }
+                }
+            }
         }
 
-        var firstNewline = trimmed.IndexOf('\n');
-        var lastFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
-        if (firstNewline < 0 || lastFence <= firstNewline)
-        {
-            return trimmed;
-        }
-
-        return trimmed[(firstNewline + 1)..lastFence].Trim();
-    }
-
-    private sealed class N8nChatResponse
-    {
-        public string Output { get; init; } = string.Empty;
+        return letters.Count > 0 ? letters[0] : null;
     }
 
     private sealed class N8nGeneratedItem
     {
-        public string Type { get; init; } = string.Empty;
-        public string Question { get; init; } = string.Empty;
-        public List<string> Options { get; init; } = [];
-        public string Answer { get; init; } = string.Empty;
-        public string Difficulty { get; init; } = string.Empty;
+        public string QuestionText { get; init; } = string.Empty;
+        public string OptionA { get; init; } = string.Empty;
+        public string OptionB { get; init; } = string.Empty;
+        public string OptionC { get; init; } = string.Empty;
+        public string OptionD { get; init; } = string.Empty;
+        public JsonElement CorrectOption { get; init; }
+        public string QuestionType { get; init; } = string.Empty;
     }
 }

@@ -1635,10 +1635,219 @@ link stays dead (confirmed not wired to anything anywhere in the
 codebase) - a related but separate self-service recovery feature for an
 EXISTING account, not built now since it wasn't asked for.
 
+=====================================================================
+PHASE 10: DOCKER & AZURE DEPLOYMENT - KICKOFF (2026-08-15)
+=====================================================================
+CURRENT-STATE INVENTORY (confirmed by reading the actual repo, not
+assumed):
+- No Docker/deployment artifacts exist anywhere yet - the `Docker/`
+  folder at repo root is empty, no Dockerfile/docker-compose.yml/
+  Bicep/ARM/`.azure*` files anywhere. Only `.github/workflows/ci.yml`
+  exists (build+test on push/PR to dev - no deploy step).
+- 8 backend processes total: Gateway (5000), User (5010), Exam (5020),
+  Question (5030), Ai (5040), Submission (5050), Result (5060),
+  Notification API (5001 in Development - not 5070 as informally used
+  during this session's manual restarts), plus Notification.Worker
+  (background, no port).
+- Every service's checked-in `appsettings.json` (the file that ships
+  in a container image) is empty placeholder (Logging + AllowedHosts
+  only) - ALL real config (ConnectionStrings, Jwt, RabbitMq, Services
+  base-URLs) lives only in `appsettings.Development.json` or user-
+  secrets, neither of which ships in a container. Gateway's base
+  `appsettings.json` is the one exception - it already holds the real
+  YARP Routes/Clusters, just hardcoded to `localhost:5xxx` addresses
+  that won't resolve inside containers.
+- All 6 databases (UserDb/ExamDb/QuestionDb/SubmissionDb/
+  NotificationDb, ResultService and AiService own no DB) use
+  `Trusted_Connection=True` (Windows Integrated Auth) against one
+  local SQL Server instance - THIS WILL NOT WORK IN A LINUX CONTAINER
+  OR IN AZURE SQL and must become SQL Authentication (username/
+  password) everywhere, unconditionally, regardless of any other
+  decision below.
+- AiService has no `Jwt:SigningKey` or `N8n:WebhookUrl` in any
+  checked-in file at all (dev-only via user-secrets) - these need a
+  real, non-dev config path for containers.
+- RabbitMQ (HostName/Port/UserName/Password/ExchangeName) is used by
+  exactly 2 publishers (User, Exam) and 1 consumer
+  (Notification.Worker) - Question/Submission/Result/Ai/Notification
+  API have no messaging involvement at all.
+- The frontend already externalizes its Gateway URL via a Vite build-
+  time env var (`VITE_API_BASE_URL`, currently `http://localhost:5000`
+  in `.env.development`/`.env.example`) - no hardcoded URL to fix.
+  `.gitignore` already excludes `bin/`, `obj/`, `node_modules/`, and
+  secret-shaped files - safe Docker build-context baseline already in
+  place.
+- The project's own founding principle (see PRINCIPLES section below)
+  already commits to "RabbitMQ locally, Azure Service Bus in the
+  cloud" - a decision made before this phase, not being relitigated
+  now, so Phase 10 must add Service Bus support rather than replace
+  RabbitMQ outright.
+
+DECISIONS LOCKED IN (proposed defaults - flagged for override, not
+silently assumed)
+--------------------------------------------------------------------
+1. SQL Authentication everywhere, no exceptions. Not really a choice -
+   Windows Integrated Auth has no meaning inside a Linux container or
+   against Azure SQL. Every connection string becomes
+   `Server=...;Database=...;User Id=...;Password=...;
+   TrustServerCertificate=True;`, values supplied by environment
+   variables (local Docker Compose `.env`) or Container Apps secrets
+   (Azure), never hardcoded. [MANDATORY]
+2. Messaging stays dual-provider: RabbitMQ for local Docker Compose
+   (unchanged), Azure Service Bus for the Azure deployment, selected
+   by a `Messaging:Provider` config switch - honors the pre-existing
+   "RabbitMQ locally, Service Bus in the cloud" principle instead of
+   migrating everything to Service Bus and losing today's zero-cost
+   local dev loop, or keeping RabbitMQ in Azure and quietly dropping a
+   decision already made. [DEFAULT, override if you'd rather run
+   RabbitMQ in Azure too via a container - simpler, one less thing to
+   learn, but breaks the stated principle.]
+3. Azure hosting model: Azure Container Apps for every backend service
+   AND the frontend (consumption-based, scale-to-zero when idle - the
+   cheapest realistic fit for a low-traffic portfolio project, and one
+   consistent hosting model instead of mixing Container Apps + App
+   Service + Static Web Apps). [DEFAULT, override if you'd rather use
+   Azure Static Web Apps for the frontend specifically (also free-
+   tier-friendly, purpose-built for a static Vite/React build, and
+   needs no Dockerfile at all for the frontend) or App Service instead
+   of Container Apps (more familiar UI, no scale-to-zero, generally
+   pricier for 9 always-on-ish processes).]
+4. Database hosting: one Azure SQL logical server, serverless/Basic
+   tier, hosting all 6 databases - mirrors today's "one local SQL
+   Server instance, many databases" shape exactly, and is the cheapest
+   PaaS option. [DEFAULT, override if you'd rather containerize SQL
+   Server itself (cheaper still, no Azure SQL vCore/DTU cost, but you
+   lose PaaS automatic backups/HA and own patching yourself).]
+5. Secrets in Azure: Container Apps' built-in secrets (referenced as
+   env vars per app), not Azure Key Vault - Key Vault is the more
+   "enterprise" answer but is extra cost and setup for a project this
+   size with no compliance requirement driving it. [DEFAULT, override
+   if you want Key Vault specifically, e.g. for portfolio/interview
+   value of showing it.]
+6. CI/CD deploys on push to `main` (not `dev`) - matches this repo's
+   existing branch convention where `dev` is the working branch and
+   `main` is the stable/release branch. [DEFAULT, override if you want
+   `dev` pushes to auto-deploy to a staging environment too - bigger
+   scope, a second environment to provision and pay for.]
+7. THE AZURE-PROVISIONING DAY (Day 43 below) IS GATED. I cannot create
+   or pay for Azure resources on your behalf - it needs you to either
+   have an Azure subscription already or create one, confirm the
+   hosting-model decisions above (or your overrides), and explicitly
+   say go-ahead once you're ready for that step to start incurring
+   real (likely small, mostly free-tier-eligible) cost. Every day
+   before that (40-42) is pure code/config work, runs entirely on your
+   machine via Docker Desktop, and costs nothing.
+
+DAY 40 - PHASE 10: DOCKERIZE ALL BACKEND SERVICES + LOCAL COMPOSE
+--------------------------------------------------------------------------
+- I am switching every backend service's connection strings from
+  `Trusted_Connection=True` to SQL Authentication, reading the
+  server/user/password from configuration (env-var-friendly ASP.NET
+  Core config keys, e.g. `ConnectionStrings__UserDb`) rather than a
+  hardcoded value in any checked-in file.
+- I am giving AiService's `Jwt:SigningKey` and `N8n:WebhookUrl` a real
+  (non-dev-only) configuration path so every service reads its
+  required secrets the same way in every environment.
+- I am writing one multi-stage Dockerfile per backend project (SDK
+  build stage -> ASP.NET runtime stage) for the Gateway and all 7
+  APIs, plus one for NotificationService.Worker (console/worker
+  runtime image, no exposed port).
+- I am fixing Gateway's hardcoded `localhost:5xxx` YARP cluster
+  addresses to resolve by Docker Compose service name locally (e.g.
+  `http://user-api:8080`) via an environment-specific config layer,
+  without breaking today's `dotnet run` local-dev experience.
+- I am adding a root-level `docker-compose.yml` (using the existing
+  empty `Docker/` folder) wiring: one SQL Server container (all 6
+  databases), one RabbitMQ container, and all 8 .NET services, with a
+  gitignored `.env` for real secret values and a checked-in
+  `.env.example` template (SQL SA password, JWT signing key, N8n
+  webhook URL, RabbitMq credentials).
+Day complete when: `docker compose up` on a clean machine (no local
+.NET/SQL Server install needed) brings up the entire backend stack,
+and I can log in through the Gateway's published port - proving every
+container's build, config, and inter-service networking is correct.
+
+DAY 41 - PHASE 10: DOCKERIZE THE FRONTEND + FULL LOCAL STACK
+VERIFICATION
+--------------------------------------------------------------------------
+- I am writing a multi-stage frontend Dockerfile: Node build stage
+  (`npm ci && npm run build`) -> nginx runtime stage serving the
+  static `dist/` output, with `VITE_API_BASE_URL` supplied as a Docker
+  build argument (Vite env vars are build-time, not runtime, so this
+  has to be a build arg, not a container env var).
+- I am adding the frontend to `docker-compose.yml`, pointed at the
+  Gateway's container.
+- I am verifying the full golden path entirely inside Docker: register
+  -> login -> admin creates and assigns an exam -> student takes it ->
+  result appears -> a real notification email arrives - the same
+  proof every phase has ended on, but for the first time with zero
+  local .NET/Node processes running, everything in containers.
+- I am updating README with a "Running via Docker" section
+  (prerequisite: Docker Desktop only, one `docker compose up` command)
+  alongside the existing local-dev instructions, not replacing them.
+Day complete when: that full verification passes with everything
+containerized, and README documents it.
+
+DAY 42 - PHASE 10: AZURE SERVICE BUS SUPPORT (still local/free - no
+Azure resources created yet)
+--------------------------------------------------------------------------
+- I am adding an Azure Service Bus implementation of `IEventPublisher`
+  in User.Infrastructure and Exam.Infrastructure, alongside (not
+  replacing) the existing RabbitMqEventPublisher, selected by a new
+  `Messaging:Provider` config switch (`RabbitMq` / `ServiceBus`).
+- I am adding the matching Service Bus listener variant to
+  NotificationService.Worker for the same three consumers
+  (UserRegistered/ExamAssigned/ExamReminder), selected the same way.
+- I am re-running Day 41's full docker-compose verification unchanged
+  (RabbitMq provider) as a regression check, then verifying the
+  Service Bus code path separately against a real or emulated Service
+  Bus namespace.
+Day complete when: both messaging providers are proven to publish and
+consume the same three event types correctly, and switching providers
+is a config change, not a code change.
+
+DAY 43 - PHASE 10: AZURE RESOURCE PROVISIONING [GATED - see decision 7
+above; requires your explicit go-ahead before anything billed exists]
+--------------------------------------------------------------------------
+- Provisioning (once you confirm): one Resource Group, one Azure
+  Container Registry, one Azure SQL logical server hosting all 6
+  databases, one Service Bus namespace, one Container Apps environment
+  hosting the Gateway + 7 APIs + Worker + frontend.
+- Wiring real secrets (SQL connection strings, JWT signing key, N8n
+  webhook URL, Service Bus connection string) as Container Apps
+  secrets referenced by each app's environment variables - nothing
+  plaintext in any checked-in file or image.
+Day complete when: every container app is running in Azure and can
+reach its database and each other, even before CI/CD exists to
+automate future deploys.
+
+DAY 44 - PHASE 10: CI/CD - BUILD, PUSH, DEPLOY
+--------------------------------------------------------------------------
+- I am extending the existing `.github/workflows/ci.yml` (currently
+  build+test only) with a deploy job: on push to `main`, build each
+  Docker image, push to Azure Container Registry, and update each
+  Container App to the new image tag.
+- GitHub repo secrets hold the Azure credentials (service principal or
+  federated OIDC) - never committed.
+Day complete when: pushing a real commit to `main` results in the live
+Azure URL reflecting the change within a few minutes, with no manual
+deployment step.
+
+DAY 45 - PHASE 10: LIVE VERIFICATION AND PROJECT WRAP-UP
+--------------------------------------------------------------------------
+- I am re-running the full golden-path verification (register, login,
+  admin creates/assigns an exam, student takes it, result appears,
+  real notification email arrives) against the real Azure URL, not
+  localhost or Docker Compose.
+- README gets a final "Live Deployment" section (Azure URL, how to
+  redeploy, a rough monthly cost note for the chosen tiers).
+Day complete when: that verification passes against production Azure
+infrastructure. -> Phase 10 complete, roadmap 100% done.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
-Phase 10 (Days 40-43) I containerize everything with Docker, deploy to Azure,
-                       and set up CI/CD.
+Phase 10 is now planned in full detail above (Days 40-45) - this
+summary section no longer applies to any remaining phase.
 
 PRINCIPLES I AM KEEPING IN MIND THE WHOLE PROJECT
 ------------------------------------------------------

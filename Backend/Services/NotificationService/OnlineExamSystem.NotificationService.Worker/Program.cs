@@ -19,4 +19,10 @@ builder.Services.AddHostedService<ExamAssignedConsumer>();
 builder.Services.AddHostedService<ExamReminderConsumer>();
 
 var host = builder.Build();
+
+using (var scope = host.Services.CreateScope())
+{
+    scope.ServiceProvider.GetRequiredService<NotificationDbContext>().Database.Migrate();
+}
+
 host.Run();

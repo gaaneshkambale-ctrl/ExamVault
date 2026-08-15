@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/.vs/
+**/.vite/
+.git/
+.github/
+Frontend/examvault-web/node_modules/
+Frontend/examvault-web/dist/
+*.md
+Documentation/
