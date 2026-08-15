@@ -916,3 +916,81 @@ a cross-batch duplicate (email already in DB, one row in the file)
 would still reach the API and hit the existing partial-failure path,
 which is unit-identical to the AI-question-approval flow already
 proven in Days 28-29.
+
+--------------------------------------------------------------------
+8g. FOLLOW-UP PLAN (2026-08-15): Imported users default to Inactive
+--------------------------------------------------------------------
+STATUS: IMPLEMENTED AND LIVE-VERIFIED (2026-08-15)
+
+ISSUE RAISED: after testing the import (manebhau@gmail.com), the user
+noticed newly imported accounts show as Active immediately, same as
+the regular "+ Add User" form. Confirmed via direct DB query
+(IsActive = 1, MustChangePassword = 1) - not a bug, just the existing
+default (AppUser.IsActive defaults to true; CreateUserCommand.IsActive
+defaults to true; the "+ Add User" form always sends isActive: true
+since the toggle was removed).
+
+DECISION (confirmed by user): change bulk import ONLY - imported rows
+are now created with isActive: false, so an Admin must manually
+activate each one (existing Activate button/endpoint, unchanged) before
+they can log in. The regular "+ Add User" single-user form is
+UNCHANGED and keeps creating users as Active by default - the user
+asked specifically for "import" to default inactive, not the whole
+create-user flow.
+
+IMPLEMENTATION: one-line change in ImportUsers.tsx's handleCreate() -
+the CreateUserRequest built per row now sends isActive: false instead
+of isActive: true. No backend change needed (CreateUserCommand already
+accepts an isActive flag from the request). No change to CreateUser.tsx.
+
+LIVE VERIFICATION: tsc --noEmit and oxlint clean. Imported a fresh
+1-row .xlsx (import.inactive.check@example.com). Preview showed it as
+Valid, clicked "Create 1 User", and the new row appeared in
+/admin/users with Status = Inactive (previously would have shown
+Active) - confirmed both visually and via the page's live counts
+(Inactive Users count went up by one). Test account deleted afterward
+via the existing Delete-user flow to leave the list clean. Confirmed
+the regular "+ Add User" form (CreateUser.tsx) was untouched and still
+creates Active users, per the user's explicit scoping to import only.
+
+--------------------------------------------------------------------
+8h. FOLLOW-UP (2026-08-15): "+ Add User" form now also defaults to
+    Inactive
+--------------------------------------------------------------------
+STATUS: IMPLEMENTED
+
+--------------------------------------------------------------------
+8i. FOLLOW-UP PLAN (2026-08-15): Status filter combo on Users page
+--------------------------------------------------------------------
+STATUS: IMPLEMENTED
+
+REQUEST (clarified over two messages): now that new users default to
+Inactive (8g/8h), the Users list gets cluttered with Inactive accounts
+that haven't been activated yet. User wants a Status filter dropdown on
+/admin/users, same idea as the existing Role filter (All Roles /
+Admin / Student), so they can filter the list down to Active users only
+when that's the purpose of looking at the page.
+
+DECISION: add a "Status" Form.Select next to the existing Role filter
+on ManageUsers.tsx - options All Status / Active / Inactive, defaulting
+to "Active" per the user's explicit request (stated twice: "I want
+active status user only"). Switching the dropdown to "All Status" or
+"Inactive" still works normally, e.g. when the Admin specifically wants
+to find newly imported/created accounts to activate them - it's just
+not the default view. Filtering logic mirrors the existing role filter
+exactly. No backend change - purely a client-side filter over the
+already-fetched user list, same as search text and role filter today.
+
+LIVE VERIFICATION: tsc --noEmit and oxlint clean. On a real logged-in
+session, confirmed the Status dropdown defaults to "Active" and the
+table showed only the 1 Active user; switching to "All Status" showed
+all 3; switching to "Inactive" showed exactly the other 2 - matching
+the Active/Inactive stat cards exactly in every state.
+
+User widened the 8g decision: the manual "+ Add User" form
+(CreateUser.tsx) should match import and also create new users as
+Inactive by default, rather than staying Active-by-default as 8g had
+left it. One-line change: CreateUser.tsx's initialFormState.isActive
+changed from true to false. Both user-creation paths (single form and
+bulk import) now default new accounts to Inactive; an Admin must use
+the existing Activate button to enable login for either.

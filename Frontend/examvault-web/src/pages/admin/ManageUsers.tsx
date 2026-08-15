@@ -93,6 +93,7 @@ export default function ManageUsers() {
   const { data: users, isLoading, isError } = useUsers();
   const [searchText, setSearchText] = useState('');
   const [roleFilter, setRoleFilter] = useState<'All' | UserRole>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('Active');
   const [page, setPage] = useState(1);
 
   const counts = {
@@ -107,6 +108,9 @@ export default function ManageUsers() {
     if (roleFilter !== 'All' && user.role !== roleFilter) {
       return false;
     }
+    if (statusFilter !== 'All' && user.isActive !== (statusFilter === 'Active')) {
+      return false;
+    }
     const term = searchText.trim().toLowerCase();
     if (term && !user.fullName.toLowerCase().includes(term) && !user.email.toLowerCase().includes(term)) {
       return false;
@@ -116,7 +120,7 @@ export default function ManageUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchText, roleFilter]);
+  }, [searchText, roleFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -150,7 +154,7 @@ export default function ManageUsers() {
       </Row>
 
       <Row className="g-2 mb-3">
-        <Col md={8}>
+        <Col md={6}>
           <Form.Control
             type="search"
             placeholder="Search by name or email..."
@@ -158,7 +162,7 @@ export default function ManageUsers() {
             onChange={(e) => setSearchText(e.target.value)}
           />
         </Col>
-        <Col md={4}>
+        <Col md={3}>
           <Form.Select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value as 'All' | UserRole)}
@@ -166,6 +170,16 @@ export default function ManageUsers() {
             <option value="All">All Roles</option>
             <option value="Admin">Admin</option>
             <option value="Student">Student</option>
+          </Form.Select>
+        </Col>
+        <Col md={3}>
+          <Form.Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'All' | 'Active' | 'Inactive')}
+          >
+            <option value="All">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
           </Form.Select>
         </Col>
       </Row>

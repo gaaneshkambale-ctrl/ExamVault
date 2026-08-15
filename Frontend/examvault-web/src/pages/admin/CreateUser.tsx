@@ -14,7 +14,7 @@ const initialFormState: CreateUserFormState = {
   fullName: '',
   email: '',
   role: 'Student',
-  isActive: true,
+  isActive: false,
   phoneNumber: '',
 };
 

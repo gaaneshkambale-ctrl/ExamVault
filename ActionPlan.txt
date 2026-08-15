@@ -1592,6 +1592,44 @@ via the existing Delete-user flow to leave the list clean. tsc --noEmit
 and oxlint both clean throughout. Full write-up, including both bugs'
 root causes, is in FeatureUpdate.txt section 8e/8f.
 
+-----------------------------------------------------------------------
+POST-PHASE-9 FIX (DONE, 2026-08-15): Imported users now default to
+Inactive instead of Active
+-----------------------------------------------------------------------
+User tested the import feature (manebhau@gmail.com) and noticed the new
+account showed as Active right away. Confirmed via DB query this was
+just the existing default (same as the regular "+ Add User" form, which
+was left unchanged), not a bug - but the user wants imported accounts
+specifically to require manual Admin activation. One-line fix in
+ImportUsers.tsx: bulk-imported rows now send isActive: false, so new
+imports land as Inactive until an Admin flips them on via the existing
+Activate button. Live-verified: imported a fresh single-row .xlsx,
+confirmed the new user showed Status = Inactive in the Users list
+(Inactive count incremented), then deleted the test account. The
+regular "+ Add User" form is untouched and still creates Active users.
+
+Follow-up same day: user asked for the manual "+ Add User" form to
+match, since it still created Active users by default. One-line change
+in CreateUser.tsx (initialFormState.isActive: true -> false). Live
+tested by submitting the form for a fresh user - it showed Status =
+Inactive immediately in the Users list, then the test account was
+deleted. Both user-creation paths (single form and bulk import) now
+default to Inactive.
+
+-----------------------------------------------------------------------
+POST-PHASE-9 FEATURE (DONE, 2026-08-15): Status filter combo on the
+Users page
+-----------------------------------------------------------------------
+Since new users now default to Inactive, the Users list would get
+cluttered with unactivated accounts. Added a "Status" dropdown
+(All Status / Active / Inactive) next to the existing Role dropdown on
+/admin/users, defaulting to Active per the user's explicit request -
+purely a client-side filter over the already-fetched list, no backend
+change, same pattern as the existing Role filter. Live-verified on a
+real session: default view showed only the 1 Active user; switching to
+"All Status" showed all 3; switching to "Inactive" showed exactly the
+other 2 - matching the stat cards in every state.
+
 Explicitly out of scope, not built: the login modal's "Forgot Password?"
 link stays dead (confirmed not wired to anything anywhere in the
 codebase) - a related but separate self-service recovery feature for an
