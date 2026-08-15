@@ -131,9 +131,14 @@ export default function ManageUsers() {
           <h1 className="h4 fw-bold mb-0 text-primary">Users</h1>
           <p className="text-muted mb-0">View and manage all users in the system.</p>
         </div>
-        <Link to="/admin/users/create" className="btn btn-primary">
-          + Add User
-        </Link>
+        <div className="d-flex gap-2">
+          <Link to="/admin/users/import" className="btn btn-outline-primary">
+            Import Users
+          </Link>
+          <Link to="/admin/users/create" className="btn btn-primary">
+            + Add User
+          </Link>
+        </div>
       </div>
 
       <Row className="g-3 mb-4">

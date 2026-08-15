@@ -8,6 +8,7 @@ import ChangePassword from '../pages/ChangePassword';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import ManageUsers from '../pages/admin/ManageUsers';
 import CreateUser from '../pages/admin/CreateUser';
+import ImportUsers from '../pages/admin/ImportUsers';
 import EditUser from '../pages/admin/EditUser';
 import UserDetails from '../pages/admin/UserDetails';
 import ResetPassword from '../pages/admin/ResetPassword';
@@ -92,6 +93,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <CreateUser />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/import"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ImportUsers />
           </ProtectedRoute>
         }
       />

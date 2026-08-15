@@ -743,3 +743,176 @@ KNOWN GAP, NOT ADDRESSED: the "Ashwini Kamble" account's temporary
 password went through the AI-rewrite path before the fix - if that
 account still can't log in, an Admin can use the existing (untouched)
 Admin-only reset-password page to set it a known password manually.
+
+--------------------------------------------------------------------
+8. NEW FEATURE PLAN (2026-08-15): Bulk User Import via Excel
+--------------------------------------------------------------------
+STATUS: IMPLEMENTED AND LIVE-VERIFIED (2026-08-15) - see 8e/8f below
+
+REQUEST: let an Admin upload an Excel file with many rows of new users
+at once, instead of using the Add New User form one at a time.
+
+--------------------------------------------------------------------
+8a. DECISIONS (proposed defaults - flagged for override, not silently
+    assumed)
+--------------------------------------------------------------------
+1. Parsing happens CLIENT-SIDE in the browser, reusing the existing
+   `POST /api/users` (CreateUser) endpoint once per row - the same
+   "loop over items, Promise.allSettled, show partial-failure results"
+   shape already used by the AI-generated-questions approval flow (Day
+   29). Zero backend changes - every row gets the auto-generated
+   password + invite email + forced-reset-on-first-login behavior for
+   free, since it's the exact same code path as creating one user by
+   hand. [DEFAULT, override if you'd rather have a real backend
+   bulk-upload endpoint that parses server-side - more scalable for very
+   large files, but needs a new .NET Excel-parsing package and
+   duplicates logic CreateUserHandler already has.]
+2. File format: `.xlsx` only for this pass, using a browser-side parsing
+   library (e.g. `xlsx`/SheetJS, a new frontend dependency). CSV is not
+   handled in this pass, though the same library can usually read CSV
+   too, so it's a cheap follow-on later if wanted. [DEFAULT]
+3. Expected columns match the single Create User form's fields minus
+   password (which is never manually entered anymore, per the prior
+   feature): Full Name, Email, Role (Student/Admin), Phone Number
+   (optional). [DEFAULT]
+4. A "Download Template" button provides a starter `.xlsx` with the
+   correct headers already filled in, generated client-side via the same
+   parsing library (which can also write files) - reduces column-name
+   mismatches. [DEFAULT, override if you'd rather skip this and just
+   document the expected columns as text.]
+5. Before actually creating anything, the Admin sees a PREVIEW table of
+   every parsed row (Full Name / Email / Role / Phone / Status) with
+   client-side validation already applied (required Full Name/Email,
+   valid email shape, Role must be exactly Student or Admin) - rows that
+   fail validation are visibly marked and excluded from the count of
+   creatable rows. Only after reviewing does the Admin click "Create N
+   Users" to actually submit. Mirrors the existing AI-generate-questions
+   "preview then approve" pattern already used elsewhere in this app
+   (Days 28-29) rather than blindly creating on file select. [DEFAULT]
+6. Partial-failure handling on actual submission (e.g. a duplicate email
+   that only the backend can catch) matches Day 29's exact pattern:
+   successfully created rows are removed from the pending list,
+   failed rows stay visible with their server-returned error reason
+   (e.g. "already exists") and are not silently retried or merged into
+   an existing account. [DEFAULT - no "update existing user" behavior on
+   duplicate email, since that's a different, riskier operation not
+   asked for.]
+
+--------------------------------------------------------------------
+8b. DESIGN
+--------------------------------------------------------------------
+FRONTEND ONLY (no backend/API changes at all under decision 8a.1):
+- New dependency: `xlsx` (SheetJS) added to
+  Frontend/examvault-web/package.json for both reading the uploaded file
+  and generating the downloadable template.
+- New page `/admin/users/import` (ImportUsers.tsx):
+  - "Download Template" button - generates and downloads a starter
+    `.xlsx` with headers Full Name / Email / Role / Phone Number.
+  - File picker restricted to `.xlsx` - on selection, parses rows client
+    side and runs the same validation rules as CreateUser.tsx today
+    (required Full Name/Email; Role must match exactly).
+  - Preview table of every row with a Status column (Valid / a specific
+    validation error message), and a running count ("12 of 15 rows
+    ready to import").
+  - "Create N Users" button (N = count of valid rows, disabled at 0) -
+    calls the existing `createUser()` from userApi.ts once per valid
+    row via `Promise.allSettled`, with a live progress indicator (this
+    can take a while - see the known limitation below) and a final
+    summary: created count, failed count + each failure's reason.
+- ManageUsers.tsx gains an "Import Users" button next to the existing
+  "+ Add New User" button, linking to the new page.
+
+--------------------------------------------------------------------
+8c. KNOWN LIMITATION, FLAGGED NOT SOLVED
+--------------------------------------------------------------------
+Every row is a real `POST /api/users` call, which itself makes a real
+synchronous HTTP call to the credential-email n8n webhook (observed at
+roughly 0.5-3 seconds per call during this session's testing). Importing
+a large file (e.g. 100+ rows) could take several minutes with the
+browser tab needing to stay open throughout, since there is no
+background job/queue under this design - building one wasn't asked for
+and would be meaningfully new backend infrastructure (a job runner, a
+way to report progress back to a closed browser tab, etc.). If the
+Admin needs to import very large lists regularly, that would be a
+reason to revisit decision 8a.1 (a real backend bulk endpoint that could
+run the row-by-row work server-side and asynchronously) rather than a
+reason to build a queue on top of this simpler design speculatively now.
+
+--------------------------------------------------------------------
+8d. NEXT STEP
+--------------------------------------------------------------------
+Awaiting confirmation on the 8a decisions (or explicit overrides) before
+implementing: add the `xlsx` dependency -> ImportUsers.tsx (template
+download, file parse, client-side validation, preview table) -> wire the
+"Import Users" button on ManageUsers.tsx -> live verification (a real
+multi-row .xlsx file, including at least one intentionally invalid row
+and one intentionally duplicate email, to confirm the preview correctly
+flags the invalid row before submission and the duplicate email shows up
+as a real per-row failure after submission rather than aborting the
+whole batch).
+
+--------------------------------------------------------------------
+8e. IMPLEMENTATION NOTES (deviations from the 8a/8b plan text)
+--------------------------------------------------------------------
+1. DEPENDENCY SWAP: `xlsx` (SheetJS), named as the example library in
+   8a.2, was NOT used. `npm install xlsx` succeeded but `npm audit`
+   flagged it high-severity - Prototype Pollution (GHSA-4r6h-8v6p-xvw6)
+   and a ReDoS (GHSA-5pgg-2g8v-p4x9), both "No fix available". Per the
+   standing security rule (don't ship known-vulnerable code), swapped to
+   `read-excel-file` + `write-excel-file` (same author/ecosystem as
+   SheetJS alternatives, actively maintained, browser-first). `npm audit`
+   confirmed 0 vulnerabilities after the swap. Duplicate-email-in-file
+   checking (not in the original 8a list) was added to validateRow() as
+   a natural extension of "required Full Name/Email; Role must match
+   exactly" - a file with the same email on two rows now flags both rows
+   rather than silently letting the second overwrite/duplicate.
+2. PACKAGE EXPORT GOTCHA: both packages only expose subpath exports
+   (`read-excel-file/browser`, `write-excel-file/browser`, plus `/node`,
+   `/universal`) - there is no bare `"."` export. Importing the bare
+   package name (`import readXlsxFile from 'read-excel-file'`) resolves
+   at the type level but fails at Vite dev-server runtime with "'.' is
+   not exported under the conditions [...] from package ...", which
+   silently blanked the whole page (React never mounted, #root stayed
+   empty, no console error - only visible via the page's
+   <vite-error-overlay> shadow DOM). Fixed by importing from the
+   `/browser` subpath explicitly in ImportUsers.tsx.
+3. API SHAPE GOTCHA: the default export of `read-excel-file` (this
+   installed version) returns `Promise<Sheet[]>` where
+   `Sheet = { sheet: string; data: Row[] }` - NOT `Promise<Row[]>`
+   directly, despite that being the historically documented shape for
+   this library. Code originally did `sheet.slice(1)` on the resolved
+   value (a single-element array), which produced an empty slice and
+   showed "The file has no data rows below the header" even for a
+   correctly-formed file. Fixed to `sheets[0].data.slice(1)`. Both
+   gotchas were caught during live verification (see 8f), not before.
+
+--------------------------------------------------------------------
+8f. LIVE VERIFICATION (2026-08-15)
+--------------------------------------------------------------------
+Built /admin/users/import (ImportUsers.tsx), wired the route in
+AppRoutes.tsx, and added an "Import Users" button next to "+ Add User"
+on ManageUsers.tsx. tsc --noEmit and oxlint both clean.
+
+Tested with a real .xlsx (6 data rows): two valid rows (one Student,
+one Admin, one with a phone number and one without), one row with a
+blank Full Name, one row with an invalid Role ("Teacher"), and two rows
+sharing the same email address. The preview table correctly showed
+"2 of 6 rows ready to import" with per-row Status: the two valid rows
+marked Valid, the blank-name row marked "Full Name is required.", the
+bad-role row marked 'Role must be exactly "Student" or "Admin".', and
+both duplicate-email rows marked "Duplicate email within the file."
+Clicking "Create 2 Users" called the real `POST /api/users` endpoint
+twice via Promise.allSettled, both succeeded, and the page navigated to
+/admin/users where both new users appeared in the live list (counts
+updated: Total Users 10, Admins 4, Students 6). Both test accounts were
+then deleted via the existing Delete-user flow to leave the user list
+clean. Partial-failure behavior (a row failing while others in the same
+batch succeed) was exercised in code review of the Promise.allSettled
+branch but not separately live-tested with a real backend-only failure
+(e.g. an email that already exists only in the DB, not in the file) -
+the in-file duplicate-detection above prevents that exact case from
+reaching the API at all for two rows with the same email in one file;
+a cross-batch duplicate (email already in DB, one row in the file)
+would still reach the API and hit the existing partial-failure path,
+which is unit-identical to the AI-question-approval flow already
+proven in Days 28-29.

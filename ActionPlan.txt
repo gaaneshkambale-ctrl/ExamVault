@@ -1554,6 +1554,44 @@ email sent through the AI-rewrite path before the fix - if its temporary
 password doesn't work, the existing (untouched) Admin-only
 reset-password page can set it a known password manually.
 
+-----------------------------------------------------------------------
+POST-PHASE-9 FEATURE (DONE, 2026-08-15): Bulk user import via Excel
+-----------------------------------------------------------------------
+IMPLEMENTED AND VERIFIED LIVE. New /admin/users/import page
+(ImportUsers.tsx), reachable via an "Import Users" button next to
+"+ Add User" on the Users list. Admin downloads a starter .xlsx
+(Full Name / Email / Role / Phone Number), uploads a filled-in copy,
+sees a preview table with a per-row Status (Valid, or the specific
+validation error), and clicks "Create N Users" to submit just the
+valid rows via the existing single-user create endpoint, one call per
+row, same Promise.allSettled/partial-failure pattern as the Day 29
+AI-question approval flow - no new backend endpoint, so every imported
+user gets the auto-generated password + invite email + forced-reset
+flow for free, identical to creating one user by hand.
+
+Dependency substituted mid-implementation: the plan's example library
+(`xlsx`/SheetJS) was rejected after `npm audit` flagged it high-severity
+with no fix available; swapped to `read-excel-file` + `write-excel-file`
+(0 vulnerabilities). Two real bugs surfaced only during live browser
+verification, not by tsc/lint: (1) both new packages only expose
+`/browser`, `/node`, `/universal` subpath exports, not a bare import -
+importing the bare package name blanked the whole page silently (React
+never mounted, no console error) until switched to the `/browser`
+subpath; (2) the installed read-excel-file version resolves to
+`Promise<Sheet[]>` (`{sheet, data}[]`), not `Promise<Row[]>` as assumed,
+which made every upload report "no data rows" until fixed to read
+`sheets[0].data`.
+
+Live-tested with a real 6-row .xlsx: 2 valid rows, 1 missing Full Name,
+1 invalid Role, 2 rows sharing one email (in-file duplicate check, not
+in the original plan, added alongside the other validation rules). The
+preview correctly flagged 4 of 6 rows and left "2 of 6 rows ready to
+import"; submitting created both valid users for real (visible
+immediately in the Users list, counts updated), then both were deleted
+via the existing Delete-user flow to leave the list clean. tsc --noEmit
+and oxlint both clean throughout. Full write-up, including both bugs'
+root causes, is in FeatureUpdate.txt section 8e/8f.
+
 Explicitly out of scope, not built: the login modal's "Forgot Password?"
 link stays dead (confirmed not wired to anything anywhere in the
 codebase) - a related but separate self-service recovery feature for an
