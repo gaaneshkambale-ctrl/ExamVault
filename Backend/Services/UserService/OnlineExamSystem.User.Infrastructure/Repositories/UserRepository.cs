@@ -23,6 +23,11 @@ public class UserRepository : IUserRepository
     public async Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Users.OrderByDescending(u => u.CreatedAtUtc).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<AppUser>> GetByIdsAsync(
+        IReadOnlyList<Guid> ids,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.Users.Where(u => ids.Contains(u.Id)).ToListAsync(cancellationToken);
+
     public Task AddAsync(AppUser user, CancellationToken cancellationToken = default) =>
         _dbContext.Users.AddAsync(user, cancellationToken).AsTask();
 

@@ -19,6 +19,9 @@ public class FakeUserRepository : IUserRepository
     public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AppUser>>(_users.ToList());
 
+    public Task<IReadOnlyList<AppUser>> GetByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AppUser>>(_users.Where(u => ids.Contains(u.Id)).ToList());
+
     public Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default)
     {
         _users.Remove(user);

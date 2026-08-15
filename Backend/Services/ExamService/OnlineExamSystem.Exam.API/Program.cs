@@ -15,6 +15,7 @@ using OnlineExamSystem.Exam.Application.Exams.Delete;
 using OnlineExamSystem.Exam.Application.Exams.GetById;
 using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Exams.Update;
+using OnlineExamSystem.Exam.API.Jobs;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Infrastructure;
 using OnlineExamSystem.Exam.Infrastructure.Messaging;
@@ -45,6 +46,8 @@ public class Program
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IUserLookupClient, UserServiceClient>(client =>
             client.BaseAddress = new Uri(userServiceBaseUrl));
+        builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl));
 
         builder.Services.AddScoped<IValidator<CreateExamCommand>, CreateExamValidator>();
         builder.Services.AddScoped<CreateExamHandler>();
@@ -67,6 +70,7 @@ public class Program
 
         builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
         builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        builder.Services.AddHostedService<ExamReminderCheckService>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

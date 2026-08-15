@@ -163,6 +163,69 @@ public class ExamRepository : IExamRepository
         return true;
     }
 
+    public async Task<IReadOnlyList<UpcomingAssignmentForReminder>> GetAssignmentsStartingWithinAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var publishedExamIds = _dbContext.Exams
+            .Where(e => e.Status == ExamStatus.Published)
+            .Select(e => e.Id);
+
+        var candidates = await _dbContext.ExamAssignments
+            .Where(a => a.StartAtUtc > fromUtc && a.StartAtUtc <= toUtc && publishedExamIds.Contains(a.ExamId))
+            .ToListAsync(cancellationToken);
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var examTitles = await _dbContext.Exams
+            .Where(e => candidates.Select(a => a.ExamId).Contains(e.Id))
+            .ToDictionaryAsync(e => e.Id, e => e.Title, cancellationToken);
+        var assignmentIds = candidates.Select(a => a.Id).ToList();
+        var targetsByAssignment = await _dbContext.ExamAssignmentTargets
+            .Where(t => assignmentIds.Contains(t.ExamAssignmentId))
+            .GroupBy(t => t.ExamAssignmentId)
+            .Select(g => new { AssignmentId = g.Key, UserIds = g.Select(t => t.UserId).ToList() })
+            .ToDictionaryAsync(g => g.AssignmentId, g => g.UserIds, cancellationToken);
+
+        return candidates
+            .Select(a => new UpcomingAssignmentForReminder(
+                a.Id,
+                a.ExamId,
+                examTitles.GetValueOrDefault(a.ExamId, "Unknown Exam"),
+                a.StartAtUtc,
+                targetsByAssignment.GetValueOrDefault(a.Id, [])))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<Guid>> FilterUserIdsWithoutReminderLogAsync(
+        Guid assignmentId,
+        ReminderWindow window,
+        IReadOnlyList<Guid> candidateUserIds,
+        CancellationToken cancellationToken = default)
+    {
+        var alreadyLogged = await _dbContext.ExamReminderLogs
+            .Where(r => r.AssignmentId == assignmentId && r.Window == window && candidateUserIds.Contains(r.UserId))
+            .Select(r => r.UserId)
+            .ToListAsync(cancellationToken);
+
+        return candidateUserIds.Except(alreadyLogged).ToList();
+    }
+
+    public async Task AddReminderLogEntriesAsync(
+        Guid assignmentId,
+        ReminderWindow window,
+        IReadOnlyList<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var entries = userIds
+            .Select(userId => new ExamReminderLog { AssignmentId = assignmentId, UserId = userId, Window = window })
+            .ToList();
+        await _dbContext.ExamReminderLogs.AddRangeAsync(entries, cancellationToken);
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

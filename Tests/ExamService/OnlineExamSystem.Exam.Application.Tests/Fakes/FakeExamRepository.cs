@@ -10,6 +10,7 @@ public class FakeExamRepository : IExamRepository
     private readonly List<ExamPaper> _exams = [];
     private readonly List<ExamAssignment> _assignments = [];
     private readonly List<ExamAssignmentTarget> _targets = [];
+    private readonly List<ExamReminderLog> _reminderLogs = [];
 
     public IReadOnlyList<ExamPaper> Exams => _exams;
     public IReadOnlyList<ExamAssignment> Assignments => _assignments;
@@ -147,6 +148,51 @@ public class FakeExamRepository : IExamRepository
         }
 
         return Task.FromResult(removed);
+    }
+
+    public Task<IReadOnlyList<UpcomingAssignmentForReminder>> GetAssignmentsStartingWithinAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var publishedExamIds = _exams.Where(e => e.Status == ExamStatus.Published).Select(e => e.Id).ToHashSet();
+        var result = _assignments
+            .Where(a => a.StartAtUtc > fromUtc && a.StartAtUtc <= toUtc && publishedExamIds.Contains(a.ExamId))
+            .Select(a => new UpcomingAssignmentForReminder(
+                a.Id,
+                a.ExamId,
+                _exams.FirstOrDefault(e => e.Id == a.ExamId)?.Title ?? "Unknown Exam",
+                a.StartAtUtc,
+                _targets.Where(t => t.ExamAssignmentId == a.Id).Select(t => t.UserId).ToList()))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<UpcomingAssignmentForReminder>>(result);
+    }
+
+    public Task<IReadOnlyList<Guid>> FilterUserIdsWithoutReminderLogAsync(
+        Guid assignmentId,
+        ReminderWindow window,
+        IReadOnlyList<Guid> candidateUserIds,
+        CancellationToken cancellationToken = default)
+    {
+        var alreadyLogged = _reminderLogs
+            .Where(r => r.AssignmentId == assignmentId && r.Window == window)
+            .Select(r => r.UserId)
+            .ToHashSet();
+        return Task.FromResult<IReadOnlyList<Guid>>(candidateUserIds.Where(id => !alreadyLogged.Contains(id)).ToList());
+    }
+
+    public Task AddReminderLogEntriesAsync(
+        Guid assignmentId,
+        ReminderWindow window,
+        IReadOnlyList<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var userId in userIds)
+        {
+            _reminderLogs.Add(new ExamReminderLog { AssignmentId = assignmentId, UserId = userId, Window = window });
+        }
+
+        return Task.CompletedTask;
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

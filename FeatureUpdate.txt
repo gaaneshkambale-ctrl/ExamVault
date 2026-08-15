@@ -1,728 +1,292 @@
 FEATURE UPDATE
 ==============
 
-FEATURE: Fix n8n notification-email AI Agent producing hallucinated/unrelated email content
-STATUS: PLANNED - NOT APPLIED YET (n8n workflow lives in the user's n8n instance, not this repo)
+MODULE: Notification Service - feature audit (what's provided vs pending)
+DATE: 2026-08-15
+METHOD: verified against actual source code (Backend/Services/NotificationService,
+Frontend/examvault-web/src pages+components+routes+sidebars), not just the plan
+text in ActionPlan.txt, since plans can lag behind real code.
 
 --------------------------------------------------------------------
-1. PROBLEM
+1. FEATURES PROVIDED (verified present in code)
 --------------------------------------------------------------------
-Reported example:
-  Raw notification body (Reminder type): "your exam remainder send you email"
-  Expected AI-rewritten email: a cleaned-up version of that same Reminder message.
-  Actual AI Agent output: "Your results are now available. Please log in to your
-  ExamVault account to view your performance. If you have any questions or need
-  assistance, feel free to reach out."
-  -> Completely unrelated content (a Result-type message) for a Reminder-type input.
 
---------------------------------------------------------------------
-2. ROOT CAUSE
---------------------------------------------------------------------
-Workflow order: Notification Webhook -> Build Email Content (Set) -> AI Agent -> Build Email
-Content1 (Set) -> Send Message (Gmail).
+BACKEND (OnlineExamSystem.Notification.API on :5070, real NotificationDb):
+- Mine: GET /api/notifications (paginated, unread-only filter), GET /{id},
+  GET /unread-count, PUT /{id}/read, POST /read-all, DELETE /{id},
+  GET/PUT /preferences - all scoped to the caller's own UserId, [Authorize].
+- Admin: POST /admin (create/broadcast), GET /admin/history (paginated,
+  type filter), GET /admin/history/{batchId} (recipient totals:
+  delivered/failed/pending), POST /admin/history/{batchId}/resend,
+  DELETE /admin/history/{batchId} - all [Authorize(Roles="Admin")].
+- Admin broadcast targeting actually resolves real recipients via
+  cross-service calls: All Students/Selected Students/Admins via User
+  Service's GET /api/users, Specific Exam Candidates via Exam Service's
+  GET /api/assignments?examId= - not stubbed.
+- Real email delivery through the n8n/Gmail webhook (IEmailDispatcher /
+  N8nEmailDispatcher), per-recipient Delivered/Failed status recorded on
+  each Notification row. A recipient with Email off for that type gets no
+  attempt, still counted for in-app purposes.
+- Two real system-triggered events, both verified as actually wired to a
+  RabbitMQ consumer that persists + emails:
+    - UserRegisteredEvent -> "Welcome to ExamVault!" (Type=Account)
+    - ExamAssignedEvent -> "New Exam Assigned" (Type=Exam, RelatedExamId set)
+- NotificationPreference grid: 5 types (Exam/Reminder/Result/System/
+  Account) x In-App/Email, defaults to both-on when no row saved yet.
+- "Schedule For Later" - store-only as designed: ScheduledAtUtc is saved,
+  batch created immediately, becomes visible in "mine" reads once its time
+  passes (no dispatcher, no email ever sent for it - see Pending section).
 
-The webhook payload arrives as:
-  { toEmail, toName, subject, body, type, notificationId }  (all nested under $json.body)
-
-The "Build Email Content" Set node only explicitly assigns 4 fields:
-  body.toEmail, body.toName, body.subject, body.textBody
-
-It never re-forwards body.body (the raw notification message) or body.type. n8n's
-Set / Edit Fields node (typeVersion 3.4) drops every field that isn't explicitly
-assigned UNLESS "Include Other Input Fields" is enabled in its options - and this
-node's options are empty ({}), i.e. left at the default (fields NOT kept).
-
-Consequence: by the time the AI Agent node runs, its prompt references
-"{{ $json.body.body }}" for the text to rewrite - but that field no longer exists,
-so the model receives an effectively empty "Message to rewrite:". Also, body.type
-is never interpolated into the prompt at all, even in the working case, so the
-model can never actually apply the correct type-based tone deterministically - it
-has to guess from a (possibly empty) message.
-
-Given an empty message, gpt-4o-mini improvises a plausible-sounding generic
-notification instead of refusing/erroring - which is the "Results are now
-available..." boilerplate observed. This is a hallucination-on-empty-input
-failure, not a wording/tone problem with the existing prompt.
-
---------------------------------------------------------------------
-3. FIX - PART A: "Build Email Content" Set node (n8n)
---------------------------------------------------------------------
-Turn on "Include Other Input Fields" in that node's Options (so body.body and
-body.type continue flowing through to the AI Agent), OR explicitly add two more
-assignments to be unambiguous:
-
-  body.body  = {{ $json.body.body }}
-  body.type  = {{ $json.body.type }}
-
-Recommended: do both - enable "Include Other Input Fields" AND keep the explicit
-assignments, so the behavior doesn't silently regress if that option is ever
-toggled back off.
+FRONTEND (all routes confirmed wired in AppRoutes.tsx, calling real API,
+no "not connected yet" stubs found anywhere in these files):
+- NotificationBell (unread badge, dropdown, mark-as-read, "View All") in
+  both AdminLayout and StudentLayout headers.
+- Student: /notifications (list), /notifications/:id (detail, with a
+  working "Take Exam" button when RelatedExamId is set and the exam is
+  still open), /notifications/settings (preference grid).
+- Admin: /admin/notifications (own inbox, same detail component but shows
+  "View Exam" instead of "Take Exam"), /admin/notifications/create
+  (title/message/type/send-to picker/related exam/send now or schedule),
+  /admin/notifications/history (table + type filter + pagination),
+  /admin/notifications/history/:batchId (recipient summary, resend,
+  delete).
+- AdminSidebar has a real "Notifications" section with Create Notification/
+  History/Notification Settings sub-links.
+- The n8n email-quality bug (AI Agent hallucinating/echoing instead of
+  properly rewriting notification text) is FIXED and verified live across
+  all 5 types plus a long multi-detail message - see ActionPlan.txt's
+  "POST-PHASE-9 FIX" entry and git history (commit b2a8d40) for the full
+  writeup (this file was cleared since that entry was already committed).
 
 --------------------------------------------------------------------
-4. FIX - PART B: AI Agent prompt (n8n)
+2. FEATURES STILL PENDING / GAPS (found by reading the actual code)
 --------------------------------------------------------------------
-Two changes to the prompt text field:
 
- (1) Actually interpolate the real notification Type and the real Original
-     Message as separate labeled inputs, instead of relying on the model to
-     infer type from body text alone.
+(a) Reminder, Result, and System notification types have NO automatic
+    trigger anywhere in the codebase. Grepping every backend project for
+    where a NotificationType is actually set shows only two real
+    triggers: NotificationType.Exam (ExamAssignedConsumer) and
+    NotificationType.Account (UserRegisteredConsumer). There is no
+    "exam starting soon" reminder job, no automatic "your result is
+    ready" trigger tied to Result Service actually computing a score, and
+    no automatic system/maintenance announcement trigger. Today, Reminder/
+    Result/System notifications can ONLY ever be sent if an Admin manually
+    composes and sends one via Create Notification - they are not
+    system-generated. This wasn't a bug found today, but it IS a real gap
+    worth being explicit about: the notification-email fix tested all 5
+    types successfully, but 3 of those 5 types are currently reachable
+    only through a manual admin action, not a real product event.
 
- (2) Add a hard anti-hallucination rule: if the Original Message is empty,
-     missing, or whitespace-only, the agent must NOT invent replacement content -
-     it must return a fixed sentinel string instead, so the failure is visible
-     downstream (e.g. in the sent email or in logs) rather than silently emailing
-     users a fabricated message.
+(b) Student sidebar (DashboardSidebar.tsx) has no "Notification Settings"
+    sub-link. The Day 39 plan called for a "Student sub-item (Notification
+    Settings)" but DashboardSidebar.tsx has no submenu/children structure
+    at all (unlike AdminSidebar.tsx, which does) - it's a flat list with
+    a single "Notifications" -> /notifications entry. A student can only
+    reach /notifications/settings by typing the URL directly or via a
+    link inside the notification detail/list pages if one exists there -
+    there is currently no direct sidebar navigation to it. Small, but a
+    real discoverability gap.
 
-Proposed replacement prompt (paste into the AI Agent node's "text" field,
-replacing the current one):
+(c) "Schedule For Later" remains store-only, as originally and honestly
+    documented in ActionPlan.txt's Phase 9 scope note - no background
+    dispatcher exists. A scheduled batch never triggers an email attempt,
+    even after its scheduled time passes; it only becomes visible in
+    in-app "mine" reads at that point. Flagged there as deliberate, still
+    true today, not something that silently regressed.
 
-------------------------------------------------------------------------------
-You are the official Email Communication Assistant for ExamVault.
+(d) SMS and "Certificate Available" notification type are intentionally
+    absent (not gaps) - both were explicit scope-drop decisions in
+    ActionPlan.txt (no SMS credential/feature exists; no certificate
+    feature exists anywhere in the app). Restating here only so this
+    audit doesn't get mistaken for missing them by oversight.
 
-Your responsibility is to transform notification messages received from the
-ExamVault system into professional, clear, polished, and user-friendly email
-content.
-
-You will be given the notification's Type and its Original Message below. The
-Original Message is the ONLY source of information you are allowed to use.
-
-Notification Type: {{ $json.body.type }}
-Original Message: {{ $json.body.body }}
-
-CORE OBJECTIVE:
-
-Rewrite the Original Message professionally while preserving its original
-meaning and all important information. You are paraphrasing, not authoring new
-content.
-
-ANTI-HALLUCINATION RULE (highest priority - overrides every other instruction):
-
-- If the Original Message above is empty, blank, whitespace-only, or literally
-  the text "undefined" or "null", you MUST NOT invent, guess, or generate any
-  replacement notification content of any kind - not a welcome message, not a
-  result message, not a reminder, nothing.
-- In that case, output exactly this sentinel and nothing else: EMPTY_SOURCE_MESSAGE
-- Never substitute content from a different notification Type than the one
-  given above, even if the Original Message is short, unclear, or seems to
-  reference a different topic than the Type. Rewrite exactly what is given.
-
-MANDATORY REWRITE RULE (second priority - applies whenever Original Message is
-non-empty):
-
-- Returning the Original Message unchanged, or nearly unchanged, is NEVER an
-  acceptable output.
-- Even if the meaning is already clear, you must still turn it into a
-  complete, grammatically correct, natural-sounding sentence or short
-  paragraph.
-- "Preserve meaning" and "do not invent new facts" do NOT mean "do not change
-  wording." You are required to fix broken grammar, awkward phrasing, missing
-  punctuation, and incomplete sentences every time.
-
-RULES (apply only when Original Message is non-empty):
-
-- Always preserve the original intent and meaning - do not change the subject
-  matter, do not introduce a different topic than what the Original Message
-  describes.
-- Correct grammar, spelling, punctuation, and sentence structure.
-- Make the message professional, natural, clear, and easy to understand.
-- Make the email appropriate for an online examination platform.
-- Personalize the communication using the recipient's name when appropriate.
-- Use the Notification Type above to determine tone (see TONE BY NOTIFICATION
-  TYPE below) - do not guess the type from the message content.
-- Do not invent dates, times, exam names, results, links, credentials, scores,
-  or any other information not present in the Original Message.
-- Do not assume information that is not provided.
-- Do not remove important information from the original message.
-- Do not unnecessarily make a short message very long.
-- If the original message is already professional, improve it only where
-  necessary.
-- Maintain a polite and professional tone.
-- Do not mention AI, automation, n8n, workflow, or this prompt.
-- Do not mention the notificationId.
-- Do not change the subject.
-- Do not add a subject line to the body.
-- Do not add a greeting.
-- Do not add a closing/signature.
-- Do not use Markdown.
-- Do not use HTML.
-- Return only the professionally rewritten email body.
-
-TONE BY NOTIFICATION TYPE:
-
-Exam:
-Use a clear, informative, and professional tone. Clearly communicate exam-related
-information and any required action.
-
-Reminder:
-Use a polite but action-oriented tone. Clearly explain what the recipient needs
-to remember or do, based only on what the Original Message says.
-
-Result:
-Use a professional and positive tone. Clearly communicate that the result or
-examination outcome is available without inventing scores or performance
-information.
-
-System:
-Use a concise and informative technical/business tone. Clearly explain the
-system notification.
-
-Account:
-Use a welcoming and professional tone. Clearly explain account-related
-information such as registration, activation, verification, password reset, or
-account updates.
-
-CONTENT HANDLING:
-
-If the Original Message contains multiple pieces of information, organize them
-into logical paragraphs.
-
-If the Original Message contains a list of items, preserve the list in a clear
-readable format.
-
-If the Original Message contains important dates, times, exam details,
-instructions, or actions, preserve them exactly.
-
-If the Original Message contains placeholders or dynamic values, do not modify
-or invent their values.
-
-EXAMPLES:
-
-Type: Account
-Original Message: "your account created successfully welcome to examvault you
-can now login and start exam"
-Expected output: "Welcome to ExamVault! Your account has been created
-successfully. You can now log in to your account and start accessing your
-examinations."
-
-Type: Reminder
-Original Message: "your exam is tomorrow at 10 please login before 9.45 and
-complete exam"
-Expected output: "Your examination is scheduled for tomorrow at 10:00 AM. Please
-log in before 9:45 AM to ensure that you are ready to begin your examination on
-time."
-
-Type: Reminder
-Original Message: "we have send mail remainder for tomorrow"
-Expected output: "This is a reminder regarding your exam scheduled for
-tomorrow. Please check your email for further details."
-
-Type: Reminder
-Original Message: "" (empty)
-Expected output: EMPTY_SOURCE_MESSAGE
-
-FINAL REQUIREMENT:
-
-Return ONLY the final professional email body, or the sentinel
-EMPTY_SOURCE_MESSAGE if the Original Message was empty.
-
-Do not return JSON.
-Do not return explanations.
-Do not return quotation marks around the response.
-------------------------------------------------------------------------------
+(e) In-progress, not yet re-verified: adding the ExamVault logo to
+    notification emails (HTML email + <img> tag). Last live test attempt
+    broke the n8n workflow (HTTP 500) due to a copy-paste escaping mistake
+    in the n8n UI, root cause identified (JSON-escaped text pasted
+    directly into the plain expression editor). The workflow was reverted
+    back to a working state (plain-text email, no logo yet) and is
+    confirmed sending correctly again. The logo feature itself has not
+    been successfully verified live yet - next attempt should import a
+    whole corrected workflow JSON via n8n's Import feature rather than
+    hand-editing individual node fields, since that has been the reliable
+    method every time so far.
 
 --------------------------------------------------------------------
-5. FIX - PART C (optional but recommended): Build Email Content1 node
+3. NOT AUDITED HERE
 --------------------------------------------------------------------
-Add a guard so that if the AI Agent ever does return the EMPTY_SOURCE_MESSAGE
-sentinel, the email is not sent with that literal text to the recipient. E.g. an
-IF node after the AI Agent checking $json.output === "EMPTY_SOURCE_MESSAGE" that
-routes to a no-op / error-log branch instead of Build Email Content1 -> Gmail.
-Not designed in detail here since it depends on how failures are meant to
-surface (this doc stops at the prompt/data-flow fix that was actually asked
-for; the routing guard is flagged as a follow-up, not implemented).
+This pass covered the Notification module only (backend + frontend +
+n8n email pipeline). Other services (User/Exam/Question/AI/Submission/
+Result) were not re-examined in this pass.
 
 --------------------------------------------------------------------
-6. WHAT'S NOT CHANGED
+4. NEW FEATURE PLAN (2026-08-15): Automatic Exam Reminder
 --------------------------------------------------------------------
-- No .NET/repo code changes - Notification.API/.Infrastructure already just POST
-  the real {toEmail, toName, subject, body, type, notificationId} payload to the
-  n8n webhook (per existing Day-37 implementation); this bug is entirely inside
-  the n8n workflow the user hosts, not in this codebase.
-- The Gmail send node, webhook path, and overall 5-node shape are unchanged.
+STATUS: PLANNED - NOT IMPLEMENTED YET (design only, per plan-before-code rule)
 
---------------------------------------------------------------------
-7. NEXT STEP
---------------------------------------------------------------------
-User applies Part A + Part B (and optionally Part C) directly in their n8n
-canvas, then re-tests with a real Reminder notification to confirm the
-AI-rewritten output actually reflects the Reminder text instead of a
-hallucinated Result message.
+FEATURE: close gap 2(a) above - automatically send a Reminder-type
+notification (in-app + email, reusing the existing pipeline) to every
+student assigned to an exam, ahead of the assignment's start time,
+without any Admin having to compose it by hand.
 
---------------------------------------------------------------------
-7b. TEST RESULT (2026-08-15) - contract confirmed, retest needed
---------------------------------------------------------------------
-Verified against the actual source (N8nEmailDispatcher.cs:31-39): the .NET
-Notification service really does POST { toEmail, toName, subject, body, type,
-notificationId } to the n8n webhook - the contract assumed by the Part A/B fix
-above is correct, not a guess.
+DECISIONS CONFIRMED WITH THE USER (none derivable from existing code):
+1. Timing: TWO reminders per assignment per student - one ~24 hours
+   before the assignment's StartAtUtc, one ~1 hour before.
+2. Recipients: everyone assigned to the assignment, regardless of
+   attempt/submission status - matches how ExamAssignedEvent already
+   notifies "everyone assigned" with no Submission Service check. No new
+   cross-service call to Submission Service is introduced by this
+   feature.
+3. Job location: a new periodic background job lives inside Exam
+   Service (Exam.API), not Notification Service/Worker - Exam Service
+   already owns all assignment/timing data in its own DB, so no new
+   cross-service HTTP call or auth flow is needed to find "assignments
+   starting soon." This mirrors the existing precedent of a per-service
+   background component (the Worker's consumers) rather than introducing
+   a new internal-endpoint-plus-anonymous-polling pattern.
 
-User's first retest sent a payload shaped like { subject, textBody } (no body,
-no type) - that does NOT match the real app's contract, so {{ $json.body.body }}
-was still empty for that specific test, and the Agent replied conversationally
-("Please provide the notification message for me to rewrite.") instead of the
-literal EMPTY_SOURCE_MESSAGE sentinel. This is a partial positive signal: the
-Agent no longer hallucinates unrelated content (no more "Your results are now
-available..." on a Reminder) - it just doesn't obey the exact-sentinel
-instruction on empty input, likely because n8n's LangChain "AI Agent" node has
-its own conversational/reasoning behavior layered on top of the system prompt,
-unlike a plain completion call.
+DESIGN (mirrors the existing ExamAssignedEvent / ExamAssignedConsumer
+shape as closely as possible - no new architectural pattern introduced):
 
-Next: retest with a payload matching the real contract, e.g.:
-{
-  "toEmail": "ganesh.kamble222@gmail.com",
-  "toName": "Ganesh Kamble",
-  "subject": "Reminder for Exam",
-  "body": "we have send mail remainder for tomorrow",
-  "type": "Reminder",
-  "notificationId": "00000000-0000-0000-0000-000000000001"
-}
-Expected: AI output should be a professional Reminder-toned rewrite of "we have
-send mail remainder for tomorrow" - not a Result message, not a clarifying
-question. If it still asks a clarifying question with body/type actually
-present, that points to the Agent node itself (not the data flow) needing a
-stricter setup (e.g. checking "Require Specific Output Format" / reducing the
-Agent's own tool-use reasoning, or switching this node from a LangChain Agent to
-a plain OpenAI Chat/Completion call which has no conversational fallback).
+Exam Service side (new):
+- New `ExamReminderCheckService` : BackgroundService in Exam.API (or
+  Exam.Infrastructure, DI-registered from Exam.API - matches where the
+  Worker's consumers live relative to Notification.Infrastructure).
+  Runs on a `PeriodicTimer`, proposed interval 5 minutes (tunable later,
+  not a decision that changes the design - flagged here rather than
+  asked as a separate question).
+- Each tick, for each of the two windows (24h, 1h) independently: query
+  ExamAssignments belonging to Published exams where
+  `0 < (StartAtUtc - UtcNow) <= window` (range check, not an exact
+  timestamp match - robust against imprecise tick timing or occasional
+  missed ticks, unlike trying to catch an exact instant).
+- New small table `ExamReminderLog` (AssignmentId, UserId,
+  ReminderWindow enum [TwentyFourHour, OneHour], SentAtUtc) with a
+  unique constraint on (AssignmentId, UserId, ReminderWindow) - the
+  idempotency guard so the same reminder is never published twice for
+  the same assignment/student/window, no matter how many ticks land
+  inside that window before it closes.
+- For each (assignment, window) pair with at least one un-logged target:
+  resolve target users via the EXISTING `IUserLookupClient.
+  GetUsersByIdsAsync` (added for ExamAssignedEvent, reused as-is - no
+  new client needed), insert `ExamReminderLog` rows for every target
+  about to be notified (write-then-publish, so a crash after the DB
+  write but before publish just skips that tick's send rather than
+  double-sending - acceptable at-most-once tradeoff, consistent with
+  this codebase's existing "email is best-effort" tolerance elsewhere),
+  then publish one new `ExamReminderDueEvent` (`Shared.Events`) carrying
+  ExamId, AssignmentId, ExamTitle, StartAtUtc, ReminderWindow, and
+  `Targets: IReadOnlyList<AssignedUserInfo>` - same shape as
+  ExamAssignedEvent, via Exam Service's existing RabbitMqEventPublisher
+  (no new publisher plumbing needed, it already exists from Day 37).
 
---------------------------------------------------------------------
-7c. TEST RESULT #2 (2026-08-15) - real contract works, but Agent now echoes
-    the input verbatim instead of rewriting it
---------------------------------------------------------------------
-Retest sent the real-contract-shaped payload (see 7b) via curl straight to the
-live n8n webhook (https://ganesh-kamble222.n8n-wsk.com/webhook/examvault/notify).
-HTTP 200, a real Gmail message was sent successfully. This confirms:
-  - body/type now correctly reach the AI Agent (Part A fix works).
-  - No more hallucinated/unrelated content (Part B anti-hallucination rule works).
+Notification Worker side (new):
+- New `ExamReminderConsumer` : BackgroundService (own queue, e.g.
+  `notification-service.exam-reminder-events`) - same
+  one-BackgroundService-per-event-type shape as
+  UserRegisteredConsumer/ExamAssignedConsumer. Builds the message text
+  based on ReminderWindow ("Your exam '{title}' starts in 24 hours" /
+  "starts in 1 hour"), persists + emails via the existing
+  NotificationPersistenceService (Type=Reminder, RelatedExamId set) -
+  no changes needed to NotificationPersistenceService itself.
 
-BUT the received email body was:
-  "Hello Ganesh Kamble,
-
-  we have send mail remainder for tomorrow
-
-  Thanks & Regards,
-  ExamVault"
-
-That middle line is the RAW, ungrammatical Original Message, completely
-unchanged - meaning $json.output from the AI Agent was literally
-"we have send mail remainder for tomorrow" verbatim. The Agent did not correct
-grammar or rephrase it at all, contradicting the prompt's CORE OBJECTIVE and
-RULES (correct grammar, make professional/natural/clear).
-
-Likely cause: the prompt over-corrected in the strict direction - repeated
-"do not invent", "preserve exactly", "do not unnecessarily lengthen", "if
-already professional, improve only where necessary" instructions likely led
-gpt-4o-mini to treat "safest possible output" as "return the input unchanged",
-rather than "fix grammar/phrasing without adding new facts". The prompt never
-explicitly said returning the input untouched is not an acceptable answer, and
-never gave an example transforming a genuinely broken sentence like this one.
-
-FIX - PART D: strengthen the AI Agent prompt further
-Add, right after the ANTI-HALLUCINATION RULE block:
-
-  MANDATORY REWRITE RULE:
-  - Returning the Original Message unchanged, or nearly unchanged, is NEVER an
-    acceptable output (except for the EMPTY_SOURCE_MESSAGE case above). Even if
-    the meaning is already clear, you must still turn it into a complete,
-    grammatically correct, natural-sounding sentence or short paragraph.
-  - "Preserve meaning" and "do not invent new facts" do NOT mean "do not
-    change wording." You are required to fix broken grammar, awkward phrasing,
-    missing punctuation, and incomplete sentences every time.
-
-And add this concrete example (matching the actual failing case) to the
-EXAMPLES section:
-
-  Type: Reminder
-  Original Message: "we have send mail remainder for tomorrow"
-  Expected output: "This is a reminder regarding your exam scheduled for
-  tomorrow. Please check your email for further details."
-
-Not yet applied anywhere (doc-only, per the plan-before-code rule) - next step
-is the user pastes this addition into the live AI Agent prompt and retests the
-same payload from 7b again.
+KNOWN LIMITATIONS (flagged, not engineered around - consistent with how
+"Schedule For Later" store-only was flagged rather than fully solved):
+- If the Exam Service process is down across an entire reminder window
+  (e.g. down for 2+ hours spanning when the 1h reminder should have
+  fired), that reminder is simply missed - no catch-up/backfill logic.
+  Given reminders are a convenience feature, not a correctness-critical
+  one, this tradeoff is accepted rather than building a more complex
+  catch-up scheduler.
+- No per-user reminder preference beyond the existing Notification
+  Settings page's Reminder row (In-App/Email toggle) - a student who
+  turns Reminder emails off simply gets no email attempt for these,
+  exactly like any other type, no new preference needed.
 
 --------------------------------------------------------------------
-7d. TEST RESULT #3 (2026-08-15) - regressed back to "please provide the
-    message", likely a partial-paste issue
+5. IMPLEMENTATION + LIVE VERIFICATION (2026-08-15)
 --------------------------------------------------------------------
-Retest with the same real-contract payload from 7b/7c came back as:
-  "Hello Ganesh Kamble,
+STATUS: DONE
 
-  Please provide the notification message for me to rewrite.
+DESIGN GAP FOUND DURING IMPLEMENTATION (before any code was written):
+the periodic job in Exam Service has no HTTP caller, so no JWT of any
+kind - but resolving each target's email/name means calling User
+Service, and the existing IUserLookupClient.GetUsersByIdsAsync forwards
+a bearerToken to the [Authorize(Roles="Admin")] GET /api/users, which
+this job simply doesn't have. Confirmed with the user: fixed by adding a
+new anonymous, Gateway-unrouted GET /internal/users/by-ids on User
+Service - same "not reachable through the Gateway, network reachability
+is the boundary" pattern already established for Question Service's
+Day-34 internal answer-key endpoint (see api-contracts.md precedent),
+not a new auth mechanism. Only returns Email/FullName for explicitly
+requested ids, never a full listing.
 
-  Thanks & Regards,
-  ExamVault"
+FILES ADDED/CHANGED:
+- Shared.Events: new ExamReminderDueEvent + ReminderWindow enum
+  (Exam/ExamReminderDueEvent.cs).
+- User Service: IUserRepository.GetByIdsAsync + UserRepository impl;
+  new Users/Internal/GetUsersByIds/ query+handler; new anonymous
+  Controllers/InternalController.cs (internal/users/by-ids).
+- Exam Service: new Domain.Enums.ReminderWindow + Domain.Entities.
+  ExamReminderLog; ExamDbContext DbSet + unique index (AssignmentId,
+  UserId, Window) + cascade FK to ExamAssignments; migration
+  AddExamReminderLog; IExamRepository/ExamRepository gained
+  GetAssignmentsStartingWithinAsync, FilterUserIdsWithoutReminderLogAsync,
+  AddReminderLogEntriesAsync, and the UpcomingAssignmentForReminder
+  projection; new IInternalUserLookupClient/InternalUserServiceClient;
+  new Jobs/ExamReminderCheckService.cs (BackgroundService, 5-min
+  PeriodicTimer, both windows checked every tick); Program.cs wired the
+  new HttpClient + HostedService.
+- Notification Worker: new ExamReminderConsumer.cs (own queue
+  notification-service.exam-reminder-events, same shape as the other two
+  consumers), registered in Program.cs.
+- Test fakes updated to implement the new interface members
+  (FakeUserRepository, FakeExamRepository) - no test behavior changed,
+  just compile fixes.
 
-This is the same symptom as 7b (Agent has no Original Message to work with),
-even though this payload DOES include body="we have send mail remainder for
-tomorrow" and type="Reminder" - and the 7c test already proved this exact
-payload shape reaches the Agent correctly (it echoed the body back verbatim
-that time). Since only the AI Agent's prompt text was changed between 7c and
-this test (nothing in Build Email Content / the data flow was touched again),
-the most likely explanation is that only the small MANDATORY REWRITE RULE
-snippet was pasted into the n8n "text" field - possibly replacing the whole
-field - which would drop the two interpolation lines near the top of the
-prompt:
-
-  Notification Type: {{ $json.body.type }}
-  Original Message: {{ $json.body.body }}
-
-Without those two lines literally present in the prompt text, the Agent is
-never shown any concrete message value anywhere in its instructions, so it
-correctly (from its perspective) asks for one.
-
-FIX: not a new prompt change - section 4 above already has the full corrected
-prompt (now including the MANDATORY REWRITE RULE and the matching example, kept
-in sync with section 8's JSON). Next step: in the n8n AI Agent node, select ALL
-existing text in the "text" field and REPLACE it entirely with the full block
-from section 4 (not just append the new rule) - then retest the same payload
-again.
-
---------------------------------------------------------------------
-7e. TEST RESULT #4 (2026-08-15) - full prompt replaced, now outputs
-    EMPTY_SOURCE_MESSAGE even with a real body/type - Expression-mode
-    suspicion
---------------------------------------------------------------------
-User replaced the whole "text" field with the full block from section 4 and
-retested the same real-contract payload (body="we have send mail remainder for
-tomorrow", type="Reminder" - identical shape to 7c, which DID work and echoed
-the body back). This time the AI output was exactly:
-  EMPTY_SOURCE_MESSAGE
-
-Two things stand out:
-  (1) The Agent DID correctly return the literal sentinel this time (progress -
-      it's obeying that instruction now, unlike 7b's conversational reply).
-  (2) But it thinks the Original Message is empty, on a payload proven to carry
-      a real one two tests ago, with no changes to Build Email Content in
-      between.
-
-Leading hypothesis: copy-pasting the plain-text block from section 4 into n8n's
-"text" field via the UI likely left the field in "Fixed" (static) mode instead
-of "Expression" mode. In Fixed mode, n8n does NOT evaluate {{ }} - it treats
-"{{ $json.body.type }}" and "{{ $json.body.body }}" as literal characters. The
-Agent would then see those literal unresolved placeholder strings instead of
-real values, correctly notice they don't look like real content (similar
-pattern to the "literally the text undefined/null" case already covered by the
-ANTI-HALLUCINATION RULE), and emit EMPTY_SOURCE_MESSAGE - which is actually the
-prompt working as designed, just against un-interpolated input.
-
-Every plain-text copy-paste into that field is a chance to lose the
-expression-mode toggle or lose lines, which is why three retests in a row have
-each failed a different way. Switching strategy: instead of hand-editing the
-"text" field again, IMPORT the whole corrected workflow from section 8 directly
-(n8n menu -> Import from File/Clipboard, paste the full JSON block) so the
-"text" parameter arrives with its leading "=" already in place (n8n's own
-expression-mode marker in exported JSON), removing the manual-paste failure
-mode entirely. Section 8's JSON already includes the MANDATORY REWRITE RULE and
-matching example, so nothing else needs to change first - it just needs to
-actually replace the live AI Agent node's parameters.
-
-Not yet applied (doc-only). Next step: user imports section 8's JSON in n8n,
-confirms the AI Agent node's "text" field shows the full prompt in Expression
-mode (fx icon highlighted / "=" prefix visible when inspecting), then retests
-the same payload once more.
-
---------------------------------------------------------------------
-7f. TEST RESULT #5 (2026-08-15) - CONFIRMED WORKING, matches expected output
-    exactly
---------------------------------------------------------------------
-STATUS: RESOLVED
-
-After importing section 8's JSON (fixing the Expression-mode issue from 7e),
-retested with the same real-contract payload (body="we have send mail
-remainder for tomorrow", type="Reminder"). AI Agent output:
-
-  "This is a reminder regarding your exam scheduled for tomorrow. Please check
-  your email for further details."
-
-This is an exact match to the expected output documented in section 4/8's
-EXAMPLES block for this exact input. Confirms, end to end, against the live
-webhook (not just theory):
-  - Part A (data flow): body/type now reach the Agent correctly.
-  - Part B (anti-hallucination): no more unrelated/hallucinated content.
-  - Part D (mandatory rewrite): no more verbatim echo of broken grammar - the
-    Agent now actually rewrites into a fluent, grammatically correct sentence,
-    on-topic and on-tone for a Reminder notification.
-
-Root-cause chain for this whole feature, in order of what was actually wrong:
-  1. Build Email Content wasn't forwarding body.body/body.type (Part A).
-  2. The prompt never interpolated the real type, and had no anti-hallucination
-     guard, so an empty message caused fabricated content (Part B).
-  3. Overly strict "preserve/do not invent" wording caused verbatim echoing of
-     even broken-grammar input (Part D).
-  4. Manual copy-paste of the prompt into n8n's UI repeatedly risked landing in
-     Fixed mode instead of Expression mode, or losing lines - resolved by
-     importing the whole node JSON instead of hand-editing text fields (7e).
-
-NEXT STEP: update the checked-in copies (Documentation/n8n-notification-
-workflow.json and Backend/Services/NotificationService/workflow.txt) to match
-this now-confirmed-working workflow - only doing so now that live behavior is
-verified, per the plan-before-code rule. Awaiting explicit go-ahead before
-touching those files.
-
---------------------------------------------------------------------
-7g. TEST RESULT #6 (2026-08-15) - all 5 notification types + a long
-    multi-detail message, all verified live
---------------------------------------------------------------------
-STATUS: FULLY VERIFIED
-
-Sent one live webhook test per notification type (Exam, Reminder, Result,
-System, Account - all HTTP 200, distinct Gmail message IDs), each with a
-deliberately rough/ungrammatical body to check both correctness and rewrite
-quality, not just plumbing.
-
-Then sent a sixth test: a long, run-on, multi-detail Exam body packed with an
-exam name, date, time, duration, total/passing marks, a topics list, and two
-instructions, to specifically exercise the CONTENT HANDLING rules (organize
-into paragraphs, preserve lists, preserve exact dates/times/marks). Input:
-
-  "you have exam data structures and algorithms on 20 aug 2026 start time
-  10am duration 2 hours total marks 100 passing marks 40 please carry your id
-  card login 15 minutes before start topics covered are arrays linked list
-  stacks queues trees and graphs do not refresh page during exam once
-  submitted cannot be changed"
-
-Output (verified by the user from the actual received email):
-
-  "You have an examination in Data Structures and Algorithms scheduled for
-  August 20, 2026. The exam will start at 10:00 AM and will have a duration
-  of 2 hours. The total marks for this exam are 100, with passing marks set
-  at 40. Please ensure you carry your ID card and log in 15 minutes prior to
-  the start time. Topics covered in this examination include arrays, linked
-  lists, stacks, queues, trees, and graphs. It is important to refrain from
-  refreshing the page during the exam; once submitted, your answers cannot be
-  changed."
-
-Every fact (date, start time, duration, both mark values, all 6 topics, both
-instructions) was preserved exactly with nothing invented or dropped, organized
-into clear readable prose, correct Exam tone, properly rewritten (not a
-verbatim echo). This confirms the fix holds up on realistic, information-dense
-input, not just short one-line messages.
-
-CONCLUSION: the feature is fully verified end-to-end against the live n8n
-webhook, across all 5 notification types and both short and long/complex
-message bodies. Ready to sync the checked-in repo copies (Documentation/
-n8n-notification-workflow.json and Backend/Services/NotificationService/
-workflow.txt) with section 8's JSON whenever the user gives the go-ahead.
-
---------------------------------------------------------------------
-8. FULL UPDATED WORKFLOW JSON (ready to paste/import into n8n)
---------------------------------------------------------------------
-Same 6 nodes as the current live workflow (Notification Webhook, Build Email
-Content, AI Agent, OpenAI Chat Model, Build Email Content1, Send Message
-(Gmail)) with only two nodes changed:
-  - "Build Email Content": added body.body / body.type assignments +
-    "includeOtherFields": true (Part A).
-  - "AI Agent": replaced "text" with the hardened prompt from section 4 (Part B),
-    plus the MANDATORY REWRITE RULE addition from section 7c (Part D).
-Everything else (Gmail node, webhook path/id, Build Email Content1, OpenAI Chat
-Model, credentials, connections) is byte-for-byte unchanged from what's live
-today. Not yet written to Documentation/n8n-notification-workflow.json or
-Backend/Services/NotificationService/workflow.txt - staying doc-only until
-this is confirmed working, per the plan-before-code rule.
-
-{
-  "nodes": [
-    {
-      "parameters": {
-        "sendTo": "={{ $json.toEmail }}",
-        "subject": "={{ $json.subject }}",
-        "emailType": "text",
-        "message": "={{ $json.textBody }}",
-        "options": {
-          "appendAttribution": false
-        }
-      },
-      "id": "7d5df96f-4bb4-4feb-ad76-4f01ec3ff013",
-      "name": "Send Message (Gmail)",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
-      "position": [144, -32],
-      "webhookId": "50c01985-3e2e-40f9-ac5a-ea4cedf7c077",
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "v21QGtki5PIZbbOZ",
-          "name": "Gmail account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "includeOtherFields": true,
-        "assignments": {
-          "assignments": [
-            {
-              "id": "a1b2c3d4-0001-4000-8000-000000000001",
-              "name": "body.toEmail",
-              "value": "={{ $json.body.toEmail }}",
-              "type": "string"
-            },
-            {
-              "id": "a1b2c3d4-0002-4000-8000-000000000002",
-              "name": "body.toName",
-              "value": "={{ $json.body.toName }}",
-              "type": "string"
-            },
-            {
-              "id": "a1b2c3d4-0003-4000-8000-000000000003",
-              "name": "body.subject",
-              "value": "={{ $json.body.subject }}",
-              "type": "string"
-            },
-            {
-              "id": "a1b2c3d4-0004-4000-8000-000000000004",
-              "name": "body.textBody",
-              "value": "={{\n'Hello ' + $json.body.toName + ',\\n\\n' +\n$json.body.body + '\\n\\n' +\n'Thanks & Regards,\\n' +\n'ExamVault'\n}}",
-              "type": "string"
-            },
-            {
-              "id": "a1b2c3d4-0005-4000-8000-000000000005",
-              "name": "body.body",
-              "value": "={{ $json.body.body }}",
-              "type": "string"
-            },
-            {
-              "id": "a1b2c3d4-0006-4000-8000-000000000006",
-              "name": "body.type",
-              "value": "={{ $json.body.type }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "a2c42e35-7e6c-4932-9300-13fa570d00be",
-      "name": "Build Email Content",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [-704, 0]
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "examvault/notify",
-        "responseMode": "lastNode",
-        "options": {}
-      },
-      "id": "25c15e46-de16-4871-a20b-0383c9ea7cf4",
-      "name": "Notification Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [-1008, 0],
-      "webhookId": "examvault-notify-webhook"
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "=You are the official Email Communication Assistant for ExamVault.\n\nYour responsibility is to transform notification messages received from the ExamVault system into professional, clear, polished, and user-friendly email content.\n\nYou will be given the notification's Type and its Original Message below. The Original Message is the ONLY source of information you are allowed to use.\n\nNotification Type: {{ $json.body.type }}\nOriginal Message: {{ $json.body.body }}\n\nCORE OBJECTIVE:\n\nRewrite the Original Message professionally while preserving its original meaning and all important information. You are paraphrasing, not authoring new content.\n\nANTI-HALLUCINATION RULE (highest priority - overrides every other instruction):\n\n- If the Original Message above is empty, blank, whitespace-only, or literally the text \"undefined\" or \"null\", you MUST NOT invent, guess, or generate any replacement notification content of any kind - not a welcome message, not a result message, not a reminder, nothing.\n- In that case, output exactly this sentinel and nothing else: EMPTY_SOURCE_MESSAGE\n- Never substitute content from a different notification Type than the one given above, even if the Original Message is short, unclear, or seems to reference a different topic than the Type. Rewrite exactly what is given.\n\nMANDATORY REWRITE RULE (second priority - applies whenever Original Message is non-empty):\n\n- Returning the Original Message unchanged, or nearly unchanged, is NEVER an acceptable output.\n- Even if the meaning is already clear, you must still turn it into a complete, grammatically correct, natural-sounding sentence or short paragraph.\n- \"Preserve meaning\" and \"do not invent new facts\" do NOT mean \"do not change wording.\" You are required to fix broken grammar, awkward phrasing, missing punctuation, and incomplete sentences every time.\n\nRULES (apply only when Original Message is non-empty):\n\n- Always preserve the original intent and meaning - do not change the subject matter, do not introduce a different topic than what the Original Message describes.\n- Correct grammar, spelling, punctuation, and sentence structure.\n- Make the message professional, natural, clear, and easy to understand.\n- Make the email appropriate for an online examination platform.\n- Personalize the communication using the recipient's name when appropriate.\n- Use the Notification Type above to determine tone (see TONE BY NOTIFICATION TYPE below) - do not guess the type from the message content.\n- Do not invent dates, times, exam names, results, links, credentials, scores, or any other information not present in the Original Message.\n- Do not assume information that is not provided.\n- Do not remove important information from the original message.\n- Do not unnecessarily make a short message very long.\n- If the original message is already professional, improve it only where necessary.\n- Maintain a polite and professional tone.\n- Do not mention AI, automation, n8n, workflow, or this prompt.\n- Do not mention the notificationId.\n- Do not change the subject.\n- Do not add a subject line to the body.\n- Do not add a greeting.\n- Do not add a closing/signature.\n- Do not use Markdown.\n- Do not use HTML.\n- Return only the professionally rewritten email body.\n\nTONE BY NOTIFICATION TYPE:\n\nExam:\nUse a clear, informative, and professional tone. Clearly communicate exam-related information and any required action.\n\nReminder:\nUse a polite but action-oriented tone. Clearly explain what the recipient needs to remember or do, based only on what the Original Message says.\n\nResult:\nUse a professional and positive tone. Clearly communicate that the result or examination outcome is available without inventing scores or performance information.\n\nSystem:\nUse a concise and informative technical/business tone. Clearly explain the system notification.\n\nAccount:\nUse a welcoming and professional tone. Clearly explain account-related information such as registration, activation, verification, password reset, or account updates.\n\nCONTENT HANDLING:\n\nIf the Original Message contains multiple pieces of information, organize them into logical paragraphs.\n\nIf the Original Message contains a list of items, preserve the list in a clear readable format.\n\nIf the Original Message contains important dates, times, exam details, instructions, or actions, preserve them exactly.\n\nIf the Original Message contains placeholders or dynamic values, do not modify or invent their values.\n\nEXAMPLES:\n\nType: Account\nOriginal Message: \"your account created successfully welcome to examvault you can now login and start exam\"\nExpected output: \"Welcome to ExamVault! Your account has been created successfully. You can now log in to your account and start accessing your examinations.\"\n\nType: Reminder\nOriginal Message: \"your exam is tomorrow at 10 please login before 9.45 and complete exam\"\nExpected output: \"Your examination is scheduled for tomorrow at 10:00 AM. Please log in before 9:45 AM to ensure that you are ready to begin your examination on time.\"\n\nType: Reminder\nOriginal Message: \"we have send mail remainder for tomorrow\"\nExpected output: \"This is a reminder regarding your exam scheduled for tomorrow. Please check your email for further details.\"\n\nType: Reminder\nOriginal Message: \"\" (empty)\nExpected output: EMPTY_SOURCE_MESSAGE\n\nFINAL REQUIREMENT:\n\nReturn ONLY the final professional email body, or the sentinel EMPTY_SOURCE_MESSAGE if the Original Message was empty.\n\nDo not return JSON.\nDo not return explanations.\nDo not return quotation marks around the response.",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [-448, -80],
-      "id": "a4129125-5491-4849-ab04-861f74e9a437",
-      "name": "AI Agent"
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "a1b2c3d4-0001-4000-8000-000000000001",
-              "name": "toEmail",
-              "value": "={{ $('Build Email Content').item.json.body.toEmail }}",
-              "type": "string"
-            },
-            {
-              "id": "a1b2c3d4-0002-4000-8000-000000000002",
-              "name": "toName",
-              "value": "={{ $('Build Email Content').item.json.body.toName }}",
-              "type": "string"
-            },
-            {
-              "id": "a1b2c3d4-0003-4000-8000-000000000003",
-              "name": "subject",
-              "value": "={{ $('Build Email Content').item.json.body.subject }}",
-              "type": "string"
-            },
-            {
-              "id": "a1b2c3d4-0004-4000-8000-000000000004",
-              "name": "textBody",
-              "value": "={{\n'Hello ' + $('Build Email Content').item.json.body.toName + ',\\n\\n' +\n$json.output + '\\n\\n' +\n'Thanks & Regards,\\n' +\n'ExamVault'\n}}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "d6821d06-d1b7-4177-b49f-417e70e82dfe",
-      "name": "Build Email Content1",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [-96, 16]
-    },
-    {
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "value": "gpt-4o-mini",
-          "mode": "list",
-          "cachedResultName": "gpt-4o-mini"
-        },
-        "builtInTools": {},
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.3,
-      "position": [-384, 128],
-      "id": "ef100da9-860c-4208-8b81-65b3b92f6c34",
-      "name": "OpenAI Chat Model",
-      "credentials": {
-        "openAiApi": {
-          "id": "XEOZmAOuMFWSG3FQ",
-          "name": "OpenAi account"
-        }
-      }
-    }
-  ],
-  "connections": {
-    "Build Email Content": {
-      "main": [
-        [
-          { "node": "AI Agent", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Notification Webhook": {
-      "main": [
-        [
-          { "node": "Build Email Content", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "AI Agent": {
-      "main": [
-        [
-          { "node": "Build Email Content1", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Build Email Content1": {
-      "main": [
-        [
-          { "node": "Send Message (Gmail)", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "OpenAI Chat Model": {
-      "ai_languageModel": [
-        [
-          { "node": "AI Agent", "type": "ai_languageModel", "index": 0 }
-        ]
-      ]
-    }
-  },
-  "pinData": {},
-  "meta": {
-    "instanceId": "8fec855d0890005bf6f3c4dce93dfa3fc5c6bba1691480f1f0b16973c5010a71"
-  }
-}
+VERIFICATION:
+- dotnet build across the full solution: clean, zero errors.
+- dotnet test across all 7 backend test projects: 196/196 passing, zero
+  regressions from before this feature.
+- EF migration applied against the real ExamVault.ExamDb
+  (ExamReminderLogs table + unique index created).
+- Live verification used REAL pre-existing data rather than a purpose-
+  built throwaway, since one happened to already exist: on Exam.API
+  startup, the job immediately found a real Published "Java" exam
+  assignment (student "ansh") with StartAtUtc ~7.6 hours out - correctly
+  matched the 24-hour window only (0 < 7.6h <= 24h), NOT the 1-hour one
+  (7.6h > 1h) - proving the range-check logic classifies windows
+  correctly, not just "does something."
+- First attempt hit a real startup race: Exam.API's immediate first tick
+  published the event before the Notification Worker's queue had
+  finished binding to the fanout exchange, so that specific message was
+  lost (fanout with no bound queue yet = dropped, not queued). Caught by
+  checking the Worker's log showed nothing. Fixed by deleting the one
+  ExamReminderLog row that tick had already written (SQL,
+  DELETE ... WHERE AssignmentId=...) and restarting Exam.API - its
+  do/while(PeriodicTimer) loop runs one check immediately on startup, so
+  this re-triggered a clean run with the Worker fully up.
+- Second attempt: full success. Exam.API log showed the DB queries,
+  the internal-endpoint HTTP call (200), and "Published
+  ExamReminderDueEvent for assignment ... (TwentyFourHour), 1 targets."
+  The Worker's log showed ExamReminderDueEvent received -> preference
+  lookup -> n8n webhook POST (200) -> Notification row inserted.
+  Confirmed directly in the database: Notifications row with
+  Type=Reminder, Title="Exam Reminder: Java", Message="Your exam \"Java\"
+  starts in 24 hours. Please make sure you're ready to begin on time.",
+  EmailStatus=Delivered.
+- Idempotency confirmed structurally: the log row is written and
+  SaveChanges'd BEFORE the event is published, and
+  FilterUserIdsWithoutReminderLogAsync excludes already-logged
+  (assignmentId, userId, window) triples - the exact mechanism that
+  correctly suppressed the lost startup-race attempt from ever being
+  retried blindly (it had to be cleared deliberately to re-test).
+- NOT separately verified live in this pass: the 1-hour window firing
+  (would need waiting for real clock time to close in on a real
+  assignment, or fabricating one - not done, since the 24-hour path
+  already proves the shared range-check/dedupe/publish/consume mechanism
+  end-to-end and the 1-hour window uses the exact same code path with a
+  different TimeSpan constant) and a student with Reminder-Email
+  preference off (not re-tested here since NotificationPersistenceService
+  itself - which does the per-recipient EmailEnabled check - is existing,
+  unchanged code already covered by Notification.Application.Tests).

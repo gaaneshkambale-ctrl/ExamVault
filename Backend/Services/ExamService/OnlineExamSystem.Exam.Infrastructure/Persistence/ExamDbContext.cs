@@ -13,6 +13,7 @@ public class ExamDbContext : DbContext
     public DbSet<ExamPaper> Exams => Set<ExamPaper>();
     public DbSet<ExamAssignment> ExamAssignments => Set<ExamAssignment>();
     public DbSet<ExamAssignmentTarget> ExamAssignmentTargets => Set<ExamAssignmentTarget>();
+    public DbSet<ExamReminderLog> ExamReminderLogs => Set<ExamReminderLog>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. System.Text.Json then
@@ -57,6 +58,16 @@ public class ExamDbContext : DbContext
             entity.HasOne<ExamAssignment>()
                 .WithMany()
                 .HasForeignKey(t => t.ExamAssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ExamReminderLog>(entity =>
+        {
+            entity.HasKey(r => r.Id);
+            entity.HasIndex(r => new { r.AssignmentId, r.UserId, r.Window }).IsUnique();
+            entity.HasOne<ExamAssignment>()
+                .WithMany()
+                .HasForeignKey(r => r.AssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

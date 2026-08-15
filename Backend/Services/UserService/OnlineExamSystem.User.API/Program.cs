@@ -15,6 +15,7 @@ using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
 using OnlineExamSystem.User.Application.Users.GetProfile;
+using OnlineExamSystem.User.Application.Users.Internal.GetUsersByIds;
 using OnlineExamSystem.User.Application.Users.List;
 using OnlineExamSystem.User.Application.Users.ListSessions;
 using OnlineExamSystem.User.Application.Users.Login;
@@ -55,6 +56,7 @@ public class Program
         builder.Services.AddScoped<RegisterUserHandler>();
         builder.Services.AddScoped<GetUserProfileHandler>();
         builder.Services.AddScoped<ListUsersHandler>();
+        builder.Services.AddScoped<GetUsersByIdsHandler>();
         builder.Services.AddScoped<IValidator<CreateUserCommand>, CreateUserValidator>();
         builder.Services.AddScoped<CreateUserHandler>();
         builder.Services.AddScoped<IValidator<UpdateUserCommand>, UpdateUserValidator>();

@@ -16,6 +16,7 @@ builder.Services.AddScoped<INotificationPersistenceService, NotificationPersiste
 
 builder.Services.AddHostedService<UserRegisteredConsumer>();
 builder.Services.AddHostedService<ExamAssignedConsumer>();
+builder.Services.AddHostedService<ExamReminderConsumer>();
 
 var host = builder.Build();
 host.Run();

@@ -1386,6 +1386,91 @@ n8n, and admin history/resend/delete all working, and nothing is ever
 visible to a user or role it wasn't addressed to. -> Phase 9 complete,
 Phase 10 unlocked.
 
+POST-PHASE-9 FIX (2026-08-15): n8n notification email AI Agent was
+hallucinating unrelated content
+-----------------------------------------------------------------------
+FIXED. The n8n notification-email workflow's "Build Email Content" Set
+node wasn't forwarding body.body/body.type downstream to the AI Agent,
+so the Agent received an effectively empty message and fabricated
+unrelated replies (e.g. a Result-type message for a Reminder
+notification, or a conversational "please provide the message" reply).
+Fixed by forwarding those fields (includeOtherFields + explicit
+assignments) and hardening the AI Agent's prompt with an
+anti-hallucination guard (fixed EMPTY_SOURCE_MESSAGE sentinel on empty
+input instead of inventing content) and a mandatory-rewrite rule
+(returning the input verbatim is never acceptable - grammar/phrasing
+must always be corrected). Verified live against the real n8n webhook
+across all 5 notification types (Exam/Reminder/Result/System/Account)
+and a long multi-detail message, confirming exact facts (dates, times,
+marks, topic lists) are preserved while wording is properly
+rewritten. Checked-in copies (Documentation/n8n-notification-
+workflow.json, Backend/Services/NotificationService/workflow.txt)
+updated to match the confirmed-working live workflow. Full
+investigation, every intermediate test result, and the complete
+before/after prompt are in FeatureUpdate.txt at the repo root.
+
+POST-PHASE-9 FEATURE (DONE, 2026-08-15): Automatic Exam Reminder
+-----------------------------------------------------------------------
+IMPLEMENTED AND VERIFIED LIVE. A Notification-module audit found that
+Reminder/Result/System notification types had no automatic trigger
+anywhere in the codebase - only Exam (assignment) and Account
+(registration) were ever system-generated; Reminder could previously
+only be sent by an Admin composing one by hand. This closes that gap for
+the Reminder type specifically (Result/System triggers were not part of
+this feature - not asked for).
+
+Decisions confirmed with the user: two reminders per assignment per
+student (~24 hours before and ~1 hour before the assignment's
+StartAtUtc); recipients are everyone assigned regardless of attempt
+status (no new Submission Service dependency); the periodic "check for
+upcoming exams" job lives inside Exam Service (it already owns the
+assignment/timing data), not Notification Service.
+
+A design gap was found mid-implementation and fixed before writing code:
+the periodic job has no HTTP caller and therefore no JWT of any kind, but
+resolving each target's email/name needs a call to User Service - the
+existing IUserLookupClient.GetUsersByIdsAsync requires an Admin bearer
+token it doesn't have. Fixed by adding a new anonymous, Gateway-unrouted
+`GET /internal/users/by-ids` on User Service (same "not reachable through
+the Gateway, network reachability is the boundary" pattern already
+established for Question Service's Day-34 internal answer-key endpoint),
+called via a new `IInternalUserLookupClient`/`InternalUserServiceClient`.
+
+Built exactly per the design: `ExamReminderCheckService` (BackgroundService
+in Exam.API, 5-minute PeriodicTimer) checks both windows each tick via a
+new `IExamRepository.GetAssignmentsStartingWithinAsync` (Published exams
+only, range-based StartAtUtc check), dedupes against a new
+`ExamReminderLog` table (AssignmentId/UserId/Window, unique index) before
+publishing, resolves targets via the new internal client, and publishes
+`ExamReminderDueEvent` (Shared.Events) through the existing
+RabbitMqEventPublisher. A new `ExamReminderConsumer` in the Notification
+Worker (same one-consumer-per-event-type shape as the other two)
+persists + emails the Reminder notification through the existing
+NotificationPersistenceService - unchanged.
+
+Verified live with real pre-existing data, not synthetic test accounts:
+on first startup the job found a real Published "Java" exam assignment
+(student "ansh") starting ~7.5 hours out, correctly classified it as due
+for the 24-hour window only (not the 1-hour one), resolved the recipient
+through the new internal endpoint, and the Notification Worker persisted
++ emailed it (EmailStatus=Delivered via n8n). A startup race the first
+time (Exam.API's immediate first tick fired before the Worker's queue
+was bound, so that specific event was lost to the fanout exchange with no
+bound queue yet) was caught, the one ExamReminderLog row it had already
+written was cleared, and a clean restart reproduced the exact same result
+end-to-end with the Worker fully up - confirming the idempotency guard
+also does its job of preventing an accidental double-send. Full backend
+test suite (dotnet build + dotnet test across all 7 projects) stayed
+green with zero regressions after adding this feature.
+
+Known limitation, flagged not solved (consistent with how "Schedule For
+Later" was flagged rather than engineered around): if Exam Service is
+down across an entire reminder window, that specific reminder is simply
+missed - no catch-up/backfill logic, since this is a convenience feature.
+
+Full design detail and the complete implementation/verification log are
+in FeatureUpdate.txt at the repo root.
+
 WHAT COMES AFTER (SUMMARY OF REMAINING PHASES)
 --------------------------------------------------
 Phase 10 (Days 40-43) I containerize everything with Docker, deploy to Azure,
