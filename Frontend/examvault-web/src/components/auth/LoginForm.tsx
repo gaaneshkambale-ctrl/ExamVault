@@ -6,8 +6,14 @@ import { isAxiosError } from 'axios';
 import { useAuth } from '../../hooks/useAuth';
 
 function extractServerError(error: unknown): string {
-  if (isAxiosError(error) && error.response?.status === 401) {
-    return 'Invalid email or password.';
+  if (isAxiosError(error)) {
+    const serverMessage = (error.response?.data as { message?: string } | undefined)?.message;
+    if (serverMessage) {
+      return serverMessage;
+    }
+    if (error.response?.status === 401) {
+      return 'Invalid email or password.';
+    }
   }
   return 'Something went wrong. Please try again.';
 }
