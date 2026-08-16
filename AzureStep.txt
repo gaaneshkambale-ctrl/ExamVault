@@ -284,25 +284,84 @@ yet attempted:
     (not Container Apps) might not hit whatever is specific to
     Container-App-to-Container-App traffic.
 
-Current workaround in place (temporary, revert once real fix found):
-exam-api is on external ingress with minReplicas=1, in the centralus
-environment. Gateway's exams-cluster destination is set to exam-api's
-external URL (not internal). Neither made the golden path work, but both
-are left as-is pending the next debugging session rather than reverted.
+STEP 6 RESOLVED - Dapr service invocation fixes bug #2
+-----------------------------------------------------------
+Given the free-trial time/cost pressure, stopped hunting the exact platform
+root cause and went straight for the most promising available fix: Azure
+Container Apps' built-in Dapr integration, which routes app-to-app calls
+through a local sidecar (`localhost:3500`) instead of the app's own public
+HTTPS URL - a genuinely different code path than everything tried so far.
 
-STEP 7 — What's verified working right now
-----------------------------------------------
-- All Azure infra (SQL, Service Bus, Container Apps Environment, ACR):
+Applied:
+  1. Enabled Dapr on Gateway + all 7 backend APIs (frontend and
+     notification-worker don't need it - they never call another Container
+     App directly):
+       az containerapp dapr enable --name <app> --resource-group rg-examvault-dev \
+         --dapr-app-id <short-name> --dapr-app-port 8080 --dapr-app-protocol http
+     dapr-app-id used: gateway, user-api, exam-api, question-api, ai-api,
+     submission-api, result-api, notification-api.
+  2. Changed every cross-app URL - Gateway's 7 YARP cluster Destination
+     addresses AND every `Services__*BaseUrl` env var (exam-api->user-api,
+     submission-api->exam-api, result-api->exam-api/question-api/
+     submission-api, notification-api->user-api/exam-api) - from
+     `https://ca-<app>-dev.internal.<domain>` to
+     `http://localhost:3500/v1.0/invoke/<dapr-app-id>/method`. Dapr appends
+     the caller's own request path after `/method/`, forwarding it
+     unchanged to the target app's real HTTP listener - e.g. a request to
+     `/api/exams` becomes `http://localhost:3500/v1.0/invoke/exam-api/method/api/exams`
+     server-side, which Dapr resolves and forwards to exam-api's own
+     `/api/exams` route.
+  3. Reverted exam-api back to internal-only ingress + minReplicas=0 (the
+     external-ingress/always-warm workaround from the failed diagnostic
+     attempts) - Dapr's mesh doesn't care about an app's ingress type at
+     all, so there's no reason for backend APIs to be externally reachable
+     once Dapr is wired. Confirmed still worked after reverting.
+
+RESULT: fully confirmed working, real requests through the real Gateway
+URL, not synthetic tests -
+  - `POST /api/users/register` -> 201, real user created
+  - `POST /api/users/login` -> 200, real JWT issued
+  - `GET /api/exams` with that JWT -> 200 `[]` (correct empty result,
+    proving the full path: Gateway -> Dapr -> exam-api -> JWT validation
+    -> real database query -> real response)
+
+This is now baked into `Infra/env.bicep` permanently (not just applied via
+one-off `az` commands to the running apps) - every backend API's
+`configuration.dapr` block and every cross-app URL in the template itself
+were updated to match, so this is what a fresh deploy produces automatically
+going forward, not a manual step to remember. `location` default also
+changed from `centralindia` to `centralus` in the same template, since
+that's what fixed bug #1. See `Infra/README.md`'s "Why Dapr, not direct
+HTTPS" section for the condensed version of this whole story.
+
+Not yet re-verified after the Bicep changes: a full redeploy-from-scratch
+using the now-updated `env.bicep` (everything above was applied to the
+already-running centralus apps via direct `az` commands, then mirrored into
+the template - the template itself hasn't been used to build this exact
+working state from zero yet). Worth doing once, deliberately, to prove the
+template alone reproduces this without any manual follow-up steps.
+
+STEP 7 — Current state: WORKING
+------------------------------------
+- All Azure infra (SQL, Service Bus, Container Apps Environment, ACR): in
+  `centralus` now (migrated from `centralindia` mid-investigation),
   provisioned, healthy.
-- All 10 Container Apps: running real application images (not placeholders).
-- Every backend service INDIVIDUALLY (called directly, bypassing Gateway):
-  confirmed working correctly (e.g. exam-api's [Authorize] correctly
-  rejects an unauthenticated request).
-- Frontend: serves its real built page.
-- NOT working: Gateway's reverse-proxy path to any backend (Step 6), and by
-  extension any feature that depends on it (essentially the whole app, since
-  Gateway is the single public entry point) or on server-to-server calls
-  between services.
+- All 10 Container Apps: running real application images, Dapr-enabled
+  where needed.
+- Gateway's full reverse-proxy path to every backend: WORKING (Step 6
+  resolved this).
+- Golden path verified live: register -> login -> authenticated API call,
+  all through the real public Gateway URL.
+- Gateway URL: `https://ca-gateway-dev.proudmushroom-43e29194.centralus.azurecontainerapps.io`
+- Frontend URL: `https://ca-frontend-dev.proudmushroom-43e29194.centralus.azurecontainerapps.io`
+  (note: frontend's baked-in `VITE_API_BASE_URL` was set to the OLD
+  centralindia gateway URL during an earlier build - needs a rebuild+push
+  with the current centralus gateway URL before the frontend itself will
+  correctly reach the API; the backend/API side is fully verified
+  independent of this).
+- Not yet done: full golden-path click-through in an actual browser (only
+  curl-level API verification so far), and the "not yet re-verified"
+  from-scratch template test noted above.
 
 STEP 8 — Repo files this all lives in
 ------------------------------------------

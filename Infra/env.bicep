@@ -18,7 +18,7 @@ targetScope = 'resourceGroup'
 param environmentName string
 
 @description('Location for every resource in this environment.')
-param location string = 'centralindia'
+param location string = 'centralus'
 
 @description('Resource group name that hosts the shared Azure Container Registry.')
 param sharedResourceGroupName string
@@ -180,6 +180,7 @@ resource userApi 'Microsoft.App/containerApps@2023-05-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: false, targetPort: 8080, transport: 'auto' }
+      dapr: { enabled: true, appId: 'user-api', appProtocol: 'http', appPort: 8080 }
       secrets: [
         { name: 'sql-connection', value: userDbConnection }
         { name: 'jwt-signing-key', value: jwtSigningKey }
@@ -232,6 +233,7 @@ resource examApi 'Microsoft.App/containerApps@2023-05-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: false, targetPort: 8080, transport: 'auto' }
+      dapr: { enabled: true, appId: 'exam-api', appProtocol: 'http', appPort: 8080 }
       secrets: [
         { name: 'sql-connection', value: examDbConnection }
         { name: 'jwt-signing-key', value: jwtSigningKey }
@@ -255,7 +257,7 @@ resource examApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Messaging__Provider', value: 'ServiceBus' }
             { name: 'ServiceBus__ConnectionString', secretRef: 'servicebus-connection' }
             { name: 'ServiceBus__TopicName', value: 'examvault.events' }
-            { name: 'Services__UserServiceBaseUrl', value: 'https://ca-user-api-${environmentName}.internal.${internalDomain}' }
+            { name: 'Services__UserServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/user-api/method' }
           ]
         }
       ]
@@ -283,6 +285,7 @@ resource questionApi 'Microsoft.App/containerApps@2023-05-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: false, targetPort: 8080, transport: 'auto' }
+      dapr: { enabled: true, appId: 'question-api', appProtocol: 'http', appPort: 8080 }
       secrets: [
         { name: 'sql-connection', value: questionDbConnection }
         { name: 'jwt-signing-key', value: jwtSigningKey }
@@ -329,6 +332,7 @@ resource aiApi 'Microsoft.App/containerApps@2023-05-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: false, targetPort: 8080, transport: 'auto' }
+      dapr: { enabled: true, appId: 'ai-api', appProtocol: 'http', appPort: 8080 }
       secrets: [
         { name: 'jwt-signing-key', value: jwtSigningKey }
         { name: 'n8n-webhook-url', value: n8nAiWebhookUrl }
@@ -375,6 +379,7 @@ resource submissionApi 'Microsoft.App/containerApps@2023-05-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: false, targetPort: 8080, transport: 'auto' }
+      dapr: { enabled: true, appId: 'submission-api', appProtocol: 'http', appPort: 8080 }
       secrets: [
         { name: 'sql-connection', value: submissionDbConnection }
         { name: 'jwt-signing-key', value: jwtSigningKey }
@@ -394,7 +399,7 @@ resource submissionApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Jwt__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'Jwt__AccessTokenMinutes', value: '15' }
             { name: 'Jwt__RefreshTokenDays', value: '7' }
-            { name: 'Services__ExamServiceBaseUrl', value: 'https://ca-exam-api-${environmentName}.internal.${internalDomain}' }
+            { name: 'Services__ExamServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
           ]
         }
       ]
@@ -422,6 +427,7 @@ resource resultApi 'Microsoft.App/containerApps@2023-05-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: false, targetPort: 8080, transport: 'auto' }
+      dapr: { enabled: true, appId: 'result-api', appProtocol: 'http', appPort: 8080 }
       secrets: [
         { name: 'jwt-signing-key', value: jwtSigningKey }
       ]
@@ -439,9 +445,9 @@ resource resultApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Jwt__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'Jwt__AccessTokenMinutes', value: '15' }
             { name: 'Jwt__RefreshTokenDays', value: '7' }
-            { name: 'Services__ExamServiceBaseUrl', value: 'https://ca-exam-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'Services__QuestionServiceBaseUrl', value: 'https://ca-question-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'Services__SubmissionServiceBaseUrl', value: 'https://ca-submission-api-${environmentName}.internal.${internalDomain}' }
+            { name: 'Services__ExamServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
+            { name: 'Services__QuestionServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/question-api/method' }
+            { name: 'Services__SubmissionServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/submission-api/method' }
           ]
         }
       ]
@@ -469,6 +475,7 @@ resource notificationApi 'Microsoft.App/containerApps@2023-05-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: false, targetPort: 8080, transport: 'auto' }
+      dapr: { enabled: true, appId: 'notification-api', appProtocol: 'http', appPort: 8080 }
       secrets: [
         { name: 'sql-connection', value: notificationDbConnection }
         { name: 'jwt-signing-key', value: jwtSigningKey }
@@ -489,8 +496,8 @@ resource notificationApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Jwt__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'Jwt__AccessTokenMinutes', value: '15' }
             { name: 'Jwt__RefreshTokenDays', value: '7' }
-            { name: 'Services__UserServiceBaseUrl', value: 'https://ca-user-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'Services__ExamServiceBaseUrl', value: 'https://ca-exam-api-${environmentName}.internal.${internalDomain}' }
+            { name: 'Services__UserServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/user-api/method' }
+            { name: 'Services__ExamServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
             { name: 'N8n__WebhookUrl', secretRef: 'n8n-webhook-url' }
           ]
         }
@@ -564,6 +571,7 @@ resource gateway 'Microsoft.App/containerApps@2023-05-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: true, targetPort: 8080, transport: 'auto' }
+      dapr: { enabled: true, appId: 'gateway', appProtocol: 'http', appPort: 8080 }
     }
     template: {
       containers: [
@@ -573,13 +581,13 @@ resource gateway 'Microsoft.App/containerApps@2023-05-01' = {
           resources: { cpu: json('0.25'), memory: '0.5Gi' }
           env: [
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Azure' }
-            { name: 'ReverseProxy__Clusters__users-cluster__Destinations__users-api__Address', value: 'https://ca-user-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'ReverseProxy__Clusters__exams-cluster__Destinations__exams-api__Address', value: 'https://ca-exam-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'ReverseProxy__Clusters__questions-cluster__Destinations__questions-api__Address', value: 'https://ca-question-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'ReverseProxy__Clusters__ai-cluster__Destinations__ai-api__Address', value: 'https://ca-ai-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'ReverseProxy__Clusters__submissions-cluster__Destinations__submissions-api__Address', value: 'https://ca-submission-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'ReverseProxy__Clusters__results-cluster__Destinations__results-api__Address', value: 'https://ca-result-api-${environmentName}.internal.${internalDomain}' }
-            { name: 'ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-api__Address', value: 'https://ca-notification-api-${environmentName}.internal.${internalDomain}' }
+            { name: 'ReverseProxy__Clusters__users-cluster__Destinations__users-api__Address', value: 'http://localhost:3500/v1.0/invoke/user-api/method' }
+            { name: 'ReverseProxy__Clusters__exams-cluster__Destinations__exams-api__Address', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
+            { name: 'ReverseProxy__Clusters__questions-cluster__Destinations__questions-api__Address', value: 'http://localhost:3500/v1.0/invoke/question-api/method' }
+            { name: 'ReverseProxy__Clusters__ai-cluster__Destinations__ai-api__Address', value: 'http://localhost:3500/v1.0/invoke/ai-api/method' }
+            { name: 'ReverseProxy__Clusters__submissions-cluster__Destinations__submissions-api__Address', value: 'http://localhost:3500/v1.0/invoke/submission-api/method' }
+            { name: 'ReverseProxy__Clusters__results-cluster__Destinations__results-api__Address', value: 'http://localhost:3500/v1.0/invoke/result-api/method' }
+            { name: 'ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-api__Address', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]

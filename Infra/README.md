@@ -13,7 +13,13 @@ same `env.bicep` re-run with a different `environmentName` when we get there).
   Bus namespace (Standard tier - Topics require Standard), and 10 Container
   Apps (Gateway + 7 APIs + Notification Worker + frontend), each pulling
   images from the shared ACR via system-assigned managed identity (no
-  registry credentials stored anywhere).
+  registry credentials stored anywhere). Gateway and every backend API have
+  Dapr enabled and talk to each other exclusively via Dapr's local service
+  invocation (`http://localhost:3500/v1.0/invoke/<dapr-app-id>/method/...`)
+  - see "Why Dapr, not direct HTTPS" below, this is load-bearing, not
+    incidental.
+- Default region is `centralus`, not the more geographically obvious
+  `centralindia` - see that same section for why.
 - `modules/acrRoleAssignment.bicep` - grants one Container App's identity
   `AcrPull` on the ACR. Has to be a module (not an inline resource) because
   the role assignment lives in the ACR's resource group, not the
@@ -32,7 +38,7 @@ az group create --name rg-examvault-shared --location centralindia
 az deployment group create --resource-group rg-examvault-shared --template-file shared.bicep
 
 # Per environment (dev/qa/prod):
-az group create --name rg-examvault-<env> --location centralindia
+az group create --name rg-examvault-<env> --location centralus
 
 az deployment group what-if \
   --resource-group rg-examvault-<env> \
@@ -68,6 +74,45 @@ then the role assignment is long since propagated. If re-running this
 template ever reintroduces a `registries` block on the bootstrap apps, expect
 the same failure.
 
+## Why Dapr, not direct HTTPS (and why `centralus`, not `centralindia`)
+
+Two real, separately-diagnosed Azure issues, both hit deploying this dev
+environment, both now worked around:
+
+1. **General outbound HTTPS from a Container App was broken in the
+   `centralindia` region** for this subscription - every outbound TLS
+   handshake failed with a low-level `SslStream.EnsureFullTlsFrameAsync`
+   exception, reproduced even calling Microsoft's own
+   `management.azure.com`, reproduced again in a completely fresh
+   Container Apps Environment (ruling out an instance-specific fault).
+   Confirmed fixed by moving the environment to `centralus` - the identical
+   test against `management.azure.com` succeeded there. Root cause never
+   identified (never escalated to Azure Support), but the region switch is
+   a clean, verified fix. This is why `location` defaults to `centralus`.
+
+2. **Container-App-to-Container-App calls specifically still failed even in
+   `centralus`** - a second, separate bug, unaffected by the region fix.
+   Gateway calling another app's own public HTTPS URL (internal or
+   external ingress, both tried) either hung for ~100s or failed instantly,
+   regardless of TLS version, cert validation settings, or ingress type.
+   Fix: enable Dapr on every app (`dapr: { enabled: true, appId, ... }` in
+   `env.bicep`) and route all inter-service calls - Gateway's YARP cluster
+   destinations AND every `Services__*BaseUrl` env var - through Dapr's
+   local sidecar (`http://localhost:3500/v1.0/invoke/<dapr-app-id>/method`)
+   instead of the app's own public URL. Dapr's sidecar-to-sidecar mesh
+   doesn't traverse the same code path that was failing, and this was
+   confirmed working end-to-end (real register -> login -> authenticated
+   API call, all through Gateway) immediately after switching.
+
+Practical upshot: because Dapr's mesh doesn't depend on an app's ingress
+type at all, every backend API stays on internal-only ingress (its public
+URL is never actually used for anything once Dapr is wired) - only Gateway
+and the frontend need `external: true`. `Infra/../AzureStep.txt` at the
+repo root has the full blow-by-blow of both investigations if this ever
+needs revisiting (e.g. if Azure Support later identifies and fixes issue 1,
+`centralindia` could be revisited; issue 2 might be worth retesting without
+Dapr at that point too).
+
 ## Cost shape (dev, mostly idle / scale-to-zero)
 
 - ACR Basic: ~$5/mo (shared across all environments, not per-env)
@@ -85,8 +130,11 @@ ACR tagged `<service>:dev-<git-sha>`, and rolls each Container App to the new
 tag - triggered on every push to the `dev` branch. Authenticates to Azure via
 OIDC (no stored client secret): an app registration
 (`examvault-github-actions-dev`) with a federated credential scoped to
-`repo:gaaneshkambale-ctrl/ExamVault:ref:refs/heads/dev`, granted `Contributor`
-on `rg-examvault-dev` and `AcrPush` on the shared registry.
+`repo:gaaneshkambale-ctrl@<ownerId>/ExamVault@<repoId>:ref:refs/heads/dev`
+(GitHub's actual OIDC subject claim includes immutable numeric owner/repo
+IDs, not just the names - get the real value from the `AADSTS700213` error
+on a failed run rather than guessing), granted `Contributor` on
+`rg-examvault-dev` and `AcrPush` on the shared registry.
 
 `AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID` are hardcoded
 directly in `cd-dev.yml`'s `env:` block rather than passed as GitHub repo
