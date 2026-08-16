@@ -1683,6 +1683,94 @@ IMPLEMENTATION PLAN:
 - No DB migration needed (IsActive and MustChangePassword columns
   already exist).
 
+-----------------------------------------------------------------------
+POST-PHASE-9 FIX (DONE, 2026-08-17): "Confirm & Assign" on
+/admin/assignments/new fails with "Something went wrong" even though
+the assignment was actually created
+-----------------------------------------------------------------------
+ISSUE RAISED: clicking "Confirm & Assign" on step 4 of the Assign Exam
+wizard shows a red "Something went wrong. Please try again." banner.
+
+ROOT CAUSE (reproduced live against the Docker stack, confirmed via
+exam-api container logs and a direct DB query): CreateAssignmentHandler
+successfully validates the request, writes the ExamAssignment +
+ExamAssignmentTargets rows, THEN calls
+_eventPublisher.PublishAsync(new ExamAssignedEvent {...}) unguarded.
+RabbitMqEventPublisher (Exam.Infrastructure/Messaging) is registered as
+a Singleton whose constructor calls
+factory.CreateConnectionAsync() exactly ONCE and caches the resulting
+Task<IConnection> for the process's entire lifetime - if that one
+connection attempt fails for any reason (RabbitMQ not fully accepting
+AMQP connections yet at exam-api startup, which is exactly what
+happened in this Docker session per the container logs -
+BrokerUnreachableException: Connection refused), every later publish
+throws the same cached exception forever, with no retry, until exam-api
+itself restarts. That exception is unhandled, so the whole HTTP request
+fails with a raw 500 that doesn't match any shape extractServerError
+recognizes (no `message`/`detail`/`errors` field) - hence the generic
+fallback text.
+
+CONFIRMED VIA REPRO: clicked Confirm & Assign twice against the c# exam
+- both times the UI showed the error, but a direct SQL query against
+ExamDb.ExamAssignments showed BOTH attempts had actually inserted a row
+(AssignmentNumber 1004 and 1005) before the crash. So today's bug is
+worse than a cosmetic error message: the write silently succeeds, the
+Admin is told it failed and is invited to retry, and retrying creates a
+duplicate assignment. It also means the ExamAssignedEvent never
+reaches Notification Service, so assigned students never get notified.
+
+DECISION: match the "best-effort side channel" principle already
+established in this codebase for CreateUserHandler's invite email (a
+downstream notification failing must not fail the operation that
+already durably succeeded) - wrap the ExamAssignedEvent publish in
+try/catch, log a warning on failure, and still return success from
+CreateAssignmentHandler since the assignment itself is valid and saved.
+
+OUT OF SCOPE, FLAGGED BUT NOT FIXED NOW: the deeper fragility - a
+Singleton RabbitMqEventPublisher that permanently breaks after a single
+failed connection attempt, no reconnect/retry - is duplicated
+per-service (also present verbatim in
+UserService's RegisterUserHandler, same unguarded PublishAsync call).
+Only the ExamService/CreateAssignmentHandler symptom is being fixed
+here, since that's what was reported; the same class of bug could
+resurface anywhere else in the codebase that publishes an event after a
+RabbitMQ startup hiccup. Worth a dedicated resiliency pass later if the
+user wants it.
+
+IMPLEMENTATION: CreateAssignmentHandler.cs - add
+ILogger<CreateAssignmentHandler> (same DI pattern as
+CreateUserHandler), wrap the PublishAsync call in try/catch logging a
+warning, keep returning CreateAssignmentResult.Ok(...) either way.
+Exam.Application.csproj needed an explicit
+Microsoft.Extensions.Logging.Abstractions package reference added
+(User.Application gets ILogger transitively via
+Microsoft.Extensions.Identity.Core; Exam.Application has no such
+dependency) - same package/version already used by Ai.Application and
+Result.Application.
+
+TESTS: FakeEventPublisher (Exam.Application.Tests/Fakes) got a
+ShouldThrow flag to simulate a broker failure. New test
+Event_publish_failure_does_not_fail_an_otherwise_valid_assignment
+confirms the assignment still saves and HandleAsync still returns
+Success when the publish throws. Full Exam.Application.Tests run:
+52/52 passed (was 51). Full solution build (Release): 0 errors.
+
+LIVE-VERIFIED in Docker: rebuilt exam-api with the fix, reran the exact
+repro (Assign Exam wizard -> Confirm & Assign against the real "c#"
+exam, All Students target) - got "Exam Assigned Successfully!"
+(ASG-1006), and exam-api's logs show no warning at all (RabbitMQ was
+fully warm by then, so the publish just succeeded normally this time -
+the try/catch is a safety net for the next time the broker hiccups at
+startup, not something that fires on every request).
+
+CLEANUP MISTAKE: while clearing out the two duplicate test assignments
+(1004, 1005) created during the original repro, deleted all rows
+in ExamAssignments/ExamAssignmentTargets by AssignmentNumber
+including 1003 and this fix's own verification row 1006 - 1003 was NOT
+created by this session's testing (its timestamp pre-dates when this
+bug investigation started) and may have been real pre-existing data.
+It could not be recovered. Flagged to the user directly in chat.
+
 =====================================================================
 PHASE 10: DOCKER & AZURE DEPLOYMENT - KICKOFF (2026-08-15)
 =====================================================================

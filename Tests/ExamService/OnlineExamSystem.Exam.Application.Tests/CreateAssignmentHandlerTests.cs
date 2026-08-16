@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using OnlineExamSystem.Exam.Application.Assignments.Create;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Application.Tests.Fakes;
@@ -11,12 +12,14 @@ public class CreateAssignmentHandlerTests
 {
     private static CreateAssignmentHandler CreateHandler(
         FakeExamRepository repository,
-        IUserLookupClient? userLookupClient = null) =>
+        IUserLookupClient? userLookupClient = null,
+        FakeEventPublisher? eventPublisher = null) =>
         new(
             repository,
             userLookupClient ?? new FakeUserLookupClient(result: null),
             new CreateAssignmentValidator(),
-            new FakeEventPublisher());
+            eventPublisher ?? new FakeEventPublisher(),
+            NullLogger<CreateAssignmentHandler>.Instance);
 
     private static CreateAssignmentCommand StudentsCommand(Guid examId, params Guid[] userIds) => new(
         examId,
@@ -151,6 +154,20 @@ public class CreateAssignmentHandlerTests
 
         Assert.False(result.Success);
         Assert.NotEmpty(result.ValidationErrors);
+    }
+
+    [Fact]
+    public async Task Event_publish_failure_does_not_fail_an_otherwise_valid_assignment()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository, eventPublisher: new FakeEventPublisher { ShouldThrow = true });
+
+        var result = await handler.HandleAsync(StudentsCommand(exam.Id, Guid.NewGuid()));
+
+        Assert.True(result.Success);
+        Assert.Single(repository.Assignments);
     }
 
     [Fact]
