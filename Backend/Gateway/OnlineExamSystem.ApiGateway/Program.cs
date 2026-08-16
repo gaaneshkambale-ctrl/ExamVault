@@ -9,12 +9,17 @@ public class Program
         builder.Services.AddReverseProxy()
             .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
-        // Dev-only: this is the single entry point the React dev server (localhost:5173) calls.
-        const string frontendDevCorsPolicy = "FrontendDev";
+        // Allowed frontend origins come from config (Cors:AllowedOrigins, comma-separated)
+        // so each environment (local dev, Azure dev/qa/prod) can allow its own frontend
+        // URL without a code change. Falls back to the local Vite dev server only.
+        var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "http://localhost:5173")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        const string frontendCorsPolicy = "Frontend";
         builder.Services.AddCors(options =>
         {
-            options.AddPolicy(frontendDevCorsPolicy, policy =>
-                policy.WithOrigins("http://localhost:5173")
+            options.AddPolicy(frontendCorsPolicy, policy =>
+                policy.WithOrigins(allowedOrigins)
                     .AllowAnyHeader()
                     .AllowAnyMethod());
         });
@@ -23,7 +28,7 @@ public class Program
 
         app.UseHttpsRedirection();
 
-        app.UseCors(frontendDevCorsPolicy);
+        app.UseCors(frontendCorsPolicy);
 
         app.MapGet("/", () => "ExamVault API Gateway");
         app.MapReverseProxy();

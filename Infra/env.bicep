@@ -581,6 +581,7 @@ resource gateway 'Microsoft.App/containerApps@2023-05-01' = {
           resources: { cpu: json('0.25'), memory: '0.5Gi' }
           env: [
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Azure' }
+            { name: 'Cors__AllowedOrigins', value: 'https://ca-frontend-${environmentName}.${internalDomain}' }
             { name: 'ReverseProxy__Clusters__users-cluster__Destinations__users-api__Address', value: 'http://localhost:3500/v1.0/invoke/user-api/method' }
             { name: 'ReverseProxy__Clusters__exams-cluster__Destinations__exams-api__Address', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
             { name: 'ReverseProxy__Clusters__questions-cluster__Destinations__questions-api__Address', value: 'http://localhost:3500/v1.0/invoke/question-api/method' }
