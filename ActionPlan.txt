@@ -1771,6 +1771,44 @@ created by this session's testing (its timestamp pre-dates when this
 bug investigation started) and may have been real pre-existing data.
 It could not be recovered. Flagged to the user directly in chat.
 
+-----------------------------------------------------------------------
+POST-PHASE-9 FIX (DONE, 2026-08-17): Website logo missing from the
+Admin/Student top nav on mobile - left side was blank
+-----------------------------------------------------------------------
+ISSUE RAISED: on mobile, opening the site left the top nav's left side
+completely blank. Root cause: AdminSidebar.tsx and DashboardSidebar.tsx
+(which hold the only BrandMark+"ExamVault" logo on those layouts) are
+both `d-none d-md-flex` - fully hidden below the md breakpoint, with no
+replacement shown anywhere else, so on mobile there is no logo at all
+in either the Admin or Student layout.
+
+DECISION: add the existing BrandMark (icon variant, already used by
+the sidebar) to the top bar itself in both AdminLayout.tsx and
+StudentLayout.tsx, shown only below md (`d-flex d-md-none`) so it
+doesn't duplicate the sidebar's own logo on desktop. Scoped to exactly
+what was asked - did not touch the deeper pre-existing issue that the
+whole sidebar nav (not just the logo) is inaccessible on mobile with no
+hamburger/toggle, since the user asked specifically about the logo.
+
+IMPLEMENTATION: both layouts' top bar div changed from
+`justify-content-end` to `justify-content-between justify-content-md-end`,
+with a new `d-flex d-md-none` BrandMark+"ExamVault" div on the left and
+the existing NotificationBell/UserProfileMenu group wrapped on the
+right, unchanged otherwise.
+
+VERIFICATION: tsc --noEmit clean. Rebuilt the frontend Docker image and
+confirmed live in Chrome at a real narrow viewport (~564px) on
+/admin/dashboard - logo now shows top-left, bell/avatar still top-right,
+matches the reported "blank" spot being filled. Confirmed no desktop
+regression via computed style (`display: none` for the new element at
+1422px on both /admin/dashboard and /dashboard). StudentLayout
+(/dashboard) uses byte-identical markup/classes, confirmed via
+computed style, but the mobile-width screenshot for it specifically
+could not be captured this session due to this browser session's
+resize_window calls behaving unreliably (worked once, then stopped
+taking effect) - correctness there rests on identical code + verified
+CSS wiring, not a second pixel screenshot.
+
 =====================================================================
 PHASE 10: DOCKER & AZURE DEPLOYMENT - KICKOFF (2026-08-15)
 =====================================================================
