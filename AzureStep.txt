@@ -213,25 +213,82 @@ outbound TLS from Container Apps containers in this subscription/region is
 either a genuine, currently-active Azure platform issue, or something at the
 subscription/tenant level (not the environment level).
 
-Next things worth trying, not yet attempted:
-  - Open an Azure support ticket / check Azure status for the centralindia
-    region and for Container Apps generally - this is now a strong
-    candidate for a genuine platform-level fault, not an app or config bug.
-  - Try a completely different Azure region for the dev environment (e.g.
-    `centralus` or `eastus`) as a differential test - if a different region
-    works, it's region-specific; if it also fails, it's subscription/tenant
-    or Container-Apps-product-wide.
+UPDATE - cross-region differential test completed, split result:
+This subscription only allows 1 Container Apps Environment total (globally,
+not per-region - a signature of a trial/low default-quota subscription:
+`MaxNumberOfGlobalEnvironmentsInSubExceeded`, later also hit
+`MaxNumberOfRegionalEnvironmentsInSubExceeded` at 1-per-region too). Testing
+a second region required deleting the centralindia one first each time.
+
+Quick isolated test: created a throwaway environment + one Container App
+(just the Gateway image, no SQL/Service Bus needed) in `centralus`,
+pointed its exams-cluster destination at `https://management.azure.com`
+(the same well-known target that failed in centralindia). RESULT: SUCCESS -
+"Received HTTP/1.1 response 400" in gateway's own log, real TLS handshake
+completed. This proves general outbound TLS to arbitrary internet HTTPS
+destinations, which was completely broken in centralindia, works fine in
+centralus. Region-specific bug #1, confirmed fixed by moving region.
+
+Followed through with a FULL migration: deleted the centralindia SQL
+Server, Service Bus namespace, and Log Analytics workspace (all empty/
+fresh, no real data lost), redeployed the entire Infra/env.bicep stack with
+`location=centralus` into the same `rg-examvault-dev` resource group
+(a resource group's own location is just deployment metadata - it does not
+constrain what region the resources inside it live in). Needed the same
+stale-role-assignment cleanup as the earlier recreation (Step 6's gotcha)
+before it would succeed - this time via the shared ACR's role assignment
+list again. Deployed real images to all 10 apps in the new centralus
+environment (`ca-gateway-dev.proudmushroom-43e29194.centralus.
+azurecontainerapps.io` etc.) the same way as Step 5.
+
+RESULT: general outbound TLS bug is gone (confirmed by the isolated test
+above) - BUT Gateway calling another Container App in the SAME environment
+(exam-api) STILL fails, in centralus too, both via internal ingress
+(instant `SslStream.EnsureFullTlsFrameAsync` failure, same as centralindia)
+and via external ingress (this time a ~40-100s HANG with no response at
+all, or occasionally an Envoy-level "upstream connect error... Connection
+refused" 503 - a different symptom, suggesting Container Apps' own ingress
+proxy layer, not .NET's TLS stack, is now where this manifests). Confirmed
+this isn't a cold-start artifact: set exam-api's `minReplicas` to 1, waited
+for it to show a warm replica, retried - same hang.
+
+CONCLUSION: there are two SEPARATE bugs, not one -
+  1. General outbound HTTPS from a Container App to ANY destination -
+     region-specific to centralindia, CONFIRMED FIXED by moving to
+     centralus.
+  2. Container-App-to-Container-App calls within the same environment -
+     present in BOTH regions, unaffected by the region fix, so it's a
+     different root cause. Not resolved as of last update.
+
+Bug #2 is now the sole remaining blocker for the golden path (Gateway is
+still unable to reach any backend service). Next things worth trying, not
+yet attempted:
+  - Open an Azure support ticket specifically about bug #2 now that bug #1
+    is isolated and confirmed separately fixed - this makes for a much more
+    precise repro to hand to support than the original combined symptom.
   - Try a Container Apps Environment WITH a custom VNet (workload profile)
     instead of the default Consumption-only environment, in case internal
-    app-to-app HTTPS specifically needs VNet integration to work reliably
-    despite Microsoft's docs saying otherwise.
+    (or even external) app-to-app HTTPS specifically needs VNet integration
+    to route reliably within the same environment, despite Microsoft's docs
+    saying VNet shouldn't be required for this.
+  - Try Dapr service invocation (Container Apps' built-in service-to-service
+    call mechanism, distinct from raw HttpClient/YARP calls) as an
+    alternative to Gateway's own outbound HTTP client for reaching sibling
+    apps - if Dapr's own transport succeeds where YARP fails, that narrows
+    the bug to something specific about how a plain .NET HttpClient (used by
+    both YARP forwarding and Services__*BaseUrl calls) opens connections to
+    another app in the same environment specifically.
   - Try Azure App Service or another compute host entirely for just the
-    Gateway, as a way to unblock the golden path while the Container-Apps-
-    specific issue is investigated separately.
+    Gateway, as a way to unblock the golden path while bug #2 is
+    investigated separately - Gateway calling out to backend App Services
+    (not Container Apps) might not hit whatever is specific to
+    Container-App-to-Container-App traffic.
 
 Current workaround in place (temporary, revert once real fix found):
-none active as of last update - the last diagnostic step (external +
-allowInsecure on exam-api) was reverted back to internal + HTTPS-only.
+exam-api is on external ingress with minReplicas=1, in the centralus
+environment. Gateway's exams-cluster destination is set to exam-api's
+external URL (not internal). Neither made the golden path work, but both
+are left as-is pending the next debugging session rather than reverted.
 
 STEP 7 — What's verified working right now
 ----------------------------------------------
