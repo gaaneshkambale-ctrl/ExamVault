@@ -86,8 +86,16 @@ public class Program
         builder.Services.AddScoped<AddGroupMemberHandler>();
         builder.Services.AddScoped<RemoveGroupMemberHandler>();
 
-        builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
-        builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
+        {
+            builder.Services.Configure<ServiceBusSettings>(builder.Configuration.GetSection("ServiceBus"));
+            builder.Services.AddSingleton<IEventPublisher, ServiceBusEventPublisher>();
+        }
+        else
+        {
+            builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+            builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        }
 
         var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
             ?? throw new InvalidOperationException("Missing \"Jwt\" configuration section.");

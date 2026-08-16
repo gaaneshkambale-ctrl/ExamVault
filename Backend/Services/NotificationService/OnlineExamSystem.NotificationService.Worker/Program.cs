@@ -6,7 +6,6 @@ using OnlineExamSystem.NotificationService.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
 builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
 
 builder.Services.AddDbContext<NotificationDbContext>(options =>
@@ -14,9 +13,20 @@ builder.Services.AddDbContext<NotificationDbContext>(options =>
 builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
 builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
 
-builder.Services.AddHostedService<UserRegisteredConsumer>();
-builder.Services.AddHostedService<ExamAssignedConsumer>();
-builder.Services.AddHostedService<ExamReminderConsumer>();
+if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
+{
+    builder.Services.Configure<ServiceBusSettings>(builder.Configuration.GetSection("ServiceBus"));
+    builder.Services.AddHostedService<ServiceBusUserRegisteredConsumer>();
+    builder.Services.AddHostedService<ServiceBusExamAssignedConsumer>();
+    builder.Services.AddHostedService<ServiceBusExamReminderConsumer>();
+}
+else
+{
+    builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+    builder.Services.AddHostedService<UserRegisteredConsumer>();
+    builder.Services.AddHostedService<ExamAssignedConsumer>();
+    builder.Services.AddHostedService<ExamReminderConsumer>();
+}
 
 var host = builder.Build();
 

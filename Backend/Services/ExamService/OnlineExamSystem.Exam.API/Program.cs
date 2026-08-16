@@ -73,8 +73,16 @@ public class Program
         builder.Services.AddScoped<GetReminderSettingsHandler>();
         builder.Services.AddScoped<UpdateReminderSettingsHandler>();
 
-        builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
-        builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
+        {
+            builder.Services.Configure<ServiceBusSettings>(builder.Configuration.GetSection("ServiceBus"));
+            builder.Services.AddSingleton<IEventPublisher, ServiceBusEventPublisher>();
+        }
+        else
+        {
+            builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+            builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        }
         builder.Services.AddHostedService<ExamReminderCheckService>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
