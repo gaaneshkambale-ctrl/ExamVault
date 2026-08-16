@@ -105,6 +105,33 @@ device-flow login on this machine across 5 attempts (2 different shells,
 full user approval confirmed each time) - something in this environment
 blocks its polling; abandoned as a diagnostic tool.
 
+UPDATE - CD pipeline fully fixed and confirmed working end-to-end.
+Two more real fixes were needed on top of the above, in order:
+  1. Actually fixed the federated credential subject (the gotcha above was
+     identified but never applied - deleted the old credential and
+     recreated it with the correct
+     `repo:gaaneshkambale-ctrl@315715166/ExamVault@1330714536:ref:refs/heads/dev`
+     subject via `az ad app federated-credential delete` + `create`). This
+     got every job's "Azure login (OIDC)" step to finally succeed.
+  2. With login fixed, the next failure was `az acr build` itself - it
+     never created a single ACR task run (`az acr task list-runs` came back
+     empty), confirmed on GitHub's own hosted runners this time, not just
+     this local machine - ruling out local resource constraints as the
+     cause once and for all. Root cause on the ACR/subscription side still
+     unknown. Fix: replaced `az acr build` (ACR Tasks, a remote build
+     service) with a plain `docker build` + `docker push` in the workflow,
+     authenticated via `az acr login` using the same already-working OIDC
+     session - no ACR Tasks involved at all. This is what actually pushes
+     images now.
+
+Verified live: a real push to `dev` triggered the full pipeline
+(build+test -> build+push all 10 images -> deploy) and completed with
+`conclusion: success`; confirmed the 2 spot-checked Container Apps
+(`gateway`, `exam-api`) were running the exact new image tag matching that
+commit's SHA, and that a real login against the freshly-deployed app still
+returned a valid JWT. Push-to-dev now really does mean automatic deploy,
+no manual steps.
+
 STEP 5 — Build, push, and deploy real images (manual route)
 -------------------------------------------------------------------
 Used because the GitHub Actions CD path (Step 4) hit the unresolved secrets

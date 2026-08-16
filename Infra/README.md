@@ -124,10 +124,16 @@ Dapr at that point too).
 
 ## CD pipeline
 
-`.github/workflows/cd-dev.yml` builds every service's Docker image via
-`az acr build` (no local Docker needed on the runner), pushes to the shared
-ACR tagged `<service>:dev-<git-sha>`, and rolls each Container App to the new
-tag - triggered on every push to the `dev` branch. Authenticates to Azure via
+`.github/workflows/cd-dev.yml` builds every service's Docker image (plain
+`docker build`/`docker push`, authenticated via `az acr login` - NOT
+`az acr build`/ACR Tasks, which never created a single task run on this
+subscription across every attempt, including on GitHub's own hosted
+runners, root cause unresolved), pushes to the shared ACR tagged
+`<service>:dev-<git-sha>`, and rolls each Container App to the new tag -
+triggered on every push to the `dev` branch. **Confirmed working
+end-to-end**, live: push -> build+test -> build+push all 10 images ->
+deploy -> real login still returns a valid JWT against the freshly deployed
+image. Authenticates to Azure via
 OIDC (no stored client secret): an app registration
 (`examvault-github-actions-dev`) with a federated credential scoped to
 `repo:gaaneshkambale-ctrl@<ownerId>/ExamVault@<repoId>:ref:refs/heads/dev`
