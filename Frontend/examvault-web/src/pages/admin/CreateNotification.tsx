@@ -2,22 +2,13 @@ import { useMemo, useState } from 'react';
 import { Alert, Button, Card, Col, Form, ListGroup, Row } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { useExams } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
 import { createNotification } from '../../api/notificationApi';
 import { NOTIFICATION_TYPES } from '../../types/notification';
 import type { CreateNotificationResponse, NotificationSendToType, NotificationType } from '../../types/notification';
-
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) return Object.values(validationErrors).flat().join(' ');
-    if (error.response?.data?.detail) return error.response.data.detail as string;
-  }
-  return 'Something went wrong. Please try again.';
-}
+import { extractServerError } from '../../utils/apiError';
 
 function toDatetimeLocalValue(date: Date): string {
   const offset = date.getTimezoneOffset();

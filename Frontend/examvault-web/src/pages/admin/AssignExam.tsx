@@ -3,7 +3,6 @@ import type { ChangeEvent } from 'react';
 import { Alert, Button, Card, Col, Form, ListGroup, Nav, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createAssignment, updateAssignment } from '../../api/assignmentApi';
 import { useAssignment } from '../../hooks/useAssignments';
@@ -12,6 +11,7 @@ import { useGroups } from '../../hooks/useGroups';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { useUsers } from '../../hooks/useUsers';
 import type { AssignmentTargetType, ExamAssignmentResponse } from '../../types/assignment';
+import { extractServerError } from '../../utils/apiError';
 
 type WizardStep = 1 | 2 | 3 | 4;
 
@@ -30,18 +30,6 @@ function toDatetimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-    if (error.response?.status === 404) {
-      return 'The selected exam or group could not be found.';
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
 
 export default function AssignExam() {
   const navigate = useNavigate();

@@ -2,10 +2,10 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Form, InputGroup, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import { registerUser } from '../../api/userApi';
 import { validate } from '../../utils/validation';
 import type { RegisterFormState } from '../../utils/validation';
+import { extractServerError } from '../../utils/apiError';
 
 type FormState = RegisterFormState;
 
@@ -16,18 +16,7 @@ const initialFormState: FormState = {
   confirmPassword: '',
 };
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 409) {
-      return 'An account with this email already exists.';
-    }
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
+const REGISTER_ERROR_OVERRIDES = { 409: 'An account with this email already exists.' };
 
 function passwordStrength(password: string): { score: 0 | 1 | 2 | 3; label: string; color: string } {
   const score = [
@@ -94,7 +83,7 @@ export default function RegisterForm() {
       setForm(initialFormState);
     } catch (error) {
       setStatus('error');
-      setServerError(extractServerError(error));
+      setServerError(extractServerError(error, REGISTER_ERROR_OVERRIDES));
     }
   };
 

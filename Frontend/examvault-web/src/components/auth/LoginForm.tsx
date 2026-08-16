@@ -2,21 +2,8 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Form, InputGroup, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import { useAuth } from '../../hooks/useAuth';
-
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    const serverMessage = (error.response?.data as { message?: string } | undefined)?.message;
-    if (serverMessage) {
-      return serverMessage;
-    }
-    if (error.response?.status === 401) {
-      return 'Invalid email or password.';
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
+import { extractServerError } from '../../utils/apiError';
 
 export default function LoginForm() {
   const navigate = useNavigate();

@@ -2,11 +2,11 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createUser } from '../../api/userApi';
 import type { CreateUserRequest, UserRole } from '../../types/user';
+import { extractServerError } from '../../utils/apiError';
 
 type CreateUserFormState = CreateUserRequest;
 
@@ -18,18 +18,7 @@ const initialFormState: CreateUserFormState = {
   phoneNumber: '',
 };
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 409) {
-      return 'A user with this email already exists.';
-    }
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
+const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
 
 export default function CreateUser() {
   const navigate = useNavigate();
@@ -66,7 +55,7 @@ export default function CreateUser() {
       navigate('/admin/users');
     } catch (error) {
       setStatus('error');
-      setServerError(extractServerError(error));
+      setServerError(extractServerError(error, USER_ERROR_OVERRIDES));
     }
   };
 

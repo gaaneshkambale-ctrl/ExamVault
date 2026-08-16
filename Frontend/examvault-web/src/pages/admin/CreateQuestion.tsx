@@ -3,11 +3,11 @@ import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createQuestion } from '../../api/questionApi';
 import { useExam } from '../../hooks/useExams';
 import { validateCreateQuestion } from '../../utils/createQuestionValidation';
+import { extractServerError } from '../../utils/apiError';
 import type {
   CreateQuestionOptionRequest,
   CreateQuestionRequest,
@@ -36,15 +36,6 @@ function trueFalseOptions(): OptionFormState[] {
   ];
 }
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
 
 export default function CreateQuestion() {
   const { examId } = useParams<{ examId: string }>();

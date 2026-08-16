@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { archiveExam, publishExam, unpublishExam } from '../../api/examApi';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
 import type { ExamStatus, ExamType } from '../../types/exam';
+import { extractServerError } from '../../utils/apiError';
 
 const statusVariant: Record<ExamStatus, string> = {
   Draft: 'secondary',
@@ -27,13 +27,6 @@ function Field({ label, value }: { label: string; value: string }) {
       <div className="fw-medium">{value}</div>
     </Col>
   );
-}
-
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error) && error.response?.status === 409) {
-    return 'That status change is not allowed from the exam’s current state.';
-  }
-  return 'Something went wrong. Please try again.';
 }
 
 export default function ExamDetails() {

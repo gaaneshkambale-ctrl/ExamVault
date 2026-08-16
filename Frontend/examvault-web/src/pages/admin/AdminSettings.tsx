@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { resetUserPassword } from '../../api/userApi';
 import { getReminderSettings, updateReminderSettings } from '../../api/examApi';
 import { useAuth } from '../../hooks/useAuth';
+import { extractServerError } from '../../utils/apiError';
 
 const requirements: Array<{ label: string; test: (value: string) => boolean }> = [
   { label: 'At least 8 characters', test: (v) => v.length >= 8 },
@@ -14,16 +14,6 @@ const requirements: Array<{ label: string; test: (value: string) => boolean }> =
   { label: 'One lowercase letter', test: (v) => /[a-z]/.test(v) },
   { label: 'One number', test: (v) => /[0-9]/.test(v) },
 ];
-
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
 
 export default function AdminSettings() {
   const { user } = useAuth();

@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import { useQueryClient } from '@tanstack/react-query';
 import readXlsxFile from 'read-excel-file/browser';
 import writeXlsxFile from 'write-excel-file/browser';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createUser } from '../../api/userApi';
 import type { CreateUserRequest, UserRole } from '../../types/user';
+import { extractServerError } from '../../utils/apiError';
 
 interface ImportRow {
   id: string;
@@ -21,18 +21,7 @@ interface ImportRow {
 
 const TEMPLATE_HEADERS = ['Full Name', 'Email', 'Role', 'Phone Number'];
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 409) {
-      return 'A user with this email already exists.';
-    }
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
+const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
 
 function validateRow(row: ImportRow, allRows: ImportRow[]): string {
   if (!row.fullName.trim()) {
@@ -140,7 +129,7 @@ export default function ImportUsers() {
       if (result.status === 'rejected') {
         const row = validRows[index];
         failedIds.add(row.id);
-        failedReasons.set(row.id, extractServerError(result.reason));
+        failedReasons.set(row.id, extractServerError(result.reason, USER_ERROR_OVERRIDES));
       }
     });
 

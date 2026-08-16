@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
-import { isAxiosError } from 'axios';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import { useExam, useExams } from '../../hooks/useExams';
@@ -12,19 +11,7 @@ import type {
   GenerateQuestionType,
   GenerateSource,
 } from '../../types/ai';
-
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 502) {
-      return 'Failed to generate questions. Please try again.';
-    }
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
+import { extractServerError } from '../../utils/apiError';
 
 export default function AiGenerateQuestion() {
   const { examId: urlExamId } = useParams<{ examId: string }>();

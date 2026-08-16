@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import { isAxiosError } from 'axios';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
@@ -8,6 +7,7 @@ import DraftEditorModal from '../../components/DraftEditorModal';
 import { generateQuestions } from '../../api/aiApi';
 import { createQuestion } from '../../api/questionApi';
 import type { DraftQuestion, GenerateDifficulty, GenerateQuestionsRequest, GenerateQuestionType } from '../../types/ai';
+import { extractServerError } from '../../utils/apiError';
 
 const questionTypeLabel: Record<GenerateQuestionType, string> = {
   MultipleChoice: 'Multiple Choice',
@@ -27,18 +27,6 @@ interface PreviewState {
   backTo: string;
 }
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 502) {
-      return 'Failed to generate questions. Please try again.';
-    }
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
 
 export default function AiGeneratedQuestionsPreview() {
   const location = useLocation();

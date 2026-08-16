@@ -2,11 +2,11 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createExam } from '../../api/examApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import type { CreateExamRequest, ExamType } from '../../types/exam';
+import { extractServerError } from '../../utils/apiError';
 
 const initialFormState: CreateExamRequest = {
   title: '',
@@ -17,16 +17,6 @@ const initialFormState: CreateExamRequest = {
   passingMarks: 40,
   instructions: '',
 };
-
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
 
 export default function CreateExam() {
   const navigate = useNavigate();

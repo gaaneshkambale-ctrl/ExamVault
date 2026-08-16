@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import { isAxiosError } from 'axios';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
@@ -16,6 +15,7 @@ import type {
   GenerateQuestionType,
   GenerateSource,
 } from '../../types/ai';
+import { extractServerError } from '../../utils/apiError';
 
 const questionTypeLabel: Record<GenerateQuestionType, string> = {
   MultipleChoice: 'Multiple Choice',
@@ -28,18 +28,6 @@ const difficultyVariant: Record<GenerateDifficulty, string> = {
   Hard: 'danger',
 };
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 502) {
-      return 'Failed to generate questions. Please try again.';
-    }
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
 
 export default function AiGenerateQuestions() {
   const { examId } = useParams<{ examId: string }>();

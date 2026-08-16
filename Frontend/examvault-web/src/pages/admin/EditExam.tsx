@@ -3,12 +3,12 @@ import type { FormEvent, ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/examApi';
 import { useExam } from '../../hooks/useExams';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import type { ExamResponse, ExamStatus, ExamType, UpdateExamRequest } from '../../types/exam';
+import { extractServerError } from '../../utils/apiError';
 
 const statusVariant: Record<ExamStatus, string> = {
   Draft: 'secondary',
@@ -143,18 +143,6 @@ function toFormState(exam: ExamResponse): UpdateExamRequest {
   return form;
 }
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-    if (error.response?.status === 409) {
-      return 'That status change is not allowed from the exam’s current state.';
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
 
 export default function EditExam() {
   const { id } = useParams<{ id: string }>();

@@ -3,25 +3,14 @@ import type { FormEvent } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
 import { updateUser } from '../../api/userApi';
 import { useUser } from '../../hooks/useUsers';
 import type { UpdateUserRequest, UserRole } from '../../types/user';
+import { extractServerError } from '../../utils/apiError';
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 409) {
-      return 'A user with this email already exists.';
-    }
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
+const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
 
 export default function EditUser() {
   const { id } = useParams<{ id: string }>();
@@ -55,7 +44,7 @@ export default function EditUser() {
       queryClient.invalidateQueries({ queryKey: ['users', id] });
       navigate('/admin/users');
     },
-    onError: (error) => setServerError(extractServerError(error)),
+    onError: (error) => setServerError(extractServerError(error, USER_ERROR_OVERRIDES)),
   });
 
   const handleSubmit = (e: FormEvent) => {

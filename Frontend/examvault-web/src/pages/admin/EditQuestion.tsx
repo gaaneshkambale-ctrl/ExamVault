@@ -3,11 +3,11 @@ import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import { updateQuestion } from '../../api/questionApi';
 import { useQuestion } from '../../hooks/useQuestions';
 import { validateCreateQuestion } from '../../utils/createQuestionValidation';
+import { extractServerError } from '../../utils/apiError';
 import type {
   CreateQuestionOptionRequest,
   QuestionDifficulty,
@@ -52,15 +52,6 @@ function toOptionFormState(question: QuestionResponse): OptionFormState[] {
     .map((o) => ({ key: nextOptionKey++, optionText: o.optionText, isCorrect: o.isCorrect }));
 }
 
-function extractServerError(error: unknown): string {
-  if (isAxiosError(error)) {
-    const validationErrors = error.response?.data?.errors as Record<string, string[]> | undefined;
-    if (validationErrors) {
-      return Object.values(validationErrors).flat().join(' ');
-    }
-  }
-  return 'Something went wrong. Please try again.';
-}
 
 export default function EditQuestion() {
   const { id } = useParams<{ id: string }>();
