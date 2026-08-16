@@ -88,14 +88,21 @@ OIDC (no stored client secret): an app registration
 `repo:gaaneshkambale-ctrl/ExamVault:ref:refs/heads/dev`, granted `Contributor`
 on `rg-examvault-dev` and `AcrPush` on the shared registry.
 
-Required GitHub repo secrets (Settings -> Secrets and variables -> Actions):
-| Secret | Value |
-|---|---|
-| `AZURE_CLIENT_ID` | the app registration's Application (client) ID |
-| `AZURE_TENANT_ID` | the Azure AD tenant ID |
-| `AZURE_SUBSCRIPTION_ID` | the Azure subscription ID |
+`AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID` are hardcoded
+directly in `cd-dev.yml`'s `env:` block rather than passed as GitHub repo
+secrets. This is intentional, not a shortcut: none of the three is actually
+sensitive - they're identifiers, not credentials. The real security boundary
+is the federated credential's subject restriction
+(`repo:gaaneshkambale-ctrl/ExamVault:ref:refs/heads/dev`, configured on the
+Azure AD app, not in this repo) - only a workflow run on that exact repo and
+branch can ever exchange a token, regardless of who can see these three
+values. (This also sidesteps a real, unresolved problem hit in practice:
+repo secrets set via the GitHub UI never reached `azure/login@v2` in several
+attempts - `client-id`/`tenant-id` kept resolving empty despite the secrets
+being correctly named and scoped - so hardcoding was also the pragmatic
+fix, not just the "more correct" one.)
 
 qa/prod get their own app registration + federated credential (scoped to
 `ref:refs/heads/QA` / `ref:refs/heads/main`) and their own `cd-qa.yml` /
-`cd-prod.yml` copied from this file with the branch/resource-group/app names
-swapped, when we're ready to build those.
+`cd-prod.yml` copied from this file with the branch/resource-group/app
+names/IDs swapped, when we're ready to build those.

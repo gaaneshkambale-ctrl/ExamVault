@@ -12,6 +12,17 @@ env:
   ACR_NAME: acrexamvaultshared
   ACR_LOGIN_SERVER: acrexamvaultshared.azurecr.io
   RESOURCE_GROUP: rg-examvault-dev
+  # Not secrets: an OIDC app registration's client-id/tenant-id/subscription-id
+  # are plain identifiers, not credentials. The actual security boundary is
+  # the federated credential's subject restriction
+  # (repo:gaaneshkambale-ctrl/ExamVault:ref:refs/heads/dev, configured on the
+  # Azure AD app) - only a workflow run on that exact repo+branch can ever
+  # exchange a token, regardless of who knows these three values. Hardcoded
+  # directly rather than via repo secrets after repo secrets repeatedly
+  # failed to reach azure/login@v2 in this environment for unresolved reasons.
+  AZURE_CLIENT_ID: 91f3c28c-6224-4020-9e1e-3093016790f9
+  AZURE_TENANT_ID: bfc976e1-17a8-446a-8bbc-d7606d729d9f
+  AZURE_SUBSCRIPTION_ID: 55f5a744-20e8-42dc-92d1-c6ef16c7fc9d
 
 jobs:
   test-backend:
@@ -73,9 +84,9 @@ jobs:
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
       - name: Build & push ${{ matrix.service }}
         run: |
           az acr build \
@@ -94,9 +105,9 @@ jobs:
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
       - name: Resolve Gateway URL
         id: gateway-url
         run: |
@@ -120,9 +131,9 @@ jobs:
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
       - name: Roll out new images
         run: |
           set -e
