@@ -1635,6 +1635,54 @@ link stays dead (confirmed not wired to anything anywhere in the
 codebase) - a related but separate self-service recovery feature for an
 EXISTING account, not built now since it wasn't asked for.
 
+-----------------------------------------------------------------------
+POST-PHASE-9 FIX (DONE, 2026-08-16): First login on a brand-new
+Inactive account should reach the forced Change Password screen and
+auto-activate, instead of being blocked entirely
+-----------------------------------------------------------------------
+ISSUE RAISED: since 8g/8h (new users default to Inactive), a real
+newly-created user who enters their correct email + temp password gets
+"Your account has been deactivated. Contact an administrator." and
+cannot log in at all, even though the credentials are correct. Confirmed
+via code read of LoginUserHandler.cs: the IsActive check (line 49) runs
+AFTER email+password verification succeeds, so this message only ever
+appears for a genuinely correct login - it's a separate gate, not a
+credentials error. Today an Admin must manually click Activate on
+/admin/users before the new user can log in at all, which defeats the
+point of emailing them a temp password to self-serve their first login.
+
+DECISION (confirmed by user): a brand-new account's very first login
+(temp password, MustChangePassword = true) should be let through to the
+existing forced Change Password screen despite IsActive = false, and
+completing that password change should flip IsActive = true
+automatically - no separate Admin "Activate" click needed for the normal
+case. Admin-deactivated accounts (an existing user IsActive was
+explicitly turned off after they already completed onboarding, so
+MustChangePassword = false) must remain fully blocked at login exactly
+as today - this change must not weaken that.
+
+IMPLEMENTATION PLAN:
+- LoginUserHandler.cs: change `if (!user.IsActive)` to
+  `if (!user.IsActive && !user.MustChangePassword)` - lets a
+  pending-first-login account through to get a token, but a genuinely
+  deactivated account (MustChangePassword already false, since they
+  already set their own password once) is still rejected exactly as
+  before. No frontend change needed: LoginForm.tsx already redirects to
+  /change-password whenever profile.mustChangePassword is true.
+- ChangePasswordHandler.cs: after a successful password change, also set
+  user.IsActive = true (alongside the existing
+  user.MustChangePassword = false). Safe/no-op for a voluntary password
+  change by an already-active user, since ChangePassword can only be
+  reached with a valid session, which an already-inactive,
+  already-onboarded (MustChangePassword = false) user can never obtain.
+- Add/extend unit tests: LoginUserHandlerTests (Inactive +
+  MustChangePassword=true succeeds; Inactive + MustChangePassword=false
+  still rejected, covering the existing test's case) and a new
+  ChangePasswordHandlerTests covering IsActive flipping to true on
+  successful change.
+- No DB migration needed (IsActive and MustChangePassword columns
+  already exist).
+
 =====================================================================
 PHASE 10: DOCKER & AZURE DEPLOYMENT - KICKOFF (2026-08-15)
 =====================================================================

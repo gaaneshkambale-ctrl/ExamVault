@@ -46,6 +46,7 @@ public class ChangePasswordHandler
 
         user.PasswordHash = _passwordHasher.HashPassword(user, command.NewPassword);
         user.MustChangePassword = false;
+        user.IsActive = true;
         await _userRepository.SaveChangesAsync(cancellationToken);
 
         return ChangePasswordResult.Ok();

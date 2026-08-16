@@ -994,3 +994,65 @@ left it. One-line change: CreateUser.tsx's initialFormState.isActive
 changed from true to false. Both user-creation paths (single form and
 bulk import) now default new accounts to Inactive; an Admin must use
 the existing Activate button to enable login for either.
+
+--------------------------------------------------------------------
+8j. FIX (2026-08-16): First login on a brand-new Inactive account now
+    reaches the forced Change Password screen and auto-activates
+--------------------------------------------------------------------
+STATUS: IMPLEMENTED AND VERIFIED VIA UNIT TESTS (backend only - not
+browser-verified this session, see note at the end of this entry)
+
+ISSUE RAISED: a real newly-created user entered their correct email and
+the temp password emailed to them, and got "Your account has been
+deactivated. Contact an administrator." instead of being logged in.
+Traced through LoginUserHandler.cs: the IsActive check runs AFTER
+email+password verification succeeds, so this message can only appear
+for a genuinely correct login - it was never a credentials problem.
+Root cause is 8g/8h: since new accounts default to Inactive, and login
+rejected on IsActive == false, no new user could ever complete their
+first login, meaning the temp-password email now led to a dead end
+requiring the Admin to manually Activate the account first every single
+time - undermining the entire point of self-service first login.
+
+DECISION (confirmed by user): a brand-new account's first login (temp
+password, MustChangePassword == true) should be let through to the
+existing forced Change Password screen despite IsActive == false, and
+completing that password change should auto-activate the account.
+Admin-deactivated accounts (IsActive turned off on a user who already
+finished onboarding, so MustChangePassword == false) must remain fully
+blocked at login, unchanged.
+
+IMPLEMENTATION:
+- LoginUserHandler.cs: the rejection condition changed from
+  `if (!user.IsActive)` to `if (!user.IsActive && !user.MustChangePassword)`.
+  A pending-first-login account now gets a token and reaches
+  /change-password (LoginForm.tsx already redirects there whenever
+  profile.mustChangePassword is true - no frontend change needed). A
+  genuinely deactivated, already-onboarded account is still rejected
+  exactly as before, since MustChangePassword is false for it.
+- ChangePasswordHandler.cs: on a successful password change, now also
+  sets user.IsActive = true alongside the existing
+  user.MustChangePassword = false. This is a no-op for a voluntary
+  password change by an already-active user (ChangePassword can only be
+  reached with a valid session, which a genuinely deactivated user can
+  never obtain, so this branch is unreachable for that case).
+
+TESTS: extended LoginUserHandlerTests.cs with a new case - an Inactive
+user with MustChangePassword = true can still log in and receive a
+token (the existing "Deactivated_user_with_correct_credentials..." test
+was left as-is and still passes, since it seeds MustChangePassword as
+false by default, correctly covering the still-blocked
+already-onboarded-deactivated case). Added a new
+ChangePasswordHandlerTests.cs (no prior test file existed for this
+handler) covering: forced first change activates the account, a
+voluntary change by an already-active user leaves it active, a wrong
+current password is rejected without activating, and an unknown user
+returns not-found. Full User.Application test project run:
+51/51 passed, no regressions.
+
+NOT DONE THIS SESSION: no live browser verification of the full flow
+(new user created -> temp password emailed -> login -> forced
+change-password screen -> account shows Active on /admin/users) - only
+backend unit tests were run. Per the standing rule that API/unit tests
+don't catch navigation/routing bugs, this should be manually verified
+end-to-end before considering it fully confirmed in production.

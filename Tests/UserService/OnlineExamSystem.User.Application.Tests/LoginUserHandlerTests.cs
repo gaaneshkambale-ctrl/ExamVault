@@ -15,9 +15,16 @@ public class LoginUserHandlerTests
         FakeUserRepository repository,
         string email,
         string password,
-        bool isActive = true)
+        bool isActive = true,
+        bool mustChangePassword = false)
     {
-        var user = new AppUser { FullName = "Jane Doe", Email = email, IsActive = isActive };
+        var user = new AppUser
+        {
+            FullName = "Jane Doe",
+            Email = email,
+            IsActive = isActive,
+            MustChangePassword = mustChangePassword,
+        };
         user.PasswordHash = new PasswordHasher<AppUser>().HashPassword(user, password);
         await repository.AddAsync(user);
         return user;
@@ -74,6 +81,20 @@ public class LoginUserHandlerTests
         Assert.False(result.Success);
         Assert.True(result.IsAccountDeactivated);
         Assert.Null(result.AccessToken);
+    }
+
+    [Fact]
+    public async Task Inactive_user_who_still_must_change_password_can_log_in_to_reach_the_reset_screen()
+    {
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!", isActive: false, mustChangePassword: true);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!"));
+
+        Assert.True(result.Success);
+        Assert.Equal(user.Id, result.User!.Id);
+        Assert.False(string.IsNullOrEmpty(result.AccessToken));
     }
 
     [Fact]

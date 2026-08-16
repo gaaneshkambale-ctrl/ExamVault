@@ -46,7 +46,7 @@ public class LoginUserHandler
             return LoginUserResult.InvalidCredentials();
         }
 
-        if (!user.IsActive)
+        if (!user.IsActive && !user.MustChangePassword)
         {
             return LoginUserResult.AccountDeactivated();
         }
