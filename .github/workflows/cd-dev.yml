@@ -88,13 +88,19 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
       - name: Build & push ${{ matrix.service }}
+        # az acr build (ACR Tasks) never even creates a task run on this
+        # subscription for reasons unresolved (see AzureStep.txt) - use a
+        # plain local docker build + push instead, authenticated via the
+        # OIDC-derived az session (az acr login), no ACR Tasks involved.
         run: |
-          az acr build \
-            --registry ${{ env.ACR_NAME }} \
-            --image ${{ matrix.service }}:dev-${{ github.sha }} \
-            --image ${{ matrix.service }}:dev-latest \
-            --file ${{ matrix.dockerfile }} \
+          az acr login --name ${{ env.ACR_NAME }}
+          docker build \
+            -f ${{ matrix.dockerfile }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}:dev-${{ github.sha }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}:dev-latest \
             .
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}:dev-${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}:dev-latest
 
   build-and-push-frontend:
     name: Build & push (frontend)
@@ -115,13 +121,15 @@ jobs:
           echo "url=https://$FQDN" >> "$GITHUB_OUTPUT"
       - name: Build & push frontend
         run: |
-          az acr build \
-            --registry ${{ env.ACR_NAME }} \
-            --image frontend:dev-${{ github.sha }} \
-            --image frontend:dev-latest \
-            --file Frontend/examvault-web/Dockerfile \
+          az acr login --name ${{ env.ACR_NAME }}
+          docker build \
+            -f Frontend/examvault-web/Dockerfile \
             --build-arg VITE_API_BASE_URL=${{ steps.gateway-url.outputs.url }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/frontend:dev-${{ github.sha }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/frontend:dev-latest \
             Frontend/examvault-web
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:dev-${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:dev-latest
 
   deploy:
     name: Deploy to Container Apps
