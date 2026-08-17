@@ -154,6 +154,10 @@ export default function ImportUsers() {
 
   return (
     <AdminLayout active="Users">
+      <Link to="/admin/users" className="text-decoration-none small d-inline-block mb-3">
+        &larr; Back to Users
+      </Link>
+
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Import Users</h1>
         <p className="text-muted mb-0">Bulk-create users from an Excel (.xlsx) file.</p>
