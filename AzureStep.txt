@@ -54,6 +54,20 @@ image with no registry wired yet.
 
     (review the what-if output, then re-run with `create` instead of `what-if`)
 
+    IMPORTANT: for the three n8n*WebhookUrl parameters above, use the exact
+    same values as N8N_USER_WEBHOOK_URL / N8N_NOTIFICATION_WEBHOOK_URL /
+    N8N_AI_WEBHOOK_URL in your local .env - those are the confirmed-working
+    n8n endpoints (verified by local docker-compose actually delivering
+    emails/AI generations through them). Do NOT guess a plausible-looking
+    path here. On 2026-08-17, ca-notification-worker-dev and
+    ca-notification-api-dev were found live with n8nNotificationWebhookUrl
+    set to ".../webhook/examvault/notify" (404, wrong) instead of the
+    correct ".../webhook/examvault/notify-credential" - exam-assignment and
+    welcome/reset-password emails were silently failing on dev until this
+    was manually corrected via `az containerapp secret set`. If this bicep
+    deployment is ever re-run, it will reset the secret back to whatever
+    value is passed here, so get it from .env, not from memory.
+
 Known gotcha hit here: deploying the Container Apps Environment and all 10
 apps in ONE deployment made every app's first revision fail with
 "Operation expired" - the environment reports Succeeded before it's
