@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { Offcanvas } from 'react-bootstrap';
 import BrandMark from './BrandMark';
 
 export type AdminNavItem =
@@ -149,13 +150,15 @@ function NavIcon({ label }: { label: AdminNavItem }) {
 
 interface AdminSidebarProps {
   active: AdminNavItem;
+  show?: boolean;
+  onClose?: () => void;
 }
 
 function isSectionActive(item: NavItem, active: AdminNavItem): boolean {
   return item.label === active || (item.children?.some((child) => child.label === active) ?? false);
 }
 
-export default function AdminSidebar({ active }: AdminSidebarProps) {
+export default function AdminSidebar({ active, show = false, onClose = () => {} }: AdminSidebarProps) {
   const [openSections, setOpenSections] = useState<Set<AdminNavItem>>(
     () => new Set(navItems.filter((item) => item.children && isSectionActive(item, active)).map((item) => item.label)),
   );
@@ -173,15 +176,20 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
   };
 
   return (
-    <aside
-      className="d-none d-md-flex flex-column text-white p-3 flex-shrink-0"
-      style={{ width: 240, background: '#0f172a' }}
-    >
-      <div className="d-flex align-items-center gap-2 fw-bold mb-4 px-2 py-2">
-        <BrandMark />
-        ExamVault
-      </div>
-      <nav className="d-flex flex-column gap-1 flex-grow-1">
+    <Offcanvas show={show} onHide={onClose} responsive="md" className="flex-shrink-0" style={{ width: 240 }}>
+      <div className="d-flex flex-column h-100 text-white" style={{ background: '#0f172a' }}>
+        <Offcanvas.Header closeButton closeVariant="white" className="d-md-none">
+          <Offcanvas.Title className="d-flex align-items-center gap-2 fw-bold">
+            <BrandMark />
+            ExamVault
+          </Offcanvas.Title>
+        </Offcanvas.Header>
+        <div className="d-flex flex-column flex-grow-1 p-3 pt-0 pt-md-3">
+        <div className="d-none d-md-flex align-items-center gap-2 fw-bold mb-4 px-2 py-2">
+          <BrandMark />
+          ExamVault
+        </div>
+        <nav className="d-flex flex-column gap-1 flex-grow-1">
         {navItems.map((item) => {
           const isOpen = item.children ? openSections.has(item.label) : false;
           return (
@@ -197,6 +205,7 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
                 >
                   <Link
                     to={item.path}
+                    onClick={onClose}
                     className="px-3 py-2 text-decoration-none flex-grow-1 d-flex align-items-center gap-2"
                     style={{ color: 'inherit' }}
                   >
@@ -245,6 +254,7 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
                     <Link
                       key={child.label}
                       to={child.path}
+                      onClick={onClose}
                       className="py-1 rounded-2 text-decoration-none small d-block"
                       style={{
                         paddingLeft: '2.25rem',
@@ -262,7 +272,9 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
             </div>
           );
         })}
-      </nav>
-    </aside>
+        </nav>
+        </div>
+      </div>
+    </Offcanvas>
   );
 }

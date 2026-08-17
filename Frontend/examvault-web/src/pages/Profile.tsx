@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button, Card, Col, Form, Row } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
@@ -21,6 +22,7 @@ function ProfileField({ label, value }: { label: string; value: string }) {
 export default function Profile() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [showMobileNav, setShowMobileNav] = useState(false);
 
   if (!user) {
     return null;
@@ -34,15 +36,39 @@ export default function Profile() {
   return (
     <div className="d-flex min-vh-100">
       {user.role === 'Admin' ? (
-        <AdminSidebar active="Profile" />
+        <AdminSidebar active="Profile" show={showMobileNav} onClose={() => setShowMobileNav(false)} />
       ) : (
-        <DashboardSidebar active="Profile" />
+        <DashboardSidebar active="Profile" show={showMobileNav} onClose={() => setShowMobileNav(false)} />
       )}
 
       <main className="flex-grow-1 bg-light">
         <div className="container-fluid py-5 px-4 px-md-5" style={{ maxWidth: 880 }}>
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h1 className="h4 fw-bold mb-0">Profile</h1>
+            <div className="d-flex align-items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowMobileNav(true)}
+                aria-label="Open menu"
+                className="btn p-0 border-0 bg-transparent d-md-none d-flex align-items-center"
+                style={{ fontSize: 20, lineHeight: 1, color: '#0f172a' }}
+              >
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
+              <h1 className="h4 fw-bold mb-0">Profile</h1>
+            </div>
             <Button variant="outline-secondary" size="sm" onClick={() => void handleLogout()}>
               Logout
             </Button>
