@@ -22,7 +22,7 @@ public class ExamServiceClient : IExamLookupClient
         string bearerToken,
         CancellationToken cancellationToken = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/exams/{examId}");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/exams/{examId}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);

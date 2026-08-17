@@ -12,6 +12,7 @@ public class CreateAssignmentHandler
 {
     private readonly IExamRepository _examRepository;
     private readonly IUserLookupClient _userLookupClient;
+    private readonly IInternalUserLookupClient _internalUserLookupClient;
     private readonly IValidator<CreateAssignmentCommand> _validator;
     private readonly IEventPublisher _eventPublisher;
     private readonly ILogger<CreateAssignmentHandler> _logger;
@@ -19,12 +20,14 @@ public class CreateAssignmentHandler
     public CreateAssignmentHandler(
         IExamRepository examRepository,
         IUserLookupClient userLookupClient,
+        IInternalUserLookupClient internalUserLookupClient,
         IValidator<CreateAssignmentCommand> validator,
         IEventPublisher eventPublisher,
         ILogger<CreateAssignmentHandler> logger)
     {
         _examRepository = examRepository;
         _userLookupClient = userLookupClient;
+        _internalUserLookupClient = internalUserLookupClient;
         _validator = validator;
         _eventPublisher = eventPublisher;
         _logger = logger;
@@ -104,10 +107,16 @@ public class CreateAssignmentHandler
         await _examRepository.AddAssignmentAsync(assignment, targetUserIds, cancellationToken);
         await _examRepository.SaveChangesAsync(cancellationToken);
 
-        var targetUsers = await _userLookupClient.GetUsersByIdsAsync(targetUserIds, command.BearerToken, cancellationToken);
-
         try
         {
+            // Both the user lookup and the publish are best-effort side channels for the
+            // notification, same principle as CreateUserHandler's invite email - a lookup/broker
+            // hiccup must not fail an assignment that's already durably saved, nor mislead the
+            // Admin into re-submitting and creating duplicates. Uses the internal, unauthenticated
+            // lookup (no bearer-token dependency) rather than IUserLookupClient's admin-only
+            // GET /api/users, the same client ExamReminderCheckService already uses for this.
+            var targetUsers = await _internalUserLookupClient.GetUsersByIdsAsync(targetUserIds, cancellationToken);
+
             await _eventPublisher.PublishAsync(
                 new ExamAssignedEvent
                 {
@@ -122,10 +131,6 @@ public class CreateAssignmentHandler
         }
         catch (Exception ex)
         {
-            // The assignment-created notification is a best-effort side channel,
-            // same principle as CreateUserHandler's invite email - a broker
-            // hiccup must not fail an assignment that's already durably saved,
-            // nor mislead the Admin into re-submitting and creating duplicates.
             _logger.LogWarning(ex, "Failed to publish ExamAssignedEvent for assignment {AssignmentId}.", assignment.Id);
         }
 

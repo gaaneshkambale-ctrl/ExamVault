@@ -3,6 +3,7 @@ import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import { useExams } from '../../hooks/useExams';
+import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import type { ExamStatus, ExamType } from '../../types/exam';
 
 const statusVariant: Record<ExamStatus, string> = {
@@ -18,6 +19,7 @@ const examTypeLabel: Record<ExamType, string> = {
 
 export default function AdminReports() {
   const { data: exams, isLoading, isError } = useExams();
+  const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
   const [searchText, setSearchText] = useState('');
 
   const filteredExams = (exams ?? []).filter((exam) =>
@@ -76,7 +78,7 @@ export default function AdminReports() {
                   <tr key={exam.id}>
                     <td className="ps-4 fw-medium">{exam.title}</td>
                     <td>{examTypeLabel[exam.examType]}</td>
-                    <td>{exam.totalQuestions}</td>
+                    <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                     <td>
                       <Badge bg={statusVariant[exam.status]}>{exam.status}</Badge>
                     </td>

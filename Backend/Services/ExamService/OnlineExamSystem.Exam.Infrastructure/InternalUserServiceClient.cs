@@ -25,7 +25,7 @@ public class InternalUserServiceClient : IInternalUserLookupClient
         }
 
         var query = string.Join('&', userIds.Select(id => $"ids={Uri.EscapeDataString(id.ToString())}"));
-        var response = await _httpClient.GetAsync($"/internal/users/by-ids?{query}", cancellationToken);
+        var response = await _httpClient.GetAsync($"internal/users/by-ids?{query}", cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var users = await response.Content.ReadFromJsonAsync<List<InternalUserApiResponse>>(

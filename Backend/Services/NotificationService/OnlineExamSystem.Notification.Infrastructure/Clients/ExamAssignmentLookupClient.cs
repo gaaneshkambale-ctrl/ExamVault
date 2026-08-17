@@ -21,7 +21,7 @@ public class ExamAssignmentLookupClient : IExamAssignmentLookupClient
         string bearerToken,
         CancellationToken cancellationToken = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/assignments?examId={examId}");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/assignments?examId={examId}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);

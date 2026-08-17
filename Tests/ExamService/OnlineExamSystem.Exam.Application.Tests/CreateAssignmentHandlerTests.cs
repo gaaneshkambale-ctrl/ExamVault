@@ -17,6 +17,7 @@ public class CreateAssignmentHandlerTests
         new(
             repository,
             userLookupClient ?? new FakeUserLookupClient(result: null),
+            new FakeInternalUserLookupClient(),
             new CreateAssignmentValidator(),
             eventPublisher ?? new FakeEventPublisher(),
             NullLogger<CreateAssignmentHandler>.Instance);

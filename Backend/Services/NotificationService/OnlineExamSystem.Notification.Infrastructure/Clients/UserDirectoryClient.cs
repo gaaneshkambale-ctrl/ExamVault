@@ -20,7 +20,7 @@ public class UserDirectoryClient : IUserDirectoryClient
         string bearerToken,
         CancellationToken cancellationToken = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/users");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/users");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);

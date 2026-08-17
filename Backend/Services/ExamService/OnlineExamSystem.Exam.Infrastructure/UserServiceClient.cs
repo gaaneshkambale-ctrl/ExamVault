@@ -22,7 +22,7 @@ public class UserServiceClient : IUserLookupClient
         string bearerToken,
         CancellationToken cancellationToken = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/users/groups/{groupId}");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/users/groups/{groupId}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -69,7 +69,7 @@ public class UserServiceClient : IUserLookupClient
         string bearerToken,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/users");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/users");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);

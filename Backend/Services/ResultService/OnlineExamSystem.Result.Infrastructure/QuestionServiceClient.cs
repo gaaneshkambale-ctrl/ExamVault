@@ -23,7 +23,7 @@ public class QuestionServiceClient : IQuestionAnswerKeyClient
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
-            $"/internal/questions/answer-key?examId={examId}");
+            $"internal/questions/answer-key?examId={examId}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);

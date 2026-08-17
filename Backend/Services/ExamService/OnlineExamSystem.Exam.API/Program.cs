@@ -46,10 +46,14 @@ public class Program
 
         var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
+        // Trailing slash is required: HttpClient/Uri combine a relative request path against
+        // BaseAddress per RFC 3986 §5.3, which drops the last base path segment (e.g. Dapr's
+        // "/v1.0/invoke/{app}/method") unless the base itself ends in "/".
+        var userServiceBaseUri = new Uri(userServiceBaseUrl.TrimEnd('/') + "/");
         builder.Services.AddHttpClient<IUserLookupClient, UserServiceClient>(client =>
-            client.BaseAddress = new Uri(userServiceBaseUrl));
+            client.BaseAddress = userServiceBaseUri);
         builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
-            client.BaseAddress = new Uri(userServiceBaseUrl));
+            client.BaseAddress = userServiceBaseUri);
 
         builder.Services.AddScoped<IValidator<CreateExamCommand>, CreateExamValidator>();
         builder.Services.AddScoped<CreateExamHandler>();

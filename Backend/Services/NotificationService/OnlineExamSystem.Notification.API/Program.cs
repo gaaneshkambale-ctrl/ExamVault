@@ -43,15 +43,18 @@ public class Program
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
         builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
 
+        // Trailing slash is required: HttpClient/Uri combine a relative request path against
+        // BaseAddress per RFC 3986 §5.3, which drops the last base path segment (e.g. Dapr's
+        // "/v1.0/invoke/{app}/method") unless the base itself ends in "/".
         var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IUserDirectoryClient, UserDirectoryClient>(client =>
-            client.BaseAddress = new Uri(userServiceBaseUrl));
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
 
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IExamAssignmentLookupClient, ExamAssignmentLookupClient>(client =>
-            client.BaseAddress = new Uri(examServiceBaseUrl));
+            client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
         builder.Services.AddScoped<GetMyNotificationsHandler>();
         builder.Services.AddScoped<GetNotificationByIdHandler>();

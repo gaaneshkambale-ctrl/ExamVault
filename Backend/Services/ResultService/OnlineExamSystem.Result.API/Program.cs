@@ -24,20 +24,23 @@ public class Program
         // No DbContext/repository registrations here - Result Service owns no
         // database, it computes results on demand from the services that do.
 
+        // Trailing slash is required: HttpClient/Uri combine a relative request path against
+        // BaseAddress per RFC 3986 §5.3, which drops the last base path segment (e.g. Dapr's
+        // "/v1.0/invoke/{app}/method") unless the base itself ends in "/".
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IExamLookupClient, ExamServiceClient>(client =>
-            client.BaseAddress = new Uri(examServiceBaseUrl));
+            client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
         var questionServiceBaseUrl = builder.Configuration["Services:QuestionServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:QuestionServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IQuestionAnswerKeyClient, QuestionServiceClient>(client =>
-            client.BaseAddress = new Uri(questionServiceBaseUrl));
+            client.BaseAddress = new Uri(questionServiceBaseUrl.TrimEnd('/') + "/"));
 
         var submissionServiceBaseUrl = builder.Configuration["Services:SubmissionServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:SubmissionServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<ISubmissionLookupClient, SubmissionServiceClient>(client =>
-            client.BaseAddress = new Uri(submissionServiceBaseUrl));
+            client.BaseAddress = new Uri(submissionServiceBaseUrl.TrimEnd('/') + "/"));
 
         builder.Services.AddScoped<GetResultHandler>();
         builder.Services.AddScoped<GetExamReportHandler>();
