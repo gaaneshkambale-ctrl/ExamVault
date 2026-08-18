@@ -36,7 +36,13 @@ interface DashboardSidebarProps {
 
 export default function DashboardSidebar({ active, show = false, onClose = () => {} }: DashboardSidebarProps) {
   return (
-    <Offcanvas show={show} onHide={onClose} responsive="md" className="flex-shrink-0" style={{ width: 240 }}>
+    <Offcanvas
+      show={show}
+      onHide={onClose}
+      responsive="md"
+      className="flex-shrink-0 d-print-none"
+      style={{ width: 240 }}
+    >
       <div className="d-flex flex-column h-100 text-white" style={{ background: '#0f172a' }}>
         <Offcanvas.Header closeButton closeVariant="white" className="d-md-none">
           <Offcanvas.Title className="d-flex align-items-center gap-2 fw-bold">

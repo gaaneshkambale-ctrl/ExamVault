@@ -37,6 +37,7 @@ import StudentExamDetails from '../pages/student/ExamDetails';
 import TakeExam from '../pages/student/TakeExam';
 import MyResults from '../pages/student/MyResults';
 import MyCertificates from '../pages/student/MyCertificates';
+import CertificateDetails from '../pages/student/CertificateDetails';
 import ResultDetails from '../pages/student/ResultDetails';
 import MyNotifications from '../pages/student/MyNotifications';
 import NotificationDetails from '../pages/student/NotificationDetails';
@@ -342,6 +343,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <MyCertificates />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/certificates/:examId"
+        element={
+          <ProtectedRoute>
+            <CertificateDetails />
           </ProtectedRoute>
         }
       />

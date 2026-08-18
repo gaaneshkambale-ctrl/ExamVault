@@ -22,7 +22,7 @@ export default function StudentLayout({ active, children, hideSidebar = false }:
         <DashboardSidebar active={active} show={showMobileNav} onClose={() => setShowMobileNav(false)} />
       )}
       <main className="flex-grow-1 bg-light">
-        <div className="d-flex justify-content-between justify-content-md-end align-items-center gap-3 px-4 px-md-5 py-3 bg-white border-bottom">
+        <div className="d-print-none d-flex justify-content-between justify-content-md-end align-items-center gap-3 px-4 px-md-5 py-3 bg-white border-bottom">
           <div className="d-flex d-md-none align-items-center gap-2 fw-bold text-primary">
             <BrandMark />
             ExamVault

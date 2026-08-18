@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExams } from '../../hooks/useExams';
@@ -9,6 +10,7 @@ import { getGrade } from '../../types/result';
 import type { ResultSummaryResponse } from '../../types/result';
 import type { ExamType } from '../../types/exam';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
+import { CERTIFICATE_MIN_PERCENTAGE, isCertificateEligible } from '../../utils/certificateId';
 
 const examTypeLabel: Record<ExamType, string> = {
   Manual: 'Manual',
@@ -49,12 +51,12 @@ export default function MyCertificates() {
   const isLoadingResults = publishedExams.length > 0 && resultQueries.some((q) => q.isLoading);
   const loading = isLoadingExams || isLoadingResults;
 
-  // A certificate is earned for every exam the student has passed - no
+  // A certificate is earned for every exam the student scored 80%+ on - no
   // separate issuance step, no persisted certificate record. Generated fresh
   // client-side from the same result data "My Results" already shows.
   const rows: ResultSummaryResponse[] = resultQueries
     .map((q) => q.data)
-    .filter((result): result is ResultSummaryResponse => !!result && result.passed)
+    .filter((result): result is ResultSummaryResponse => !!result && isCertificateEligible(result))
     .sort((a, b) => new Date(b.submittedAtUtc).getTime() - new Date(a.submittedAtUtc).getTime());
 
   const filteredRows = rows.filter((result) =>
@@ -64,7 +66,7 @@ export default function MyCertificates() {
   return (
     <StudentLayout active="My Certificates">
       <h1 className="h4 fw-bold mb-1 text-primary">My Certificates</h1>
-      <p className="text-muted mb-4">A certificate for every exam you've passed.</p>
+      <p className="text-muted mb-4">A certificate for every exam you've scored {CERTIFICATE_MIN_PERCENTAGE}% or above on.</p>
 
       <Row className="g-2 mb-3">
         <Col md={6}>
@@ -87,7 +89,7 @@ export default function MyCertificates() {
 
           {!loading && rows.length === 0 && (
             <div className="text-center text-muted py-5">
-              No certificates yet. Pass an exam to earn one here.
+              No certificates yet. Score {CERTIFICATE_MIN_PERCENTAGE}% or above on an exam to earn one here.
             </div>
           )}
 
@@ -125,14 +127,19 @@ export default function MyCertificates() {
                       </td>
                       <td>{new Date(result.submittedAtUtc).toLocaleDateString()}</td>
                       <td className="pe-4">
-                        <Button
-                          variant="outline-primary"
-                          size="sm"
-                          disabled={!user}
-                          onClick={() => user && generateCertificatePdf(result, user.fullName)}
-                        >
-                          Download Certificate
-                        </Button>
+                        <div className="d-flex gap-2">
+                          <Link to={`/certificates/${result.examId}`} className="btn btn-primary btn-sm">
+                            View Certificate
+                          </Link>
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            disabled={!user}
+                            onClick={() => user && generateCertificatePdf(result, user.fullName)}
+                          >
+                            Download
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
