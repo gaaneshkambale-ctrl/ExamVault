@@ -1,4 +1,4 @@
-import apiClient from './axiosClient';
+import apiClient, { getRefreshToken } from './axiosClient';
 import type {
   ChangePasswordRequest,
   CreateUserRequest,
@@ -8,6 +8,7 @@ import type {
   RegisterRequest,
   RegisterResponse,
   ResetPasswordRequest,
+  UpdateMyProfileRequest,
   UpdateUserRequest,
   UserListItem,
   UserProfile,
@@ -38,6 +39,47 @@ export async function logoutUser(refreshToken: string): Promise<void> {
 export async function getMyProfile(): Promise<UserProfile> {
   const { data } = await apiClient.get<UserProfile>('/api/users/me');
   return data;
+}
+
+export async function updateMyProfile(request: UpdateMyProfileRequest): Promise<UserProfile> {
+  const { data } = await apiClient.put<UserProfile>('/api/users/me', request);
+  return data;
+}
+
+export async function updateMyPhoto(file: File): Promise<void> {
+  const formData = new FormData();
+  formData.append('photo', file);
+  await apiClient.put('/api/users/me/photo', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+// The photo endpoint requires the Bearer token, so a plain <img src> can't
+// hit it directly - fetch the bytes through the authenticated client and
+// hand back an object URL the caller can point an <img> at (and must revoke
+// with URL.revokeObjectURL when done).
+export async function fetchMyPhotoObjectUrl(): Promise<string | null> {
+  try {
+    const { data } = await apiClient.get<Blob>('/api/users/me/photo', { responseType: 'blob' });
+    return URL.createObjectURL(data);
+  } catch {
+    return null;
+  }
+}
+
+export async function getMySessions(): Promise<UserSession[]> {
+  const { data } = await apiClient.get<UserSession[]>('/api/users/me/sessions', {
+    headers: { 'X-Refresh-Token': getRefreshToken() ?? '' },
+  });
+  return data;
+}
+
+export async function revokeOtherSessions(): Promise<void> {
+  await apiClient.post(
+    '/api/users/me/sessions/revoke-others',
+    {},
+    { headers: { 'X-Refresh-Token': getRefreshToken() ?? '' } },
+  );
 }
 
 export async function listUsers(): Promise<UserListItem[]> {

@@ -5,4 +5,6 @@ public record UserSessionResponse(
     DateTime IssuedAtUtc,
     DateTime ExpiresAtUtc,
     DateTime? RevokedAtUtc,
-    string Status);
+    string Status,
+    string DeviceLabel = "Unknown device",
+    bool IsCurrent = false);

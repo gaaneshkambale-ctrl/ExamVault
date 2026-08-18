@@ -6,6 +6,7 @@ using OnlineExamSystem.Shared.Contracts.Responses.User;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
+using OnlineExamSystem.User.Application.Users.GetMySessions;
 using OnlineExamSystem.User.Application.Users.GetProfile;
 using OnlineExamSystem.User.Application.Users.List;
 using OnlineExamSystem.User.Application.Users.ListSessions;
@@ -13,9 +14,12 @@ using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
+using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
+using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
+using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.API.Controllers;
@@ -37,7 +41,20 @@ public class UsersController : ControllerBase
     private readonly LogoutHandler _logoutHandler;
     private readonly SetUserActiveStatusHandler _setUserActiveStatusHandler;
     private readonly ListUserSessionsHandler _listUserSessionsHandler;
+    private readonly UpdateMyProfileHandler _updateMyProfileHandler;
+    private readonly UpdateMyPhotoHandler _updateMyPhotoHandler;
+    private readonly GetMySessionsHandler _getMySessionsHandler;
+    private readonly RevokeOtherSessionsHandler _revokeOtherSessionsHandler;
     private readonly ILogger<UsersController> _logger;
+
+    private static readonly HashSet<string> AllowedPhotoContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    };
+
+    private const long MaxPhotoSizeBytes = 2 * 1024 * 1024;
 
     public UsersController(
         RegisterUserHandler registerUserHandler,
@@ -53,6 +70,10 @@ public class UsersController : ControllerBase
         LogoutHandler logoutHandler,
         SetUserActiveStatusHandler setUserActiveStatusHandler,
         ListUserSessionsHandler listUserSessionsHandler,
+        UpdateMyProfileHandler updateMyProfileHandler,
+        UpdateMyPhotoHandler updateMyPhotoHandler,
+        GetMySessionsHandler getMySessionsHandler,
+        RevokeOtherSessionsHandler revokeOtherSessionsHandler,
         ILogger<UsersController> logger)
     {
         _registerUserHandler = registerUserHandler;
@@ -68,6 +89,10 @@ public class UsersController : ControllerBase
         _logoutHandler = logoutHandler;
         _setUserActiveStatusHandler = setUserActiveStatusHandler;
         _listUserSessionsHandler = listUserSessionsHandler;
+        _updateMyProfileHandler = updateMyProfileHandler;
+        _updateMyPhotoHandler = updateMyPhotoHandler;
+        _getMySessionsHandler = getMySessionsHandler;
+        _revokeOtherSessionsHandler = revokeOtherSessionsHandler;
         _logger = logger;
     }
 
@@ -105,7 +130,7 @@ public class UsersController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginUserRequest request, CancellationToken cancellationToken)
     {
-        var command = new LoginUserCommand(request.Email, request.Password);
+        var command = new LoginUserCommand(request.Email, request.Password, Request.Headers.UserAgent.ToString());
         var result = await _loginUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsAccountDeactivated)
@@ -124,7 +149,14 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} logged in successfully.", user.Id);
-        var profile = new UserProfileResponse(user.Id, user.FullName, user.Email, user.Role.ToString(), user.MustChangePassword);
+        var profile = new UserProfileResponse(
+            user.Id,
+            user.FullName,
+            user.Email,
+            user.Role.ToString(),
+            user.MustChangePassword,
+            user.PhoneNumber,
+            user.PhotoData is not null);
         var response = new LoginResponse(profile, result.AccessToken!, result.RefreshToken!);
         return Ok(response);
     }
@@ -132,7 +164,7 @@ public class UsersController : ControllerBase
     [HttpPost("refresh-token")]
     public async Task<IActionResult> RefreshToken(RefreshTokenRequest request, CancellationToken cancellationToken)
     {
-        var command = new RefreshTokenCommand(request.RefreshToken);
+        var command = new RefreshTokenCommand(request.RefreshToken, Request.Headers.UserAgent.ToString());
         var result = await _refreshTokenHandler.HandleAsync(command, cancellationToken);
 
         if (!result.Success)
@@ -382,8 +414,140 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "User not found." });
         }
 
-        var response = new UserProfileResponse(user.Id, user.FullName, user.Email, user.Role.ToString(), user.MustChangePassword);
+        var response = new UserProfileResponse(
+            user.Id,
+            user.FullName,
+            user.Email,
+            user.Role.ToString(),
+            user.MustChangePassword,
+            user.PhoneNumber,
+            user.PhotoData is not null);
         return Ok(response);
+    }
+
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<IActionResult> UpdateMyProfile(UpdateMyProfileRequest request, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var command = new UpdateMyProfileCommand(userId, request.FullName, request.PhoneNumber);
+        var result = await _updateMyProfileHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        var user = result.User!;
+        _logger.LogInformation("User {UserId} updated their own profile.", userId);
+        var response = new UserProfileResponse(
+            user.Id,
+            user.FullName,
+            user.Email,
+            user.Role.ToString(),
+            user.MustChangePassword,
+            user.PhoneNumber,
+            user.PhotoData is not null);
+        return Ok(response);
+    }
+
+    [Authorize]
+    [HttpPut("me/photo")]
+    [RequestSizeLimit(MaxPhotoSizeBytes)]
+    public async Task<IActionResult> UpdateMyPhoto(IFormFile photo, CancellationToken cancellationToken)
+    {
+        if (photo is null || photo.Length == 0)
+        {
+            return BadRequest(new { message = "No photo file was provided." });
+        }
+
+        if (photo.Length > MaxPhotoSizeBytes)
+        {
+            return BadRequest(new { message = "Photo must be 2 MB or smaller." });
+        }
+
+        if (!AllowedPhotoContentTypes.Contains(photo.ContentType))
+        {
+            return BadRequest(new { message = "Photo must be a JPEG, PNG, or WebP image." });
+        }
+
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        using var memoryStream = new MemoryStream();
+        await photo.CopyToAsync(memoryStream, cancellationToken);
+
+        var result = await _updateMyPhotoHandler.HandleAsync(
+            new UpdateMyPhotoCommand(userId, memoryStream.ToArray(), photo.ContentType),
+            cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        _logger.LogInformation("User {UserId} updated their profile photo.", userId);
+        return NoContent();
+    }
+
+    [Authorize]
+    [HttpGet("me/photo")]
+    public async Task<IActionResult> GetMyPhoto(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var user = await _getUserProfileHandler.HandleAsync(new GetUserProfileQuery(userId), cancellationToken);
+        if (user?.PhotoData is null)
+        {
+            return NotFound();
+        }
+
+        return File(user.PhotoData, user.PhotoContentType ?? "application/octet-stream");
+    }
+
+    [Authorize]
+    [HttpGet("me/sessions")]
+    public async Task<IActionResult> ListMySessions(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var currentRefreshToken = Request.Headers["X-Refresh-Token"].ToString();
+        var sessions = await _getMySessionsHandler.HandleAsync(
+            new GetMySessionsQuery(userId, string.IsNullOrWhiteSpace(currentRefreshToken) ? null : currentRefreshToken),
+            cancellationToken);
+
+        return Ok(sessions.Select(s => new UserSessionResponse(
+            s.Id,
+            s.IssuedAtUtc,
+            s.ExpiresAtUtc,
+            s.RevokedAtUtc,
+            s.Status,
+            s.DeviceLabel,
+            s.IsCurrent)));
+    }
+
+    [Authorize]
+    [HttpPost("me/sessions/revoke-others")]
+    public async Task<IActionResult> RevokeOtherSessions(CancellationToken cancellationToken)
+    {
+        var currentRefreshToken = Request.Headers["X-Refresh-Token"].ToString();
+        if (string.IsNullOrWhiteSpace(currentRefreshToken))
+        {
+            return BadRequest(new { message = "Current session token is required." });
+        }
+
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await _revokeOtherSessionsHandler.HandleAsync(
+            new RevokeOtherSessionsCommand(userId, currentRefreshToken),
+            cancellationToken);
+
+        _logger.LogInformation("User {UserId} signed out their other sessions.", userId);
+        return NoContent();
     }
 
     private static UserListItemResponse ToResponse(AppUser user) =>
@@ -397,6 +561,12 @@ public class UsersController : ControllerBase
                 ? "Expired"
                 : "Active";
 
-        return new UserSessionResponse(token.Id, token.CreatedAtUtc, token.ExpiresAtUtc, token.RevokedAtUtc, status);
+        return new UserSessionResponse(
+            token.Id,
+            token.CreatedAtUtc,
+            token.ExpiresAtUtc,
+            token.RevokedAtUtc,
+            status,
+            token.DeviceLabel ?? "Unknown device");
     }
 }

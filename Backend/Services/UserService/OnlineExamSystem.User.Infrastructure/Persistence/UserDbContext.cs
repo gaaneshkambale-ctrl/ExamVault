@@ -25,12 +25,14 @@ public class UserDbContext : DbContext
             entity.Property(u => u.PasswordHash).IsRequired();
             entity.Property(u => u.IsActive).HasDefaultValue(true);
             entity.Property(u => u.PhoneNumber).HasMaxLength(20);
+            entity.Property(u => u.PhotoContentType).HasMaxLength(100);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>
         {
             entity.HasKey(t => t.Id);
             entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(256);
+            entity.Property(t => t.DeviceLabel).HasMaxLength(100);
             entity.HasIndex(t => t.TokenHash).IsUnique();
             entity.HasOne<AppUser>()
                 .WithMany()

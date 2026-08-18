@@ -8,6 +8,7 @@ export interface AuthContextValue {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<UserProfile>;
   logout: () => Promise<void>;
   clearMustChangePassword: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

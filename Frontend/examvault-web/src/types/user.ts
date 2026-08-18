@@ -16,6 +16,13 @@ export interface UserProfile {
   email: string;
   role: 'Student' | 'Admin';
   mustChangePassword: boolean;
+  phoneNumber: string | null;
+  hasPhoto: boolean;
+}
+
+export interface UpdateMyProfileRequest {
+  fullName: string;
+  phoneNumber: string;
 }
 
 export interface LoginRequest {
@@ -78,4 +85,6 @@ export interface UserSession {
   expiresAtUtc: string;
   revokedAtUtc: string | null;
   status: UserSessionStatus;
+  deviceLabel: string;
+  isCurrent: boolean;
 }

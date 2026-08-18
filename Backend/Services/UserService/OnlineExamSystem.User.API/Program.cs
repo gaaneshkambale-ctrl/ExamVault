@@ -22,10 +22,14 @@ using OnlineExamSystem.User.Application.Users.ListSessions;
 using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
+using OnlineExamSystem.User.Application.Users.GetMySessions;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
+using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
+using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
+using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Infrastructure.Authentication;
 using OnlineExamSystem.User.Infrastructure.Email;
@@ -77,6 +81,11 @@ public class Program
         builder.Services.AddScoped<LogoutHandler>();
         builder.Services.AddScoped<SetUserActiveStatusHandler>();
         builder.Services.AddScoped<ListUserSessionsHandler>();
+        builder.Services.AddScoped<IValidator<UpdateMyProfileCommand>, UpdateMyProfileValidator>();
+        builder.Services.AddScoped<UpdateMyProfileHandler>();
+        builder.Services.AddScoped<UpdateMyPhotoHandler>();
+        builder.Services.AddScoped<GetMySessionsHandler>();
+        builder.Services.AddScoped<RevokeOtherSessionsHandler>();
 
         builder.Services.AddScoped<IValidator<CreateGroupCommand>, CreateGroupValidator>();
         builder.Services.AddScoped<CreateGroupHandler>();

@@ -52,6 +52,16 @@ public class FakeUserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
+    public Task RevokeOtherRefreshTokensForUserAsync(Guid userId, string currentTokenHash, CancellationToken cancellationToken = default)
+    {
+        foreach (var token in _refreshTokens.Where(t =>
+                     t.UserId == userId && t.RevokedAtUtc == null && t.TokenHash != currentTokenHash))
+        {
+            token.RevokedAtUtc = DateTime.UtcNow;
+        }
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<RefreshToken>>(
             _refreshTokens.Where(t => t.UserId == userId).OrderByDescending(t => t.CreatedAtUtc).ToList());

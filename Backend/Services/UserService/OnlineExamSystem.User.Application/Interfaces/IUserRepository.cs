@@ -13,6 +13,7 @@ public interface IUserRepository
     Task AddRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken = default);
     Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
     Task RevokeAllRefreshTokensForUserAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task RevokeOtherRefreshTokensForUserAsync(Guid userId, string currentTokenHash, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -12,4 +12,6 @@ public class AppUser : BaseEntity
     public bool IsActive { get; set; } = true;
     public string? PhoneNumber { get; set; }
     public bool MustChangePassword { get; set; }
+    public byte[]? PhotoData { get; set; }
+    public string? PhotoContentType { get; set; }
 }

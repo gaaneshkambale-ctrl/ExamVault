@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Application.Users.Common;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.Application.Users.Login;
@@ -59,6 +60,7 @@ public class LoginUserHandler
             UserId = user.Id,
             TokenHash = _jwtTokenService.HashToken(refreshToken),
             ExpiresAtUtc = _jwtTokenService.GetRefreshTokenExpiry(),
+            DeviceLabel = UserAgentDeviceParser.Describe(command.UserAgent),
         }, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
