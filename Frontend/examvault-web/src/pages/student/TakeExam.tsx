@@ -292,7 +292,7 @@ export default function TakeExam() {
   );
 
   return (
-    <StudentLayout active="My Exams">
+    <StudentLayout active="My Exams" hideSidebar={mode === 'take' || mode === 'review'}>
       {mode !== 'submitted' && (
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
