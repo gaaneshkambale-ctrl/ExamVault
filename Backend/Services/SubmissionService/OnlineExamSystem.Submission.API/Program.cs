@@ -42,6 +42,8 @@ public class Program
         // "/v1.0/invoke/{app}/method") unless the base itself ends in "/".
         builder.Services.AddHttpClient<IExamLookupClient, ExamServiceClient>(client =>
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IAssignmentLookupClient, AssignmentServiceClient>(client =>
+            client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
         builder.Services.AddScoped<IValidator<StartAttemptCommand>, StartAttemptValidator>();
         builder.Services.AddScoped<StartAttemptHandler>();

@@ -2287,3 +2287,53 @@ false->true violation path itself - that would need an actual second
 physical display to trigger, which isn't available in this
 environment). Test assignment and throwaway test admin cleaned up
 after verification.
+
+=====================================================================
+FOLLOW-UP FIX (DONE, 2026-08-18): assignment's Max Attempts had no
+effect - exam's own default was enforced instead
+=====================================================================
+REPORTED: "i am set i want to give 3 attemp but one attemp allowed" -
+the assignment wizard's "Max Attempts" field appeared to do nothing;
+the student was blocked after 1 attempt regardless of what was set
+per-assignment.
+
+ROOT CAUSE: StartAttemptHandler (Submission Service) has always
+checked `exam.MaxAttempts` / `exam.StartAtUtc` / `exam.EndAtUtc` -
+the ExamPaper entity's own defaults, fetched via a plain GET
+/api/exams/{id} - and never looked at the calling student's actual
+ExamAssignment at all. The assignment wizard's MaxAttempts/StartAtUtc/
+EndAtUtc fields have existed and been saved correctly this whole time;
+they were just never read by the one handler that enforces them. Same
+root cause explains why the scheduling window (start/end date) an
+admin sets per-assignment was also silently ignored - it happened to
+go unnoticed because most exams never set an exam-level window at all
+(null = always open), so nothing ever visibly blocked on it.
+
+FIX: added IAssignmentLookupClient (Submission.Application) +
+AssignmentServiceClient (Submission.Infrastructure), hitting the
+existing GET /api/assignments/mine?examId={id} endpoint (already used
+by the frontend, scoped to "mine" via the bearer token - no new Exam
+Service endpoint needed). StartAttemptHandler now resolves the
+caller's assignment first and uses its MaxAttempts/StartAtUtc/EndAtUtc
+when one exists, falling back to the exam's own defaults only when
+the student has no assignment at all (preserves old behavior for that
+edge case rather than blocking everything).
+
+NOT FIXED (separate, pre-existing, out of scope for this report):
+AllowLateJoin and GraceTimeMinutes are assignment fields that have
+never been read anywhere in Submission Service either - grace-time-
+aware late joining isn't implemented at all yet. Flagging this
+explicitly rather than silently leaving it; it's a real gap but a
+separate feature, not what was reported broken here.
+
+VERIFIED: added 3 new regression tests to StartAttemptHandlerTests
+(assignment MaxAttempts overriding a stricter exam default, assignment
+MaxAttempts still blocking once exhausted, assignment scheduling
+window overriding the exam's) - all 25 tests in the suite pass. Live
+in Docker: set exam AA's own MaxAttempts to 1, created a fresh test
+student + assignment with MaxAttempts=3, ran the exact reported
+scenario end-to-end via curl - attempts 1/2/3 all succeeded
+(attemptNumber 1, 2, 3), attempt 4 was correctly blocked with "You
+have used all of your attempts for this exam." Test student,
+assignment, and exam-level MaxAttempts override all cleaned up
+afterward.
