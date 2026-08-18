@@ -22,7 +22,7 @@ const navItems: NavItem[] = [
   { label: 'My Exams', path: '/exams' },
   { label: 'Upcoming Exams', path: '/exams?tab=Upcoming' },
   { label: 'My Results', path: '/results' },
-  { label: 'My Certificates', path: null },
+  { label: 'My Certificates', path: '/certificates' },
   { label: 'Profile', path: '/profile' },
   { label: 'Notifications', path: '/notifications' },
   { label: 'Settings', path: null },

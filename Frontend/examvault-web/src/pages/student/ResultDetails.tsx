@@ -6,6 +6,7 @@ import { useMyResult } from '../../hooks/useResults';
 import { getGrade } from '../../types/result';
 import type { QuestionResultResponse } from '../../types/result';
 import type { ExamType } from '../../types/exam';
+import { generateResultPdf } from '../../utils/generateResultPdf';
 
 const examTypeLabel: Record<ExamType, string> = {
   Manual: 'Manual',
@@ -188,11 +189,9 @@ export default function ResultDetails() {
           )}
 
           <div className="d-flex justify-content-end mt-3">
-            <span title="Coming soon">
-              <Button variant="primary" disabled>
-                Download Result
-              </Button>
-            </span>
+            <Button variant="primary" onClick={() => generateResultPdf(result)}>
+              Download Result
+            </Button>
           </div>
         </>
       )}
