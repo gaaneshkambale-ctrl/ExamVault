@@ -165,17 +165,34 @@ export function useProctoring(
     };
   }, [enabled, settings.faceDetectionEnabled, settings.multiPersonDetectionEnabled]);
 
+  // Tab switch / browser minimize / switching to another application.
+  // document.hidden alone misses one real case: alt-tabbing to another app
+  // while this browser window would otherwise stay "restored" on screen -
+  // some browser/OS combinations don't reliably flip document.hidden for
+  // that, but always fire window.blur. Both signals funnel through the same
+  // isAway check so a single real event (which can fire both) only ever
+  // counts once, edge-triggered on the away->back transition the same way
+  // the multi-monitor detector is.
   useEffect(() => {
     if (!enabled || !settings.screenMonitoringEnabled) {
       return;
     }
-    const handleVisibility = () => {
-      if (document.hidden) {
+    let wasAway = document.hidden || !document.hasFocus();
+    const checkAway = () => {
+      const isAway = document.hidden || !document.hasFocus();
+      if (isAway && !wasAway) {
         reportViolation('TabSwitch');
       }
+      wasAway = isAway;
     };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
+    document.addEventListener('visibilitychange', checkAway);
+    window.addEventListener('blur', checkAway);
+    window.addEventListener('focus', checkAway);
+    return () => {
+      document.removeEventListener('visibilitychange', checkAway);
+      window.removeEventListener('blur', checkAway);
+      window.removeEventListener('focus', checkAway);
+    };
   }, [enabled, settings.screenMonitoringEnabled]);
 
   useEffect(() => {
