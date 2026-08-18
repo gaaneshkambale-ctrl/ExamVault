@@ -22,6 +22,10 @@ export interface ProctoringStatus {
   cameraReady: boolean;
   faceStatus: 'ok' | 'no-face' | 'multiple-faces' | 'unknown';
   violationCounts: Record<ProctoringViolationType, number>;
+  // Exposed so the exam screen can show a small live preview - lets the
+  // student see exactly what the camera sees, same stream as detection runs
+  // on (a MediaStream can back more than one <video> element at once).
+  stream: MediaStream | null;
 }
 
 const emptyCounts: Record<ProctoringViolationType, number> = {
@@ -55,6 +59,7 @@ export function useProctoring(
   const [cameraReady, setCameraReady] = useState(false);
   const [faceStatus, setFaceStatus] = useState<ProctoringStatus['faceStatus']>('unknown');
   const [violationCounts, setViolationCounts] = useState(emptyCounts);
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const reportViolation = (type: ProctoringViolationType) => {
     setViolationCounts((prev) => ({ ...prev, [type]: prev[type] + 1 }));
@@ -95,6 +100,7 @@ export function useProctoring(
         }
         videoRef.current = video;
         setCameraReady(true);
+        setStream(stream);
 
         const checkFace = async () => {
           const currentVideo = videoRef.current;
@@ -152,6 +158,7 @@ export function useProctoring(
       videoRef.current = null;
       setCameraReady(false);
       setFaceStatus('unknown');
+      setStream(null);
     };
   }, [enabled, settings.faceDetectionEnabled, settings.multiPersonDetectionEnabled]);
 
@@ -220,5 +227,5 @@ export function useProctoring(
     };
   }, [enabled, settings.multipleTabsEnabled, attemptId]);
 
-  return { cameraReady, faceStatus, violationCounts };
+  return { cameraReady, faceStatus, violationCounts, stream };
 }

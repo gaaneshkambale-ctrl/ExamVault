@@ -54,6 +54,38 @@ interface AnswerState {
   isMarkedForReview: boolean;
 }
 
+// Small always-visible preview of the proctoring camera feed, so the student
+// can see exactly what's being watched instead of a camera silently running
+// in the background. Same MediaStream the detection hook reads from - a
+// stream can back more than one <video> element at once.
+function CameraPreview({ stream }: { stream: MediaStream }) {
+  return (
+    <div
+      className="position-fixed rounded-3 overflow-hidden shadow-lg border border-light"
+      style={{ bottom: 20, right: 20, width: 160, height: 120, zIndex: 1500, background: '#000' }}
+    >
+      <video
+        ref={(el) => {
+          if (el && el.srcObject !== stream) {
+            el.srcObject = stream;
+          }
+        }}
+        autoPlay
+        muted
+        playsInline
+        className="w-100 h-100"
+        style={{ objectFit: 'cover', transform: 'scaleX(-1)' }}
+      />
+      <span
+        className="position-absolute bottom-0 start-0 end-0 text-white text-center small py-1"
+        style={{ background: 'rgba(0,0,0,0.55)' }}
+      >
+        Camera monitoring active
+      </span>
+    </div>
+  );
+}
+
 function shuffle<T>(items: T[]): T[] {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i--) {
@@ -244,6 +276,9 @@ export default function TakeExam() {
       setSubmittedAttempt(attempt);
       setMode('submitted');
       void queryClient.invalidateQueries({ queryKey: ['submissions', 'mine', id] });
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {});
+      }
     },
     onError: (error) => setAttemptError(extractError(error)),
   });
@@ -446,6 +481,8 @@ export default function TakeExam() {
 
   return (
     <StudentLayout active="My Exams" hideSidebar={mode === 'take' || mode === 'review'}>
+      {proctoringActive && proctoring.stream && <CameraPreview stream={proctoring.stream} />}
+
       {showFullscreenWarning && (mode === 'take' || mode === 'review') && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center px-3"
