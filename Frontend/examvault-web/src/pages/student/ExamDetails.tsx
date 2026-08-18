@@ -101,16 +101,22 @@ export default function ExamDetails() {
   const startMutation = useMutation({
     mutationFn: () => startAttempt(id!),
     onSuccess: () => {
-      // Best-effort: enter fullscreen right as the exam begins. Browsers
-      // require this to originate from a user gesture (the button click
-      // that got us here), and silently ignore it if the device/browser
-      // doesn't support it - never block starting the exam on this.
-      void document.documentElement.requestFullscreen?.().catch(() => {});
       // Take Exam resolves the attempt itself via the mine-lookup endpoint,
       // so it doesn't need the attempt id handed through navigation state.
       navigate(`/exams/${id}/take`);
     },
   });
+
+  // Best-effort: enter fullscreen right as the exam begins. Browsers only
+  // grant requestFullscreen() while still inside the user-gesture callback
+  // that triggered it - calling it from the mutation's onSuccess (after an
+  // awaited network round-trip) loses that gesture and silently no-ops, so
+  // this must run synchronously in the button's own onClick instead. Also
+  // silently ignores devices/browsers that don't support it at all - never
+  // block starting the exam on this.
+  const requestFullscreenFromGesture = () => {
+    void document.documentElement.requestFullscreen?.().catch(() => {});
+  };
 
   const runSystemCheck = () => {
     setChecks({
@@ -320,7 +326,10 @@ export default function ExamDetails() {
               <Button
                 variant="primary"
                 disabled={!agreedToRules || startMutation.isPending}
-                onClick={() => startMutation.mutate()}
+                onClick={() => {
+                  requestFullscreenFromGesture();
+                  startMutation.mutate();
+                }}
               >
                 {startMutation.isPending ? (
                   <>
