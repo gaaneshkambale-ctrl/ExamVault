@@ -12,6 +12,7 @@ public class RecordProctoringViolationResult
     public int MultipleTabsCount { get; init; }
     public int CopyPasteCount { get; init; }
     public int RightClickCount { get; init; }
+    public int MultipleMonitorsCount { get; init; }
 
     public static RecordProctoringViolationResult Ok(Domain.Entities.ExamAttempt attempt) => new()
     {
@@ -22,6 +23,7 @@ public class RecordProctoringViolationResult
         MultipleTabsCount = attempt.MultipleTabsCount,
         CopyPasteCount = attempt.CopyPasteCount,
         RightClickCount = attempt.RightClickCount,
+        MultipleMonitorsCount = attempt.MultipleMonitorsCount,
     };
 
     public static RecordProctoringViolationResult AttemptNotFound() => new() { IsAttemptNotFound = true };

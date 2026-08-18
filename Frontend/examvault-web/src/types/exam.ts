@@ -47,4 +47,5 @@ export interface ProctoringSettingsResponse {
   multipleTabsEnabled: boolean;
   copyPasteBlockingEnabled: boolean;
   rightClickBlockingEnabled: boolean;
+  multipleMonitorsEnabled: boolean;
 }

@@ -8,4 +8,5 @@ public enum ProctoringViolationType
     MultipleTabs,
     CopyPaste,
     RightClick,
+    MultipleMonitors,
 }

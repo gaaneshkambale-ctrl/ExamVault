@@ -41,6 +41,7 @@ export default function AdminSettings() {
   const [multipleTabsEnabled, setMultipleTabsEnabled] = useState(true);
   const [copyPasteBlockingEnabled, setCopyPasteBlockingEnabled] = useState(true);
   const [rightClickBlockingEnabled, setRightClickBlockingEnabled] = useState(true);
+  const [multipleMonitorsEnabled, setMultipleMonitorsEnabled] = useState(true);
   const [proctoringStatus, setProctoringStatus] = useState<'idle' | 'loading' | 'saving' | 'success' | 'error'>(
     'idle',
   );
@@ -68,6 +69,7 @@ export default function AdminSettings() {
         setMultipleTabsEnabled(settings.multipleTabsEnabled);
         setCopyPasteBlockingEnabled(settings.copyPasteBlockingEnabled);
         setRightClickBlockingEnabled(settings.rightClickBlockingEnabled);
+        setMultipleMonitorsEnabled(settings.multipleMonitorsEnabled);
         setProctoringStatus('idle');
       })
       .catch(() => setProctoringStatus('error'));
@@ -121,6 +123,7 @@ export default function AdminSettings() {
         multipleTabsEnabled,
         copyPasteBlockingEnabled,
         rightClickBlockingEnabled,
+        multipleMonitorsEnabled,
       });
       setProctoringEnabled(settings.proctoringEnabled);
       setFaceDetectionEnabled(settings.faceDetectionEnabled);
@@ -130,6 +133,7 @@ export default function AdminSettings() {
       setMultipleTabsEnabled(settings.multipleTabsEnabled);
       setCopyPasteBlockingEnabled(settings.copyPasteBlockingEnabled);
       setRightClickBlockingEnabled(settings.rightClickBlockingEnabled);
+      setMultipleMonitorsEnabled(settings.multipleMonitorsEnabled);
       setProctoringStatus('success');
     } catch {
       setProctoringStatus('error');
@@ -394,6 +398,14 @@ export default function AdminSettings() {
                   label="Block right-click"
                   checked={rightClickBlockingEnabled}
                   onChange={(e) => setRightClickBlockingEnabled(e.target.checked)}
+                  className="mb-2"
+                />
+                <Form.Check
+                  type="checkbox"
+                  id="multipleMonitorsEnabled"
+                  label="Multiple-monitor detection"
+                  checked={multipleMonitorsEnabled}
+                  onChange={(e) => setMultipleMonitorsEnabled(e.target.checked)}
                 />
               </fieldset>
 

@@ -18,4 +18,5 @@ public class ExamAttempt : BaseEntity
     public int MultipleTabsCount { get; set; }
     public int CopyPasteCount { get; set; }
     public int RightClickCount { get; set; }
+    public int MultipleMonitorsCount { get; set; }
 }

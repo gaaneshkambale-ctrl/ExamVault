@@ -14,4 +14,5 @@ public record ExamAttemptResponse(
     int TabSwitchCount,
     int MultipleTabsCount,
     int CopyPasteCount,
-    int RightClickCount);
+    int RightClickCount,
+    int MultipleMonitorsCount);

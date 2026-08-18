@@ -24,4 +24,5 @@ public class AdminAttemptResult
     public int MultipleTabsCount { get; init; }
     public int CopyPasteCount { get; init; }
     public int RightClickCount { get; init; }
+    public int MultipleMonitorsCount { get; init; }
 }

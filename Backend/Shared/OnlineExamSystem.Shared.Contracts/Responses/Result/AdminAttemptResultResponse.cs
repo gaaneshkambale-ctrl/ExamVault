@@ -17,4 +17,5 @@ public record AdminAttemptResultResponse(
     int TabSwitchCount,
     int MultipleTabsCount,
     int CopyPasteCount,
-    int RightClickCount);
+    int RightClickCount,
+    int MultipleMonitorsCount);

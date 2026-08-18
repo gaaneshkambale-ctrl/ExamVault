@@ -164,7 +164,8 @@ export default function AdminResults() {
                   const grade = getGrade(result.totalScore, result.totalMarks, result.passed);
                   const student = studentById.get(result.userId);
                   const suspiciousActivity = result.noFaceDetectedCount + result.multipleFacesDetectedCount;
-                  const tabWindowActivity = result.tabSwitchCount + result.multipleTabsCount;
+                  const tabWindowActivity =
+                    result.tabSwitchCount + result.multipleTabsCount + result.multipleMonitorsCount;
                   const copyPasteRightClick = result.copyPasteCount + result.rightClickCount;
                   return (
                     <tr key={result.attemptId}>

@@ -2196,3 +2196,94 @@ api/assignments/{id}); the one test attempt it produced was on the
 pre-existing "bulktest.arjun.reddy" seed account and was left in
 place as low-risk residual test data, consistent with other
 "bulktest.*" rows already in the DB from earlier sessions.
+
+FOLLOW-UP (DONE, 2026-08-18): submit didn't exit fullscreen (browser
+stayed stuck in fullscreen after Submit/auto-submit) - fixed by
+calling document.exitFullscreen() in submitMutation.onSuccess,
+verified live it does NOT falsely trigger the fullscreen-exit
+violation (mode is already 'submitted' by the time the async
+fullscreenchange event fires, so the listener's mode-gate skips it).
+Also added a small always-visible camera preview (bottom-right
+corner, same MediaStream the detection hook already reads from) per
+explicit user request, so the student can see what the camera sees
+instead of it running invisibly.
+
+=====================================================================
+FOLLOW-UP FEATURE (DONE, 2026-08-18): multi-monitor detection
+=====================================================================
+REQUESTED: "add the double screen detection" - this closes one of the
+under-reporting gaps flagged when the user asked whether proctoring
+could under-report: a second monitor with another app open never
+trips screen-monitoring today, since document.visibilitychange only
+fires on tab/window blur, not on "user is looking at a different
+physical display."
+
+APPROACH: `window.screen.isExtended` (Window Management API,
+Chromium-based browsers) reports whether the OS has an extended
+multi-display desktop - as a plain boolean, with NO permission prompt
+(unlike the fuller getScreenDetails() API, which would ask the user
+to grant permission and is overkill for a yes/no check). Unsupported
+browsers (Firefox, Safari) get `undefined` back - fails open silently
+(no violation, no error) rather than false-flagging every exam taken
+on those browsers.
+
+Exact same pipeline as every other detector this session:
+- New `MultipleMonitorsEnabled` toggle on ProctoringSettings (Exam
+  Service), default true, own EF migration.
+- New `MultipleMonitors` value on ProctoringViolationType +
+  MultipleMonitorsCount counter on ExamAttempt (Submission Service),
+  reported through the existing generic proctoring-violation
+  endpoint (no new endpoint needed) - own EF migration.
+- Threaded through Result Service the same way the other five
+  counters were (SubmissionLookupResult -> SubmissionServiceClient ->
+  AdminAttemptResult -> GetExamReportHandler ->
+  AdminAttemptResultResponse -> ResultsController).
+- Frontend: useProctoring polls `window.screen.isExtended` every 5s
+  (cheap, synchronous, no camera/permission involved) and reports a
+  violation on each false->true transition (not on every poll while
+  it stays true) - one event per "monitor got connected," same
+  discrete-event shape as tab-switch, not a continuous spam.
+- Admin Settings gets a 9th checkbox; AdminResults' existing "Tab/
+  Window Activity" column absorbs this count too (extends that
+  grouping rather than adding a 4th proctoring column).
+
+BUG CAUGHT DURING IMPLEMENTATION: `dotnet ef migrations add` scaffolds
+AddColumn<bool> defaults from `default(bool)` (false), not from the
+C# entity's `= true` property initializer - that initializer only
+applies to newly-constructed objects, not to the SQL DEFAULT used to
+backfill pre-existing rows. Every prior ProctoringSettings field was
+safe from this because they all shipped in the original CreateTable
+migration (no existing rows to backfill yet); this is the first
+AddColumn against that already-populated singleton row, and the
+scaffolded migration would have silently flipped every existing
+customer's row to MultipleMonitorsEnabled=false the moment it
+deployed. Caught it live: the local dev DB's real ProctoringSettings
+row came back false after applying the migration. Fixed the migration
+file to `defaultValue: true` before committing, and corrected the
+already-applied local row via the settings PUT endpoint (a one-time,
+environment-specific fix - the corrected migration file is what
+matters for every other environment, including the Azure dev
+deployment this'll go out to).
+
+VERIFIED: backend - dotnet build clean on all three services, all
+three touched test projects passing (52+22+13, including the two
+positional-record test-fixture edits for the new trailing
+MultipleMonitorsCount arg) after adding an 8th trailing 0 to every
+SubmissionLookupResult test construction; frontend - `tsc -b` and
+`vite build` both clean. Live in local Docker (after one Docker
+Desktop daemon crash + the standard kill/relaunch/`compose up -d`
+recovery mid-rebuild): GET/PUT proctoring-settings shows and persists
+the 9th flag correctly, a full curl chain (start attempt -> record
+MultipleMonitors violation -> submit -> admin exam report) shows
+multipleMonitorsCount=1 threaded correctly through Result Service.
+Browser-verified: the 9th "Multiple-monitor detection" checkbox
+renders and loads correctly on Admin Settings; ran a full exam attempt
+as a student with the new detector active - camera preview and
+"Proctoring Active" badge both worked, zero console errors from the
+new `window.screen.isExtended` polling effect (this sandbox is
+single-monitor, so isExtended reads false/undefined there and the
+code's unsupported-browser guard was exercised for real, just not the
+false->true violation path itself - that would need an actual second
+physical display to trigger, which isn't available in this
+environment). Test assignment and throwaway test admin cleaned up
+after verification.

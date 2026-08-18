@@ -69,6 +69,7 @@ public class GetExamReportHandler
                     MultipleTabsCount = attempt.MultipleTabsCount,
                     CopyPasteCount = attempt.CopyPasteCount,
                     RightClickCount = attempt.RightClickCount,
+                    MultipleMonitorsCount = attempt.MultipleMonitorsCount,
                 };
             }).ToList();
 

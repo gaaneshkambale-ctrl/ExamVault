@@ -52,6 +52,9 @@ public class RecordProctoringViolationHandler
             case ProctoringViolationType.RightClick:
                 attempt.RightClickCount++;
                 break;
+            case ProctoringViolationType.MultipleMonitors:
+                attempt.MultipleMonitorsCount++;
+                break;
         }
 
         await _repository.SaveChangesAsync(cancellationToken);

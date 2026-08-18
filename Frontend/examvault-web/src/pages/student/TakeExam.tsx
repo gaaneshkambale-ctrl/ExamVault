@@ -176,6 +176,7 @@ export default function TakeExam() {
     multipleTabsEnabled: proctoringSettings?.multipleTabsEnabled ?? true,
     copyPasteBlockingEnabled: proctoringSettings?.copyPasteBlockingEnabled ?? true,
     rightClickBlockingEnabled: proctoringSettings?.rightClickBlockingEnabled ?? true,
+    multipleMonitorsEnabled: proctoringSettings?.multipleMonitorsEnabled ?? true,
   });
 
   useEffect(() => {

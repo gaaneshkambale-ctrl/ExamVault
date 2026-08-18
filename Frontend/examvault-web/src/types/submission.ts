@@ -25,6 +25,7 @@ export interface ExamAttemptResponse {
   multipleTabsCount: number;
   copyPasteCount: number;
   rightClickCount: number;
+  multipleMonitorsCount: number;
 }
 
 export type ProctoringViolationType =
@@ -33,7 +34,8 @@ export type ProctoringViolationType =
   | 'TabSwitch'
   | 'MultipleTabs'
   | 'CopyPaste'
-  | 'RightClick';
+  | 'RightClick'
+  | 'MultipleMonitors';
 
 export interface AttemptAnswerResponse {
   id: string;

@@ -8,4 +8,5 @@ public record UpdateProctoringSettingsCommand(
     bool FullscreenExitEnabled,
     bool MultipleTabsEnabled,
     bool CopyPasteBlockingEnabled,
-    bool RightClickBlockingEnabled);
+    bool RightClickBlockingEnabled,
+    bool MultipleMonitorsEnabled);

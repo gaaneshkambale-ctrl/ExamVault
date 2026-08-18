@@ -47,6 +47,7 @@ export interface AdminAttemptResultResponse {
   multipleTabsCount: number;
   copyPasteCount: number;
   rightClickCount: number;
+  multipleMonitorsCount: number;
 }
 
 export type Grade = 'A+' | 'A' | 'B' | 'C' | 'F';

@@ -15,7 +15,8 @@ public record SubmissionLookupResult(
     int TabSwitchCount,
     int MultipleTabsCount,
     int CopyPasteCount,
-    int RightClickCount);
+    int RightClickCount,
+    int MultipleMonitorsCount);
 
 public interface ISubmissionLookupClient
 {

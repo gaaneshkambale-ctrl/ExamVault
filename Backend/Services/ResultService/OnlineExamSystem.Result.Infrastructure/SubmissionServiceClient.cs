@@ -72,7 +72,8 @@ public class SubmissionServiceClient : ISubmissionLookupClient
             body.Attempt.TabSwitchCount,
             body.Attempt.MultipleTabsCount,
             body.Attempt.CopyPasteCount,
-            body.Attempt.RightClickCount);
+            body.Attempt.RightClickCount,
+            body.Attempt.MultipleMonitorsCount);
 
     private sealed class AttemptWithAnswersApiResponse
     {
@@ -94,6 +95,7 @@ public class SubmissionServiceClient : ISubmissionLookupClient
         public int MultipleTabsCount { get; init; }
         public int CopyPasteCount { get; init; }
         public int RightClickCount { get; init; }
+        public int MultipleMonitorsCount { get; init; }
     }
 
     private sealed class AttemptAnswerApiResponse

@@ -8,6 +8,7 @@ const FACE_CHECK_INTERVAL_MS = 3000;
 // only counts a violation once a bad reading is seen this many checks in a row.
 const CONSECUTIVE_BAD_READINGS_REQUIRED = 3;
 const MODEL_URL = '/models';
+const MONITOR_CHECK_INTERVAL_MS = 5000;
 
 export interface ProctoringSettingsFlags {
   faceDetectionEnabled: boolean;
@@ -16,6 +17,7 @@ export interface ProctoringSettingsFlags {
   multipleTabsEnabled: boolean;
   copyPasteBlockingEnabled: boolean;
   rightClickBlockingEnabled: boolean;
+  multipleMonitorsEnabled: boolean;
 }
 
 export interface ProctoringStatus {
@@ -35,6 +37,7 @@ const emptyCounts: Record<ProctoringViolationType, number> = {
   MultipleTabs: 0,
   CopyPaste: 0,
   RightClick: 0,
+  MultipleMonitors: 0,
 };
 
 // Runs the whole client-side proctoring layer for an active exam attempt:
@@ -226,6 +229,34 @@ export function useProctoring(
       channel.close();
     };
   }, [enabled, settings.multipleTabsEnabled, attemptId]);
+
+  // Second physical monitor connected: window.screen.isExtended is a plain
+  // boolean with no permission prompt (unlike the fuller getScreenDetails()
+  // API). Unsupported browsers (Firefox, Safari) get undefined back - fails
+  // open silently rather than false-flagging every exam taken there. Polled
+  // rather than event-driven (no "display config changed" event exists) and
+  // only reports on the false->true transition, not on every poll while a
+  // second monitor stays connected.
+  useEffect(() => {
+    if (!enabled || !settings.multipleMonitorsEnabled) {
+      return;
+    }
+    const screenWithIsExtended = window.screen as Screen & { isExtended?: boolean };
+    if (typeof screenWithIsExtended.isExtended !== 'boolean') {
+      return;
+    }
+    let wasExtended = false;
+    const checkMonitors = () => {
+      const isExtended = screenWithIsExtended.isExtended === true;
+      if (isExtended && !wasExtended) {
+        reportViolation('MultipleMonitors');
+      }
+      wasExtended = isExtended;
+    };
+    checkMonitors();
+    const intervalId = setInterval(checkMonitors, MONITOR_CHECK_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [enabled, settings.multipleMonitorsEnabled]);
 
   return { cameraReady, faceStatus, violationCounts, stream };
 }

@@ -216,6 +216,7 @@ public class SubmissionsController : ControllerBase
             multipleTabsCount = result.MultipleTabsCount,
             copyPasteCount = result.CopyPasteCount,
             rightClickCount = result.RightClickCount,
+            multipleMonitorsCount = result.MultipleMonitorsCount,
         });
     }
 
@@ -319,7 +320,8 @@ public class SubmissionsController : ControllerBase
             attempt.TabSwitchCount,
             attempt.MultipleTabsCount,
             attempt.CopyPasteCount,
-            attempt.RightClickCount);
+            attempt.RightClickCount,
+            attempt.MultipleMonitorsCount);
 
     private static AttemptAnswerResponse ToResponse(AttemptAnswer answer) =>
         new(

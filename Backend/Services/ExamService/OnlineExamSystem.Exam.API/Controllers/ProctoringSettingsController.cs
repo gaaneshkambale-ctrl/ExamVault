@@ -48,7 +48,8 @@ public class ProctoringSettingsController : ControllerBase
                 request.FullscreenExitEnabled,
                 request.MultipleTabsEnabled,
                 request.CopyPasteBlockingEnabled,
-                request.RightClickBlockingEnabled),
+                request.RightClickBlockingEnabled,
+                request.MultipleMonitorsEnabled),
             cancellationToken);
         return Ok(ToResponse(settings));
     }
@@ -62,5 +63,6 @@ public class ProctoringSettingsController : ControllerBase
             settings.FullscreenExitEnabled,
             settings.MultipleTabsEnabled,
             settings.CopyPasteBlockingEnabled,
-            settings.RightClickBlockingEnabled);
+            settings.RightClickBlockingEnabled,
+            settings.MultipleMonitorsEnabled);
 }

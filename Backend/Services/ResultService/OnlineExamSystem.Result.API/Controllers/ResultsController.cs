@@ -117,7 +117,8 @@ public class ResultsController : ControllerBase
             attempt.TabSwitchCount,
             attempt.MultipleTabsCount,
             attempt.CopyPasteCount,
-            attempt.RightClickCount);
+            attempt.RightClickCount,
+            attempt.MultipleMonitorsCount);
 
     private static ResultSummaryResponse ToResponse(ExamResultSummary summary) =>
         new(

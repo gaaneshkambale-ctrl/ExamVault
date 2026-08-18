@@ -25,6 +25,7 @@ public class UpdateProctoringSettingsHandler
         settings.MultipleTabsEnabled = command.MultipleTabsEnabled;
         settings.CopyPasteBlockingEnabled = command.CopyPasteBlockingEnabled;
         settings.RightClickBlockingEnabled = command.RightClickBlockingEnabled;
+        settings.MultipleMonitorsEnabled = command.MultipleMonitorsEnabled;
 
         await _examRepository.SaveChangesAsync(cancellationToken);
 

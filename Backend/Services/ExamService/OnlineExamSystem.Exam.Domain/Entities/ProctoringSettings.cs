@@ -16,4 +16,5 @@ public class ProctoringSettings : BaseEntity
     public bool MultipleTabsEnabled { get; set; } = true;
     public bool CopyPasteBlockingEnabled { get; set; } = true;
     public bool RightClickBlockingEnabled { get; set; } = true;
+    public bool MultipleMonitorsEnabled { get; set; } = true;
 }
