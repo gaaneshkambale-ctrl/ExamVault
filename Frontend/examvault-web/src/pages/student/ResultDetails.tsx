@@ -1,12 +1,12 @@
-import { Badge, Button, Card, Col, ListGroup, ProgressBar, Row, Spinner } from 'react-bootstrap';
+import { Badge, Button, Card, Col, ProgressBar, Row, Spinner } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useMyResult } from '../../hooks/useResults';
 import { getGrade } from '../../types/result';
-import type { QuestionResultResponse } from '../../types/result';
 import type { ExamType } from '../../types/exam';
 import { generateResultPdf } from '../../utils/generateResultPdf';
+import AnswerReviewPanel from '../../components/result/AnswerReviewPanel';
 
 const examTypeLabel: Record<ExamType, string> = {
   Manual: 'Manual',
@@ -30,42 +30,6 @@ function AnalysisRow({ label, count, total, variant }: { label: string; count: n
       </div>
       <ProgressBar now={total > 0 ? (count / total) * 100 : 0} variant={variant} style={{ height: 8 }} />
     </div>
-  );
-}
-
-function QuestionBreakdownItem({ question, index }: { question: QuestionResultResponse; index: number }) {
-  return (
-    <Card className="border-0 shadow-sm mb-3">
-      <Card.Body className="p-4">
-        <div className="d-flex justify-content-between align-items-start mb-3">
-          <h2 className="h6 fw-bold mb-0" style={{ maxWidth: 560 }}>
-            {index + 1}. {question.questionText}
-          </h2>
-          <Badge bg={question.isCorrect ? 'success' : 'danger'}>
-            {question.isCorrect ? `+${question.marksAwarded}` : '0'} / {question.marks}
-          </Badge>
-        </div>
-        <ListGroup>
-          {question.options.map((option) => {
-            const isSelected = option.optionId === question.selectedOptionId;
-            const variant = option.isCorrect ? 'success' : isSelected ? 'danger' : undefined;
-            return (
-              <ListGroup.Item
-                key={option.optionId}
-                className="d-flex justify-content-between align-items-center"
-                variant={variant}
-              >
-                {option.optionText}
-                <div className="d-flex gap-2">
-                  {isSelected && <Badge bg={option.isCorrect ? 'success' : 'danger'}>Your Answer</Badge>}
-                  {option.isCorrect && !isSelected && <Badge bg="success">Correct Answer</Badge>}
-                </div>
-              </ListGroup.Item>
-            );
-          })}
-        </ListGroup>
-      </Card.Body>
-    </Card>
   );
 }
 
@@ -173,14 +137,7 @@ export default function ResultDetails() {
             </Col>
           </Row>
 
-          {questions && questions.length > 0 && (
-            <div>
-              <h2 className="h6 fw-bold mb-3">Answer Review</h2>
-              {questions.map((question, index) => (
-                <QuestionBreakdownItem key={question.questionId} question={question} index={index} />
-              ))}
-            </div>
-          )}
+          {questions && questions.length > 0 && <AnswerReviewPanel questions={questions} />}
 
           {!questions && (
             <div className="text-center text-muted small py-3">
