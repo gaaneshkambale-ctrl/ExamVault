@@ -18,6 +18,7 @@ export interface ExamAttemptResponse {
   status: AttemptStatus;
   startedAtUtc: string;
   submittedAtUtc: string | null;
+  fullscreenExitCount: number;
 }
 
 export interface AttemptAnswerResponse {

@@ -6,12 +6,13 @@ import { isAxiosError } from 'axios';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
-import { getMyAttempt, saveAnswer, startAttempt, submitAttempt } from '../../api/submissionApi';
+import { getMyAttempt, recordFullscreenExit, saveAnswer, startAttempt, submitAttempt } from '../../api/submissionApi';
 import type { QuestionResponse } from '../../types/question';
 import type { ExamAttemptResponse } from '../../types/submission';
 
 type NavState = 'answered' | 'not-answered' | 'marked' | 'not-visited';
 type Mode = 'loading' | 'take' | 'review' | 'submitted';
+type NavFilter = 'all' | 'answered' | 'unanswered' | 'marked';
 
 const NAV_LEGEND: Array<{ state: NavState; label: string; color: string }> = [
   { state: 'answered', label: 'Answered', color: '#16a34a' },
@@ -20,12 +21,22 @@ const NAV_LEGEND: Array<{ state: NavState; label: string; color: string }> = [
   { state: 'not-visited', label: 'Not Visited', color: '#e5e7eb' },
 ];
 
+// Fill colors match each state's legend swatch exactly - they previously
+// didn't (not-answered rendered as plain white, indistinguishable from
+// not-visited), which silently hid the "visited but left blank" state.
 const navStateStyle: Record<NavState, { background: string; color: string }> = {
   answered: { background: '#16a34a', color: 'white' },
-  'not-answered': { background: 'white', color: '#212529' },
+  'not-answered': { background: '#dc3545', color: 'white' },
   marked: { background: '#f59e0b', color: 'white' },
   'not-visited': { background: '#e5e7eb', color: '#6c757d' },
 };
+
+const NAV_FILTERS: Array<{ value: NavFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'answered', label: 'Answered' },
+  { value: 'unanswered', label: 'Unanswered' },
+  { value: 'marked', label: 'Marked' },
+];
 
 const statusLabel: Record<ExamAttemptResponse['status'], string> = {
   InProgress: 'In Progress',
@@ -81,6 +92,41 @@ export default function TakeExam() {
   const [visited, setVisited] = useState<Set<string>>(new Set());
   const [answers, setAnswers] = useState<Record<string, AnswerState>>({});
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [navFilter, setNavFilter] = useState<NavFilter>('all');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
+  const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
+
+  // Browsers won't let a site block Esc from exiting fullscreen (by design,
+  // it's a user-safety escape hatch) - so instead of trying to prevent it,
+  // detect the exit and block the exam behind a warning until they return.
+  // Also best-effort logs it server-side so an admin can review it later -
+  // never lets that call block or fail the warning UI itself.
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && (mode === 'take' || mode === 'review')) {
+        setFullscreenExitCount((count) => count + 1);
+        setShowFullscreenWarning(true);
+        if (attemptId) {
+          void recordFullscreenExit(attemptId).catch(() => {});
+        }
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [mode, attemptId]);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
 
   // Resolve the attempt via the mine-lookup endpoint first: continue an
   // InProgress attempt with saved answers restored, or land straight on the
@@ -207,6 +253,7 @@ export default function TakeExam() {
         selectedOptionId: payload.answer.selectedOptionId,
         isMarkedForReview: payload.answer.isMarkedForReview,
       }),
+    onSuccess: () => setLastSavedAt(new Date()),
   });
 
   const persistAnswer = (questionId: string, answer: AnswerState) => {
@@ -257,26 +304,96 @@ export default function TakeExam() {
     ? (answers[currentQuestion.id] ?? { selectedOptionId: null, isMarkedForReview: false })
     : null;
 
-  const answeredCount = displayQuestions.filter((q) => answers[q.id]?.selectedOptionId).length;
-  const markedCount = displayQuestions.filter((q) => answers[q.id]?.isMarkedForReview).length;
-  const notAnsweredCount = displayQuestions.length - answeredCount;
+  // Bucketed off navState (not raw answer flags) so the grid colors, the
+  // filter tabs, and the stats row can never disagree with each other - a
+  // marked-and-answered question shows as "marked" everywhere consistently.
+  const answeredCount = displayQuestions.filter((q) => navState(q) === 'answered').length;
+  const markedCount = displayQuestions.filter((q) => navState(q) === 'marked').length;
+  const unansweredCount = displayQuestions.filter(
+    (q) => navState(q) === 'not-answered' || navState(q) === 'not-visited',
+  ).length;
+
+  const matchesFilter = (question: QuestionResponse): boolean => {
+    const state = navState(question);
+    if (navFilter === 'all') return true;
+    if (navFilter === 'answered') return state === 'answered';
+    if (navFilter === 'marked') return state === 'marked';
+    return state === 'not-answered' || state === 'not-visited';
+  };
 
   const questionNavigator = (
     <Card className="border-0 shadow-sm">
       <Card.Body>
         <h2 className="h6 fw-bold mb-3">Question Navigator</h2>
-        <div className="d-flex flex-wrap gap-2 mb-4">
-          {displayQuestions.map((question, index) => (
+
+        <div className="d-flex gap-1 mb-3 p-1 rounded-2 bg-light">
+          {NAV_FILTERS.map((f) => (
             <button
-              key={question.id}
+              key={f.value}
               type="button"
-              onClick={() => goToIndex(index)}
-              className="border rounded-2 fw-medium"
-              style={{ width: 34, height: 34, ...navStateStyle[navState(question)] }}
+              onClick={() => setNavFilter(f.value)}
+              className="btn btn-sm flex-fill border-0 fw-medium"
+              style={
+                navFilter === f.value
+                  ? { background: '#0f172a', color: 'white' }
+                  : { background: 'transparent', color: '#495057' }
+              }
             >
-              {index + 1}
+              {f.label}
             </button>
           ))}
+        </div>
+
+        <Row className="g-2 text-center mb-3">
+          <Col xs={3}>
+            <div className="fw-bold">{displayQuestions.length}</div>
+            <div className="text-muted" style={{ fontSize: 11 }}>
+              All
+            </div>
+          </Col>
+          <Col xs={3}>
+            <div className="fw-bold text-success">{answeredCount}</div>
+            <div className="text-muted" style={{ fontSize: 11 }}>
+              Answered
+            </div>
+          </Col>
+          <Col xs={3}>
+            <div className="fw-bold text-danger">{unansweredCount}</div>
+            <div className="text-muted" style={{ fontSize: 11 }}>
+              Unanswered
+            </div>
+          </Col>
+          <Col xs={3}>
+            <div className="fw-bold text-warning">{markedCount}</div>
+            <div className="text-muted" style={{ fontSize: 11 }}>
+              Marked
+            </div>
+          </Col>
+        </Row>
+
+        <div className="d-flex flex-wrap gap-2 mb-4">
+          {displayQuestions.map((question, index) => {
+            if (!matchesFilter(question)) {
+              return null;
+            }
+            const isCurrent = mode === 'take' && index === currentIndex;
+            return (
+              <button
+                key={question.id}
+                type="button"
+                onClick={() => goToIndex(index)}
+                className="rounded-2 fw-medium"
+                style={{
+                  width: 34,
+                  height: 34,
+                  border: isCurrent ? '2px solid #2563eb' : '1px solid #dee2e6',
+                  ...navStateStyle[navState(question)],
+                }}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
         </div>
 
         <div className="d-flex flex-column gap-2">
@@ -286,6 +403,13 @@ export default function TakeExam() {
               {item.label}
             </div>
           ))}
+          <div className="d-flex align-items-center gap-2 small">
+            <span
+              className="rounded-1 flex-shrink-0"
+              style={{ width: 14, height: 14, border: '2px solid #2563eb' }}
+            />
+            Current
+          </div>
         </div>
       </Card.Body>
     </Card>
@@ -293,29 +417,70 @@ export default function TakeExam() {
 
   return (
     <StudentLayout active="My Exams" hideSidebar={mode === 'take' || mode === 'review'}>
+      {showFullscreenWarning && (mode === 'take' || mode === 'review') && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center px-3"
+          style={{ background: 'rgba(15, 23, 42, 0.85)', zIndex: 2000 }}
+        >
+          <Card className="border-0 shadow-lg text-center" style={{ maxWidth: 420 }}>
+            <Card.Body className="p-4">
+              <div
+                className="rounded-circle bg-danger-subtle text-danger d-inline-flex align-items-center justify-content-center mb-3"
+                style={{ width: 56, height: 56 }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" strokeLinejoin="round" strokeLinecap="round" />
+                  <path d="M12 9v4M12 17h.01" strokeLinecap="round" />
+                </svg>
+              </div>
+              <h2 className="h5 fw-bold mb-2">You exited fullscreen</h2>
+              <p className="text-muted mb-1">Fullscreen mode is required while the exam is in progress.</p>
+              <p className="text-danger fw-medium mb-4">
+                Warning {fullscreenExitCount}: exiting fullscreen may be flagged for review.
+              </p>
+              <Button
+                variant="primary"
+                className="w-100"
+                onClick={() => {
+                  void document.documentElement
+                    .requestFullscreen?.()
+                    .then(() => setShowFullscreenWarning(false))
+                    .catch(() => {});
+                }}
+              >
+                Return to Fullscreen
+              </Button>
+            </Card.Body>
+          </Card>
+        </div>
+      )}
+
       {mode !== 'submitted' && (
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <div>
+        <Card className="border-0 shadow-sm mb-3">
+          <Card.Body className="d-flex justify-content-between align-items-center flex-wrap gap-3">
             <h1 className="h5 fw-bold mb-0">
               {isLoadingExam ? <Spinner animation="border" size="sm" /> : (exam?.title ?? 'Take Exam')}
             </h1>
-          </div>
-          <div className="d-flex align-items-center gap-3">
-            <div className="text-center">
-              <div className="text-muted small">Time Left</div>
-              <div className="fw-bold">
-                {remainingSeconds !== null ? formatDuration(remainingSeconds) : '--:--:--'}
+            <div className="d-flex align-items-center gap-3">
+              <div className="text-center">
+                <div className="text-muted small mb-1">Time Left</div>
+                <div className="border rounded-2 px-3 py-1 fw-bold" style={{ minWidth: 110 }}>
+                  {remainingSeconds !== null ? formatDuration(remainingSeconds) : '--:--:--'}
+                </div>
               </div>
+              <Badge bg={isOnline ? 'success' : 'danger'} className="fw-normal py-2 px-3">
+                {isOnline ? 'Connected' : 'Offline'}
+              </Badge>
+              <Button
+                variant="primary"
+                disabled={mode === 'loading' || submitMutation.isPending}
+                onClick={() => (mode === 'review' ? submitMutation.mutate(false) : setMode('review'))}
+              >
+                Submit Exam
+              </Button>
             </div>
-            <Button
-              variant="danger"
-              disabled={mode === 'loading' || submitMutation.isPending}
-              onClick={() => (mode === 'review' ? submitMutation.mutate(false) : setMode('review'))}
-            >
-              Submit Exam
-            </Button>
-          </div>
-        </div>
+          </Card.Body>
+        </Card>
       )}
 
       {attemptError && <Alert variant="danger">{attemptError}</Alert>}
@@ -358,34 +523,58 @@ export default function TakeExam() {
                 <p className="fw-medium mb-4">{currentQuestion.questionText}</p>
 
                 <Form>
-                  {currentQuestion.options.map((option, index) => (
-                    <Form.Check
-                      key={option.id}
-                      type="radio"
-                      name={`question-${currentQuestion.id}`}
-                      id={`option-${option.id}`}
-                      label={`${OPTION_LETTERS[index] ?? index + 1}: ${option.optionText}`}
-                      checked={currentAnswer.selectedOptionId === option.id}
-                      onChange={() => updateAnswer(currentQuestion.id, { selectedOptionId: option.id })}
-                      className="mb-2"
-                    />
-                  ))}
+                  {currentQuestion.options.map((option, index) => {
+                    const selected = currentAnswer.selectedOptionId === option.id;
+                    return (
+                      <label
+                        key={option.id}
+                        htmlFor={`option-${option.id}`}
+                        className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2"
+                        style={{
+                          cursor: 'pointer',
+                          borderColor: selected ? '#16a34a' : undefined,
+                          background: selected ? '#f0fdf4' : undefined,
+                        }}
+                      >
+                        <Form.Check
+                          type="radio"
+                          name={`question-${currentQuestion.id}`}
+                          id={`option-${option.id}`}
+                          checked={selected}
+                          onChange={() => updateAnswer(currentQuestion.id, { selectedOptionId: option.id })}
+                          className="mb-0"
+                        />
+                        <span>
+                          {OPTION_LETTERS[index] ?? index + 1}. {option.optionText}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </Form>
 
-                <div className="d-flex justify-content-between mt-4">
+                <div className="small mt-2" style={{ minHeight: 20 }}>
+                  {saveAnswerMutation.isPending && <span className="text-muted">Saving...</span>}
+                  {!saveAnswerMutation.isPending && lastSavedAt && (
+                    <span className="text-success">
+                      &#10003; Answer saved &nbsp;|&nbsp; Last saved: {lastSavedAt.toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
+
+                <div className="d-flex justify-content-between mt-3">
                   <Button
                     variant="outline-secondary"
                     disabled={currentIndex === 0}
                     onClick={() => goToIndex(Math.max(0, currentIndex - 1))}
                   >
-                    &larr; Previous
+                    &larr; Save &amp; Previous
                   </Button>
                   <Button
                     variant="primary"
                     disabled={currentIndex === displayQuestions.length - 1}
                     onClick={() => goToIndex(Math.min(displayQuestions.length - 1, currentIndex + 1))}
                   >
-                    Next &rarr;
+                    Save &amp; Next &rarr;
                   </Button>
                 </div>
               </Card.Body>
@@ -415,7 +604,7 @@ export default function TakeExam() {
                   </Col>
                   <Col xs={6} sm={3}>
                     <div className="text-muted small">Not Answered</div>
-                    <div className="h4 fw-bold mb-0 text-danger">{notAnsweredCount}</div>
+                    <div className="h4 fw-bold mb-0 text-danger">{unansweredCount}</div>
                   </Col>
                   <Col xs={6} sm={3}>
                     <div className="text-muted small">Marked for Review</div>

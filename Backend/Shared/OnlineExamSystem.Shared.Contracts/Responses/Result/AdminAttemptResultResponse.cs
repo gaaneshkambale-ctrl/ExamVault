@@ -10,4 +10,5 @@ public record AdminAttemptResultResponse(
     int PassingMarks,
     bool Passed,
     DateTime SubmittedAtUtc,
-    IReadOnlyList<QuestionResultResponse> Questions);
+    IReadOnlyList<QuestionResultResponse> Questions,
+    int FullscreenExitCount);

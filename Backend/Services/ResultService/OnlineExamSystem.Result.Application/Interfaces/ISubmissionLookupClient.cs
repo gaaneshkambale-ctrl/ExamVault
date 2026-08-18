@@ -8,7 +8,8 @@ public record SubmissionLookupResult(
     Guid ExamId,
     string Status,
     DateTime? SubmittedAtUtc,
-    IReadOnlyList<SubmissionAnswer> Answers);
+    IReadOnlyList<SubmissionAnswer> Answers,
+    int FullscreenExitCount);
 
 public interface ISubmissionLookupClient
 {

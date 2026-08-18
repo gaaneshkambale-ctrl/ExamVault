@@ -11,4 +11,5 @@ public class ExamAttempt : BaseEntity
     public DateTime StartedAtUtc { get; set; }
     public DateTime? SubmittedAtUtc { get; set; }
     public AttemptStatus Status { get; set; } = AttemptStatus.InProgress;
+    public int FullscreenExitCount { get; set; }
 }

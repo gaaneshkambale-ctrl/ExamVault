@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
+using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
 using OnlineExamSystem.Submission.Application.Attempts.Submit;
@@ -24,6 +25,7 @@ public class SubmissionsController : ControllerBase
     private readonly GetMyAttemptHandler _getMyAttemptHandler;
     private readonly ListAttemptsByExamHandler _listAttemptsByExamHandler;
     private readonly ListAttemptsByUserHandler _listAttemptsByUserHandler;
+    private readonly RecordFullscreenExitHandler _recordFullscreenExitHandler;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -33,6 +35,7 @@ public class SubmissionsController : ControllerBase
         GetMyAttemptHandler getMyAttemptHandler,
         ListAttemptsByExamHandler listAttemptsByExamHandler,
         ListAttemptsByUserHandler listAttemptsByUserHandler,
+        RecordFullscreenExitHandler recordFullscreenExitHandler,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
@@ -41,6 +44,7 @@ public class SubmissionsController : ControllerBase
         _getMyAttemptHandler = getMyAttemptHandler;
         _listAttemptsByExamHandler = listAttemptsByExamHandler;
         _listAttemptsByUserHandler = listAttemptsByUserHandler;
+        _recordFullscreenExitHandler = recordFullscreenExitHandler;
         _logger = logger;
     }
 
@@ -132,6 +136,37 @@ public class SubmissionsController : ControllerBase
         }
 
         return Ok(ToResponse(result.Answer!));
+    }
+
+    // Best-effort proctoring signal: the student's client calls this every time it
+    // detects the browser leaving fullscreen mid-attempt. Not authoritative on its
+    // own (a determined student can still find ways around client-side detection),
+    // but it's a real record an admin can review, not fabricated.
+    [HttpPost("{attemptId:guid}/fullscreen-exit")]
+    public async Task<IActionResult> RecordFullscreenExit(Guid attemptId, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await _recordFullscreenExitHandler.HandleAsync(
+            new RecordFullscreenExitCommand(attemptId, userId),
+            cancellationToken);
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
+
+        if (result.IsNotInProgress)
+        {
+            return Conflict(new { message = "This attempt is no longer in progress." });
+        }
+
+        return Ok(new { fullscreenExitCount = result.FullscreenExitCount });
     }
 
     [HttpPost("{attemptId:guid}/submit")]
@@ -227,7 +262,8 @@ public class SubmissionsController : ControllerBase
             attempt.AttemptNumber,
             attempt.Status.ToString(),
             attempt.StartedAtUtc,
-            attempt.SubmittedAtUtc);
+            attempt.SubmittedAtUtc,
+            attempt.FullscreenExitCount);
 
     private static AttemptAnswerResponse ToResponse(AttemptAnswer answer) =>
         new(

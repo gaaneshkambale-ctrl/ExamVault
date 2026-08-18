@@ -52,3 +52,9 @@ export async function getUserAttempts(userId: string): Promise<ExamAttemptRespon
   const { data } = await apiClient.get<ExamAttemptResponse[]>(`/api/submissions/by-user/${userId}`);
   return data;
 }
+
+// Best-effort proctoring signal - failures are swallowed by the caller, a
+// broker/network hiccup here must never interrupt the student's exam.
+export async function recordFullscreenExit(attemptId: string): Promise<void> {
+  await apiClient.post(`/api/submissions/${attemptId}/fullscreen-exit`);
+}

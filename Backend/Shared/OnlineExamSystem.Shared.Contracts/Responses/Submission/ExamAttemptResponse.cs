@@ -7,4 +7,5 @@ public record ExamAttemptResponse(
     int AttemptNumber,
     string Status,
     DateTime StartedAtUtc,
-    DateTime? SubmittedAtUtc);
+    DateTime? SubmittedAtUtc,
+    int FullscreenExitCount);

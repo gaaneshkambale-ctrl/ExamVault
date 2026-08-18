@@ -110,7 +110,8 @@ public class ResultsController : ControllerBase
             report.PassingMarks,
             attempt.Passed,
             attempt.SubmittedAtUtc,
-            attempt.Questions.Select(ToResponse).ToList());
+            attempt.Questions.Select(ToResponse).ToList(),
+            attempt.FullscreenExitCount);
 
     private static ResultSummaryResponse ToResponse(ExamResultSummary summary) =>
         new(

@@ -65,7 +65,8 @@ public class SubmissionServiceClient : ISubmissionLookupClient
             body.Attempt.ExamId,
             body.Attempt.Status,
             body.Attempt.SubmittedAtUtc,
-            body.Answers.Select(a => new SubmissionAnswer(a.QuestionId, a.SelectedOptionId)).ToList());
+            body.Answers.Select(a => new SubmissionAnswer(a.QuestionId, a.SelectedOptionId)).ToList(),
+            body.Attempt.FullscreenExitCount);
 
     private sealed class AttemptWithAnswersApiResponse
     {
@@ -80,6 +81,7 @@ public class SubmissionServiceClient : ISubmissionLookupClient
         public Guid ExamId { get; init; }
         public string Status { get; init; } = string.Empty;
         public DateTime? SubmittedAtUtc { get; init; }
+        public int FullscreenExitCount { get; init; }
     }
 
     private sealed class AttemptAnswerApiResponse

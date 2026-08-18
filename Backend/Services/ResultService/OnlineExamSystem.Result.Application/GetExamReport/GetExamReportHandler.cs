@@ -62,6 +62,7 @@ public class GetExamReportHandler
                     Passed = totalScore >= exam.PassingMarks,
                     SubmittedAtUtc = attempt.SubmittedAtUtc ?? DateTime.UtcNow,
                     Questions = questionResults,
+                    FullscreenExitCount = attempt.FullscreenExitCount,
                 };
             }).ToList();
 

@@ -17,4 +17,5 @@ public class AdminAttemptResult
     public bool Passed { get; init; }
     public DateTime SubmittedAtUtc { get; init; }
     public IReadOnlyList<QuestionResult> Questions { get; init; } = [];
+    public int FullscreenExitCount { get; init; }
 }

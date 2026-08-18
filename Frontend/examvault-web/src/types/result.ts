@@ -40,6 +40,7 @@ export interface AdminAttemptResultResponse {
   passed: boolean;
   submittedAtUtc: string;
   questions: QuestionResultResponse[];
+  fullscreenExitCount: number;
 }
 
 export type Grade = 'A+' | 'A' | 'B' | 'C' | 'F';

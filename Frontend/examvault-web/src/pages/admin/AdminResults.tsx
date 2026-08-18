@@ -150,6 +150,7 @@ export default function AdminResults() {
                   <th>Grade</th>
                   <th>Status</th>
                   <th>Submitted On</th>
+                  <th>Fullscreen Exits</th>
                   <th className="pe-4">Action</th>
                 </tr>
               </thead>
@@ -179,6 +180,13 @@ export default function AdminResults() {
                         </Badge>
                       </td>
                       <td>{new Date(result.submittedAtUtc).toLocaleString()}</td>
+                      <td>
+                        {result.fullscreenExitCount > 0 ? (
+                          <Badge bg="danger">{result.fullscreenExitCount}</Badge>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
                       <td className="pe-4">
                         <Link to={`/admin/reports/${result.examId}`} className="btn btn-outline-secondary btn-sm">
                           View Report

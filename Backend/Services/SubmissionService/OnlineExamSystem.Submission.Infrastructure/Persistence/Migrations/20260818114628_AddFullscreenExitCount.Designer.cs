@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OnlineExamSystem.Submission.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using OnlineExamSystem.Submission.Infrastructure.Persistence;
 namespace OnlineExamSystem.Submission.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SubmissionDbContext))]
-    partial class SubmissionDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260818114628_AddFullscreenExitCount")]
+    partial class AddFullscreenExitCount
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
