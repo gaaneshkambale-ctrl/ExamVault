@@ -111,7 +111,13 @@ public class ResultsController : ControllerBase
             attempt.Passed,
             attempt.SubmittedAtUtc,
             attempt.Questions.Select(ToResponse).ToList(),
-            attempt.FullscreenExitCount);
+            attempt.FullscreenExitCount,
+            attempt.NoFaceDetectedCount,
+            attempt.MultipleFacesDetectedCount,
+            attempt.TabSwitchCount,
+            attempt.MultipleTabsCount,
+            attempt.CopyPasteCount,
+            attempt.RightClickCount);
 
     private static ResultSummaryResponse ToResponse(ExamResultSummary summary) =>
         new(

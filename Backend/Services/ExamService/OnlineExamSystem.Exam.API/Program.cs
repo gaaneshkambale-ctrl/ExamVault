@@ -17,6 +17,8 @@ using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Exams.Update;
 using OnlineExamSystem.Exam.API.Jobs;
 using OnlineExamSystem.Exam.Application.Interfaces;
+using OnlineExamSystem.Exam.Application.Proctoring.GetProctoringSettings;
+using OnlineExamSystem.Exam.Application.Proctoring.UpdateProctoringSettings;
 using OnlineExamSystem.Exam.Application.Reminders.GetReminderSettings;
 using OnlineExamSystem.Exam.Application.Reminders.UpdateReminderSettings;
 using OnlineExamSystem.Exam.Infrastructure;
@@ -76,6 +78,8 @@ public class Program
 
         builder.Services.AddScoped<GetReminderSettingsHandler>();
         builder.Services.AddScoped<UpdateReminderSettingsHandler>();
+        builder.Services.AddScoped<GetProctoringSettingsHandler>();
+        builder.Services.AddScoped<UpdateProctoringSettingsHandler>();
 
         if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
         {

@@ -15,6 +15,7 @@ public class ExamDbContext : DbContext
     public DbSet<ExamAssignmentTarget> ExamAssignmentTargets => Set<ExamAssignmentTarget>();
     public DbSet<ExamReminderLog> ExamReminderLogs => Set<ExamReminderLog>();
     public DbSet<ReminderSettings> ReminderSettings => Set<ReminderSettings>();
+    public DbSet<ProctoringSettings> ProctoringSettings => Set<ProctoringSettings>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. System.Text.Json then

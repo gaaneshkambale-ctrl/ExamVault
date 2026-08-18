@@ -11,4 +11,10 @@ public record AdminAttemptResultResponse(
     bool Passed,
     DateTime SubmittedAtUtc,
     IReadOnlyList<QuestionResultResponse> Questions,
-    int FullscreenExitCount);
+    int FullscreenExitCount,
+    int NoFaceDetectedCount,
+    int MultipleFacesDetectedCount,
+    int TabSwitchCount,
+    int MultipleTabsCount,
+    int CopyPasteCount,
+    int RightClickCount);

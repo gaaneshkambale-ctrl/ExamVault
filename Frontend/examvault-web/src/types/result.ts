@@ -41,6 +41,12 @@ export interface AdminAttemptResultResponse {
   submittedAtUtc: string;
   questions: QuestionResultResponse[];
   fullscreenExitCount: number;
+  noFaceDetectedCount: number;
+  multipleFacesDetectedCount: number;
+  tabSwitchCount: number;
+  multipleTabsCount: number;
+  copyPasteCount: number;
+  rightClickCount: number;
 }
 
 export type Grade = 'A+' | 'A' | 'B' | 'C' | 'F';

@@ -66,7 +66,13 @@ public class SubmissionServiceClient : ISubmissionLookupClient
             body.Attempt.Status,
             body.Attempt.SubmittedAtUtc,
             body.Answers.Select(a => new SubmissionAnswer(a.QuestionId, a.SelectedOptionId)).ToList(),
-            body.Attempt.FullscreenExitCount);
+            body.Attempt.FullscreenExitCount,
+            body.Attempt.NoFaceDetectedCount,
+            body.Attempt.MultipleFacesDetectedCount,
+            body.Attempt.TabSwitchCount,
+            body.Attempt.MultipleTabsCount,
+            body.Attempt.CopyPasteCount,
+            body.Attempt.RightClickCount);
 
     private sealed class AttemptWithAnswersApiResponse
     {
@@ -82,6 +88,12 @@ public class SubmissionServiceClient : ISubmissionLookupClient
         public string Status { get; init; } = string.Empty;
         public DateTime? SubmittedAtUtc { get; init; }
         public int FullscreenExitCount { get; init; }
+        public int NoFaceDetectedCount { get; init; }
+        public int MultipleFacesDetectedCount { get; init; }
+        public int TabSwitchCount { get; init; }
+        public int MultipleTabsCount { get; init; }
+        public int CopyPasteCount { get; init; }
+        public int RightClickCount { get; init; }
     }
 
     private sealed class AttemptAnswerApiResponse

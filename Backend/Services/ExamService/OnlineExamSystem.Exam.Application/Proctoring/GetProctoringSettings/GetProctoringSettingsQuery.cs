@@ -1,0 +1,3 @@
+namespace OnlineExamSystem.Exam.Application.Proctoring.GetProctoringSettings;
+
+public record GetProctoringSettingsQuery;

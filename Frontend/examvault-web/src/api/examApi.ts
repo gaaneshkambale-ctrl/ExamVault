@@ -1,5 +1,11 @@
 import apiClient from './axiosClient';
-import type { CreateExamRequest, ExamResponse, ReminderSettingsResponse, UpdateExamRequest } from '../types/exam';
+import type {
+  CreateExamRequest,
+  ExamResponse,
+  ProctoringSettingsResponse,
+  ReminderSettingsResponse,
+  UpdateExamRequest,
+} from '../types/exam';
 
 export async function createExam(request: CreateExamRequest): Promise<ExamResponse> {
   const { data } = await apiClient.post<ExamResponse>('/api/exams', request);
@@ -49,5 +55,17 @@ export async function updateReminderSettings(
   request: ReminderSettingsResponse,
 ): Promise<ReminderSettingsResponse> {
   const { data } = await apiClient.put<ReminderSettingsResponse>('/api/exams/reminder-settings', request);
+  return data;
+}
+
+export async function getProctoringSettings(): Promise<ProctoringSettingsResponse> {
+  const { data } = await apiClient.get<ProctoringSettingsResponse>('/api/exams/proctoring-settings');
+  return data;
+}
+
+export async function updateProctoringSettings(
+  request: ProctoringSettingsResponse,
+): Promise<ProctoringSettingsResponse> {
+  const { data } = await apiClient.put<ProctoringSettingsResponse>('/api/exams/proctoring-settings', request);
   return data;
 }

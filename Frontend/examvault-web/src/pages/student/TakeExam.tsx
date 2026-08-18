@@ -6,6 +6,9 @@ import { isAxiosError } from 'axios';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
+import { useMyAssignmentForExam } from '../../hooks/useAssignments';
+import { useProctoringSettings } from '../../hooks/useProctoringSettings';
+import { useProctoring } from '../../hooks/useProctoring';
 import { getMyAttempt, recordFullscreenExit, saveAnswer, startAttempt, submitAttempt } from '../../api/submissionApi';
 import type { QuestionResponse } from '../../types/question';
 import type { ExamAttemptResponse } from '../../types/submission';
@@ -82,6 +85,8 @@ export default function TakeExam() {
 
   const { data: exam, isLoading: isLoadingExam } = useExam(id);
   const { data: questions, isLoading: isLoadingQuestions } = useQuestions(id);
+  const { data: assignment } = useMyAssignmentForExam(id);
+  const { data: proctoringSettings } = useProctoringSettings();
 
   const [mode, setMode] = useState<Mode>('loading');
   const [attemptId, setAttemptId] = useState<string | null>(null);
@@ -98,12 +103,20 @@ export default function TakeExam() {
   const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
   const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
 
+  // Defaults to enabled while the global setting is still loading, so
+  // behavior doesn't regress during that window - matches the fail-open
+  // default every ProctoringSettings field is created with server-side.
+  const fullscreenExitEnabled = proctoringSettings?.fullscreenExitEnabled ?? true;
+
   // Browsers won't let a site block Esc from exiting fullscreen (by design,
   // it's a user-safety escape hatch) - so instead of trying to prevent it,
   // detect the exit and block the exam behind a warning until they return.
   // Also best-effort logs it server-side so an admin can review it later -
   // never lets that call block or fail the warning UI itself.
   useEffect(() => {
+    if (!fullscreenExitEnabled) {
+      return;
+    }
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement && (mode === 'take' || mode === 'review')) {
         setFullscreenExitCount((count) => count + 1);
@@ -115,7 +128,23 @@ export default function TakeExam() {
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, [mode, attemptId]);
+  }, [mode, attemptId, fullscreenExitEnabled]);
+
+  // AI proctoring suite (face detection, tab/window monitoring, duplicate-tab
+  // detection, copy/paste + right-click blocking) - gated on both the
+  // per-assignment EnableProctoring flag and the global admin master switch.
+  const proctoringActive =
+    Boolean(assignment?.enableProctoring) &&
+    Boolean(proctoringSettings?.proctoringEnabled) &&
+    (mode === 'take' || mode === 'review');
+  const proctoring = useProctoring(proctoringActive, attemptId, {
+    faceDetectionEnabled: proctoringSettings?.faceDetectionEnabled ?? true,
+    multiPersonDetectionEnabled: proctoringSettings?.multiPersonDetectionEnabled ?? true,
+    screenMonitoringEnabled: proctoringSettings?.screenMonitoringEnabled ?? true,
+    multipleTabsEnabled: proctoringSettings?.multipleTabsEnabled ?? true,
+    copyPasteBlockingEnabled: proctoringSettings?.copyPasteBlockingEnabled ?? true,
+    rightClickBlockingEnabled: proctoringSettings?.rightClickBlockingEnabled ?? true,
+  });
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -471,6 +500,18 @@ export default function TakeExam() {
               <Badge bg={isOnline ? 'success' : 'danger'} className="fw-normal py-2 px-3">
                 {isOnline ? 'Connected' : 'Offline'}
               </Badge>
+              {proctoringActive && (
+                <Badge
+                  bg={proctoring.faceStatus === 'no-face' || proctoring.faceStatus === 'multiple-faces' ? 'warning' : 'secondary'}
+                  className="fw-normal py-2 px-3"
+                >
+                  {proctoring.faceStatus === 'no-face'
+                    ? 'No Face Detected'
+                    : proctoring.faceStatus === 'multiple-faces'
+                      ? 'Multiple Faces Detected'
+                      : 'Proctoring Active'}
+                </Badge>
+              )}
               <Button
                 variant="primary"
                 disabled={mode === 'loading' || submitMutation.isPending}

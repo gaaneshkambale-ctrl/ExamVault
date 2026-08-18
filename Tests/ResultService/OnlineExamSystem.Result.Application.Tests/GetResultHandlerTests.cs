@@ -31,7 +31,7 @@ public class GetResultHandlerTests
             NullLogger<GetResultHandler>.Instance);
 
     private static SubmissionLookupResult Submitted(IReadOnlyList<SubmissionAnswer> answers) =>
-        new(AttemptId, UserId, ExamId, "Submitted", DateTime.UtcNow, answers, 0);
+        new(AttemptId, UserId, ExamId, "Submitted", DateTime.UtcNow, answers, 0, 0, 0, 0, 0, 0, 0);
 
     private static IReadOnlyList<AnswerKeyQuestion> DefaultAnswerKey() =>
         [
@@ -67,7 +67,7 @@ public class GetResultHandlerTests
     [Fact]
     public async Task InProgress_attempt_returns_not_submitted()
     {
-        var submission = new SubmissionLookupResult(AttemptId, UserId, ExamId, "InProgress", null, [], 0);
+        var submission = new SubmissionLookupResult(AttemptId, UserId, ExamId, "InProgress", null, [], 0, 0, 0, 0, 0, 0, 0);
         var handler = CreateHandler(submission, DefaultAnswerKey(), new ExamLookupResult(ExamId, "Test", 2, 1));
 
         var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));

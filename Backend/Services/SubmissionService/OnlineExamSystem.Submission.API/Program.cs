@@ -7,6 +7,7 @@ using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
+using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
 using OnlineExamSystem.Submission.Application.Attempts.Submit;
@@ -52,6 +53,7 @@ public class Program
         builder.Services.AddScoped<ListAttemptsByExamHandler>();
         builder.Services.AddScoped<ListAttemptsByUserHandler>();
         builder.Services.AddScoped<RecordFullscreenExitHandler>();
+        builder.Services.AddScoped<RecordProctoringViolationHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

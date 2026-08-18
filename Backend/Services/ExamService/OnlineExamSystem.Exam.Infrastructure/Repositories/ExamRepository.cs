@@ -239,6 +239,19 @@ public class ExamRepository : IExamRepository
         return settings;
     }
 
+    public async Task<ProctoringSettings> GetOrCreateProctoringSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = await _dbContext.ProctoringSettings.FirstOrDefaultAsync(cancellationToken);
+        if (settings is null)
+        {
+            settings = new ProctoringSettings();
+            await _dbContext.ProctoringSettings.AddAsync(settings, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return settings;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

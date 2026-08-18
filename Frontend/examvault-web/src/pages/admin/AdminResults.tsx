@@ -151,6 +151,9 @@ export default function AdminResults() {
                   <th>Status</th>
                   <th>Submitted On</th>
                   <th>Fullscreen Exits</th>
+                  <th>Suspicious Activity</th>
+                  <th>Tab/Window Activity</th>
+                  <th>Copy/Paste &amp; Right-Click</th>
                   <th className="pe-4">Action</th>
                 </tr>
               </thead>
@@ -160,6 +163,9 @@ export default function AdminResults() {
                     result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
                   const grade = getGrade(result.totalScore, result.totalMarks, result.passed);
                   const student = studentById.get(result.userId);
+                  const suspiciousActivity = result.noFaceDetectedCount + result.multipleFacesDetectedCount;
+                  const tabWindowActivity = result.tabSwitchCount + result.multipleTabsCount;
+                  const copyPasteRightClick = result.copyPasteCount + result.rightClickCount;
                   return (
                     <tr key={result.attemptId}>
                       <td className="ps-4 fw-medium">
@@ -183,6 +189,27 @@ export default function AdminResults() {
                       <td>
                         {result.fullscreenExitCount > 0 ? (
                           <Badge bg="danger">{result.fullscreenExitCount}</Badge>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {suspiciousActivity > 0 ? (
+                          <Badge bg="danger">{suspiciousActivity}</Badge>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {tabWindowActivity > 0 ? (
+                          <Badge bg="warning">{tabWindowActivity}</Badge>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {copyPasteRightClick > 0 ? (
+                          <Badge bg="warning">{copyPasteRightClick}</Badge>
                         ) : (
                           <span className="text-muted">—</span>
                         )}

@@ -66,7 +66,7 @@ public class GetExamReportHandlerTests
                     new SubmissionAnswer(Question1Id, Question1CorrectOptionId),
                     new SubmissionAnswer(Question2Id, Question2CorrectOptionId),
                 ],
-                0),
+                0, 0, 0, 0, 0, 0, 0),
             new(
                 AttemptBId,
                 UserBId,
@@ -77,7 +77,7 @@ public class GetExamReportHandlerTests
                     new SubmissionAnswer(Question1Id, Question1WrongOptionId),
                     new SubmissionAnswer(Question2Id, Question2CorrectOptionId),
                 ],
-                0),
+                0, 0, 0, 0, 0, 0, 0),
         };
         var handler = CreateHandler(attempts, DefaultAnswerKey(), new ExamLookupResult(ExamId, "Test Exam", 2, 1));
 

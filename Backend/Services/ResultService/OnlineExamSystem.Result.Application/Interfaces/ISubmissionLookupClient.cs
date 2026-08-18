@@ -9,7 +9,13 @@ public record SubmissionLookupResult(
     string Status,
     DateTime? SubmittedAtUtc,
     IReadOnlyList<SubmissionAnswer> Answers,
-    int FullscreenExitCount);
+    int FullscreenExitCount,
+    int NoFaceDetectedCount,
+    int MultipleFacesDetectedCount,
+    int TabSwitchCount,
+    int MultipleTabsCount,
+    int CopyPasteCount,
+    int RightClickCount);
 
 public interface ISubmissionLookupClient
 {

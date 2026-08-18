@@ -8,4 +8,10 @@ public record ExamAttemptResponse(
     string Status,
     DateTime StartedAtUtc,
     DateTime? SubmittedAtUtc,
-    int FullscreenExitCount);
+    int FullscreenExitCount,
+    int NoFaceDetectedCount,
+    int MultipleFacesDetectedCount,
+    int TabSwitchCount,
+    int MultipleTabsCount,
+    int CopyPasteCount,
+    int RightClickCount);

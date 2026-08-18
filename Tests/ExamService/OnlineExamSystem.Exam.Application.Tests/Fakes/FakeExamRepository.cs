@@ -12,6 +12,7 @@ public class FakeExamRepository : IExamRepository
     private readonly List<ExamAssignmentTarget> _targets = [];
     private readonly List<ExamReminderLog> _reminderLogs = [];
     private ReminderSettings? _reminderSettings;
+    private ProctoringSettings? _proctoringSettings;
 
     public IReadOnlyList<ExamPaper> Exams => _exams;
     public IReadOnlyList<ExamAssignment> Assignments => _assignments;
@@ -200,6 +201,12 @@ public class FakeExamRepository : IExamRepository
     {
         _reminderSettings ??= new ReminderSettings();
         return Task.FromResult(_reminderSettings);
+    }
+
+    public Task<ProctoringSettings> GetOrCreateProctoringSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        _proctoringSettings ??= new ProctoringSettings();
+        return Task.FromResult(_proctoringSettings);
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

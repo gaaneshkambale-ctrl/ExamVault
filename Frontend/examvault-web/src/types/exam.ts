@@ -37,3 +37,14 @@ export interface ReminderSettingsResponse {
   enable24HourReminder: boolean;
   enable1HourReminder: boolean;
 }
+
+export interface ProctoringSettingsResponse {
+  proctoringEnabled: boolean;
+  faceDetectionEnabled: boolean;
+  multiPersonDetectionEnabled: boolean;
+  screenMonitoringEnabled: boolean;
+  fullscreenExitEnabled: boolean;
+  multipleTabsEnabled: boolean;
+  copyPasteBlockingEnabled: boolean;
+  rightClickBlockingEnabled: boolean;
+}

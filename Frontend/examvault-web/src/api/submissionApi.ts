@@ -4,6 +4,7 @@ import type {
   AttemptAnswerResponse,
   AttemptWithAnswersResponse,
   ExamAttemptResponse,
+  ProctoringViolationType,
   SaveAnswerRequest,
 } from '../types/submission';
 
@@ -57,4 +58,11 @@ export async function getUserAttempts(userId: string): Promise<ExamAttemptRespon
 // broker/network hiccup here must never interrupt the student's exam.
 export async function recordFullscreenExit(attemptId: string): Promise<void> {
   await apiClient.post(`/api/submissions/${attemptId}/fullscreen-exit`);
+}
+
+export async function recordProctoringViolation(
+  attemptId: string,
+  type: ProctoringViolationType,
+): Promise<void> {
+  await apiClient.post(`/api/submissions/${attemptId}/proctoring-violation`, { type });
 }

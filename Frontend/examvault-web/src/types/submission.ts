@@ -19,7 +19,21 @@ export interface ExamAttemptResponse {
   startedAtUtc: string;
   submittedAtUtc: string | null;
   fullscreenExitCount: number;
+  noFaceDetectedCount: number;
+  multipleFacesDetectedCount: number;
+  tabSwitchCount: number;
+  multipleTabsCount: number;
+  copyPasteCount: number;
+  rightClickCount: number;
 }
+
+export type ProctoringViolationType =
+  | 'NoFaceDetected'
+  | 'MultipleFacesDetected'
+  | 'TabSwitch'
+  | 'MultipleTabs'
+  | 'CopyPaste'
+  | 'RightClick';
 
 export interface AttemptAnswerResponse {
   id: string;

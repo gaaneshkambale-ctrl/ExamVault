@@ -5,6 +5,7 @@ using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
+using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
 using OnlineExamSystem.Submission.Application.Attempts.Submit;
@@ -26,6 +27,7 @@ public class SubmissionsController : ControllerBase
     private readonly ListAttemptsByExamHandler _listAttemptsByExamHandler;
     private readonly ListAttemptsByUserHandler _listAttemptsByUserHandler;
     private readonly RecordFullscreenExitHandler _recordFullscreenExitHandler;
+    private readonly RecordProctoringViolationHandler _recordProctoringViolationHandler;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -36,6 +38,7 @@ public class SubmissionsController : ControllerBase
         ListAttemptsByExamHandler listAttemptsByExamHandler,
         ListAttemptsByUserHandler listAttemptsByUserHandler,
         RecordFullscreenExitHandler recordFullscreenExitHandler,
+        RecordProctoringViolationHandler recordProctoringViolationHandler,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
@@ -45,6 +48,7 @@ public class SubmissionsController : ControllerBase
         _listAttemptsByExamHandler = listAttemptsByExamHandler;
         _listAttemptsByUserHandler = listAttemptsByUserHandler;
         _recordFullscreenExitHandler = recordFullscreenExitHandler;
+        _recordProctoringViolationHandler = recordProctoringViolationHandler;
         _logger = logger;
     }
 
@@ -169,6 +173,52 @@ public class SubmissionsController : ControllerBase
         return Ok(new { fullscreenExitCount = result.FullscreenExitCount });
     }
 
+    // Generic proctoring-violation sink: the exam client's face-detection/tab-monitoring
+    // hook posts here with a `type` naming which counter to bump. Same best-effort,
+    // client-side-detection caveat as fullscreen-exit above.
+    [HttpPost("{attemptId:guid}/proctoring-violation")]
+    public async Task<IActionResult> RecordProctoringViolation(
+        Guid attemptId,
+        RecordProctoringViolationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!Enum.TryParse<ProctoringViolationType>(request.Type, ignoreCase: true, out var violationType))
+        {
+            return BadRequest(new { message = $"Unknown proctoring violation type '{request.Type}'." });
+        }
+
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await _recordProctoringViolationHandler.HandleAsync(
+            new RecordProctoringViolationCommand(attemptId, userId, violationType),
+            cancellationToken);
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
+
+        if (result.IsNotInProgress)
+        {
+            return Conflict(new { message = "This attempt is no longer in progress." });
+        }
+
+        return Ok(new
+        {
+            noFaceDetectedCount = result.NoFaceDetectedCount,
+            multipleFacesDetectedCount = result.MultipleFacesDetectedCount,
+            tabSwitchCount = result.TabSwitchCount,
+            multipleTabsCount = result.MultipleTabsCount,
+            copyPasteCount = result.CopyPasteCount,
+            rightClickCount = result.RightClickCount,
+        });
+    }
+
     [HttpPost("{attemptId:guid}/submit")]
     public async Task<IActionResult> Submit(
         Guid attemptId,
@@ -263,7 +313,13 @@ public class SubmissionsController : ControllerBase
             attempt.Status.ToString(),
             attempt.StartedAtUtc,
             attempt.SubmittedAtUtc,
-            attempt.FullscreenExitCount);
+            attempt.FullscreenExitCount,
+            attempt.NoFaceDetectedCount,
+            attempt.MultipleFacesDetectedCount,
+            attempt.TabSwitchCount,
+            attempt.MultipleTabsCount,
+            attempt.CopyPasteCount,
+            attempt.RightClickCount);
 
     private static AttemptAnswerResponse ToResponse(AttemptAnswer answer) =>
         new(

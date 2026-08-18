@@ -63,6 +63,12 @@ public class GetExamReportHandler
                     SubmittedAtUtc = attempt.SubmittedAtUtc ?? DateTime.UtcNow,
                     Questions = questionResults,
                     FullscreenExitCount = attempt.FullscreenExitCount,
+                    NoFaceDetectedCount = attempt.NoFaceDetectedCount,
+                    MultipleFacesDetectedCount = attempt.MultipleFacesDetectedCount,
+                    TabSwitchCount = attempt.TabSwitchCount,
+                    MultipleTabsCount = attempt.MultipleTabsCount,
+                    CopyPasteCount = attempt.CopyPasteCount,
+                    RightClickCount = attempt.RightClickCount,
                 };
             }).ToList();
 

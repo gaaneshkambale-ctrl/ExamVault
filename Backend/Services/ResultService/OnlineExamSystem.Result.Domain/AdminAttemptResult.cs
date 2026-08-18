@@ -18,4 +18,10 @@ public class AdminAttemptResult
     public DateTime SubmittedAtUtc { get; init; }
     public IReadOnlyList<QuestionResult> Questions { get; init; } = [];
     public int FullscreenExitCount { get; init; }
+    public int NoFaceDetectedCount { get; init; }
+    public int MultipleFacesDetectedCount { get; init; }
+    public int TabSwitchCount { get; init; }
+    public int MultipleTabsCount { get; init; }
+    public int CopyPasteCount { get; init; }
+    public int RightClickCount { get; init; }
 }

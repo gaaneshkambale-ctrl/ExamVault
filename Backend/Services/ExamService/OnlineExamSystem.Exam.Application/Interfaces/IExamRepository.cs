@@ -77,5 +77,9 @@ public interface IExamRepository
     /// enabled (the pre-existing default behavior) if it doesn't exist yet.</summary>
     Task<ReminderSettings> GetOrCreateReminderSettingsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Returns the single global ProctoringSettings row, creating it with every
+    /// detector enabled (the pre-existing default behavior) if it doesn't exist yet.</summary>
+    Task<ProctoringSettings> GetOrCreateProctoringSettingsAsync(CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

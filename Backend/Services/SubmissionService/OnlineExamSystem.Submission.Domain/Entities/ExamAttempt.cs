@@ -12,4 +12,10 @@ public class ExamAttempt : BaseEntity
     public DateTime? SubmittedAtUtc { get; set; }
     public AttemptStatus Status { get; set; } = AttemptStatus.InProgress;
     public int FullscreenExitCount { get; set; }
+    public int NoFaceDetectedCount { get; set; }
+    public int MultipleFacesDetectedCount { get; set; }
+    public int TabSwitchCount { get; set; }
+    public int MultipleTabsCount { get; set; }
+    public int CopyPasteCount { get; set; }
+    public int RightClickCount { get; set; }
 }

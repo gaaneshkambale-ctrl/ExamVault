@@ -2067,3 +2067,132 @@ on top of it:
 - Polish pass at the end of each phase's UI work (Day "Question UI",
   "Exam UI completion", etc.) to bring screens up to production quality,
   not just functional quality.
+
+=====================================================================
+POST-PHASE-10 FEATURE (DONE, 2026-08-18): AI proctoring suite - face
+detection, multiple-person detection, screen monitoring, fullscreen
+exit, duplicate tabs, copy/paste + right-click blocking, managed from
+a new global Admin Settings panel
+=====================================================================
+REQUESTED (three rounds, same day): (1) "Face detection,
+Multiple-person detection, Face not detected, Suspicious activity,
+Screen monitoring" - a webcam-based live proctoring layer on top of
+the exam-taking screen. (2) "this functionnality manage by admin
+setting" - admins need an on/off panel for it, not hardcoded
+behavior. (3) "Tab switching, Browser minimized, Fullscreen exit,
+Multiple attempts, Copy/paste, Right click" - expand the detector set
+and fold the pre-existing (already-shipped) fullscreen-exit warning
+into the same admin-managed settings instead of it being permanently
+always-on.
+
+SCOPE DECISIONS (confirmed with the user before writing code, across
+all three rounds):
+- Per-exam trigger stays the existing `enableProctoring` flag on
+  ExamAssignment (Phase 7 field, never read until now) - exams
+  assigned without it checked get none of this.
+- On top of that, a NEW global "AI Proctoring" panel on Admin
+  Settings (single ProctoringSettings row in Exam Service, same
+  pattern as the pre-existing ReminderSettings) with a master on/off
+  switch plus one checkbox per detector. This is the answer to round
+  2 ("manage by admin setting"): the per-assignment flag decides
+  *which exams* get proctored; the global panel decides *which
+  checks* run for all of them.
+- "Suspicious activity" is not its own detector - it's the admin-UI
+  label for face-detection findings (no face / multiple faces). True
+  gaze/head-pose tracking was explicitly cut (false-positive risk
+  from webcam angle/lighting, marginal signal beyond face-count).
+- "Screen monitoring" = tab-switch / browser-minimize detection
+  (document.visibilitychange), not literal screen recording.
+- "Multiple attempts" (round 3) was ambiguous between "restrict total
+  attempts" (already exists, separate MaxAttempts exam setting,
+  untouched) vs. "same attempt open in two tabs at once" - confirmed
+  with the user it means the latter: detected client-side via a
+  per-attempt BroadcastChannel, no new server session-tracking
+  infrastructure.
+- Copy/paste and right-click (round 3): confirmed with the user to
+  actively block (preventDefault) AND log a violation, not log-only.
+- Fullscreen-exit (shipped earlier in the session as a standalone,
+  always-on feature) is now ALSO gated by the new global setting's
+  FullscreenExitEnabled flag, defaulting true so existing behavior is
+  unchanged until an admin opts out. It stays assignment-flag-
+  independent, same as before - only the global panel can turn it off.
+- Violation handling for every detector matches the fullscreen-exit
+  precedent: count + persist server-side, no blocking overlay per
+  event - just a small live status badge plus an admin-visible tally
+  afterward. (Copy/paste and right-click are the one exception: the
+  action itself is blocked via preventDefault, since blocking a
+  keystroke is instant and non-disruptive, unlike a webcam read.)
+- Privacy stance unchanged: all face detection runs client-side
+  (face-api.js, TinyFaceDetector model, weights self-hosted under
+  public/models). No video frame/image/snapshot ever leaves the
+  browser - only lightweight violation events (type + timestamp).
+
+IMPLEMENTATION (mirrors the ReminderSettings / FullscreenExitCount
+patterns already in the codebase):
+- Exam Service: new ProctoringSettings entity (ProctoringEnabled +
+  7 per-detector bools, all default true) with GetOrCreate repository
+  method, Get/UpdateProctoringSettingsHandler, and
+  ProctoringSettingsController at api/exams/proctoring-settings (GET
+  open to any authenticated user - the exam client needs to read it;
+  PUT restricted to Admin). EF migration AddProctoringSettings.
+- Submission Service: ExamAttempt gained 6 new int counters -
+  NoFaceDetectedCount, MultipleFacesDetectedCount, TabSwitchCount,
+  MultipleTabsCount, CopyPasteCount, RightClickCount. One generic
+  POST /api/submissions/{attemptId}/proctoring-violation with a
+  `type` field increments the right one (not six near-duplicate
+  endpoints). EF migration AddProctoringViolationCounts. Threaded
+  through GetExamReportHandler / AdminAttemptResultResponse in Result
+  Service the same way FullscreenExitCount was, including the two
+  ResultService test files that construct SubmissionLookupResult
+  positionally.
+- Frontend: `useProctoring` hook owns a hidden <video> + its own
+  getUserMedia stream (separate from the readiness-check's
+  grab-and-release camera test), runs face-api.js TinyFaceDetector on
+  a 3s interval, requires 3 consecutive bad readings before counting
+  a violation (absorbs single-frame flakiness), and tears the stream
+  down on unmount. Also owns visibilitychange (tab switch), a
+  per-attempt BroadcastChannel (duplicate tabs), and copy/paste/
+  contextmenu blockers - each independently gated by its settings
+  flag. `useProctoringSettings` (react-query) fetches the global
+  panel; TakeExam.tsx combines it with useMyAssignmentForExam's
+  enableProctoring to decide whether the hook runs at all, and gates
+  the pre-existing fullscreen-exit effect on the new
+  FullscreenExitEnabled flag (default true while loading). A small
+  Badge next to the Connected/Offline indicator surfaces live face
+  status without blocking the exam.
+- Admin UI: new "AI Proctoring" card on AdminSettings.tsx (master
+  switch + 7 checkboxes, mirrors the existing Exam Reminders card).
+  AdminResults.tsx gets three more columns beyond the existing
+  Fullscreen Exits one - "Suspicious Activity" (NoFace + MultiFace),
+  "Tab/Window Activity" (TabSwitch + MultipleTabs), and "Copy/Paste &
+  Right-Click" - grouped rather than six raw counters, to keep the
+  table readable.
+
+VERIFIED: backend - dotnet build clean on all three touched services
+(Exam/Submission/Result API) plus all three touched test projects
+(52+22+13 tests passing, including the FakeExamRepository and
+FakeInternalUserLookupClient fakes updated for the new interface
+members); frontend - `tsc -b` and `vite build` both clean. Live in
+local Docker: rebuilt exam-api/submission-api/result-api/frontend,
+both new EF migrations (AddProctoringSettings, AddProctoringViolation
+Counts) applied automatically on container start with no errors.
+Confirmed via curl against the real running stack: GET/PUT
+api/exams/proctoring-settings (Admin can read+write, Student can read
+but gets 403 on PUT, unset settings auto-create with every flag
+true); created a real assignment+attempt end-to-end and hit
+api/submissions/{id}/proctoring-violation for all 6 violation types
+plus one invalid type (400, as expected) - each counter incremented
+independently; submitted the attempt and confirmed
+api/results/by-exam/{id} carries all 6 counts through Result Service
+correctly. Confirmed the frontend container serves the updated bundle
+(new UI strings present) and the self-hosted face-api.js model files
+(200 on both the manifest and shard1). Did NOT do a full logged-in
+browser walkthrough of the new AdminSettings panel / AdminResults
+columns - avoided resetting the real admin account's password just
+for a screenshot; flagging this as the one unverified-by-eyeball
+piece, rest is proven via the running API and served bundle. Test
+assignment cleaned up after verification (DELETE
+api/assignments/{id}); the one test attempt it produced was on the
+pre-existing "bulktest.arjun.reddy" seed account and was left in
+place as low-risk residual test data, consistent with other
+"bulktest.*" rows already in the DB from earlier sessions.
