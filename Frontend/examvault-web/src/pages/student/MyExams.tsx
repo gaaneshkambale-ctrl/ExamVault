@@ -107,7 +107,7 @@ export default function MyExams() {
           </div>
 
           <Row className="g-2 mb-3">
-            <Col md={8}>
+            <Col md={6}>
               <Form.Control
                 type="search"
                 placeholder="Search exams..."
@@ -115,7 +115,7 @@ export default function MyExams() {
                 onChange={(e) => setSearchText(e.target.value)}
               />
             </Col>
-            <Col md={4}>
+            <Col md={3}>
               <Form.Select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value as 'All' | ExamType)}
@@ -123,6 +123,14 @@ export default function MyExams() {
                 <option value="All">All Types</option>
                 <option value="Manual">Manual</option>
                 <option value="AiGenerated">AI Generated</option>
+              </Form.Select>
+            </Col>
+            <Col md={3}>
+              <Form.Select value={tab} onChange={(e) => setTab(e.target.value as Tab)}>
+                <option value="All">All Status</option>
+                <option value="Upcoming">Upcoming</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
               </Form.Select>
             </Col>
           </Row>
