@@ -26,6 +26,7 @@ const statusVariant: Record<RowStatus, string> = {
 
 interface ExamRow extends ExamResponse {
   rowStatus: RowStatus;
+  hasRetakesLeft: boolean;
 }
 
 function isTab(value: string | null): value is Tab {
@@ -61,7 +62,10 @@ export default function MyExams() {
       : attempt.attempt.status === 'InProgress'
         ? 'In Progress'
         : 'Completed';
-    return { ...exam, rowStatus };
+    // A submitted attempt doesn't mean the exam is done for good - the
+    // student can still retake it up to maxAttempts times.
+    const hasRetakesLeft = rowStatus === 'Completed' && attempt!.attempt.attemptNumber < exam.maxAttempts;
+    return { ...exam, rowStatus, hasRetakesLeft };
   });
 
   const tabRows = tab === 'All' ? rows : rows.filter((row) => row.rowStatus === tab);
@@ -79,7 +83,7 @@ export default function MyExams() {
   const loading = isLoading || isLoadingAttempts;
 
   return (
-    <StudentLayout active={tab === 'Upcoming' ? 'Upcoming Exams' : 'My Exams'}>
+    <StudentLayout active="My Exams">
       <h1 className="h4 fw-bold mb-4">My Exams</h1>
 
       <Card className="border-0 shadow-sm">
@@ -177,9 +181,16 @@ export default function MyExams() {
                         </Link>
                       )}
                       {exam.rowStatus === 'Completed' && (
-                        <Link to={`/results/${exam.id}`} className="btn btn-outline-secondary btn-sm">
-                          View Result
-                        </Link>
+                        <div className="d-flex gap-2">
+                          <Link to={`/results/${exam.id}`} className="btn btn-outline-secondary btn-sm">
+                            View Result
+                          </Link>
+                          {exam.hasRetakesLeft && (
+                            <Link to={`/exams/${exam.id}`} className="btn btn-primary btn-sm">
+                              Retake Exam
+                            </Link>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>

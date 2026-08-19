@@ -7,6 +7,7 @@ import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
 import { useMyAssignmentForExam } from '../../hooks/useAssignments';
+import { useMyAttempt } from '../../hooks/useSubmissions';
 import { startAttempt } from '../../api/submissionApi';
 import type { ExamType } from '../../types/exam';
 
@@ -81,6 +82,12 @@ export default function ExamDetails() {
   const { data: exam, isLoading, isError } = useExam(id);
   const { data: questions } = useQuestions(id);
   const { data: assignment } = useMyAssignmentForExam(id);
+  const { data: myAttempt } = useMyAttempt(id);
+
+  const attemptsUsed = myAttempt?.attempt.attemptNumber ?? 0;
+  const isAttemptInProgress = myAttempt?.attempt.status === 'InProgress';
+  const remainingAttempts = exam ? exam.maxAttempts - attemptsUsed : 0;
+  const canStartNewAttempt = remainingAttempts > 0;
 
   const [mode, setMode] = useState<'details' | 'check'>('details');
   const [checks, setChecks] = useState<Record<CheckKey, CheckStatus>>({
@@ -214,8 +221,25 @@ export default function ExamDetails() {
             <Card className="border-0 shadow-sm h-100">
               <Card.Body className="p-4">
                 <h1 className="h5 fw-bold mb-2">{exam.title}</h1>
-                <Badge bg="primary" className="mb-3">
-                  Upcoming
+                <Badge
+                  bg={
+                    isAttemptInProgress
+                      ? 'warning'
+                      : attemptsUsed === 0
+                        ? 'primary'
+                        : canStartNewAttempt
+                          ? 'info'
+                          : 'success'
+                  }
+                  className="mb-3"
+                >
+                  {isAttemptInProgress
+                    ? 'In Progress'
+                    : attemptsUsed === 0
+                      ? 'Upcoming'
+                      : canStartNewAttempt
+                        ? 'Retake Available'
+                        : 'Completed'}
                 </Badge>
                 <Row>
                   <Field label="Total Questions" value={String(totalQuestions)} />
@@ -260,13 +284,33 @@ export default function ExamDetails() {
                   <li className="mb-2">Do not refresh or close the browser window.</li>
                 </ol>
 
-                <Alert variant="warning" className="small">
-                  You can start the exam only once. Make sure you are ready.
+                <Alert variant={canStartNewAttempt || isAttemptInProgress ? 'warning' : 'secondary'} className="small">
+                  {isAttemptInProgress
+                    ? 'You have an exam in progress. Resume it to continue where you left off.'
+                    : attemptsUsed === 0
+                      ? exam.maxAttempts === 1
+                        ? 'You can start the exam only once. Make sure you are ready.'
+                        : `You can attempt this exam up to ${exam.maxAttempts} times. Make sure you are ready.`
+                      : canStartNewAttempt
+                        ? `You've used ${attemptsUsed} of ${exam.maxAttempts} attempts. You have ${remainingAttempts} attempt${
+                            remainingAttempts === 1 ? '' : 's'
+                          } remaining.`
+                        : `You have used all ${exam.maxAttempts} of your allowed attempts for this exam.`}
                 </Alert>
 
-                <Button variant="primary" className="w-100" onClick={beginSystemCheck}>
-                  Start Exam Now
-                </Button>
+                {isAttemptInProgress ? (
+                  <Link to={`/exams/${id}/take`} className="btn btn-warning w-100">
+                    Resume Exam
+                  </Link>
+                ) : canStartNewAttempt ? (
+                  <Button variant="primary" className="w-100" onClick={beginSystemCheck}>
+                    {attemptsUsed === 0 ? 'Start Exam Now' : 'Retake Exam'}
+                  </Button>
+                ) : (
+                  <Link to={`/results/${id}`} className="btn btn-outline-secondary w-100">
+                    View Result
+                  </Link>
+                )}
               </Card.Body>
             </Card>
           </Col>

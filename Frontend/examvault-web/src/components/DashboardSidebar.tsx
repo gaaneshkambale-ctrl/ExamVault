@@ -5,7 +5,6 @@ import BrandMark from './BrandMark';
 export type DashboardNavItem =
   | 'Dashboard'
   | 'My Exams'
-  | 'Upcoming Exams'
   | 'My Results'
   | 'My Certificates'
   | 'Profile'
@@ -20,7 +19,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'My Exams', path: '/exams' },
-  { label: 'Upcoming Exams', path: '/exams?tab=Upcoming' },
   { label: 'My Results', path: '/results' },
   { label: 'My Certificates', path: '/certificates' },
   { label: 'Profile', path: '/profile' },
