@@ -1,6 +1,6 @@
 namespace OnlineExamSystem.Result.Application.Interfaces;
 
-public record ExamLookupResult(Guid Id, string Title, int TotalMarks, int PassingMarks);
+public record ExamLookupResult(Guid Id, string Title, int TotalMarks, int PassingMarks, bool ShowResult = true);
 
 public interface IExamLookupClient
 {

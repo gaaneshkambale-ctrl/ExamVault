@@ -7,6 +7,7 @@ public class GetResultResult
     public bool Success { get; init; }
     public bool IsExamNotFound { get; init; }
     public bool IsNotSubmitted { get; init; }
+    public bool IsNotRevealed { get; init; }
     public bool IsProviderFailure { get; init; }
     public string? ProviderErrorMessage { get; init; }
     public ExamResultSummary? Summary { get; init; }
@@ -16,6 +17,8 @@ public class GetResultResult
     public static GetResultResult ExamNotFound() => new() { IsExamNotFound = true };
 
     public static GetResultResult NotSubmitted() => new() { IsNotSubmitted = true };
+
+    public static GetResultResult NotRevealed() => new() { IsNotRevealed = true };
 
     public static GetResultResult ProviderFailure(string message) =>
         new() { IsProviderFailure = true, ProviderErrorMessage = message };

@@ -52,6 +52,11 @@ public class ResultsController : ControllerBase
             return NotFound(new { message = "No submitted attempt found for this exam." });
         }
 
+        if (result.IsNotRevealed)
+        {
+            return NotFound(new { message = "Your result for this exam hasn't been published yet." });
+        }
+
         if (result.IsExamNotFound)
         {
             return NotFound(new { message = "Exam not found." });

@@ -36,7 +36,7 @@ public class ExamServiceClient : IExamLookupClient
         var exam = await response.Content.ReadFromJsonAsync<ExamApiResponse>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("Empty response from Exam Service.");
 
-        return new ExamLookupResult(exam.Id, exam.Title, exam.TotalMarks, exam.PassingMarks);
+        return new ExamLookupResult(exam.Id, exam.Title, exam.TotalMarks, exam.PassingMarks, exam.ShowResult);
     }
 
     public async Task<bool> GetShowCorrectAnswersAsync(
@@ -67,6 +67,7 @@ public class ExamServiceClient : IExamLookupClient
         public string Title { get; init; } = string.Empty;
         public int TotalMarks { get; init; }
         public int PassingMarks { get; init; }
+        public bool ShowResult { get; init; } = true;
     }
 
     private sealed class MyAssignmentApiResponse

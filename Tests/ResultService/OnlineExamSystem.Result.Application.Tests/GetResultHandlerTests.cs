@@ -131,6 +131,21 @@ public class GetResultHandlerTests
     }
 
     [Fact]
+    public async Task ShowResult_off_returns_not_revealed_without_scoring()
+    {
+        var handler = CreateHandler(
+            Submitted([new(Question1Id, Question1CorrectOptionId)]),
+            DefaultAnswerKey(),
+            new ExamLookupResult(ExamId, "Test Exam", 2, 1, ShowResult: false));
+
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsNotRevealed);
+        Assert.Null(result.Summary);
+    }
+
+    [Fact]
     public async Task Exam_not_found_returns_exam_not_found()
     {
         var handler = CreateHandler(Submitted([]), DefaultAnswerKey(), null);

@@ -66,7 +66,8 @@ export default function ResultDetails() {
 
       {!isLoading && !isError && !result && (
         <div className="text-center text-muted py-5">
-          No result available for this exam yet - it may not be submitted.
+          No result available for this exam yet - it may not be submitted, or your result hasn't been published by
+          the admin yet.
         </div>
       )}
 

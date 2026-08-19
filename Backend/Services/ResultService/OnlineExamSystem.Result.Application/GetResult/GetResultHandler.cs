@@ -48,6 +48,14 @@ public class GetResultHandler
                 return GetResultResult.ExamNotFound();
             }
 
+            // The admin controls whether a submitted attempt's score is visible to
+            // the student yet via the exam's "Show Result to Student" setting - no
+            // point scoring the attempt at all if it won't be shown.
+            if (!exam.ShowResult)
+            {
+                return GetResultResult.NotRevealed();
+            }
+
             var answerKey = await _questionAnswerKeyClient.GetAnswerKeyAsync(
                 query.ExamId,
                 query.BearerToken,
