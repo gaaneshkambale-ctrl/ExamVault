@@ -14,6 +14,10 @@ public class CreateExamValidator : AbstractValidator<CreateExamCommand>
         RuleFor(x => x.Description)
             .MaximumLength(2000);
 
+        RuleFor(x => x.Category)
+            .NotEmpty()
+            .MaximumLength(100);
+
         RuleFor(x => x.ExamType)
             .IsEnumName(typeof(ExamType), caseSensitive: false);
 

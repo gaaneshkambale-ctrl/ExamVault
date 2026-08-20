@@ -17,4 +17,9 @@ public record UpdateExamRequest(
     DateTime? EndAtUtc,
     int MaxAttempts,
     bool NegativeMarkingEnabled,
-    decimal NegativeMarks);
+    decimal NegativeMarks,
+    bool ShowSectionSummaryToStudents,
+    bool AllowCalculator,
+    bool AllowNotes,
+    bool AutoSubmitOnTimeEnd,
+    bool ConfirmBeforeSubmit);

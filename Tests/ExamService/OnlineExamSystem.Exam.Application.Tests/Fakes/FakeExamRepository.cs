@@ -1,5 +1,6 @@
 using OnlineExamSystem.Exam.Application.Assignments;
 using OnlineExamSystem.Exam.Application.Interfaces;
+using OnlineExamSystem.Exam.Application.Sections;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Exam.Domain.Enums;
 
@@ -8,6 +9,7 @@ namespace OnlineExamSystem.Exam.Application.Tests.Fakes;
 public class FakeExamRepository : IExamRepository
 {
     private readonly List<ExamPaper> _exams = [];
+    private readonly List<Section> _sections = [];
     private readonly List<ExamAssignment> _assignments = [];
     private readonly List<ExamAssignmentTarget> _targets = [];
     private readonly List<ExamReminderLog> _reminderLogs = [];
@@ -15,6 +17,7 @@ public class FakeExamRepository : IExamRepository
     private ProctoringSettings? _proctoringSettings;
 
     public IReadOnlyList<ExamPaper> Exams => _exams;
+    public IReadOnlyList<Section> Sections => _sections;
     public IReadOnlyList<ExamAssignment> Assignments => _assignments;
     public IReadOnlyList<ExamAssignmentTarget> Targets => _targets;
 
@@ -42,6 +45,41 @@ public class FakeExamRepository : IExamRepository
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
     {
         _exams.RemoveAll(e => e.Id == exam.Id);
+        return Task.CompletedTask;
+    }
+
+    public Task AddSectionAsync(Section section, CancellationToken cancellationToken = default)
+    {
+        _sections.Add(section);
+        return Task.CompletedTask;
+    }
+
+    public Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_sections.FirstOrDefault(s => s.Id == sectionId));
+
+    public Task<IReadOnlyList<Section>> GetSectionsByExamIdAsync(
+        Guid examId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Section>>(
+            _sections.Where(s => s.ExamId == examId).OrderBy(s => s.DisplayOrder).ToList());
+
+    public Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
+    {
+        var removed = _sections.RemoveAll(s => s.Id == sectionId) > 0;
+        return Task.FromResult(removed);
+    }
+
+    public Task ReorderSectionsAsync(
+        Guid examId,
+        IReadOnlyList<SectionOrderEntry> order,
+        CancellationToken cancellationToken = default)
+    {
+        var orderBySectionId = order.ToDictionary(o => o.SectionId, o => o.DisplayOrder);
+        foreach (var section in _sections.Where(s => s.ExamId == examId && orderBySectionId.ContainsKey(s.Id)))
+        {
+            section.DisplayOrder = orderBySectionId[section.Id];
+        }
+
         return Task.CompletedTask;
     }
 

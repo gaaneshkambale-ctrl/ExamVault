@@ -11,6 +11,7 @@ public class ExamDbContext : DbContext
     }
 
     public DbSet<ExamPaper> Exams => Set<ExamPaper>();
+    public DbSet<Section> Sections => Set<Section>();
     public DbSet<ExamAssignment> ExamAssignments => Set<ExamAssignment>();
     public DbSet<ExamAssignmentTarget> ExamAssignmentTargets => Set<ExamAssignmentTarget>();
     public DbSet<ExamReminderLog> ExamReminderLogs => Set<ExamReminderLog>();
@@ -37,8 +38,22 @@ public class ExamDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.Category).HasMaxLength(100);
             entity.Property(e => e.Instructions).HasMaxLength(2000);
             entity.Property(e => e.NegativeMarks).HasColumnType("decimal(5,2)");
+        });
+
+        modelBuilder.Entity<Section>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.Name).IsRequired().HasMaxLength(200);
+            entity.Property(s => s.Description).HasMaxLength(2000);
+            entity.Property(s => s.Instructions).HasMaxLength(2000);
+            entity.Property(s => s.NegativeMarks).HasColumnType("decimal(5,2)");
+            entity.HasOne<ExamPaper>()
+                .WithMany()
+                .HasForeignKey(s => s.ExamId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ExamAssignment>(entity =>

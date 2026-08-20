@@ -4,10 +4,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Question.Application.Interfaces;
+using OnlineExamSystem.Question.Application.Questions.BulkAssignSection;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Infrastructure.Persistence;
 using OnlineExamSystem.Question.Infrastructure.Repositories;
@@ -38,6 +40,8 @@ public class Program
         builder.Services.AddScoped<IValidator<UpdateQuestionCommand>, UpdateQuestionValidator>();
         builder.Services.AddScoped<UpdateQuestionHandler>();
         builder.Services.AddScoped<DeleteQuestionHandler>();
+        builder.Services.AddScoped<BulkAssignSectionHandler>();
+        builder.Services.AddScoped<UnassignSectionHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

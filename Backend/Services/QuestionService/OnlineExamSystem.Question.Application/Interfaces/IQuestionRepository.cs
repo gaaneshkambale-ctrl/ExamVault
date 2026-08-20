@@ -17,7 +17,18 @@ public interface IQuestionRepository
 
     Task<IReadOnlyList<ExamQuestion>> GetQuestionsByExamIdAsync(
         Guid examId,
+        Guid? sectionId = null,
+        bool unassignedOnly = false,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Sets SectionId on every given question. Pass a null sectionId to unassign.</summary>
+    Task BulkSetSectionIdAsync(
+        Guid? sectionId,
+        IReadOnlyList<Guid> questionIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Clears SectionId back to null on every question currently assigned to this section.</summary>
+    Task UnassignAllQuestionsInSectionAsync(Guid sectionId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdsAsync(
         IReadOnlyList<Guid> questionIds,

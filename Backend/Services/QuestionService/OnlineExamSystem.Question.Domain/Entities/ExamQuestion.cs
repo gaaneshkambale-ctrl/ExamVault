@@ -6,6 +6,7 @@ namespace OnlineExamSystem.Question.Domain.Entities;
 public class ExamQuestion : BaseEntity
 {
     public Guid ExamId { get; set; }
+    public Guid? SectionId { get; set; }
     public QuestionType QuestionType { get; set; } = QuestionType.MultipleChoice;
     public string QuestionText { get; set; } = string.Empty;
     public int Marks { get; set; }

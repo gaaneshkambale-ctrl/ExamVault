@@ -17,6 +17,10 @@ import ManageExams from '../pages/admin/ManageExams';
 import CreateExam from '../pages/admin/CreateExam';
 import ExamDetails from '../pages/admin/ExamDetails';
 import EditExam from '../pages/admin/EditExam';
+import ManageSections from '../pages/admin/ManageSections';
+import SectionForm from '../pages/admin/SectionForm';
+import SectionDetails from '../pages/admin/SectionDetails';
+import ReorderSections from '../pages/admin/ReorderSections';
 import QuestionBank from '../pages/admin/QuestionBank';
 import CreateQuestion from '../pages/admin/CreateQuestion';
 import QuestionDetails from '../pages/admin/QuestionDetails';
@@ -207,6 +211,46 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ExamDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/sections"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ManageSections />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/sections/reorder"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ReorderSections />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/sections/create"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <SectionForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/sections/:sectionId/edit"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <SectionForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/sections/:sectionId"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <SectionDetails />
           </ProtectedRoute>
         }
       />

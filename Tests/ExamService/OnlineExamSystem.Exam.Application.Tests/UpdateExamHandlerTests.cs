@@ -29,7 +29,12 @@ public class UpdateExamHandlerTests
             EndAtUtc: null,
             MaxAttempts: 2,
             NegativeMarkingEnabled: true,
-            NegativeMarks: 0.25m);
+            NegativeMarks: 0.25m,
+            ShowSectionSummaryToStudents: true,
+            AllowCalculator: false,
+            AllowNotes: false,
+            AutoSubmitOnTimeEnd: true,
+            ConfirmBeforeSubmit: true);
 
     [Fact]
     public async Task Valid_command_updates_basic_info_and_settings()

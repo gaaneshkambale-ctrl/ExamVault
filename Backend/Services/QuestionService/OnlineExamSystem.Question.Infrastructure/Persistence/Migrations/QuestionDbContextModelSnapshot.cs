@@ -51,6 +51,9 @@ namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
                     b.Property<int>("QuestionType")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("ShuffleOptions")
                         .HasColumnType("bit");
 

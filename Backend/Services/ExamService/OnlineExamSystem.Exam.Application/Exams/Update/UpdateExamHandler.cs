@@ -49,6 +49,11 @@ public class UpdateExamHandler
         exam.MaxAttempts = command.MaxAttempts;
         exam.NegativeMarkingEnabled = command.NegativeMarkingEnabled;
         exam.NegativeMarks = command.NegativeMarks;
+        exam.ShowSectionSummaryToStudents = command.ShowSectionSummaryToStudents;
+        exam.AllowCalculator = command.AllowCalculator;
+        exam.AllowNotes = command.AllowNotes;
+        exam.AutoSubmitOnTimeEnd = command.AutoSubmitOnTimeEnd;
+        exam.ConfirmBeforeSubmit = command.ConfirmBeforeSubmit;
 
         await _examRepository.SaveChangesAsync(cancellationToken);
 

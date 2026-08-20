@@ -6,6 +6,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import DeleteExamButton from '../../components/DeleteExamButton';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
+import { EXAM_CATEGORIES } from '../../types/exam';
 import type { ExamResponse, ExamStatus, ExamType } from '../../types/exam';
 
 const statusVariant: Record<ExamStatus, string> = {
@@ -95,6 +96,7 @@ export default function ManageExams() {
   const [searchParams] = useSearchParams();
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<'All' | ExamType>('All');
+  const [categoryFilter, setCategoryFilter] = useState<'All' | string>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | ExamStatus>(() => {
     const fromUrl = searchParams.get('status');
     return VALID_STATUSES.includes(fromUrl as ExamStatus) ? (fromUrl as ExamStatus) : 'All';
@@ -112,6 +114,9 @@ export default function ManageExams() {
     if (typeFilter !== 'All' && exam.examType !== typeFilter) {
       return false;
     }
+    if (categoryFilter !== 'All' && exam.category !== categoryFilter) {
+      return false;
+    }
     if (statusFilter !== 'All' && exam.status !== statusFilter) {
       return false;
     }
@@ -123,7 +128,7 @@ export default function ManageExams() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchText, typeFilter, statusFilter]);
+  }, [searchText, typeFilter, categoryFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredExams.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -136,8 +141,14 @@ export default function ManageExams() {
 
   return (
     <AdminLayout active="Exams">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h4 fw-bold mb-0 text-primary">Exams</h1>
+      <div
+        className="d-flex justify-content-between align-items-center mb-4 px-4 py-3 rounded-3"
+        style={{ backgroundColor: 'darkgray' }}
+      >
+        <div>
+          <h1 className="h4 fw-bold mb-0 text-white">Exams</h1>
+          <p className="text-white-50 small mb-0">View and manage all exams in the system</p>
+        </div>
         <Link to="/admin/exams/create" className="btn btn-primary">
           + Create Exam
         </Link>
@@ -151,13 +162,26 @@ export default function ManageExams() {
       </Row>
 
       <Row className="g-2 mb-3">
-        <Col md={6}>
+        <Col md={4}>
           <Form.Control
             type="search"
             placeholder="Search exams..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
+        </Col>
+        <Col md={3}>
+          <Form.Select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="All">All Categories</option>
+            {EXAM_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </Form.Select>
         </Col>
         <Col md={3}>
           <Form.Select
@@ -169,7 +193,7 @@ export default function ManageExams() {
             <option value="AiGenerated">AI Generated</option>
           </Form.Select>
         </Col>
-        <Col md={3}>
+        <Col md={2}>
           <Form.Select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'All' | ExamStatus)}
@@ -210,9 +234,10 @@ export default function ManageExams() {
 
           {!isLoading && !isError && filteredExams.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase table-light">
                 <tr>
                   <th className="ps-4">Title</th>
+                  <th>Category</th>
                   <th>Type</th>
                   <th>Total Questions</th>
                   <th>Duration</th>
@@ -226,6 +251,7 @@ export default function ManageExams() {
                 {pagedExams.map((exam) => (
                   <tr key={exam.id}>
                     <td className="ps-4 fw-medium">{exam.title}</td>
+                    <td>{exam.category || '—'}</td>
                     <td>{examTypeLabel[exam.examType]}</td>
                     <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                     <td>{exam.durationMinutes} min</td>

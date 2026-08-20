@@ -1409,3 +1409,52 @@ to hold this.
   (25/25) all green
 
 **Phase 9 (Notification Service, Days 37-39) is COMPLETE. Gate passed.**
+
+## Exam Sections Milestone Progress
+
+- [x] Days 46-50 — Sections, wizard, question assignment, reorder, configuration
+
+Inserted ahead of Phase 10's remaining work (Days 42-45) per a new
+wireframe (`exam screen.jpg`). Sections are optional per exam
+(`ExamPaper.ContainsSections`) — existing flat-question exams are
+completely unaffected.
+
+### Days 46-50 Notes
+
+- Backend: `Section` entity + `NavigationType` enum (Free/Sequential/
+  Locked) in Exam Service, full CRUD + Reorder via `SectionsController`
+  (`/api/exams/{examId}/sections/**`, Admin-only). `ExamPaper` gained
+  `Category`/`ContainsSections` plus 5 Exam Configuration fields
+  (`ShowSectionSummaryToStudents`/`AllowCalculator`/`AllowNotes`/
+  `AutoSubmitOnTimeEnd`/`ConfirmBeforeSubmit`).
+- Question Service: `ExamQuestion` gained a nullable `SectionId`;
+  `GET /api/questions` gained `sectionId`/`unassignedOnly` filters; new
+  `PUT /api/questions/bulk-assign-section` (assign/unassign a batch) and
+  an internal-only `PUT /internal/questions/sections/{id}/unassign`
+  (outside `/api`, unreachable through the Gateway) that Exam Service
+  calls when a Section is deleted, so its questions become unassigned
+  rather than orphaned or deleted.
+- Frontend: `ManageSections` (list), `SectionForm` (one shared 3-step
+  Add/Edit wizard — Information/Rules/Question Assignment), `SectionDetails`,
+  `ReorderSections` (up/down controls, no new drag-and-drop dependency).
+  `CreateExam` gained a Category dropdown and "This exam contains
+  sections" toggle; `ManageExams` gained a Category column/filter;
+  `ExamDetails` (already titled "Exam Review & Publish") gained a
+  conditional "Manage Sections" button. The 5 new Exam Configuration
+  settings were added to `EditExam`'s existing settings panel rather
+  than a new wizard shell, since Manage Sections/Edit Exam/Exam Details
+  already cover the wireframe's remaining steps as real screens.
+  `ConfirmBeforeSubmit` is the one setting actually enforced — Take
+  Exam now shows a real confirm modal before final submission.
+- 23 new backend tests (Exam Service Section CRUD/Reorder handlers,
+  Question Service BulkAssignSection) — backend suite now 223/223.
+  Frontend `tsc`/`oxlint`/`npm run build`/26 Vitest tests all green.
+- Verified live end-to-end via curl through the Gateway (Category/
+  ContainsSections round-trip, bulk-assign + both question filters,
+  cross-service unassign-on-delete confirmed for real, 401/403
+  boundaries, reorder persistence, Exam Configuration defaults/persistence)
+  and in a real browser (full Create Exam → Manage Sections → Add
+  Section → Section Details → Edit Section → Delete Section flow, plus
+  Edit Exam's new Exam Configuration toggles).
+
+**Exam Sections Milestone (Days 46-50) is COMPLETE. Gate passed.**

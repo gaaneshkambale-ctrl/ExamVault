@@ -1,4 +1,5 @@
 using OnlineExamSystem.Exam.Application.Assignments;
+using OnlineExamSystem.Exam.Application.Sections;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Exam.Domain.Enums;
 
@@ -10,6 +11,18 @@ public interface IExamRepository
     Task<ExamPaper?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ExamPaper>> GetAllAsync(CancellationToken cancellationToken = default);
     Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default);
+
+    Task AddSectionAsync(Section section, CancellationToken cancellationToken = default);
+    Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Section>> GetSectionsByExamIdAsync(Guid examId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns true if the section was found and removed.</summary>
+    Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default);
+
+    Task ReorderSectionsAsync(
+        Guid examId,
+        IReadOnlyList<SectionOrderEntry> order,
+        CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ExamPaper>> GetAssignedPublishedExamsAsync(
         Guid userId,

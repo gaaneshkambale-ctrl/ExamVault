@@ -11,6 +11,8 @@ public class CreateExamValidatorTests
         new(
             "C# Fundamentals",
             "Covers the basics of C#.",
+            "Technical",
+            false,
             "Manual",
             60,
             50,

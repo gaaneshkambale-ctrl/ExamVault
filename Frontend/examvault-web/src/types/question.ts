@@ -31,6 +31,7 @@ export interface QuestionOptionResponse {
 export interface QuestionResponse {
   id: string;
   examId: string;
+  sectionId: string | null;
   questionType: QuestionType;
   questionText: string;
   marks: number;

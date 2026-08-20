@@ -32,9 +32,46 @@ public class FakeQuestionRepository : IQuestionRepository
 
     public Task<IReadOnlyList<ExamQuestion>> GetQuestionsByExamIdAsync(
         Guid examId,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<ExamQuestion>>(
-            _questions.Where(q => q.ExamId == examId).OrderByDescending(q => q.CreatedAtUtc).ToList());
+        Guid? sectionId = null,
+        bool unassignedOnly = false,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _questions.Where(q => q.ExamId == examId);
+        if (unassignedOnly)
+        {
+            query = query.Where(q => q.SectionId == null);
+        }
+        else if (sectionId is { } id)
+        {
+            query = query.Where(q => q.SectionId == id);
+        }
+
+        return Task.FromResult<IReadOnlyList<ExamQuestion>>(
+            query.OrderByDescending(q => q.CreatedAtUtc).ToList());
+    }
+
+    public Task BulkSetSectionIdAsync(
+        Guid? sectionId,
+        IReadOnlyList<Guid> questionIds,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var question in _questions.Where(q => questionIds.Contains(q.Id)))
+        {
+            question.SectionId = sectionId;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task UnassignAllQuestionsInSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
+    {
+        foreach (var question in _questions.Where(q => q.SectionId == sectionId))
+        {
+            question.SectionId = null;
+        }
+
+        return Task.CompletedTask;
+    }
 
     public Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdsAsync(
         IReadOnlyList<Guid> questionIds,

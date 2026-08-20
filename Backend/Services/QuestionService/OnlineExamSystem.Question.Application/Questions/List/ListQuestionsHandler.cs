@@ -15,7 +15,11 @@ public class ListQuestionsHandler
         ListQuestionsQuery query,
         CancellationToken cancellationToken = default)
     {
-        var questions = await _questionRepository.GetQuestionsByExamIdAsync(query.ExamId, cancellationToken);
+        var questions = await _questionRepository.GetQuestionsByExamIdAsync(
+            query.ExamId,
+            query.SectionId,
+            query.UnassignedOnly,
+            cancellationToken);
         if (questions.Count == 0)
         {
             return [];

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Exam.Application.Assignments;
 using OnlineExamSystem.Exam.Application.Interfaces;
+using OnlineExamSystem.Exam.Application.Sections;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Exam.Domain.Enums;
 using OnlineExamSystem.Exam.Infrastructure.Persistence;
@@ -31,6 +32,48 @@ public class ExamRepository : IExamRepository
     {
         _dbContext.Exams.Remove(exam);
         return Task.CompletedTask;
+    }
+
+    public Task AddSectionAsync(Section section, CancellationToken cancellationToken = default) =>
+        _dbContext.Sections.AddAsync(section, cancellationToken).AsTask();
+
+    public Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default) =>
+        _dbContext.Sections.FirstOrDefaultAsync(s => s.Id == sectionId, cancellationToken);
+
+    public async Task<IReadOnlyList<Section>> GetSectionsByExamIdAsync(
+        Guid examId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.Sections
+            .Where(s => s.ExamId == examId)
+            .OrderBy(s => s.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+    public async Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
+    {
+        var section = await _dbContext.Sections.FirstOrDefaultAsync(s => s.Id == sectionId, cancellationToken);
+        if (section is null)
+        {
+            return false;
+        }
+
+        _dbContext.Sections.Remove(section);
+        return true;
+    }
+
+    public async Task ReorderSectionsAsync(
+        Guid examId,
+        IReadOnlyList<SectionOrderEntry> order,
+        CancellationToken cancellationToken = default)
+    {
+        var orderBySectionId = order.ToDictionary(o => o.SectionId, o => o.DisplayOrder);
+        var sections = await _dbContext.Sections
+            .Where(s => s.ExamId == examId && orderBySectionId.Keys.Contains(s.Id))
+            .ToListAsync(cancellationToken);
+
+        foreach (var section in sections)
+        {
+            section.DisplayOrder = orderBySectionId[section.Id];
+        }
     }
 
     public async Task<IReadOnlyList<ExamPaper>> GetAssignedPublishedExamsAsync(

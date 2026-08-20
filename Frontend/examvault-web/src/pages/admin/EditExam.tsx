@@ -84,6 +84,30 @@ const icons = {
       <path d="M9 13h6" /><path d="M9 17h6" />
     </SettingIcon>
   ),
+  sectionSummary: (
+    <SettingIcon>
+      <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+    </SettingIcon>
+  ),
+  calculator: (
+    <SettingIcon>
+      <rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" y1="6" x2="16" y2="6" />
+      <line x1="8" y1="11" x2="8" y2="11" /><line x1="12" y1="11" x2="12" y2="11" /><line x1="16" y1="11" x2="16" y2="11" />
+      <line x1="8" y1="15" x2="8" y2="15" /><line x1="12" y1="15" x2="12" y2="15" /><line x1="16" y1="15" x2="16" y2="18" />
+      <line x1="8" y1="18" x2="8" y2="18" /><line x1="12" y1="18" x2="12" y2="18" />
+    </SettingIcon>
+  ),
+  notes: (
+    <SettingIcon>
+      <path d="M4 4h16v16H4z" /><path d="M8 8h8" /><path d="M8 12h8" /><path d="M8 16h5" />
+    </SettingIcon>
+  ),
+  confirmSubmit: (
+    <SettingIcon>
+      <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </SettingIcon>
+  ),
 };
 
 interface SettingCardProps {
@@ -550,6 +574,53 @@ export default function EditExam() {
                         </Button>
                       )}
                     </SettingCard>
+                  </Col>
+                </Row>
+
+                <h2 className="h6 fw-bold mb-1 mt-2">Exam Configuration</h2>
+                <p className="text-muted small mb-3">
+                  Additional preferences for the student experience during this exam.
+                </p>
+
+                <Row>
+                  <Col md={6}>
+                    <SettingCard
+                      icon={icons.sectionSummary}
+                      title="Show Section Summary to Students"
+                      description="Show a breakdown of sections before the exam starts"
+                      checked={form.showSectionSummaryToStudents}
+                      onToggle={(checked) => updateField('showSectionSummaryToStudents', checked)}
+                    />
+                    <SettingCard
+                      icon={icons.calculator}
+                      title="Allow Calculator"
+                      description="Let students use an on-screen calculator"
+                      checked={form.allowCalculator}
+                      onToggle={(checked) => updateField('allowCalculator', checked)}
+                    />
+                    <SettingCard
+                      icon={icons.notes}
+                      title="Allow Notes"
+                      description="Let students jot down notes during the exam"
+                      checked={form.allowNotes}
+                      onToggle={(checked) => updateField('allowNotes', checked)}
+                    />
+                  </Col>
+                  <Col md={6}>
+                    <SettingCard
+                      icon={icons.autoSubmit}
+                      title="Auto Submit on Time End"
+                      description="Automatically submit the exam when time runs out"
+                      checked={form.autoSubmitOnTimeEnd}
+                      onToggle={(checked) => updateField('autoSubmitOnTimeEnd', checked)}
+                    />
+                    <SettingCard
+                      icon={icons.confirmSubmit}
+                      title="Confirm Before Submit"
+                      description="Ask students to confirm before their final submission"
+                      checked={form.confirmBeforeSubmit}
+                      onToggle={(checked) => updateField('confirmBeforeSubmit', checked)}
+                    />
                   </Col>
                 </Row>
 

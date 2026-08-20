@@ -53,6 +53,8 @@ public class ExamsController : ControllerBase
         var command = new CreateExamCommand(
             request.Title,
             request.Description,
+            request.Category,
+            request.ContainsSections,
             request.ExamType,
             request.DurationMinutes,
             request.TotalMarks,
@@ -127,7 +129,12 @@ public class ExamsController : ControllerBase
             request.EndAtUtc,
             request.MaxAttempts,
             request.NegativeMarkingEnabled,
-            request.NegativeMarks);
+            request.NegativeMarks,
+            request.ShowSectionSummaryToStudents,
+            request.AllowCalculator,
+            request.AllowNotes,
+            request.AutoSubmitOnTimeEnd,
+            request.ConfirmBeforeSubmit);
 
         var result = await _updateExamHandler.HandleAsync(command, cancellationToken);
 
@@ -211,6 +218,8 @@ public class ExamsController : ControllerBase
             exam.Id,
             exam.Title,
             exam.Description,
+            exam.Category,
+            exam.ContainsSections,
             exam.ExamType.ToString(),
             exam.DurationMinutes,
             exam.TotalMarks,
@@ -228,5 +237,10 @@ public class ExamsController : ControllerBase
             exam.EndAtUtc,
             exam.MaxAttempts,
             exam.NegativeMarkingEnabled,
-            exam.NegativeMarks);
+            exam.NegativeMarks,
+            exam.ShowSectionSummaryToStudents,
+            exam.AllowCalculator,
+            exam.AllowNotes,
+            exam.AutoSubmitOnTimeEnd,
+            exam.ConfirmBeforeSubmit);
 }

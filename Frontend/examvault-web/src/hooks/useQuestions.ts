@@ -1,11 +1,32 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { getQuestion, listQuestions } from '../api/questionApi';
+import {
+  getQuestion,
+  listQuestions,
+  listQuestionsBySection,
+  listUnassignedQuestions,
+} from '../api/questionApi';
 
 export function useQuestions(examId: string | undefined) {
   return useQuery({
     queryKey: ['questions', 'byExam', examId],
     queryFn: () => listQuestions(examId!),
     enabled: !!examId,
+  });
+}
+
+export function useUnassignedQuestions(examId: string | undefined) {
+  return useQuery({
+    queryKey: ['questions', 'byExam', examId, 'unassigned'],
+    queryFn: () => listUnassignedQuestions(examId!),
+    enabled: !!examId,
+  });
+}
+
+export function useQuestionsBySection(examId: string | undefined, sectionId: string | undefined) {
+  return useQuery({
+    queryKey: ['questions', 'byExam', examId, 'bySection', sectionId],
+    queryFn: () => listQuestionsBySection(examId!, sectionId!),
+    enabled: !!examId && !!sectionId,
   });
 }
 

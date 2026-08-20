@@ -1,9 +1,20 @@
 export type ExamType = 'Manual' | 'AiGenerated';
 export type ExamStatus = 'Draft' | 'Published' | 'Archived';
 
+export const EXAM_CATEGORIES = [
+  'Technical',
+  'Database',
+  'Aptitude',
+  'Programming',
+  'Soft Skills',
+  'General',
+] as const;
+
 export interface CreateExamRequest {
   title: string;
   description: string;
+  category: string;
+  containsSections: boolean;
   examType: ExamType;
   durationMinutes: number;
   totalMarks: number;
@@ -22,6 +33,11 @@ export interface ExamSettings {
   maxAttempts: number;
   negativeMarkingEnabled: boolean;
   negativeMarks: number;
+  showSectionSummaryToStudents: boolean;
+  allowCalculator: boolean;
+  allowNotes: boolean;
+  autoSubmitOnTimeEnd: boolean;
+  confirmBeforeSubmit: boolean;
 }
 
 export interface UpdateExamRequest extends CreateExamRequest, ExamSettings {}

@@ -4,6 +4,8 @@ public record ExamResponse(
     Guid Id,
     string Title,
     string Description,
+    string Category,
+    bool ContainsSections,
     string ExamType,
     int DurationMinutes,
     int TotalMarks,
@@ -21,4 +23,9 @@ public record ExamResponse(
     DateTime? EndAtUtc,
     int MaxAttempts,
     bool NegativeMarkingEnabled,
-    decimal NegativeMarks);
+    decimal NegativeMarks,
+    bool ShowSectionSummaryToStudents,
+    bool AllowCalculator,
+    bool AllowNotes,
+    bool AutoSubmitOnTimeEnd,
+    bool ConfirmBeforeSubmit);

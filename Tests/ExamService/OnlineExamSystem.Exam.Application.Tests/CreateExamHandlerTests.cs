@@ -19,6 +19,8 @@ public class CreateExamHandlerTests
         var command = new CreateExamCommand(
             "C# Fundamentals",
             "Covers the basics of C#.",
+            "Technical",
+            false,
             "Manual",
             60,
             50,
@@ -42,7 +44,7 @@ public class CreateExamHandlerTests
     {
         var repository = new FakeExamRepository();
         var handler = CreateHandler(repository);
-        var command = new CreateExamCommand("", "", "Manual", 0, 0, 0, "", Guid.NewGuid());
+        var command = new CreateExamCommand("", "", "", false, "Manual", 0, 0, 0, "", Guid.NewGuid());
 
         var result = await handler.HandleAsync(command);
 

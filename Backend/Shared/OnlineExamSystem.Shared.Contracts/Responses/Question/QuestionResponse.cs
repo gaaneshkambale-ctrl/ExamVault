@@ -5,6 +5,7 @@ public record QuestionOptionResponse(Guid Id, string OptionText, bool IsCorrect,
 public record QuestionResponse(
     Guid Id,
     Guid ExamId,
+    Guid? SectionId,
     string QuestionType,
     string QuestionText,
     int Marks,

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Responses.Question;
 
@@ -16,10 +17,14 @@ namespace OnlineExamSystem.Question.API.Controllers;
 public class InternalController : ControllerBase
 {
     private readonly ListQuestionsHandler _listQuestionsHandler;
+    private readonly UnassignSectionHandler _unassignSectionHandler;
 
-    public InternalController(ListQuestionsHandler listQuestionsHandler)
+    public InternalController(
+        ListQuestionsHandler listQuestionsHandler,
+        UnassignSectionHandler unassignSectionHandler)
     {
         _listQuestionsHandler = listQuestionsHandler;
+        _unassignSectionHandler = unassignSectionHandler;
     }
 
     [HttpGet("answer-key")]
@@ -29,10 +34,21 @@ public class InternalController : ControllerBase
         return Ok(questions.Select(q => ToResponse(q.Question, q.Options)));
     }
 
+    // Called by Exam Service when a Section is deleted, so its questions become
+    // unassigned rather than being deleted themselves. Internal-only for the same
+    // reason as answer-key: a student's browser never calls Question API directly.
+    [HttpPut("sections/{sectionId:guid}/unassign")]
+    public async Task<IActionResult> UnassignSection(Guid sectionId, CancellationToken cancellationToken)
+    {
+        await _unassignSectionHandler.HandleAsync(new UnassignSectionCommand(sectionId), cancellationToken);
+        return NoContent();
+    }
+
     private static QuestionResponse ToResponse(ExamQuestion question, IReadOnlyList<QuestionOption> options) =>
         new(
             question.Id,
             question.ExamId,
+            question.SectionId,
             question.QuestionType.ToString(),
             question.QuestionText,
             question.Marks,

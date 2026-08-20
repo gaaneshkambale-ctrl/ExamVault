@@ -15,6 +15,10 @@ export function validateCreateExam(
     errors.description = 'Description must be 2000 characters or fewer.';
   }
 
+  if (!form.category.trim()) {
+    errors.category = 'Category is required.';
+  }
+
   if (!Number.isFinite(form.durationMinutes) || form.durationMinutes <= 0) {
     errors.durationMinutes = 'Duration must be greater than 0.';
   }

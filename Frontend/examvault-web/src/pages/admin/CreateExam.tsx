@@ -5,12 +5,15 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createExam } from '../../api/examApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
+import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreateExamRequest, ExamType } from '../../types/exam';
 import { extractServerError } from '../../utils/apiError';
 
 const initialFormState: CreateExamRequest = {
   title: '',
   description: '',
+  category: '',
+  containsSections: false,
   examType: 'Manual',
   durationMinutes: 60,
   totalMarks: 100,
@@ -88,6 +91,37 @@ export default function CreateExam() {
                     <option value="AiGenerated">AI Generated</option>
                   </Form.Select>
                 </Form.Group>
+              </Col>
+            </Row>
+
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3" controlId="examCategory">
+                  <Form.Label className="fw-bold">Category</Form.Label>
+                  <Form.Select
+                    value={form.category}
+                    onChange={(e) => updateField('category', e.target.value)}
+                    isInvalid={!!fieldErrors.category}
+                  >
+                    <option value="">Select a category</option>
+                    {EXAM_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <Form.Control.Feedback type="invalid">{fieldErrors.category}</Form.Control.Feedback>
+                </Form.Group>
+              </Col>
+              <Col md={8} className="d-flex align-items-end">
+                <Form.Check
+                  type="switch"
+                  id="examContainsSections"
+                  className="mb-3"
+                  label="This exam contains sections"
+                  checked={form.containsSections}
+                  onChange={(e) => updateField('containsSections', e.target.checked)}
+                />
               </Col>
             </Row>
 

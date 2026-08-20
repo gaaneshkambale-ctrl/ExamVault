@@ -26,7 +26,12 @@ public class UpdateExamValidatorTests
             EndAtUtc: null,
             MaxAttempts: 1,
             NegativeMarkingEnabled: false,
-            NegativeMarks: 0);
+            NegativeMarks: 0,
+            ShowSectionSummaryToStudents: true,
+            AllowCalculator: false,
+            AllowNotes: false,
+            AutoSubmitOnTimeEnd: true,
+            ConfirmBeforeSubmit: true);
 
     [Fact]
     public void Valid_command_passes()

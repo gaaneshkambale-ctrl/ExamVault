@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
@@ -286,6 +286,15 @@ export default function TakeExam() {
 
   const { mutate: runSubmit } = submitMutation;
 
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const requestSubmit = () => {
+    if (exam?.confirmBeforeSubmit) {
+      setShowSubmitConfirm(true);
+    } else {
+      submitMutation.mutate(false);
+    }
+  };
+
   // Countdown timer: exam.durationMinutes from Phase 5 + the attempt's real
   // StartedAtUtc. Auto-submits once when it reaches zero.
   useEffect(() => {
@@ -553,7 +562,7 @@ export default function TakeExam() {
               <Button
                 variant="primary"
                 disabled={mode === 'loading' || submitMutation.isPending}
-                onClick={() => (mode === 'review' ? submitMutation.mutate(false) : setMode('review'))}
+                onClick={() => (mode === 'review' ? requestSubmit() : setMode('review'))}
               >
                 Submit Exam
               </Button>
@@ -702,7 +711,7 @@ export default function TakeExam() {
                   <Button
                     variant="primary"
                     disabled={submitMutation.isPending}
-                    onClick={() => submitMutation.mutate(false)}
+                    onClick={requestSubmit}
                   >
                     {submitMutation.isPending ? (
                       <>
@@ -760,6 +769,31 @@ export default function TakeExam() {
           </Card.Body>
         </Card>
       )}
+
+      <Modal show={showSubmitConfirm} onHide={() => setShowSubmitConfirm(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Submit Exam?</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Once submitted, you won't be able to change your answers. Are you sure you want to submit
+          this exam?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowSubmitConfirm(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={submitMutation.isPending}
+            onClick={() => {
+              setShowSubmitConfirm(false);
+              submitMutation.mutate(false);
+            }}
+          >
+            {submitMutation.isPending ? 'Submitting...' : 'Submit'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </StudentLayout>
   );
 }

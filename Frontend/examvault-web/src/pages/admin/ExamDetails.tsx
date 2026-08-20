@@ -93,6 +93,11 @@ export default function ExamDetails() {
               </span>
             )
           )}
+          {id && exam?.containsSections && (
+            <Link to={`/admin/exams/${id}/sections`} className="btn btn-outline-primary">
+              Manage Sections
+            </Link>
+          )}
           {id && (
             <Link to={`/admin/exams/${id}/edit`} className="btn btn-primary">
               Edit
@@ -165,6 +170,7 @@ export default function ExamDetails() {
               </div>
 
               <Row>
+                <Field label="Category" value={exam.category || 'Uncategorized'} />
                 <Field label="Exam Type" value={examTypeLabel[exam.examType]} />
                 <Field label="Duration" value={`${exam.durationMinutes} minutes`} />
                 <Field label="Total Marks" value={String(exam.totalMarks)} />

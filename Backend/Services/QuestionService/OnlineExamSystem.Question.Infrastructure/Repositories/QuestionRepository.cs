@@ -36,11 +36,42 @@ public class QuestionRepository : IQuestionRepository
 
     public async Task<IReadOnlyList<ExamQuestion>> GetQuestionsByExamIdAsync(
         Guid examId,
-        CancellationToken cancellationToken = default) =>
+        Guid? sectionId = null,
+        bool unassignedOnly = false,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.Questions.Where(q => q.ExamId == examId);
+
+        if (unassignedOnly)
+        {
+            query = query.Where(q => q.SectionId == null);
+        }
+        else if (sectionId is { } id)
+        {
+            query = query.Where(q => q.SectionId == id);
+        }
+
+        return await query.OrderByDescending(q => q.CreatedAtUtc).ToListAsync(cancellationToken);
+    }
+
+    public async Task BulkSetSectionIdAsync(
+        Guid? sectionId,
+        IReadOnlyList<Guid> questionIds,
+        CancellationToken cancellationToken = default)
+    {
         await _dbContext.Questions
-            .Where(q => q.ExamId == examId)
-            .OrderByDescending(q => q.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
+            .Where(q => questionIds.Contains(q.Id))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(q => q.SectionId, sectionId), cancellationToken);
+    }
+
+    public async Task UnassignAllQuestionsInSectionAsync(
+        Guid sectionId,
+        CancellationToken cancellationToken = default)
+    {
+        await _dbContext.Questions
+            .Where(q => q.SectionId == sectionId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(q => q.SectionId, (Guid?)null), cancellationToken);
+    }
 
     public async Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdsAsync(
         IReadOnlyList<Guid> questionIds,

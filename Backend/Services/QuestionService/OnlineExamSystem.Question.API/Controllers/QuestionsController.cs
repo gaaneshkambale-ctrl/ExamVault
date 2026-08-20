@@ -2,10 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Question.Application.Questions;
+using OnlineExamSystem.Question.Application.Questions.BulkAssignSection;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Question;
@@ -23,6 +25,8 @@ public class QuestionsController : ControllerBase
     private readonly ListQuestionsHandler _listQuestionsHandler;
     private readonly UpdateQuestionHandler _updateQuestionHandler;
     private readonly DeleteQuestionHandler _deleteQuestionHandler;
+    private readonly BulkAssignSectionHandler _bulkAssignSectionHandler;
+    private readonly UnassignSectionHandler _unassignSectionHandler;
     private readonly ILogger<QuestionsController> _logger;
 
     public QuestionsController(
@@ -31,6 +35,8 @@ public class QuestionsController : ControllerBase
         ListQuestionsHandler listQuestionsHandler,
         UpdateQuestionHandler updateQuestionHandler,
         DeleteQuestionHandler deleteQuestionHandler,
+        BulkAssignSectionHandler bulkAssignSectionHandler,
+        UnassignSectionHandler unassignSectionHandler,
         ILogger<QuestionsController> logger)
     {
         _createQuestionHandler = createQuestionHandler;
@@ -38,6 +44,8 @@ public class QuestionsController : ControllerBase
         _listQuestionsHandler = listQuestionsHandler;
         _updateQuestionHandler = updateQuestionHandler;
         _deleteQuestionHandler = deleteQuestionHandler;
+        _bulkAssignSectionHandler = bulkAssignSectionHandler;
+        _unassignSectionHandler = unassignSectionHandler;
         _logger = logger;
     }
 
@@ -81,10 +89,33 @@ public class QuestionsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] Guid examId, CancellationToken cancellationToken)
+    public async Task<IActionResult> List(
+        [FromQuery] Guid examId,
+        [FromQuery] Guid? sectionId,
+        [FromQuery] bool unassignedOnly,
+        CancellationToken cancellationToken)
     {
-        var questions = await _listQuestionsHandler.HandleAsync(new ListQuestionsQuery(examId), cancellationToken);
+        var questions = await _listQuestionsHandler.HandleAsync(
+            new ListQuestionsQuery(examId, sectionId, unassignedOnly),
+            cancellationToken);
         return Ok(questions.Select(q => ToResponse(q.Question, q.Options, RevealAnswers)));
+    }
+
+    [HttpPut("bulk-assign-section")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> BulkAssignSection(
+        BulkAssignSectionRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _bulkAssignSectionHandler.HandleAsync(
+            new BulkAssignSectionCommand(request.SectionId, request.QuestionIds),
+            cancellationToken);
+
+        _logger.LogInformation(
+            "{Count} question(s) assigned to section {SectionId}.",
+            request.QuestionIds.Count,
+            request.SectionId);
+        return NoContent();
     }
 
     [HttpGet("{id:guid}")]
@@ -163,6 +194,7 @@ public class QuestionsController : ControllerBase
         new(
             question.Id,
             question.ExamId,
+            question.SectionId,
             question.QuestionType.ToString(),
             question.QuestionText,
             question.Marks,

@@ -42,7 +42,64 @@ passed). AI Milestone (Days 27-30) is COMPLETE (gate passed). Phase 7
 (Submission Service, Days 31-33) is COMPLETE (gate passed). Phase 8
 (Result Service, Days 34-36) is COMPLETE (gate passed). Phase 9
 (Notification Service, Days 37-39) is COMPLETE (gate passed). Phase 10
-(Docker/Azure/CI-CD, Days 40-43) is unlocked and next.
+(Docker/Azure/CI-CD, Days 40-45) is FURTHER ALONG THAN THIS FILE
+PREVIOUSLY TRACKED - correction made 2026-08-20 after finding real,
+already-live Azure infrastructure via `git log` and `az` that this
+file's Days-42-45 text never reflected:
+- Days 40-41 (Dockerize + local Compose): DONE, re-confirmed working
+  this session (2026-08-20 `docker compose up -d --build`, all 12
+  containers healthy).
+- Day 42 (Azure Service Bus support): DONE - commit 3964766
+  (2026-08-16), `dotnet test` 196/196 at the time. Never got a DONE note
+  in this file until now.
+- Day 43 (Azure provisioning): DONE - a real dev environment is live
+  in Azure right now (`rg-examvault-dev`/`rg-examvault-shared`,
+  centralus): SQL Server, Service Bus namespace, Container Apps
+  Environment, ACR, all 10 Container Apps, confirmed via `az
+  containerapp list` (2026-08-20) - every app `provisioningState:
+  Succeeded`. This consumed real Azure spend and used the Decision-7
+  go-ahead at some point before this session; full blow-by-blow is in
+  `AzureStep.txt`, including two real platform bugs hit and resolved
+  (a centralindia region-specific outbound-TLS bug, fixed by moving to
+  centralus; a Container-App-to-Container-App TLS bug, fixed by
+  switching Gateway+backends to Dapr service invocation instead of
+  direct HTTPS).
+- Day 44 (CI/CD): DONE per `AzureStep.txt`'s last update - GitHub
+  Actions OIDC login was fixed (federated credential subject correction)
+  and `az acr build` was replaced with plain `docker build`+`push` in
+  `.github/workflows/cd-dev.yml` after ACR Tasks never worked; a real
+  push to `dev` was confirmed triggering build+test+push+deploy end to
+  end. `AzureStep.txt` Step 8's file list still calls this "currently
+  unverified" - that note is now stale, superseded by Step 4's later
+  UPDATE in the same file.
+- Day 45 (live verification): PARTIAL. Confirmed live this session
+  (2026-08-20) via curl against the real Gateway URL
+  (`https://ca-gateway-dev.proudmushroom-43e29194.centralus.
+  azurecontainerapps.io`): cold-start on the first request (~30s,
+  scale-to-zero), then fast/correct (401 on an unauthenticated request
+  in <1s) on every request after. `AzureStep.txt` flags two things as
+  not yet done: an actual browser click-through of the golden path
+  (only curl-level API checks exist), and a from-scratch redeploy of
+  the current `env.bicep` to prove the template alone (not manual `az`
+  follow-up commands) reproduces the working Dapr-based state.
+This correction exists because this file's own staleness nearly caused
+a second implementation of Day 42's already-shipped work - see
+[[project_examvault_progress]] memory for why re-checking `git log`
+before trusting this file's CURRENT STATUS matters.
+
+The EXAM SECTIONS MILESTONE (Days 46-50, plan written 2026-08-20 per a
+new wireframe, "exam screen.jpg") is COMPLETE, gate passed (2026-08-20).
+Sections (optional per exam, Category/ContainsSections on ExamPaper),
+the full Add/Edit Section 3-step wizard, Question Assignment (manual
+selection + bulk-assign, with cross-service unassign on Section delete),
+Reorder Sections, and the 5 new Exam Configuration settings (added to
+the existing EditExam settings panel rather than a redundant wizard
+shell - ExamDetails.tsx already serves as the "Review & Publish" step)
+are all built, backend-tested (223/223 total, up from 206), and verified
+live end-to-end via curl through the Gateway AND in a real browser
+(Chrome extension) - see the milestone's own DONE notes below for the
+full verification detail. Phase 10 Days 42-45 (Azure Service Bus,
+Azure provisioning, CI/CD, live verification) are unlocked and next.
 
 DAY 1 — PHASE 0: REPOSITORY & TOOLING SETUP  (TODAY)
 ------------------------------------------------------
@@ -1810,6 +1867,310 @@ taking effect) - correctness there rests on identical code + verified
 CSS wiring, not a second pixel screenshot.
 
 =====================================================================
+EXAM SECTIONS MILESTONE - KICKOFF (2026-08-20)
+=====================================================================
+WIREFRAME SCOPE NOTE FOR THE EXAM SECTIONS MILESTONE
+--------------------------------------------------------------------------
+A new wireframe ("exam screen.jpg", provided 2026-08-20) covers 12
+admin-side screens introducing Sections as an optional sub-structure
+inside an exam: 01 All Exams (Category column/filter added), 02 Create
+Exam - Basic Information (Category field, "This exam contains sections"
+toggle, Negative Marking, Max Attempts moved into this step), 03 Manage
+Sections (List), 04-06 Add Section 3-step wizard (Information / Rules /
+Question Assignment), 07 Section Details, 08 Edit Section, 09 Reorder
+Sections, 10 Exam Configuration, 11 Review & Publish, 12 Assign Exam to
+Students/Groups (ALREADY BUILT - AssignExam.tsx, no work needed here).
+
+Sections are OPTIONAL per exam, confirmed with the user 2026-08-20: the
+existing flat question-list model (Question Service's
+ExamQuestion.ExamId, no section) keeps working completely unchanged for
+exams that don't turn sections on. Sections are an additive path, not a
+migration - matches the toggle shown on screen 02.
+
+Scope simplifications, flagged rather than silently built or silently
+dropped (same convention every prior phase used):
+- Screen 06's "Auto Selection" and "Import Questions" tabs are visible
+  but disabled this milestone - same treatment as Phase 6's Import
+  Questions deferral. Only "Manual Selection" (search/filter/checkbox-
+  pick from the exam's own already-created, not-yet-assigned questions)
+  is real.
+- Screen 06's "Subject" filter dropdown has no backing field anywhere in
+  the current schema (ExamQuestion has no Subject/topic tag) - dropped
+  from scope rather than inventing a new taxonomy. Manual Selection
+  filters by Question Type, Difficulty, and a text search of question
+  text only.
+- Screen 10's "Show Correct Answer" control is NOT being added - an
+  exam-level ShowCorrectAnswers field already exists and is already
+  known to be superseded by the assignment-level
+  ShowResultsAfterSubmit/ShowCorrectAnswers fields (documented gap from
+  Phase 8). Adding a third copy on a new "Exam Configuration" step would
+  make that duplication worse, so this row is dropped from the step
+  entirely.
+- Screen 10's Allow Calculator / Allow Notes / Auto Submit on Time End /
+  Confirm Before Submit / Show Section Summary to Students are stored
+  preferences this milestone. Allow Calculator, Allow Notes, and Show
+  Section Summary to Students have no real consumer yet (no
+  calculator/notes widget, no summary screen exists in Take Exam) -
+  stored honestly, not silently faked, same treatment Phase 9 gave
+  "Schedule For Later." Confirm Before Submit IS fully implemented (a
+  real confirm dialog on Take Exam's Submit button). Auto Submit on Time
+  End already effectively happens via the existing Day-33 auto-submit
+  timer - this toggle is new UI over existing behavior; turning it off
+  is NOT wired to actually disable the timer this milestone (flagged,
+  not built).
+- Per-section Navigation Type (Free/Sequential/Locked) is stored on the
+  Section entity this milestone but NOT enforced by Submission Service's
+  Take Exam flow - this wireframe is 100% admin-authoring screens, no
+  student-side Take-Exam mockup was provided alongside it. Enforcing
+  section-scoped navigation/timing during a real attempt is separate
+  follow-on work, not assumed to be included here.
+- "Exam Categories" and "Tags" stay disabled sidebar placeholders
+  (Categories already is one, since Day 19) - Category becomes a simple
+  string field on Exam (a fixed short list of options, not a separate
+  manageable entity/CRUD page) for this milestone, matching how Phase 6
+  deferred full Category/Tag management.
+
+DECISIONS LOCKED IN FOR THE EXAM SECTIONS MILESTONE (confirmed with the
+user 2026-08-20)
+--------------------------------------------------------------------------
+1. Sections are OPTIONAL per exam via ExamPaper.ContainsSections (bool,
+   default false) - existing exams and the entire flat-question code
+   path are untouched. [CONFIRMED]
+2. This milestone is inserted ahead of Phase 10's remaining work (Azure
+   Service Bus support onward) rather than after it - Phase 10's Days
+   40-41 (Docker/Compose) already exist and work (confirmed via a live
+   `docker compose up` this session); its Days 42-45 (Service Bus, Azure
+   provisioning, CI/CD, live verification) resume once this milestone's
+   gate passes. [CONFIRMED]
+3. Section entity lives in Exam Service (Exam.Domain), not Question
+   Service - it mirrors exam-level settings (navigation, negative
+   marking, shuffle, review) and Manage/Reorder Sections is exam-
+   authoring, the same reasoning ExamAssignment already lives in Exam
+   Service. Question Service's ExamQuestion gains a nullable SectionId
+   (Guid?) - the cross-service reference pattern ExamId already
+   established. [PROPOSED DEFAULT - flag if you want this to live in
+   Question Service instead]
+4. A Section's Question Count/Marks (entered at Add Section Step 1) are
+   admin-entered targets, not auto-synced to however many questions
+   actually get assigned in Step 3 - same precedent as
+   ExamPaper.TotalQuestions since Day 19. [PROPOSED DEFAULT]
+5. Deleting a Section does NOT delete its assigned questions - it clears
+   their SectionId back to null (unassigned, visible again in Manual
+   Selection for another section) rather than losing content. [PROPOSED
+   DEFAULT]
+
+DAY 46 - EXAM SECTIONS: BACKEND SKELETON (ENTITIES + MIGRATIONS)
+--------------------------------------------------------------------------
+- New `Section` entity in Exam.Domain (ExamId, Name, Description,
+  Instructions, DisplayOrder, QuestionCount, Marks, DurationMinutes,
+  NavigationType enum [Free/Sequential/Locked], NegativeMarkingEnabled,
+  NegativeMarks, ShuffleQuestions, ShuffleOptions, AllowReview),
+  migration against ExamDb.
+- ExamPaper gains Category (string) and ContainsSections (bool, default
+  false), migration.
+- Question Service's ExamQuestion gains nullable SectionId (Guid?),
+  migration against QuestionDb.
+- Skeleton only - no endpoints/handlers/UI yet, matching every prior
+  phase's Day-1 shape.
+Day complete when: both migrations apply cleanly and `dotnet build` is
+clean across Exam and Question services.
+
+DAY 47 - EXAM SECTIONS: SECTION CRUD APIS + MANAGE SECTIONS LIST
+--------------------------------------------------------------------------
+- CreateSectionCommand/Validator/Handler, UpdateSectionCommand/Validator/
+  Handler, DeleteSectionCommand/Handler, GetSectionQuery/Handler,
+  ListSectionsQuery/Handler, ReorderSectionsCommand/Handler (bulk
+  DisplayOrder update) in Exam.Application.
+- SectionsController: GET/POST /api/exams/{examId}/sections, GET/PUT/
+  DELETE /api/exams/{examId}/sections/{id}, PUT /api/exams/{examId}/
+  sections/reorder - all [Authorize(Roles="Admin")].
+- Frontend: Manage Sections (List) page (wireframe screen 03) - table
+  (Name/Questions/Marks/Duration/Navigation/Status/Actions), Total row,
+  Add Section and Reorder Sections buttons (both link to stub routes
+  until Day 48/50 build their real destinations).
+- "This exam contains sections" toggle wired into the existing Create
+  Exam form, persisting ContainsSections; Category field added as a
+  dropdown from a fixed short list.
+Day complete when: Section CRUD is verified end-to-end via curl through
+the Gateway with a real Admin JWT (create/list/get/update/delete, 403 for
+Student), and Manage Sections renders real data for a throwaway exam.
+
+DAY 48 - EXAM SECTIONS: ADD/EDIT SECTION WIZARD (INFORMATION + RULES)
+--------------------------------------------------------------------------
+- One client-side 3-step wizard component (Information / Rules / Question
+  Assignment) shared by Add Section and Edit Section, holding all three
+  steps' state locally and submitting once at the end (Day 49) rather
+  than per-step API calls - avoids orphaned Section records if a user
+  abandons the wizard partway, same one-shot-submit precedent Create Exam
+  already uses.
+- Step 1 Information (wireframe screen 04): Section Name, Description,
+  Instructions, Question Count, Marks, Duration, Display Order.
+- Step 2 Rules (wireframe screen 05): Navigation Type radio (Free/
+  Sequential/Locked), Negative Marking toggle+value, Shuffle Questions/
+  Options toggles, Allow Review toggle.
+- Edit Section pre-populates all of the above from GetSectionQuery.
+Day complete when: the wizard's Steps 1-2 hold state correctly across
+Back/Next with no data loss, verified by clicking through in a real
+browser (Chrome extension).
+
+DAY 49 - EXAM SECTIONS: QUESTION ASSIGNMENT, DETAILS, DELETE
+--------------------------------------------------------------------------
+- Step 3 Manual Selection (wireframe screen 06): lists the exam's
+  questions with SectionId == null (new `GET /api/questions?examId=
+  &unassignedOnly=true` filter), Type/Difficulty filters + keyword
+  search, checkbox multi-select with a running Selected Questions/Total
+  Marks summary. "Add Section" (or "Save" on Edit) does one combined
+  action: creates/updates the Section from Steps 1-2's state, then a new
+  bulk `PUT /api/questions/bulk-assign-section` sets SectionId on every
+  selected question in one request (avoids N sequential calls).
+- Section Details / View page (wireframe screen 07): section info +
+  assigned-questions table + "View All Questions" link + Edit Section
+  button.
+- Delete Section (confirm-modal pattern, matching DeleteQuestionButton/
+  DeleteExamButton): clears SectionId back to null on its questions
+  rather than deleting them, per Decision 5 above.
+Day complete when: verified end-to-end for real - assigned questions to a
+throwaway section, confirmed their SectionId in QuestionDb, deleted the
+section, confirmed the same questions now show SectionId=null and
+reappear in Manual Selection unassigned.
+
+DAY 50 - EXAM SECTIONS: REORDER, WIZARD-IFY CREATE EXAM, CONFIGURATION,
+REVIEW & PUBLISH, GATE
+--------------------------------------------------------------------------
+- Reorder Sections (wireframe screen 09): drag-and-drop list, Save Order
+  calls ReorderSectionsCommand.
+- Create Exam becomes a 4-step wizard shell: Basic Information (existing
+  form, now step 1) -> Manage Sections (step 2, shown only when
+  ContainsSections is on, skipped when off) -> Exam Configuration (step
+  3, new) -> Review & Publish (step 4, new). EditExam keeps its current
+  single-page layout - this wizard shell is for the Create flow only,
+  per the wireframe's own screen numbering (02 is titled "Create Exam").
+- Exam Configuration step (wireframe screen 10, with the Show Correct
+  Answer row dropped per the scope note above): Show Section Summary to
+  Students, Allow Calculator, Allow Notes, Auto Submit on Time End,
+  Confirm Before Submit - new bool fields on ExamPaper.
+- Review & Publish step (wireframe screen 11): read-only summary of every
+  wizard step + a Sections Summary table, Publish button reusing the
+  existing publish status-transition endpoint.
+- Full verification + gate: backend/frontend test suites green, and a
+  real click-through creating a sectioned exam end-to-end (toggle on ->
+  add 2 sections with different navigation types -> assign real
+  questions to each -> configure -> review -> publish), plus confirming
+  a non-sectioned exam's Create flow is completely unaffected. README
+  gets an "Exam Sections Milestone" section. ActionPlan.txt CURRENT
+  STATUS updated: milestone COMPLETE, Phase 10 Days 42-45 unlocked and
+  next.
+
+DAYS 46-50 DONE (2026-08-20), MILESTONE GATE CLOSED. Implemented in one
+continuous session rather than spread across 5 literal days, but every
+day's scope above was built and verified in order.
+
+Backend (Exam Service): `Section` entity + `NavigationType` enum
+(Free/Sequential/Locked) in Exam.Domain; `ExamPaper` gained `Category`
+(string) + `ContainsSections` (bool) + the 5 Exam Configuration bools
+(`ShowSectionSummaryToStudents`/`AllowCalculator`/`AllowNotes`/
+`AutoSubmitOnTimeEnd`/`ConfirmBeforeSubmit`) - two migrations
+(`AddSectionsAndExamCategory`, `AddExamConfigurationFields`). Full
+Section CRUD (`CreateSectionHandler`/`UpdateSectionHandler`/
+`DeleteSectionHandler`/`GetSectionHandler`/`ListSectionsHandler`/
+`ReorderSectionsHandler`) + `SectionsController`
+(`/api/exams/{examId}/sections/**`, Admin-only). `IQuestionServiceClient`
+(new Exam.Infrastructure HTTP client, mirrors `IExamLookupClient`'s
+bearer-forwarding pattern) calls Question Service when a Section is
+deleted, so its questions get unassigned rather than orphaned or
+deleted - best-effort/logged-not-fatal, same principle as
+`CreateAssignmentHandler`'s event publish.
+
+Backend (Question Service): `ExamQuestion` gained nullable `SectionId`.
+`GET /api/questions` gained `sectionId`/`unassignedOnly` query filters.
+New `PUT /api/questions/bulk-assign-section` (Admin-only, sets/clears
+SectionId on a batch of question ids in one call) and
+`PUT /internal/questions/sections/{sectionId}/unassign` (added to the
+existing internal-only controller, outside `/api` so the Gateway can
+never proxy it - same reasoning as the Phase 8 answer-key endpoint;
+this is what `IQuestionServiceClient` calls).
+
+Frontend: `ManageSections` (list), `SectionForm` (one shared 3-step
+wizard component for both Add and Edit - Information/Rules/Question
+Assignment, single combined submit at the end rather than per-step API
+calls), `SectionDetails` (view), `ReorderSections` (up/down-arrow
+reordering rather than pulling in a new drag-and-drop dependency - a
+deliberate scope simplification, no DnD library existed in package.json
+and this app has a general no-extra-dependency preference). `CreateExam`
+gained the Category dropdown (`EXAM_CATEGORIES`, a fixed short list, no
+separate manageable entity) and the "This exam contains sections"
+toggle. `ManageExams` gained the Category column + filter.
+`ExamDetails` gained a conditional "Manage Sections" button
+(`exam.containsSections`) and a Category field - it already carries the
+title "Exam Review & Publish" from an earlier day, so it already serves
+the wireframe's step-4 role without needing a new page. `EditExam`
+gained a second "Exam Configuration" settings section (5 new
+`SettingCard` toggles) using the exact same pattern its existing
+Exam Settings section already used - reused rather than building a
+redundant multi-step wizard shell around Create Exam, since Manage
+Sections/Exam Configuration/Review&Publish already exist as their own
+real screens (Manage Sections, Edit Exam, Exam Details respectively).
+`TakeExam.tsx` (Submission Service's student-facing page) is the one
+piece of Exam Configuration that's actually enforced, not just stored:
+a `showSubmitConfirm` Modal now gates both Submit Exam buttons behind
+`exam.confirmBeforeSubmit`, matching the existing Delete-confirmation
+Modal pattern already used elsewhere (`DeleteSectionButton` etc.)
+rather than a native `window.confirm`. `ShowSectionSummaryToStudents`/
+`AllowCalculator`/`AllowNotes`/`AutoSubmitOnTimeEnd` are stored
+preferences with no consumer yet - flagged in a code comment on
+`ExamPaper`, not silently built or dropped, per the milestone's own
+scope note above.
+
+23 new backend tests (15 Exam Service: CreateSection
+validator/handler, UpdateSection handler, DeleteSection handler incl. a
+Question-Service-failure-does-not-fail-the-delete case, Reorder
+handler; 2 Question Service: BulkAssignSection handler) - full backend
+suite now 223/223 (up from 206), zero regressions. Frontend
+`tsc`/`oxlint`/`npm run build`/26 Vitest tests all green (25 prior + 1
+new Category-required validation case).
+
+Verified live end-to-end twice: (1) via curl through the Gateway with a
+real Admin JWT - created a sectioned exam (Category+ContainsSections
+round-tripped correctly), created a Section, created a question
+(SectionId null), bulk-assigned it (confirmed via both
+`unassignedOnly=true` and `sectionId=` filters), deleted the Section and
+confirmed the cross-service call really unassigned the question back to
+SectionId=null (not just locally), confirmed Student gets 403 and an
+unauthenticated request gets 401 on Sections endpoints, created 2 more
+sections and confirmed Reorder actually persists the new DisplayOrder
+values, and confirmed the 5 Exam Configuration fields round-trip with
+the right defaults. (2) In a real browser (Chrome extension) - logged
+in as a real promoted Admin, walked the entire Create Exam -> Manage
+Sections -> Add Section (all 3 steps, including the real empty-state
+message when an exam has no unassigned questions yet) -> Section
+Details -> Edit Section (confirmed Steps 1-2 correctly pre-populate,
+including the Sequential radio staying selected) -> Delete Section
+(real confirm modal, correct copy) flow, and separately confirmed the
+new Exam Configuration toggles render with correct defaults on Edit
+Exam and that toggling+saving one (Allow Calculator) actually persists
+via a follow-up API check. `ConfirmBeforeSubmit`'s Modal in
+`TakeExam.tsx` was code-reviewed and type-checked but NOT click-tested
+live as a student mid-exam this session (would need a full
+register->assign->start-attempt setup) - flagged rather than silently
+assumed working. All throwaway exams/sections created during
+verification were deleted afterward via the real DELETE endpoints,
+same discipline as every prior day.
+
+Operational note from this session: rebuilding the whole Docker stack
+(`docker compose up -d --build` with no service argument) while it's
+already running pushes this machine's ~8GB RAM into swap and can crash
+buildkit mid-build - confirmed again here. Every rebuild this session
+instead targeted only the changed service(s)
+(`docker compose build exam-api question-api frontend`, then
+`docker compose up -d` with no `--build` for the rest), which stayed
+fast and never touched SQL Server/RabbitMQ/the other 8 already-running
+containers.
+
+**Exam Sections Milestone COMPLETE, gate passed. Phase 10 Days 42-45
+(Azure Service Bus, Azure provisioning, CI/CD, live verification)
+unlocked and next.**
+
+=====================================================================
 PHASE 10: DOCKER & AZURE DEPLOYMENT - KICKOFF (2026-08-15)
 =====================================================================
 CURRENT-STATE INVENTORY (confirmed by reading the actual repo, not
@@ -2337,3 +2698,32 @@ scenario end-to-end via curl - attempts 1/2/3 all succeeded
 have used all of your attempts for this exam." Test student,
 assignment, and exam-level MaxAttempts override all cleaned up
 afterward.
+
+=====================================================================
+FOLLOW-UP FIX (PLANNED, 2026-08-19): Manage Exams table header not
+showing light gray background
+=====================================================================
+REPORTED: admin side Exams table (Title/Type/Total Questions/
+Duration/Total Marks/Status/Created On/Actions) header row should
+have a light gray background.
+
+ROOT CAUSE: ManageExams.tsx's <thead> already has a `bg-light` class
+(same pattern every other table in the app copies), but confirmed live
+in the browser it renders white, not gray. Bootstrap 5 table cells set
+their own `--bs-table-bg` (transparent) at the td/th level, which
+paints over a `bg-light` background applied at the <thead> level -
+`bg-light` is the wrong utility for table headers. Bootstrap's
+dedicated `table-light` context class sets that CSS variable directly
+and is the correct fix.
+
+SCOPE: user confirmed (asked directly) to fix ONLY the Exams table for
+this report, not the same bg-light-on-thead pattern found copy-pasted
+across ~15 other tables app-wide (My Exams, Assignments, Results,
+Question Bank, Manage Users, etc.) - those likely share the same bug
+but are out of scope here, flagged for a future pass if raised again.
+
+FIX: swap `bg-light` -> `table-light` on ManageExams.tsx's <thead>
+className.
+
+VERIFY: reload /admin/exams in the browser, confirm the header row is
+visibly light gray.

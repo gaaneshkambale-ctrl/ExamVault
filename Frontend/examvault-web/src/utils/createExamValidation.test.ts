@@ -5,6 +5,8 @@ import type { CreateExamRequest } from '../types/exam';
 const validForm: CreateExamRequest = {
   title: 'C# Fundamentals',
   description: 'Covers the basics of C#.',
+  category: 'Technical',
+  containsSections: false,
   examType: 'Manual',
   durationMinutes: 60,
   totalMarks: 50,
@@ -20,6 +22,11 @@ describe('validateCreateExam', () => {
   it('requires a title', () => {
     const errors = validateCreateExam({ ...validForm, title: '   ' });
     expect(errors.title).toBe('Title is required.');
+  });
+
+  it('requires a category', () => {
+    const errors = validateCreateExam({ ...validForm, category: '' });
+    expect(errors.category).toBe('Category is required.');
   });
 
   it('rejects a duration that is not positive', () => {

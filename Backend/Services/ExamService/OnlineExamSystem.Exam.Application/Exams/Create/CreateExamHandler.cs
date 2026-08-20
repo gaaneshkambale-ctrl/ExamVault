@@ -31,6 +31,8 @@ public class CreateExamHandler
         {
             Title = command.Title,
             Description = command.Description,
+            Category = command.Category,
+            ContainsSections = command.ContainsSections,
             ExamType = Enum.Parse<ExamType>(command.ExamType, ignoreCase: true),
             DurationMinutes = command.DurationMinutes,
             TotalMarks = command.TotalMarks,

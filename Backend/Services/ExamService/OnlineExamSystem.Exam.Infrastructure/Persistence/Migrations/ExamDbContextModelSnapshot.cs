@@ -123,7 +123,27 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("AllowCalculator")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowNotes")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("AllowReview")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AutoSubmitOnTimeEnd")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("ConfirmBeforeSubmit")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ContainsSections")
                         .HasColumnType("bit");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -167,6 +187,9 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("ShowResult")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowSectionSummaryToStudents")
                         .HasColumnType("bit");
 
                     b.Property<bool>("ShuffleOptions")
@@ -284,6 +307,70 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.ToTable("ReminderSettings");
                 });
 
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.Section", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AllowReview")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ExamId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Instructions")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("Marks")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("NavigationType")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("NegativeMarkingEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("NegativeMarks")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int>("QuestionCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("ShuffleOptions")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShuffleQuestions")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExamId");
+
+                    b.ToTable("Sections");
+                });
+
             modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamAssignment", b =>
                 {
                     b.HasOne("OnlineExamSystem.Exam.Domain.Entities.ExamPaper", null)
@@ -307,6 +394,15 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.HasOne("OnlineExamSystem.Exam.Domain.Entities.ExamAssignment", null)
                         .WithMany()
                         .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.Section", b =>
+                {
+                    b.HasOne("OnlineExamSystem.Exam.Domain.Entities.ExamPaper", null)
+                        .WithMany()
+                        .HasForeignKey("ExamId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

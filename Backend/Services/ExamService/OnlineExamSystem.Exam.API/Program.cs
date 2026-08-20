@@ -21,6 +21,12 @@ using OnlineExamSystem.Exam.Application.Proctoring.GetProctoringSettings;
 using OnlineExamSystem.Exam.Application.Proctoring.UpdateProctoringSettings;
 using OnlineExamSystem.Exam.Application.Reminders.GetReminderSettings;
 using OnlineExamSystem.Exam.Application.Reminders.UpdateReminderSettings;
+using OnlineExamSystem.Exam.Application.Sections.Create;
+using OnlineExamSystem.Exam.Application.Sections.Delete;
+using OnlineExamSystem.Exam.Application.Sections.GetById;
+using OnlineExamSystem.Exam.Application.Sections.List;
+using OnlineExamSystem.Exam.Application.Sections.Reorder;
+using OnlineExamSystem.Exam.Application.Sections.Update;
 using OnlineExamSystem.Exam.Infrastructure;
 using OnlineExamSystem.Exam.Infrastructure.Messaging;
 using OnlineExamSystem.Exam.Infrastructure.Persistence;
@@ -57,6 +63,12 @@ public class Program
         builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
             client.BaseAddress = userServiceBaseUri);
 
+        var questionServiceBaseUrl = builder.Configuration["Services:QuestionServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:QuestionServiceBaseUrl\" configuration.");
+        var questionServiceBaseUri = new Uri(questionServiceBaseUrl.TrimEnd('/') + "/");
+        builder.Services.AddHttpClient<IQuestionServiceClient, QuestionServiceClient>(client =>
+            client.BaseAddress = questionServiceBaseUri);
+
         builder.Services.AddScoped<IValidator<CreateExamCommand>, CreateExamValidator>();
         builder.Services.AddScoped<CreateExamHandler>();
         builder.Services.AddScoped<GetExamHandler>();
@@ -65,6 +77,15 @@ public class Program
         builder.Services.AddScoped<UpdateExamHandler>();
         builder.Services.AddScoped<ChangeExamStatusHandler>();
         builder.Services.AddScoped<DeleteExamHandler>();
+
+        builder.Services.AddScoped<IValidator<CreateSectionCommand>, CreateSectionValidator>();
+        builder.Services.AddScoped<CreateSectionHandler>();
+        builder.Services.AddScoped<IValidator<UpdateSectionCommand>, UpdateSectionValidator>();
+        builder.Services.AddScoped<UpdateSectionHandler>();
+        builder.Services.AddScoped<DeleteSectionHandler>();
+        builder.Services.AddScoped<GetSectionHandler>();
+        builder.Services.AddScoped<ListSectionsHandler>();
+        builder.Services.AddScoped<ReorderSectionsHandler>();
 
         builder.Services.AddScoped<IValidator<CreateAssignmentCommand>, CreateAssignmentValidator>();
         builder.Services.AddScoped<CreateAssignmentHandler>();

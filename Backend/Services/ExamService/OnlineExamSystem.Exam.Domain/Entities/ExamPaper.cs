@@ -7,6 +7,8 @@ public class ExamPaper : BaseEntity
 {
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public bool ContainsSections { get; set; }
     public ExamType ExamType { get; set; } = ExamType.Manual;
     public int DurationMinutes { get; set; }
     public int TotalMarks { get; set; }
@@ -26,4 +28,17 @@ public class ExamPaper : BaseEntity
     public int MaxAttempts { get; set; } = 1;
     public bool NegativeMarkingEnabled { get; set; }
     public decimal NegativeMarks { get; set; }
+
+    // Exam Configuration (wireframe screen 10). AllowCalculator/AllowNotes/
+    // ShowSectionSummaryToStudents/AutoSubmitOnTimeEnd are stored preferences with
+    // no consumer yet (no calculator/notes widget, no section-summary screen exists in
+    // Take Exam, and turning AutoSubmitOnTimeEnd off doesn't disable the existing
+    // Day-33 auto-submit timer) - flagged here rather than silently built or dropped,
+    // per the Exam Sections Milestone scope note in ActionPlan.txt. ConfirmBeforeSubmit
+    // is the one that's actually wired into Take Exam's Submit button.
+    public bool ShowSectionSummaryToStudents { get; set; } = true;
+    public bool AllowCalculator { get; set; }
+    public bool AllowNotes { get; set; }
+    public bool AutoSubmitOnTimeEnd { get; set; } = true;
+    public bool ConfirmBeforeSubmit { get; set; } = true;
 }
