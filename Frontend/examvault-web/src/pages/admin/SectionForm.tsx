@@ -450,11 +450,10 @@ export default function SectionForm() {
                 <Col md={9}>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <div className="fw-bold">Available Questions</div>
-                    <div className="d-flex align-items-center gap-3">
+                    <div className="d-flex align-items-center gap-2">
                       <Button
-                        variant="link"
+                        variant="outline-primary"
                         size="sm"
-                        className="p-0"
                         disabled={submitting}
                         onClick={goToCreateQuestion}
                       >
@@ -465,7 +464,7 @@ export default function SectionForm() {
                           : '+ Create Question'}
                       </Button>
                       {filteredQuestions.length > 0 && (
-                        <Button variant="link" size="sm" className="p-0" onClick={toggleSelectAll}>
+                        <Button variant="outline-secondary" size="sm" onClick={toggleSelectAll}>
                           {allFilteredSelected ? 'Clear All' : 'Select All'}
                         </Button>
                       )}

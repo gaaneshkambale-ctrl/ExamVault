@@ -141,13 +141,10 @@ export default function ManageExams() {
 
   return (
     <AdminLayout active="Exams">
-      <div
-        className="d-flex justify-content-between align-items-center mb-4 px-4 py-3 rounded-3"
-        style={{ backgroundColor: 'darkgray' }}
-      >
+      <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="h4 fw-bold mb-0 text-white">Exams</h1>
-          <p className="text-white-50 small mb-0">View and manage all exams in the system</p>
+          <h1 className="h4 fw-bold mb-0 text-primary">Exams</h1>
+          <p className="text-muted mb-0">View and manage all exams in the system</p>
         </div>
         <Link to="/admin/exams/create" className="btn btn-primary">
           + Create Exam
