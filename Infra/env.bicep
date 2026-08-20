@@ -258,6 +258,7 @@ resource examApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'ServiceBus__ConnectionString', secretRef: 'servicebus-connection' }
             { name: 'ServiceBus__TopicName', value: 'examvault.events' }
             { name: 'Services__UserServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/user-api/method' }
+            { name: 'Services__QuestionServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/question-api/method' }
           ]
         }
       ]
