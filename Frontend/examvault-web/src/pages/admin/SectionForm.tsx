@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createSection, updateSection } from '../../api/sectionApi';
@@ -36,6 +36,8 @@ export default function SectionForm() {
   const { examId, sectionId } = useParams<{ examId: string; sectionId?: string }>();
   const isEdit = !!sectionId;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromWizard = searchParams.get('wizard') === 'true';
   const queryClient = useQueryClient();
 
   const { data: existingSection, isLoading: isLoadingSection } = useSection(examId, sectionId);
@@ -129,7 +131,9 @@ export default function SectionForm() {
       }
 
       invalidateAll();
-      navigate(`/admin/exams/${examId}/sections`);
+      navigate(
+        fromWizard ? `/admin/exams/${examId}/wizard/sections` : `/admin/exams/${examId}/sections`,
+      );
     } catch (error) {
       setSubmitError(extractServerError(error));
     } finally {

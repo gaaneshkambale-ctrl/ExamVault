@@ -8,6 +8,7 @@ import { validateCreateExam } from '../../utils/createExamValidation';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreateExamRequest, ExamType } from '../../types/exam';
 import { extractServerError } from '../../utils/apiError';
+import ExamWizardStepper from '../../components/ExamWizardStepper';
 
 const initialFormState: CreateExamRequest = {
   title: '',
@@ -46,8 +47,12 @@ export default function CreateExam() {
     setStatus('loading');
     setServerError('');
     try {
-      await createExam(form);
-      navigate('/admin/exams');
+      const exam = await createExam(form);
+      navigate(
+        exam.containsSections
+          ? `/admin/exams/${exam.id}/wizard/sections`
+          : `/admin/exams/${exam.id}/wizard/configuration`,
+      );
     } catch (error) {
       setStatus('error');
       setServerError(extractServerError(error));
@@ -60,6 +65,8 @@ export default function CreateExam() {
         <h1 className="h4 fw-bold mb-0 text-primary">Create Exam</h1>
         <p className="text-muted mb-0">Basic Information</p>
       </div>
+
+      <ExamWizardStepper currentStep={1} containsSections={form.containsSections} />
 
       {status === 'error' && <Alert variant="danger">{serverError}</Alert>}
 

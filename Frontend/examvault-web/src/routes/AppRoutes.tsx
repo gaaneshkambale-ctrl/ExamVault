@@ -21,6 +21,9 @@ import ManageSections from '../pages/admin/ManageSections';
 import SectionForm from '../pages/admin/SectionForm';
 import SectionDetails from '../pages/admin/SectionDetails';
 import ReorderSections from '../pages/admin/ReorderSections';
+import ExamWizardSections from '../pages/admin/ExamWizardSections';
+import ExamWizardConfiguration from '../pages/admin/ExamWizardConfiguration';
+import ExamWizardReview from '../pages/admin/ExamWizardReview';
 import QuestionBank from '../pages/admin/QuestionBank';
 import CreateQuestion from '../pages/admin/CreateQuestion';
 import QuestionDetails from '../pages/admin/QuestionDetails';
@@ -219,6 +222,30 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ManageSections />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/wizard/sections"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamWizardSections />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/wizard/configuration"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamWizardConfiguration />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/wizard/review"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamWizardReview />
           </ProtectedRoute>
         }
       />

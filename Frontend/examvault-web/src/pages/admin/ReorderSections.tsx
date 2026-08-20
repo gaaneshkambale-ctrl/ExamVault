@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Card, ListGroup, Spinner } from 'react-bootstrap';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { reorderSections } from '../../api/sectionApi';
@@ -13,6 +13,9 @@ export default function ReorderSections() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: sections, isLoading } = useSections(examId);
+  const [searchParams] = useSearchParams();
+  const fromWizard = searchParams.get('wizard') === 'true';
+  const backTo = fromWizard ? `/admin/exams/${examId}/wizard/sections` : `/admin/exams/${examId}/sections`;
 
   const [ordered, setOrdered] = useState<SectionResponse[]>([]);
   const [saving, setSaving] = useState(false);
@@ -41,7 +44,7 @@ export default function ReorderSections() {
         ordered.map((section, index) => ({ sectionId: section.id, displayOrder: index })),
       );
       queryClient.invalidateQueries({ queryKey: ['sections', examId] });
-      navigate(`/admin/exams/${examId}/sections`);
+      navigate(backTo);
     } catch (err) {
       setError(extractServerError(err));
     } finally {
@@ -110,7 +113,7 @@ export default function ReorderSections() {
       </Card>
 
       <div className="d-flex justify-content-end gap-2 mt-3">
-        <Link to={`/admin/exams/${examId}/sections`} className="btn btn-outline-secondary">
+        <Link to={backTo} className="btn btn-outline-secondary">
           Cancel
         </Link>
         <Button variant="primary" disabled={saving || ordered.length === 0} onClick={handleSave}>
