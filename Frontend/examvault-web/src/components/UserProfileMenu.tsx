@@ -1,12 +1,7 @@
 import { Dropdown } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-
-function getInitials(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/);
-  const initials = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.[0] ?? '?';
-  return initials.toUpperCase();
-}
+import UserAvatar from './UserAvatar';
 
 export default function UserProfileMenu() {
   const { user, logout } = useAuth();
@@ -29,12 +24,7 @@ export default function UserProfileMenu() {
         className="d-flex align-items-center gap-2"
         style={{ cursor: 'pointer' }}
       >
-        <div
-          className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0 fw-bold"
-          style={{ width: 36, height: 36, fontSize: 14 }}
-        >
-          {getInitials(user.fullName)}
-        </div>
+        <UserAvatar fullName={user.fullName} hasPhoto={user.hasPhoto} />
         <div className="d-none d-sm-block text-end">
           <div className="small fw-medium">{user.fullName}</div>
           <div className="text-muted" style={{ fontSize: 11 }}>

@@ -37,6 +37,77 @@ interface SectionTimerState {
   isCompleted: boolean;
 }
 
+// Generic tech-flavored line icons for the section slider cards - there's no
+// per-section icon/subject config to key off of, so these just cycle by
+// index. Same stroke style as the icon set used for the admin exam stat
+// cards, and a single brand-tinted circle rather than per-card rainbow
+// colors, so the slider actually matches the rest of the app's palette.
+function SectionCodeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
+function SectionBookIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
+}
+
+function SectionLayersIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  );
+}
+
+function SectionChecklistIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
+function SectionTargetIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+function SectionBulbIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+      <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1v.2h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" />
+    </svg>
+  );
+}
+
+const SECTION_ICONS = [
+  SectionCodeIcon,
+  SectionBookIcon,
+  SectionLayersIcon,
+  SectionChecklistIcon,
+  SectionTargetIcon,
+  SectionBulbIcon,
+];
+
 const NAV_LEGEND: Array<{ state: NavState; label: string; color: string }> = [
   { state: 'answered', label: 'Answered', color: '#16a34a' },
   { state: 'not-answered', label: 'Not Answered', color: '#dc3545' },
@@ -617,32 +688,83 @@ export default function TakeExam() {
   const sectionNavigator = isSectioned && (
     <Card className="border-0 shadow-sm mb-3">
       <Card.Body className="p-3">
-        <h2 className="h6 fw-bold mb-2">Sections</h2>
-        <div className="d-flex flex-wrap gap-2">
+        <h2 className="h6 fw-bold mb-3">Sections</h2>
+        <div className="d-flex gap-3 pb-1" style={{ overflowX: 'auto' }}>
           {orderedSections.map((section, index) => {
             const isCurrent = index === sectionIndex;
             const isCompleted = Boolean(sectionStates[section.id]?.isCompleted);
             const isOpenable = canOpenSection(index);
+            const isLocked = !isOpenable && !isCurrent && !isCompleted;
+            const sectionQuestions = sectionGroups[index]?.questions ?? [];
+            const total = sectionQuestions.length;
+            const answered = sectionQuestions.filter((q) => navState(q) === 'answered').length;
+            const progressPct = total > 0 ? Math.round((answered / total) * 100) : 0;
+            const progressColor =
+              total > 0 && answered === total ? '#16a34a' : answered > 0 ? '#d97706' : '#94a3b8';
+            const SectionIcon = SECTION_ICONS[index % SECTION_ICONS.length];
+
             return (
               <button
                 key={section.id}
                 type="button"
                 disabled={sectionEntering || (!isOpenable && !isCurrent)}
                 onClick={() => void switchToSection(index)}
-                className="btn btn-sm fw-medium"
-                style={
-                  isCurrent
-                    ? { background: '#0f172a', color: 'white', border: '1px solid #0f172a' }
-                    : isCompleted
-                      ? { background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' }
-                      : isOpenable
-                        ? { background: 'white', color: '#0f172a', border: '1px solid #dee2e6' }
-                        : { background: '#f1f5f9', color: '#94a3b8', border: '1px solid #e2e8f0' }
-                }
+                className="text-start border-0 bg-transparent p-0 flex-shrink-0"
+                style={{ width: 216, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'pointer' }}
               >
-                {!isOpenable && !isCurrent && !isCompleted && '\u{1F512} '}
-                {isCompleted && !isCurrent && '✓ '}
-                {section.name}
+                <div
+                  className="d-flex align-items-center gap-2 px-3 py-3 rounded-4"
+                  style={{
+                    border: isCurrent ? '1.5px solid #4f46e5' : '1px solid #e5e7eb',
+                    background: isCurrent ? '#eef2ff' : 'white',
+                    boxShadow: isCurrent ? '0 4px 10px rgba(79, 70, 229, 0.14)' : 'none',
+                  }}
+                >
+                  <div className="position-relative flex-shrink-0">
+                    <div
+                      className="rounded-circle d-flex align-items-center justify-content-center"
+                      style={{ width: 36, height: 36, background: '#e0e7ff', color: '#4338ca' }}
+                    >
+                      {isLocked ? '\u{1F512}' : <SectionIcon />}
+                    </div>
+                    {isCompleted && (
+                      <span
+                        className="position-absolute rounded-circle bg-success text-white d-flex align-items-center justify-content-center"
+                        style={{ width: 14, height: 14, fontSize: 9, bottom: -2, right: -2, border: '1.5px solid white' }}
+                      >
+                        &#10003;
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-grow-1 overflow-hidden">
+                    <div
+                      className="fw-semibold text-truncate"
+                      style={{ fontSize: 13.5, color: '#0f172a' }}
+                      title={section.name}
+                    >
+                      {section.name}
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center" style={{ fontSize: 11.5 }}>
+                      <span className="text-muted">
+                        {total} Question{total === 1 ? '' : 's'}
+                      </span>
+                      <span className="fw-bold" style={{ color: progressColor }}>
+                        {answered}/{total}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-1 rounded-pill" style={{ height: 3, background: '#e5e7eb', overflow: 'hidden' }}>
+                  <div
+                    className="h-100 rounded-pill"
+                    style={{ width: `${progressPct}%`, background: isCurrent ? '#4f46e5' : progressColor }}
+                  />
+                </div>
+                {isCurrent && sectionRemainingSeconds !== null && (
+                  <div className="text-center mt-1 fw-medium" style={{ fontSize: 11, color: '#4f46e5' }}>
+                    &#9201; {formatDuration(sectionRemainingSeconds)} left
+                  </div>
+                )}
               </button>
             );
           })}
@@ -803,14 +925,6 @@ export default function TakeExam() {
                   {remainingSeconds !== null ? formatDuration(remainingSeconds) : '--:--:--'}
                 </div>
               </div>
-              {currentGroup?.section && (
-                <div className="text-center">
-                  <div className="text-muted small mb-1">Section Time Left</div>
-                  <div className="border rounded-2 px-3 py-1 fw-bold" style={{ minWidth: 110 }}>
-                    {sectionRemainingSeconds !== null ? formatDuration(sectionRemainingSeconds) : '--:--:--'}
-                  </div>
-                </div>
-              )}
               <Badge bg={isOnline ? 'success' : 'danger'} className="fw-normal py-2 px-3">
                 {isOnline ? 'Connected' : 'Offline'}
               </Badge>

@@ -1,13 +1,8 @@
 import { Dropdown, Container, Nav, Navbar } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import BrandMark from './BrandMark';
+import UserAvatar from './UserAvatar';
 import { useAuth } from '../hooks/useAuth';
-
-function getInitials(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/);
-  const initials = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.[0] ?? '?';
-  return initials.toUpperCase();
-}
 
 export default function NavBar() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -49,12 +44,7 @@ export default function NavBar() {
                 className="d-flex align-items-center gap-2"
                 style={{ cursor: 'pointer' }}
               >
-                <div
-                  className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
-                  style={{ width: 36, height: 36, fontSize: 14 }}
-                >
-                  {getInitials(user.fullName)}
-                </div>
+                <UserAvatar fullName={user.fullName} hasPhoto={user.hasPhoto} />
                 <span className="fw-medium">{user.fullName}</span>
               </Dropdown.Toggle>
               <Dropdown.Menu>

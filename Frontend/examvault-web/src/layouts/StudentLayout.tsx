@@ -7,9 +7,12 @@ import UserProfileMenu from '../components/UserProfileMenu';
 interface StudentLayoutProps {
   active: DashboardNavItem;
   children: ReactNode;
-  // While taking an exam, the left nav is a distraction (and an easy way to
-  // navigate away mid-attempt) - hide it and the mobile menu toggle that
-  // would otherwise open it, but keep the rest of the top bar.
+  // While taking an exam, the left nav and the rest of the top bar are a
+  // distraction - and the profile dropdown's Profile/Logout links and the
+  // notification bell are an easy way to navigate away mid-attempt, the
+  // exact thing hiding the sidebar was meant to prevent. TakeExam renders
+  // its own header (title, timers, Submit button) inside the page content,
+  // so nothing here is actually needed while an exam is in progress.
   hideSidebar?: boolean;
 }
 
@@ -22,13 +25,13 @@ export default function StudentLayout({ active, children, hideSidebar = false }:
         <DashboardSidebar active={active} show={showMobileNav} onClose={() => setShowMobileNav(false)} />
       )}
       <main className="flex-grow-1 bg-light">
-        <div className="d-print-none d-flex justify-content-between justify-content-md-end align-items-center gap-3 px-4 px-md-5 py-3 bg-white border-bottom">
-          <div className="d-flex d-md-none align-items-center gap-2 fw-bold text-primary">
-            <BrandMark />
-            ExamVault
-          </div>
-          <div className="d-flex align-items-center gap-3">
-            {!hideSidebar && (
+        {!hideSidebar && (
+          <div className="d-print-none d-flex justify-content-between justify-content-md-end align-items-center gap-3 px-4 px-md-5 py-3 bg-white border-bottom">
+            <div className="d-flex d-md-none align-items-center gap-2 fw-bold text-primary">
+              <BrandMark />
+              ExamVault
+            </div>
+            <div className="d-flex align-items-center gap-3">
               <button
                 type="button"
                 onClick={() => setShowMobileNav(true)}
@@ -51,11 +54,11 @@ export default function StudentLayout({ active, children, hideSidebar = false }:
                   <line x1="3" y1="18" x2="21" y2="18" />
                 </svg>
               </button>
-            )}
-            <NotificationBell />
-            <UserProfileMenu />
+              <NotificationBell />
+              <UserProfileMenu />
+            </div>
           </div>
-        </div>
+        )}
         <div className="container-fluid py-5 px-4 px-md-5">{children}</div>
       </main>
     </div>
