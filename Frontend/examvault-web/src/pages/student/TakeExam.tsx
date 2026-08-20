@@ -487,7 +487,14 @@ export default function TakeExam() {
       return;
     }
     const state = sectionStates[section.id];
-    if (!state?.deadlineUtc) {
+    // Completing the current section (completeSection) updates its state
+    // - including while sectionIndex hasn't advanced yet during the
+    // switchToSection transition - which re-runs this effect since
+    // `sectionStates` changed. Without this check it would re-subscribe to
+    // the same already-finished section's stale deadline and keep ticking
+    // it down (and could re-trigger auto-advance) instead of going blank
+    // until the next section's own timer takes over.
+    if (!state?.deadlineUtc || state.isCompleted) {
       setSectionRemainingSeconds(null);
       return;
     }

@@ -88,7 +88,11 @@ export default function ExamDetails() {
 
   const attemptsUsed = myAttempt?.attempt.attemptNumber ?? 0;
   const isAttemptInProgress = myAttempt?.attempt.status === 'InProgress';
-  const remainingAttempts = exam ? exam.maxAttempts - attemptsUsed : 0;
+  // The assignment's own attempt limit (set per-assignment in the Assign Exam
+  // wizard) overrides the exam's default - matches StartAttemptHandler's
+  // `assignment?.MaxAttempts ?? exam.MaxAttempts` fallback on the backend.
+  const maxAttempts = assignment?.maxAttempts ?? exam?.maxAttempts ?? 0;
+  const remainingAttempts = exam ? maxAttempts - attemptsUsed : 0;
   const canStartNewAttempt = remainingAttempts > 0;
 
   const [mode, setMode] = useState<'details' | 'check'>('details');
@@ -300,14 +304,14 @@ export default function ExamDetails() {
                   {isAttemptInProgress
                     ? 'You have an exam in progress. Resume it to continue where you left off.'
                     : attemptsUsed === 0
-                      ? exam.maxAttempts === 1
+                      ? maxAttempts === 1
                         ? 'You can start the exam only once. Make sure you are ready.'
-                        : `You can attempt this exam up to ${exam.maxAttempts} times. Make sure you are ready.`
+                        : `You can attempt this exam up to ${maxAttempts} times. Make sure you are ready.`
                       : canStartNewAttempt
-                        ? `You've used ${attemptsUsed} of ${exam.maxAttempts} attempts. You have ${remainingAttempts} attempt${
+                        ? `You've used ${attemptsUsed} of ${maxAttempts} attempts. You have ${remainingAttempts} attempt${
                             remainingAttempts === 1 ? '' : 's'
                           } remaining.`
-                        : `You have used all ${exam.maxAttempts} of your allowed attempts for this exam.`}
+                        : `You have used all ${maxAttempts} of your allowed attempts for this exam.`}
                 </Alert>
 
                 {isAttemptInProgress ? (

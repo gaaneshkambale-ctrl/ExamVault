@@ -6,6 +6,7 @@ import StudentLayout from '../../layouts/StudentLayout';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { getMyAttempt } from '../../api/submissionApi';
+import { getMyAssignmentForExam } from '../../api/assignmentApi';
 import type { ExamResponse, ExamType } from '../../types/exam';
 
 const examTypeLabel: Record<ExamType, string> = {
@@ -53,10 +54,22 @@ export default function MyExams() {
     })),
   });
 
+  // The assignment's own attempt limit (set per-assignment in the Assign
+  // Exam wizard) overrides the exam's default - matches StartAttemptHandler's
+  // `assignment?.MaxAttempts ?? exam.MaxAttempts` fallback on the backend.
+  const assignmentQueries = useQueries({
+    queries: publishedExams.map((exam) => ({
+      queryKey: ['assignments', 'mine', exam.id],
+      queryFn: () => getMyAssignmentForExam(exam.id),
+      enabled: !!exams,
+    })),
+  });
+
   const isLoadingAttempts = publishedExams.length > 0 && attemptQueries.some((q) => q.isLoading);
 
   const rows: ExamRow[] = publishedExams.map((exam, index) => {
     const attempt = attemptQueries[index]?.data;
+    const maxAttempts = assignmentQueries[index]?.data?.maxAttempts ?? exam.maxAttempts;
     const rowStatus: RowStatus = !attempt
       ? 'Upcoming'
       : attempt.attempt.status === 'InProgress'
@@ -64,7 +77,7 @@ export default function MyExams() {
         : 'Completed';
     // A submitted attempt doesn't mean the exam is done for good - the
     // student can still retake it up to maxAttempts times.
-    const hasRetakesLeft = rowStatus === 'Completed' && attempt!.attempt.attemptNumber < exam.maxAttempts;
+    const hasRetakesLeft = rowStatus === 'Completed' && attempt!.attempt.attemptNumber < maxAttempts;
     return { ...exam, rowStatus, hasRetakesLeft };
   });
 
