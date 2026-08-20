@@ -99,6 +99,15 @@ function SectionBulbIcon() {
   );
 }
 
+function ClockIcon({ color }: { color: string }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
 const SECTION_ICONS = [
   SectionCodeIcon,
   SectionBookIcon,
@@ -639,6 +648,9 @@ export default function TakeExam() {
     return 'not-visited';
   };
 
+  // Last 5 minutes switch the header timer to an urgent red treatment.
+  const isTimeLow = remainingSeconds !== null && remainingSeconds <= 300;
+
   const isLoading = mode === 'loading' || isLoadingExam || isLoadingQuestions || (mode === 'take' && !sectionInitialized);
   const currentQuestion = displayQuestions[currentIndex];
   const currentAnswer = currentQuestion
@@ -919,10 +931,34 @@ export default function TakeExam() {
               {isLoadingExam ? <Spinner animation="border" size="sm" /> : (exam?.title ?? 'Take Exam')}
             </h1>
             <div className="d-flex align-items-center gap-3">
-              <div className="text-center">
-                <div className="text-muted small mb-1">Time Left</div>
-                <div className="border rounded-2 px-3 py-1 fw-bold" style={{ minWidth: 110 }}>
-                  {remainingSeconds !== null ? formatDuration(remainingSeconds) : '--:--:--'}
+              <div
+                className="d-flex align-items-center gap-2 px-3 py-2 rounded-4"
+                style={{
+                  background: isTimeLow ? '#fef2f2' : '#eef2ff',
+                  border: `1px solid ${isTimeLow ? '#fecaca' : '#c7d2fe'}`,
+                  transition: 'background 0.3s, border-color 0.3s',
+                }}
+              >
+                <ClockIcon color={isTimeLow ? '#dc2626' : '#4f46e5'} />
+                <div>
+                  <div
+                    className="text-uppercase fw-semibold"
+                    style={{ fontSize: 10, letterSpacing: 0.6, color: isTimeLow ? '#dc2626' : '#4f46e5' }}
+                  >
+                    Time Left
+                  </div>
+                  <div
+                    className="fw-bold"
+                    style={{
+                      fontSize: 24,
+                      lineHeight: 1.15,
+                      fontVariantNumeric: 'tabular-nums',
+                      color: isTimeLow ? '#dc2626' : '#1e1b4b',
+                      minWidth: 116,
+                    }}
+                  >
+                    {remainingSeconds !== null ? formatDuration(remainingSeconds) : '--:--:--'}
+                  </div>
                 </div>
               </div>
               <Badge bg={isOnline ? 'success' : 'danger'} className="fw-normal py-2 px-3">
