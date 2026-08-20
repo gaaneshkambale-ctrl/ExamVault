@@ -87,6 +87,35 @@ a second implementation of Day 42's already-shipped work - see
 [[project_examvault_progress]] memory for why re-checking `git log`
 before trusting this file's CURRENT STATUS matters.
 
+DEPLOYMENT BUG FOUND AND FIXED (2026-08-20), while attempting the Day-45
+browser click-through: `ca-exam-api-dev` had been silently crash-looping
+on EVERY deploy since the Exam Sections Milestone push (`2ef947a`) -
+`Program.cs` requires `Services:QuestionServiceBaseUrl` (added for the
+new cross-service Section-delete call), but that setting was only ever
+added to local dev config and `docker-compose.yml`, never to
+`Infra/env.bicep`. Container Apps' `Single` revision mode kept the last
+HEALTHY revision (the pre-Sections one) silently serving 100% of real
+traffic the entire time, while its own metadata reported the new
+(crashing) revision as "100% active" - every verification attempt
+against the live URL was unknowingly hitting old code no matter how many
+times the image was rebuilt or redeployed. Root-caused by checking
+`az containerapp logs show` for the actual startup exception, not by
+guessing at Docker-cache or Dapr-routing theories (both were tried first
+and both were red herrings - documented here so a future session doesn't
+retread the same dead ends: a `--no-cache` rebuild changed nothing, and
+the image's own compiled content was independently verified correct via
+`docker run --entrypoint sh ... grep Category` before the real cause was
+found in the logs). Fixed live via `az containerapp update --set-env-vars`
+and in `Infra/env.bicep` (commit `17c3d8d`) so future template-based
+redeploys don't regress it. Re-verified after the fix: exam-api now
+returns `category`/`containsSections`/all 5 Exam Configuration fields
+correctly, only one revision exists and it's `RunningAtMaxScale`, no
+stale fallback. Lesson for next time a new required config value is
+added to any service's `Program.cs`: it needs updating in THREE places,
+not two - `appsettings.Development.json` (local dotnet run),
+`docker-compose.yml` (local Docker), AND `Infra/env.bicep` (Azure) -
+easy to forget the third since it has no fast local feedback loop.
+
 The EXAM SECTIONS MILESTONE (Days 46-50, plan written 2026-08-20 per a
 new wireframe, "exam screen.jpg") is COMPLETE, gate passed (2026-08-20).
 Sections (optional per exam, Category/ContainsSections on ExamPaper),
