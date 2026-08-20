@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Exam.Application.Sections.Create;
 using OnlineExamSystem.Exam.Application.Sections.Delete;
 using OnlineExamSystem.Exam.Application.Sections.GetById;
+using OnlineExamSystem.Exam.Application.Sections.GetOrCreateDefault;
 using OnlineExamSystem.Exam.Application.Sections.List;
 using OnlineExamSystem.Exam.Application.Sections.Reorder;
 using OnlineExamSystem.Exam.Application.Sections.Update;
@@ -23,6 +24,7 @@ public class SectionsController : ControllerBase
     private readonly GetSectionHandler _getSectionHandler;
     private readonly ListSectionsHandler _listSectionsHandler;
     private readonly ReorderSectionsHandler _reorderSectionsHandler;
+    private readonly GetOrCreateDefaultSectionHandler _getOrCreateDefaultSectionHandler;
     private readonly ILogger<SectionsController> _logger;
 
     public SectionsController(
@@ -32,6 +34,7 @@ public class SectionsController : ControllerBase
         GetSectionHandler getSectionHandler,
         ListSectionsHandler listSectionsHandler,
         ReorderSectionsHandler reorderSectionsHandler,
+        GetOrCreateDefaultSectionHandler getOrCreateDefaultSectionHandler,
         ILogger<SectionsController> logger)
     {
         _createSectionHandler = createSectionHandler;
@@ -40,6 +43,7 @@ public class SectionsController : ControllerBase
         _getSectionHandler = getSectionHandler;
         _listSectionsHandler = listSectionsHandler;
         _reorderSectionsHandler = reorderSectionsHandler;
+        _getOrCreateDefaultSectionHandler = getOrCreateDefaultSectionHandler;
         _logger = logger;
     }
 
@@ -87,6 +91,21 @@ public class SectionsController : ControllerBase
     {
         var sections = await _listSectionsHandler.HandleAsync(new ListSectionsQuery(examId), cancellationToken);
         return Ok(sections.Select(ToResponse));
+    }
+
+    [HttpGet("default")]
+    public async Task<IActionResult> GetOrCreateDefault(Guid examId, CancellationToken cancellationToken)
+    {
+        var section = await _getOrCreateDefaultSectionHandler.HandleAsync(
+            new GetOrCreateDefaultSectionQuery(examId),
+            cancellationToken);
+
+        if (section is null)
+        {
+            return NotFound(new { message = "Exam not found." });
+        }
+
+        return Ok(ToResponse(section));
     }
 
     [HttpGet("{id:guid}")]

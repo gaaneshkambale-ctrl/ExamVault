@@ -24,6 +24,7 @@ using OnlineExamSystem.Exam.Application.Reminders.UpdateReminderSettings;
 using OnlineExamSystem.Exam.Application.Sections.Create;
 using OnlineExamSystem.Exam.Application.Sections.Delete;
 using OnlineExamSystem.Exam.Application.Sections.GetById;
+using OnlineExamSystem.Exam.Application.Sections.GetOrCreateDefault;
 using OnlineExamSystem.Exam.Application.Sections.List;
 using OnlineExamSystem.Exam.Application.Sections.Reorder;
 using OnlineExamSystem.Exam.Application.Sections.Update;
@@ -86,6 +87,7 @@ public class Program
         builder.Services.AddScoped<GetSectionHandler>();
         builder.Services.AddScoped<ListSectionsHandler>();
         builder.Services.AddScoped<ReorderSectionsHandler>();
+        builder.Services.AddScoped<GetOrCreateDefaultSectionHandler>();
 
         builder.Services.AddScoped<IValidator<CreateAssignmentCommand>, CreateAssignmentValidator>();
         builder.Services.AddScoped<CreateAssignmentHandler>();

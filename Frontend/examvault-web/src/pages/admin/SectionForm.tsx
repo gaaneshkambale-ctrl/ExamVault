@@ -3,12 +3,18 @@ import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'reac
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import CreateQuestionModal from '../../components/CreateQuestionModal';
 import { createSection, updateSection } from '../../api/sectionApi';
 import { bulkAssignSection } from '../../api/questionApi';
 import { useSection, useSections } from '../../hooks/useSections';
 import { useQuestionsBySection, useUnassignedQuestions } from '../../hooks/useQuestions';
 import type { NavigationType, SectionRequest } from '../../types/section';
+import type { QuestionResponse } from '../../types/question';
 import { extractServerError } from '../../utils/apiError';
+
+function stepFromParam(value: string | null): 1 | 2 | 3 {
+  return value === '2' ? 2 : value === '3' ? 3 : 1;
+}
 
 const NAVIGATION_TYPES: { value: NavigationType; label: string; description: string }[] = [
   { value: 'Free', label: 'Free Navigation', description: 'Students can go to any question in this section.' },
@@ -48,7 +54,7 @@ export default function SectionForm() {
     sectionId,
   );
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(stepFromParam(searchParams.get('step')));
   const [form, setForm] = useState<SectionRequest>(initialForm);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
@@ -57,6 +63,7 @@ export default function SectionForm() {
   const [searchText, setSearchText] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showCreateQuestion, setShowCreateQuestion] = useState(false);
 
   useEffect(() => {
     if (isEdit && existingSection) {
@@ -120,6 +127,12 @@ export default function SectionForm() {
 
   const updateField = <K extends keyof SectionRequest>(field: K, value: SectionRequest[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleQuestionCreated = (question: QuestionResponse) => {
+    queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', examId] });
+    setSelectedIds((prev) => new Set(prev).add(question.id));
+    setShowCreateQuestion(false);
   };
 
   const invalidateAll = () => {
@@ -394,11 +407,21 @@ export default function SectionForm() {
                 <Col md={9}>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <div className="fw-bold">Available Questions</div>
-                    {filteredQuestions.length > 0 && (
-                      <Button variant="link" size="sm" className="p-0" onClick={toggleSelectAll}>
-                        {allFilteredSelected ? 'Clear All' : 'Select All'}
+                    <div className="d-flex align-items-center gap-3">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0"
+                        onClick={() => setShowCreateQuestion(true)}
+                      >
+                        + Create Question
                       </Button>
-                    )}
+                      {filteredQuestions.length > 0 && (
+                        <Button variant="link" size="sm" className="p-0" onClick={toggleSelectAll}>
+                          {allFilteredSelected ? 'Clear All' : 'Select All'}
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {(isLoadingUnassigned || (isEdit && isLoadingSectionQuestions)) && (
@@ -409,8 +432,8 @@ export default function SectionForm() {
 
                   {!isLoadingUnassigned && filteredQuestions.length === 0 && (
                     <div className="text-center text-muted py-4">
-                      No unassigned questions match these filters. Add questions to this exam first
-                      from the Exam page, then come back to assign them here.
+                      No unassigned questions match these filters. Click "+ Create Question" above
+                      to add one.
                     </div>
                   )}
 
@@ -472,6 +495,15 @@ export default function SectionForm() {
           )}
         </Card.Body>
       </Card>
+
+      {examId && (
+        <CreateQuestionModal
+          examId={examId}
+          show={showCreateQuestion}
+          onClose={() => setShowCreateQuestion(false)}
+          onCreated={handleQuestionCreated}
+        />
+      )}
     </AdminLayout>
   );
 }

@@ -1,18 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  Col,
-  Form,
-  Modal,
-  Nav,
-  Pagination,
-  Row,
-  Spinner,
-  Table,
-} from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router-dom';
+import { Badge, Card, Col, Form, Nav, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
@@ -41,10 +29,7 @@ type Tab = (typeof tabs)[number];
 const PAGE_SIZE = 5;
 
 export default function QuestionBank() {
-  const navigate = useNavigate();
   const { data: exams, isLoading: isLoadingExams } = useExams();
-  const [showPicker, setShowPicker] = useState(false);
-  const [selectedExamId, setSelectedExamId] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('All');
   const [searchText, setSearchText] = useState('');
   const [examFilter, setExamFilter] = useState('All');
@@ -108,68 +93,15 @@ export default function QuestionBank() {
     'True/False': allQuestions.filter((q) => q.questionType === 'TrueFalse').length,
   };
 
-  const openPicker = () => {
-    setSelectedExamId(exams?.[0]?.id ?? '');
-    setShowPicker(true);
-  };
-
-  const goToAddQuestion = () => {
-    if (!selectedExamId) {
-      return;
-    }
-    const selectedExam = exams?.find((exam) => exam.id === selectedExamId);
-    if (selectedExam?.examType === 'AiGenerated') {
-      navigate(`/admin/exams/${selectedExamId}/questions/ai-generate`);
-    } else {
-      navigate(`/admin/exams/${selectedExamId}/questions/create`);
-    }
-  };
-
   return (
     <AdminLayout active="Questions">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Questions</h1>
-        <Button variant="primary" onClick={openPicker}>
-          + Add Question
-        </Button>
+        <p className="text-muted mb-0">
+          Browse questions across all exams. To add a question, open an exam and use Manage
+          Sections (or Manage Questions) &rarr; Question Assignment.
+        </p>
       </div>
-
-      <Modal show={showPicker} onHide={() => setShowPicker(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Add Question</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {isLoadingExams && <p className="text-muted mb-0">Loading exams...</p>}
-          {!isLoadingExams && exams?.length === 0 && (
-            <p className="text-muted mb-0">
-              No exams yet. Create an exam first, then add questions to it.
-            </p>
-          )}
-          {!isLoadingExams && exams && exams.length > 0 && (
-            <Form.Group controlId="pickExamForQuestion">
-              <Form.Label>Which exam is this question for?</Form.Label>
-              <Form.Select
-                value={selectedExamId}
-                onChange={(e) => setSelectedExamId(e.target.value)}
-              >
-                {exams.map((exam) => (
-                  <option key={exam.id} value={exam.id}>
-                    {exam.title}
-                  </option>
-                ))}
-              </Form.Select>
-            </Form.Group>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="outline-secondary" onClick={() => setShowPicker(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" disabled={!selectedExamId} onClick={goToAddQuestion}>
-            Continue
-          </Button>
-        </Modal.Footer>
-      </Modal>
 
       <Nav
         variant="tabs"
@@ -228,7 +160,8 @@ export default function QuestionBank() {
 
           {!isLoadingExams && !isLoadingQuestions && filteredQuestions.length === 0 && (
             <div className="text-center text-muted py-4">
-              No questions yet. Click "+ Add Question" above to add one.
+              No questions yet. Open an exam's Manage Sections / Manage Questions page to add
+              some.
             </div>
           )}
 

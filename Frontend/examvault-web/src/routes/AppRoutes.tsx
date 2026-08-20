@@ -25,7 +25,6 @@ import ExamWizardSections from '../pages/admin/ExamWizardSections';
 import ExamWizardConfiguration from '../pages/admin/ExamWizardConfiguration';
 import ExamWizardReview from '../pages/admin/ExamWizardReview';
 import QuestionBank from '../pages/admin/QuestionBank';
-import CreateQuestion from '../pages/admin/CreateQuestion';
 import QuestionDetails from '../pages/admin/QuestionDetails';
 import EditQuestion from '../pages/admin/EditQuestion';
 import AiGenerateQuestion from '../pages/admin/AiGenerateQuestion';
@@ -310,14 +309,6 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ExamReportDetails />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/exams/:examId/questions/create"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <CreateQuestion />
           </ProtectedRoute>
         }
       />

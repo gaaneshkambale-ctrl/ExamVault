@@ -11,6 +11,11 @@ export async function getSection(examId: string, sectionId: string): Promise<Sec
   return data;
 }
 
+export async function getOrCreateDefaultSection(examId: string): Promise<SectionResponse> {
+  const { data } = await apiClient.get<SectionResponse>(`/api/exams/${examId}/sections/default`);
+  return data;
+}
+
 export async function createSection(examId: string, request: SectionRequest): Promise<SectionResponse> {
   const { data } = await apiClient.post<SectionResponse>(`/api/exams/${examId}/sections`, request);
   return data;

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { archiveExam, publishExam, unpublishExam } from '../../api/examApi';
+import { getOrCreateDefaultSection } from '../../api/sectionApi';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
 import type { ExamStatus, ExamType } from '../../types/exam';
@@ -31,10 +32,17 @@ function Field({ label, value }: { label: string; value: string }) {
 
 export default function ExamDetails() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: exam, isLoading, isError } = useExam(id);
   const { data: questions } = useQuestions(id);
   const [statusError, setStatusError] = useState('');
+
+  const manageQuestionsMutation = useMutation({
+    mutationFn: () => getOrCreateDefaultSection(id!),
+    onSuccess: (section) => navigate(`/admin/exams/${id}/sections/${section.id}/edit?step=3`),
+    onError: (error) => setStatusError(extractServerError(error)),
+  });
 
   // exam.totalQuestions is a legacy field that's never kept in sync with
   // Question Service, so it's always 0 - use the real live count instead.
@@ -96,6 +104,20 @@ export default function ExamDetails() {
           {id && exam?.containsSections && (
             <Link to={`/admin/exams/${id}/sections`} className="btn btn-outline-primary">
               Manage Sections
+            </Link>
+          )}
+          {id && exam && !exam.containsSections && (
+            <Button
+              variant="outline-primary"
+              disabled={manageQuestionsMutation.isPending}
+              onClick={() => manageQuestionsMutation.mutate()}
+            >
+              {manageQuestionsMutation.isPending ? 'Loading...' : 'Manage Questions'}
+            </Button>
+          )}
+          {id && exam?.examType === 'AiGenerated' && (
+            <Link to={`/admin/exams/${id}/questions/ai-generate`} className="btn btn-outline-primary">
+              Generate Questions with AI
             </Link>
           )}
           {id && (
