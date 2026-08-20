@@ -1,6 +1,7 @@
 import { Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { useSection } from '../../hooks/useSections';
 import { useQuestionsBySection } from '../../hooks/useQuestions';
 
@@ -68,12 +69,7 @@ export default function SectionDetails() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-4">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h3 className="h6 fw-bold mb-0">Assigned Questions ({questions?.length ?? 0})</h3>
-                <Link to="/admin/questions" className="small">
-                  View All Questions
-                </Link>
-              </div>
+              <h3 className="h6 fw-bold mb-3">Assigned Questions ({questions?.length ?? 0})</h3>
 
               {questions && questions.length === 0 && (
                 <div className="text-center text-muted py-4">
@@ -89,6 +85,7 @@ export default function SectionDetails() {
                       <th>Type</th>
                       <th>Difficulty</th>
                       <th>Marks</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -100,6 +97,23 @@ export default function SectionDetails() {
                           <Badge bg="secondary">{q.difficulty}</Badge>
                         </td>
                         <td>{q.marks}</td>
+                        <td>
+                          <div className="d-flex gap-2">
+                            <Link
+                              to={`/admin/questions/${q.id}`}
+                              className="btn btn-outline-secondary btn-sm"
+                            >
+                              View
+                            </Link>
+                            <Link
+                              to={`/admin/questions/${q.id}/edit`}
+                              className="btn btn-outline-primary btn-sm"
+                            >
+                              Edit
+                            </Link>
+                            <DeleteQuestionButton questionId={q.id} examId={q.examId} />
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

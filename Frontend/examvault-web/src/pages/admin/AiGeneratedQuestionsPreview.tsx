@@ -48,7 +48,7 @@ export default function AiGeneratedQuestionsPreview() {
 
   if (!initialState) {
     return (
-      <AdminLayout active="Questions">
+      <AdminLayout active="Exams">
         <div className="mb-4">
           <h1 className="h4 fw-bold mb-0 text-primary">AI Generated Questions Preview</h1>
         </div>
@@ -146,7 +146,7 @@ export default function AiGeneratedQuestionsPreview() {
     }
 
     queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', examId] });
-    navigate(returnTo ?? '/admin/questions');
+    navigate(returnTo ?? `/admin/exams/${examId}`);
   };
 
   const counts = {
@@ -156,7 +156,7 @@ export default function AiGeneratedQuestionsPreview() {
   };
 
   return (
-    <AdminLayout active="Questions">
+    <AdminLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">AI Generated Questions Preview</h1>
       </div>

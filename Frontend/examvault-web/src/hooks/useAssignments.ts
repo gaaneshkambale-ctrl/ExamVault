@@ -1,11 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
-import { getAssignment, getMyAssignmentForExam, listAllAssignments } from '../api/assignmentApi';
+import {
+  getAssignment,
+  getMyAssignmentForExam,
+  listAllAssignments,
+  listAssignmentsForExam,
+} from '../api/assignmentApi';
 
 export function useAssignments(enabled = true) {
   return useQuery({
     queryKey: ['assignments'],
     queryFn: listAllAssignments,
     enabled,
+  });
+}
+
+export function useAssignmentsForExam(examId: string | undefined) {
+  return useQuery({
+    queryKey: ['assignments', 'byExam', examId],
+    queryFn: () => listAssignmentsForExam(examId!),
+    enabled: !!examId,
   });
 }
 

@@ -218,7 +218,7 @@ export default function AssignExam() {
 
   if (isEditMode && (assignmentLoading || !prefilled) && !assignmentError) {
     return (
-      <AdminLayout active="Exam Assignment">
+      <AdminLayout active="Exams">
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
@@ -228,10 +228,10 @@ export default function AssignExam() {
 
   if (isEditMode && assignmentError) {
     return (
-      <AdminLayout active="Exam Assignment">
+      <AdminLayout active="Exams">
         <div className="text-center text-muted py-5">
           Couldn't load this assignment.{' '}
-          <Link to="/admin/assignments">Back to Assignments</Link>
+          <Link to="/admin/exams">Back to Exams</Link>
         </div>
       </AdminLayout>
     );
@@ -239,7 +239,7 @@ export default function AssignExam() {
 
   if (createdAssignment) {
     return (
-      <AdminLayout active="Exam Assignment">
+      <AdminLayout active="Exams">
         <Card className="border-0 shadow-sm mx-auto" style={{ maxWidth: 560 }}>
           <Card.Body className="p-4 text-center">
             <div
@@ -308,8 +308,11 @@ export default function AssignExam() {
                   Assign Another Exam
                 </Button>
               )}
-              <Button variant="primary" onClick={() => navigate('/admin/assignments')}>
-                View Assignments
+              <Button
+                variant="primary"
+                onClick={() => navigate(`/admin/exams/${createdAssignment.examId}`)}
+              >
+                View Exam
               </Button>
             </div>
           </Card.Body>
@@ -319,7 +322,7 @@ export default function AssignExam() {
   }
 
   return (
-    <AdminLayout active="Exam Assignment">
+    <AdminLayout active="Exams">
       <h1 className="h4 fw-bold mb-1 text-primary">{isEditMode ? 'Edit Assignment' : 'Assign Exam'}</h1>
       <p className="text-muted mb-4">
         {isEditMode

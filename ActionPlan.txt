@@ -2893,3 +2893,98 @@ button read "Save & Generate with AI", clicking it created section
 "Basics" and landed on "Exam: Java - Section: Basics" in the AI
 generator; confirmed via Manage Sections that "Basics" was saved
 correctly, not orphaned.
+
+=====================================================================
+FEATURE (DONE, 2026-08-20): Removed the global Questions page/nav item
+=====================================================================
+REQUESTED: "i want questions menu remove and that page see and
+functionality under section- good idea right" - after several rounds
+of moving question creation/AI-generation under Question Assignment,
+the standalone "Questions" nav item and its global cross-exam question
+bank page had become redundant. Flagged the one real tradeoff (losing
+a single place to browse/search questions across every exam at once)
+before proceeding - user accepted and said "yes".
+
+REMOVED: QuestionBank.tsx (deleted) and its route/nav entry
+(AdminSidebar.tsx - 'Questions' dropped from the AdminNavItem type,
+nav item, and icon map; AppRoutes.tsx - /admin/questions route and
+import removed). AdminDashboard.tsx's "+ Add Question" quick action
+removed too (no longer a meaningful single global entry point).
+
+FUNCTIONALITY MOVED UNDER SECTION: SectionDetails.tsx's "Assigned
+Questions" table gained View/Edit/Delete action buttons per row
+(previously read-only, with a "View All Questions" link to the now-
+removed global page - that link is gone). SectionForm.tsx's Question
+Assignment "Available Questions" table (step 3) also gained Edit/
+Delete actions per row, so questions not yet organized into any
+section are still manageable from wherever they're visible.
+QuestionDetails.tsx and EditQuestion.tsx no longer target the global
+page: both compute a `backTo`/`backLink` from the question's own
+sectionId (its section's Question Assignment step if assigned, else
+the exam's own page) instead of hardcoding '/admin/questions', and
+their AdminLayout `active` prop changed from the removed 'Questions'
+to 'Exams'. Same fallback fix applied to AiGenerateQuestion.tsx's
+Cancel link and AiGeneratedQuestionsPreview.tsx's post-approve
+navigate, both of which could still fall through to the dead route in
+the exam-level (no sectionId) case.
+
+VERIFIED: tsc --noEmit and oxlint clean, 26/26 frontend tests pass.
+Live in Docker: "Questions" gone from the sidebar and the dashboard's
+Quick Actions; /admin/questions itself renders blank (pre-existing
+app behavior for any unmatched route - no wildcard/404 route exists
+anywhere in this app, not something introduced here); Section Details'
+Assigned Questions table shows working View/Edit/Delete per row;
+clicked View on an assigned question, then Back - correctly returned
+to that exact section's Question Assignment step (?step=3) instead of
+a global list.
+
+=====================================================================
+FEATURE (DONE, 2026-08-20): Removed the global Exam Assignment page
+=====================================================================
+REQUESTED: "delete the sub menu exam assignment i thing you already
+create in uder exam edit right" - assumed the "Assign Students" button
+on Exam Details already covered this. It only handles CREATING a new
+assignment though - viewing/editing/deleting EXISTING assignments only
+lived on the global Assignments.tsx list page, which had no equivalent
+anywhere per-exam. Flagged that gap before proceeding (same pattern as
+the Questions removal); user picked "move it under Exam Details" over
+losing that capability outright.
+
+MOVED UNDER EXAM DETAILS: new `useAssignmentsForExam(examId)` hook
+(useAssignments.ts) wraps the already-existing but previously-unused
+`listAssignmentsForExam` API call (backend already supported
+`GET /api/assignments?examId=`, no backend change needed).
+ExamDetails.tsx gained an "Assigned Students" card below the exam's
+own details - Assignment ID, Assigned To (resolves batch names via
+useGroups, same pattern as the old global page), Start/End dates,
+status badge, Edit/Delete per row (DeleteAssignmentButton already
+invalidates the `['assignments']` prefix, which covers the new
+`['assignments','byExam',examId]` key automatically via React Query's
+prefix matching - no changes needed there).
+
+REMOVED: Assignments.tsx (deleted) and its route/nav entry
+(AdminSidebar.tsx - 'Exam Assignment' dropped from the AdminNavItem
+type and as a child of the 'Exams' item, which now has no children at
+all; AppRoutes.tsx - the /admin/assignments route and import removed).
+/admin/assignments/new and /admin/assignments/:id/edit routes were
+kept (still reachable from Exam Details' "Assign Students" button and
+the new per-row Edit links). AssignExam.tsx's dangling references to
+the removed page fixed: `active="Exam Assignment"` -> `active="Exams"`
+(4 places - one was missed by an earlier bulk replace and had to be
+fixed individually, same tool quirk seen once before this session),
+the error-state "Back to Assignments" link -> "Back to Exams"
+(/admin/exams), and the post-create success screen's "View
+Assignments" button now navigates to the specific exam's own page
+instead of the removed list. AdminDashboard.tsx's two dangling
+"View"/"View all" links (Upcoming Exams card, Scheduled Exams pending
+action) retargeted to /admin/exams - the dashboard's own summary
+cards still work unchanged since they use the global `useAssignments()`
+hook directly, not the deleted page.
+
+VERIFIED: tsc --noEmit and oxlint clean, 26/26 frontend tests pass.
+Live in Docker: sidebar's "Exams" item has no expand chevron anymore
+(no children); opened "c# fundamental" (has a real assignment,
+ASG-5005) and confirmed the new "Assigned Students (1)" card renders
+correctly with Active status and working Edit/Delete; clicked Edit and
+confirmed it lands on Edit Assignment pre-filled with the existing
+assignee, sidebar showing "Exams" as active (not the removed item).

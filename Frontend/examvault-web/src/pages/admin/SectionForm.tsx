@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import CreateQuestionModal from '../../components/CreateQuestionModal';
+import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { createSection, updateSection } from '../../api/sectionApi';
 import { bulkAssignSection } from '../../api/questionApi';
 import { useExam } from '../../hooks/useExams';
@@ -489,6 +490,7 @@ export default function SectionForm() {
                           <th>Type</th>
                           <th>Difficulty</th>
                           <th>Marks</th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -512,6 +514,27 @@ export default function SectionForm() {
                               <Badge bg="secondary">{q.difficulty}</Badge>
                             </td>
                             <td>{q.marks}</td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div className="d-flex gap-2">
+                                <Link
+                                  to={`/admin/questions/${q.id}/edit`}
+                                  className="btn btn-outline-primary btn-sm"
+                                >
+                                  Edit
+                                </Link>
+                                <DeleteQuestionButton
+                                  questionId={q.id}
+                                  examId={q.examId}
+                                  onDeleted={() =>
+                                    setSelectedIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(q.id);
+                                      return next;
+                                    })
+                                  }
+                                />
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>

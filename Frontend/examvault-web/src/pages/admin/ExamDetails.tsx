@@ -1,14 +1,24 @@
-import { useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
+import { useMemo, useState } from 'react';
+import { Alert, Badge, Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import DeleteAssignmentButton from '../../components/DeleteAssignmentButton';
 import { archiveExam, publishExam, unpublishExam } from '../../api/examApi';
 import { getOrCreateDefaultSection } from '../../api/sectionApi';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
+import { useAssignmentsForExam } from '../../hooks/useAssignments';
+import { useGroups } from '../../hooks/useGroups';
 import type { ExamStatus, ExamType } from '../../types/exam';
+import { getAssignmentStatus, type AssignmentStatus } from '../../types/assignment';
 import { extractServerError } from '../../utils/apiError';
+
+const assignmentStatusVariant: Record<AssignmentStatus, string> = {
+  Upcoming: 'info',
+  Active: 'success',
+  Expired: 'secondary',
+};
 
 const statusVariant: Record<ExamStatus, string> = {
   Draft: 'secondary',
@@ -36,7 +46,17 @@ export default function ExamDetails() {
   const queryClient = useQueryClient();
   const { data: exam, isLoading, isError } = useExam(id);
   const { data: questions } = useQuestions(id);
+  const { data: assignments, isLoading: isLoadingAssignments } = useAssignmentsForExam(id);
+  const { data: groups } = useGroups();
   const [statusError, setStatusError] = useState('');
+
+  const groupNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of groups ?? []) {
+      map.set(group.id, group.name);
+    }
+    return map;
+  }, [groups]);
 
   const manageQuestionsMutation = useMutation({
     mutationFn: () => getOrCreateDefaultSection(id!),
@@ -210,6 +230,74 @@ export default function ExamDetails() {
           )}
         </Card.Body>
       </Card>
+
+      {exam && (
+        <Card className="border-0 shadow-sm mt-4">
+          <Card.Body className="p-4">
+            <h3 className="h6 fw-bold mb-3">Assigned Students ({assignments?.length ?? 0})</h3>
+
+            {isLoadingAssignments && (
+              <div className="d-flex justify-content-center py-4">
+                <Spinner animation="border" size="sm" />
+              </div>
+            )}
+
+            {!isLoadingAssignments && assignments && assignments.length === 0 && (
+              <div className="text-center text-muted py-4">
+                Not assigned to any students yet. Use "Assign Students" above to get started.
+              </div>
+            )}
+
+            {!isLoadingAssignments && assignments && assignments.length > 0 && (
+              <Table responsive hover className="align-middle mb-0">
+                <thead className="text-muted small text-uppercase table-light">
+                  <tr>
+                    <th>Assignment ID</th>
+                    <th>Assigned To</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assignments.map((a) => {
+                    const status = getAssignmentStatus(a.startAtUtc, a.endAtUtc);
+                    return (
+                      <tr key={a.id}>
+                        <td className="fw-medium">ASG-{a.assignmentNumber}</td>
+                        <td>
+                          {a.targetType === 'Batch'
+                            ? groupNameById.get(a.groupId ?? '') ?? 'Batch'
+                            : a.targetType === 'AllStudents'
+                              ? `All Students (${a.targetUserIds.length})`
+                              : `Students (${a.targetUserIds.length})`}
+                        </td>
+                        <td>{new Date(a.startAtUtc).toLocaleString()}</td>
+                        <td>{new Date(a.endAtUtc).toLocaleString()}</td>
+                        <td>
+                          <Badge bg={assignmentStatusVariant[status]}>{status}</Badge>
+                        </td>
+                        <td>
+                          <div className="d-flex gap-2">
+                            <Link
+                              to={`/admin/assignments/${a.id}/edit`}
+                              className="btn btn-outline-primary btn-sm"
+                            >
+                              Edit
+                            </Link>
+                            <DeleteAssignmentButton assignmentId={a.id} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            )}
+          </Card.Body>
+        </Card>
+      )}
     </AdminLayout>
   );
 }

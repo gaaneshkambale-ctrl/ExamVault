@@ -120,7 +120,7 @@ export default function AiGenerateQuestion() {
   };
 
   return (
-    <AdminLayout active="Questions">
+    <AdminLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">AI Generate Questions</h1>
         <p className="text-muted mb-0">
@@ -263,7 +263,7 @@ export default function AiGenerateQuestion() {
             <div className="d-flex justify-content-end gap-2">
               <Link
                 to={
-                  sectionReturnTo ?? (urlExamId ? `/admin/exams/${urlExamId}/edit` : '/admin/questions')
+                  sectionReturnTo ?? (urlExamId ? `/admin/exams/${urlExamId}/edit` : '/admin/exams')
                 }
                 className="btn btn-outline-secondary"
               >

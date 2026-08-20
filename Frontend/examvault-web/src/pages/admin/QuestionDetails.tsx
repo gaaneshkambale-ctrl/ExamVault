@@ -21,8 +21,14 @@ export default function QuestionDetails() {
   const navigate = useNavigate();
   const { data: question, isLoading, isError } = useQuestion(id);
 
+  const backTo = question
+    ? question.sectionId
+      ? `/admin/exams/${question.examId}/sections/${question.sectionId}/edit?step=3`
+      : `/admin/exams/${question.examId}`
+    : '/admin/exams';
+
   return (
-    <AdminLayout active="Questions">
+    <AdminLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Question Details</h1>
         {question && (
@@ -33,10 +39,10 @@ export default function QuestionDetails() {
             <DeleteQuestionButton
               questionId={question.id}
               examId={question.examId}
-              onDeleted={() => navigate(`/admin/exams/${question.examId}/edit`)}
+              onDeleted={() => navigate(backTo)}
             />
-            <Link to="/admin/questions" className="btn btn-outline-secondary">
-              Back to Questions
+            <Link to={backTo} className="btn btn-outline-secondary">
+              Back
             </Link>
           </div>
         )}

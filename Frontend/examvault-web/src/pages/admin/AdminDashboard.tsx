@@ -420,7 +420,7 @@ export default function AdminDashboard() {
                 <Card.Body className={upcomingAssignments.length === 0 ? '' : 'p-0'}>
                   <div className="d-flex justify-content-between align-items-center p-4 pb-3">
                     <h2 className="h6 fw-bold mb-0">Upcoming Exams</h2>
-                    <Link to="/admin/assignments" className="small">
+                    <Link to="/admin/exams" className="small">
                       View all
                     </Link>
                   </div>
@@ -490,7 +490,7 @@ export default function AdminDashboard() {
                           <Badge bg="primary">{isLoadingAssignments ? '—' : scheduledExamsCount}</Badge>
                         </td>
                         <td className="pe-4 text-end">
-                          <Link to="/admin/assignments" className="btn btn-outline-secondary btn-sm">
+                          <Link to="/admin/exams" className="btn btn-outline-secondary btn-sm">
                             View
                           </Link>
                         </td>
@@ -587,9 +587,6 @@ export default function AdminDashboard() {
                   <div className="d-flex flex-wrap gap-2">
                     <Link to="/admin/exams/create" className="btn btn-outline-primary">
                       + Create Exam
-                    </Link>
-                    <Link to="/admin/questions" className="btn btn-outline-primary">
-                      + Add Question
                     </Link>
                     <Link to="/admin/assignments/new" className="btn btn-outline-primary">
                       Assign Exam

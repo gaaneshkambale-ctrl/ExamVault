@@ -24,14 +24,12 @@ import ReorderSections from '../pages/admin/ReorderSections';
 import ExamWizardSections from '../pages/admin/ExamWizardSections';
 import ExamWizardConfiguration from '../pages/admin/ExamWizardConfiguration';
 import ExamWizardReview from '../pages/admin/ExamWizardReview';
-import QuestionBank from '../pages/admin/QuestionBank';
 import QuestionDetails from '../pages/admin/QuestionDetails';
 import EditQuestion from '../pages/admin/EditQuestion';
 import AiGenerateQuestion from '../pages/admin/AiGenerateQuestion';
 import AiGeneratedQuestionsPreview from '../pages/admin/AiGeneratedQuestionsPreview';
 import ManageGroups from '../pages/admin/ManageGroups';
 import GroupDetails from '../pages/admin/GroupDetails';
-import Assignments from '../pages/admin/Assignments';
 import AssignExam from '../pages/admin/AssignExam';
 import AdminResults from '../pages/admin/AdminResults';
 import AdminReports from '../pages/admin/AdminReports';
@@ -161,14 +159,6 @@ export default function AppRoutes() {
         }
       />
       <Route
-        path="/admin/assignments"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <Assignments />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/admin/assignments/new"
         element={
           <ProtectedRoute roles={['Admin']}>
@@ -277,14 +267,6 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <SectionDetails />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/questions"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <QuestionBank />
           </ProtectedRoute>
         }
       />

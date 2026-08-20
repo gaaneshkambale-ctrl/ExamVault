@@ -125,17 +125,21 @@ export default function EditQuestion() {
       await updateQuestion(id, form);
       queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', question!.examId] });
       queryClient.invalidateQueries({ queryKey: ['questions', id] });
-      navigate('/admin/questions');
+      navigate(backLink);
     } catch (error) {
       setStatus('error');
       setServerError(extractServerError(error));
     }
   };
 
-  const backLink = '/admin/questions';
+  const backLink = question
+    ? question.sectionId
+      ? `/admin/exams/${question.examId}/sections/${question.sectionId}/edit?step=3`
+      : `/admin/exams/${question.examId}`
+    : '/admin/exams';
 
   return (
-    <AdminLayout active="Questions">
+    <AdminLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Edit Question</h1>
       </div>
