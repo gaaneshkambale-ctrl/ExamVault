@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -237,6 +237,8 @@ export default function TakeExam() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
   const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
+  const [showTabSwitchWarning, setShowTabSwitchWarning] = useState(false);
+  const lastSeenTabSwitchCount = useRef(0);
   const [initialSectionStates, setInitialSectionStates] = useState<AttemptSectionStateResponse[]>([]);
   const [sectionStates, setSectionStates] = useState<Record<string, SectionTimerState>>({});
   const [sectionInitialized, setSectionInitialized] = useState(false);
@@ -285,6 +287,22 @@ export default function TakeExam() {
     rightClickBlockingEnabled: proctoringSettings?.rightClickBlockingEnabled ?? true,
     multipleMonitorsEnabled: proctoringSettings?.multipleMonitorsEnabled ?? true,
   });
+
+  // Minimizing the window or switching away (Alt+Tab, clicking the taskbar)
+  // can't be blocked by JS any more than Esc-exiting fullscreen can - so this
+  // mirrors that same pattern: useProctoring already records the violation
+  // (TabSwitch count) the moment it happens, and this just surfaces a
+  // blocking warning the student has to dismiss on return, instead of the
+  // switch going unnoticed.
+  const tabSwitchCount = proctoring.violationCounts.TabSwitch;
+  useEffect(() => {
+    if (tabSwitchCount > lastSeenTabSwitchCount.current) {
+      lastSeenTabSwitchCount.current = tabSwitchCount;
+      if (mode === 'take' || mode === 'review') {
+        setShowTabSwitchWarning(true);
+      }
+    }
+  }, [tabSwitchCount, mode]);
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -918,6 +936,48 @@ export default function TakeExam() {
                 }}
               >
                 Return to Fullscreen
+              </Button>
+            </Card.Body>
+          </Card>
+        </div>
+      )}
+
+      {showTabSwitchWarning && (mode === 'take' || mode === 'review') && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center px-3"
+          style={{ background: 'rgba(15, 23, 42, 0.85)', zIndex: 2000 }}
+        >
+          <Card className="border-0 shadow-lg text-center" style={{ maxWidth: 420 }}>
+            <Card.Body className="p-4">
+              <div
+                className="rounded-circle bg-danger-subtle text-danger d-inline-flex align-items-center justify-content-center mb-3"
+                style={{ width: 56, height: 56 }}
+              >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" strokeLinejoin="round" strokeLinecap="round" />
+                  <path d="M12 9v4M12 17h.01" strokeLinecap="round" />
+                </svg>
+              </div>
+              <h2 className="h5 fw-bold mb-2">You left the exam window</h2>
+              <p className="text-muted mb-1">
+                Minimizing, switching tabs, or switching to another application is not allowed
+                while the exam is in progress.
+              </p>
+              <p className="text-danger fw-medium mb-4">
+                Warning {tabSwitchCount}: this has been flagged for review.
+              </p>
+              <Button
+                variant="primary"
+                className="w-100"
+                onClick={() => {
+                  setShowTabSwitchWarning(false);
+                  window.focus();
+                  if (!document.fullscreenElement) {
+                    void document.documentElement.requestFullscreen?.().catch(() => {});
+                  }
+                }}
+              >
+                Return to Exam
               </Button>
             </Card.Body>
           </Card>
