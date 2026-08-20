@@ -39,6 +39,7 @@ public class GetResultHandlerTests
                 Question1Id,
                 "Question 1",
                 1,
+                null,
                 [
                     new AnswerKeyOption(Question1CorrectOptionId, "Correct", true),
                     new AnswerKeyOption(Question1WrongOptionId, "Wrong", false),
@@ -47,6 +48,7 @@ public class GetResultHandlerTests
                 Question2Id,
                 "Question 2",
                 1,
+                null,
                 [
                     new AnswerKeyOption(Question2CorrectOptionId, "Correct", true),
                     new AnswerKeyOption(Question2WrongOptionId, "Wrong", false),

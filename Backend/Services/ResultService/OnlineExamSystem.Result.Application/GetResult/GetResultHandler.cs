@@ -62,7 +62,15 @@ public class GetResultHandler
                 cancellationToken);
             var selectedOptionByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId, a => a.SelectedOptionId);
 
-            var (totalScore, questionResults) = AttemptScorer.Score(answerKey, selectedOptionByQuestionId);
+            var sections = await _examLookupClient.GetSectionsAsync(query.ExamId, query.BearerToken, cancellationToken);
+            var sectionsById = sections.ToDictionary(s => s.Id);
+
+            var (totalScore, questionResults) = AttemptScorer.Score(
+                answerKey,
+                selectedOptionByQuestionId,
+                sectionsById,
+                exam.NegativeMarkingEnabled,
+                exam.NegativeMarks);
 
             var showCorrectAnswers = await _examLookupClient.GetShowCorrectAnswersAsync(
                 query.ExamId,

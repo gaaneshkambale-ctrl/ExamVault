@@ -8,13 +8,17 @@ public class FakeSubmissionRepository : ISubmissionRepository
 {
     private readonly List<ExamAttempt> _attempts = [];
     private readonly List<AttemptAnswer> _answers = [];
+    private readonly List<AttemptSectionState> _sectionStates = [];
 
     public IReadOnlyList<ExamAttempt> Attempts => _attempts;
     public IReadOnlyList<AttemptAnswer> Answers => _answers;
+    public IReadOnlyList<AttemptSectionState> SectionStates => _sectionStates;
 
     public void SeedAttempt(ExamAttempt attempt) => _attempts.Add(attempt);
 
     public void SeedAnswer(AttemptAnswer answer) => _answers.Add(answer);
+
+    public void SeedSectionState(AttemptSectionState state) => _sectionStates.Add(state);
 
     public Task<ExamAttempt?> GetInProgressAttemptAsync(
         Guid examId,
@@ -82,6 +86,25 @@ public class FakeSubmissionRepository : ISubmissionRepository
     public Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default)
     {
         _answers.Add(answer);
+        return Task.CompletedTask;
+    }
+
+    public Task<AttemptSectionState?> GetSectionStateAsync(
+        Guid attemptId,
+        Guid sectionId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_sectionStates.FirstOrDefault(
+            s => s.AttemptId == attemptId && s.SectionId == sectionId));
+
+    public Task<IReadOnlyList<AttemptSectionState>> GetSectionStatesByAttemptIdAsync(
+        Guid attemptId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AttemptSectionState>>(
+            _sectionStates.Where(s => s.AttemptId == attemptId).ToList());
+
+    public Task AddSectionStateAsync(AttemptSectionState state, CancellationToken cancellationToken = default)
+    {
+        _sectionStates.Add(state);
         return Task.CompletedTask;
     }
 

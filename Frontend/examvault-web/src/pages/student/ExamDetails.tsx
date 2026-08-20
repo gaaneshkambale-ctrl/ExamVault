@@ -6,6 +6,7 @@ import { isAxiosError } from 'axios';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
+import { useSections } from '../../hooks/useSections';
 import { useMyAssignmentForExam } from '../../hooks/useAssignments';
 import { useMyAttempt } from '../../hooks/useSubmissions';
 import { startAttempt } from '../../api/submissionApi';
@@ -81,6 +82,7 @@ export default function ExamDetails() {
   const navigate = useNavigate();
   const { data: exam, isLoading, isError } = useExam(id);
   const { data: questions } = useQuestions(id);
+  const { data: sections } = useSections(id, Boolean(exam?.containsSections));
   const { data: assignment } = useMyAssignmentForExam(id);
   const { data: myAttempt } = useMyAttempt(id);
 
@@ -242,6 +244,9 @@ export default function ExamDetails() {
                         : 'Completed'}
                 </Badge>
                 <Row>
+                  {exam.containsSections && (
+                    <Field label="Sections" value={String(sections?.length ?? 0)} />
+                  )}
                   <Field label="Total Questions" value={String(totalQuestions)} />
                   <Field label="Duration" value={`${exam.durationMinutes} Minutes`} />
                   <Field label="Total Marks" value={String(exam.totalMarks)} />
@@ -274,6 +279,13 @@ export default function ExamDetails() {
                     The exam contains {totalQuestions} question{totalQuestions === 1 ? '' : 's'}.
                   </li>
                   <li className="mb-2">The exam carries a total of {exam.totalMarks} marks.</li>
+                  {exam.containsSections && sections && sections.length > 0 && (
+                    <li className="mb-2">
+                      This exam is organized into {sections.length} section{sections.length === 1 ? '' : 's'}.
+                      Some sections may have their own time limit and navigation rules (e.g. no going
+                      back once you move on).
+                    </li>
+                  )}
                   <li className="mb-2">
                     {exam.negativeMarkingEnabled
                       ? `Negative marking is enabled (${exam.negativeMarks} marks per wrong answer).`

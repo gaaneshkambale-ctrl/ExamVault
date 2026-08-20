@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
+using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
@@ -28,6 +30,8 @@ public class SubmissionsController : ControllerBase
     private readonly ListAttemptsByUserHandler _listAttemptsByUserHandler;
     private readonly RecordFullscreenExitHandler _recordFullscreenExitHandler;
     private readonly RecordProctoringViolationHandler _recordProctoringViolationHandler;
+    private readonly EnterSectionHandler _enterSectionHandler;
+    private readonly CompleteSectionHandler _completeSectionHandler;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -39,6 +43,8 @@ public class SubmissionsController : ControllerBase
         ListAttemptsByUserHandler listAttemptsByUserHandler,
         RecordFullscreenExitHandler recordFullscreenExitHandler,
         RecordProctoringViolationHandler recordProctoringViolationHandler,
+        EnterSectionHandler enterSectionHandler,
+        CompleteSectionHandler completeSectionHandler,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
@@ -49,6 +55,8 @@ public class SubmissionsController : ControllerBase
         _listAttemptsByUserHandler = listAttemptsByUserHandler;
         _recordFullscreenExitHandler = recordFullscreenExitHandler;
         _recordProctoringViolationHandler = recordProctoringViolationHandler;
+        _enterSectionHandler = enterSectionHandler;
+        _completeSectionHandler = completeSectionHandler;
         _logger = logger;
     }
 
@@ -263,6 +271,78 @@ public class SubmissionsController : ControllerBase
         return Ok(ToResponse(result.Attempt!));
     }
 
+    [HttpPost("{attemptId:guid}/sections/{sectionId:guid}/enter")]
+    public async Task<IActionResult> EnterSection(
+        Guid attemptId,
+        Guid sectionId,
+        CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+
+        var result = await _enterSectionHandler.HandleAsync(
+            new EnterSectionCommand(attemptId, sectionId, userId, bearerToken),
+            cancellationToken);
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
+
+        if (result.IsNotInProgress)
+        {
+            return Conflict(new { message = "This attempt is no longer in progress." });
+        }
+
+        if (result.IsSectionNotFound)
+        {
+            return NotFound(new { message = "Section not found." });
+        }
+
+        if (result.IsSectionLocked)
+        {
+            return Conflict(new { message = "This section is locked until earlier sections are completed." });
+        }
+
+        return Ok(ToResponse(result.State!));
+    }
+
+    [HttpPost("{attemptId:guid}/sections/{sectionId:guid}/complete")]
+    public async Task<IActionResult> CompleteSection(
+        Guid attemptId,
+        Guid sectionId,
+        CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await _completeSectionHandler.HandleAsync(
+            new CompleteSectionCommand(attemptId, sectionId, userId),
+            cancellationToken);
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
+
+        if (result.IsNotInProgress)
+        {
+            return Conflict(new { message = "This attempt is no longer in progress." });
+        }
+
+        return Ok(ToResponse(result.State!));
+    }
+
     [HttpGet("mine")]
     public async Task<IActionResult> Mine([FromQuery] Guid examId, CancellationToken cancellationToken)
     {
@@ -276,7 +356,8 @@ public class SubmissionsController : ControllerBase
 
         return Ok(new AttemptWithAnswersResponse(
             ToResponse(result.Attempt),
-            result.Answers.Select(ToResponse).ToList()));
+            result.Answers.Select(ToResponse).ToList(),
+            result.SectionStates.Select(ToResponse).ToList()));
     }
 
     [HttpGet("by-exam/{examId:guid}")]
@@ -290,7 +371,8 @@ public class SubmissionsController : ControllerBase
         return Ok(attempts
             .Select(a => new AttemptWithAnswersResponse(
                 ToResponse(a.Attempt),
-                a.Answers.Select(ToResponse).ToList()))
+                a.Answers.Select(ToResponse).ToList(),
+                Array.Empty<AttemptSectionStateResponse>()))
             .ToList());
     }
 
@@ -331,4 +413,14 @@ public class SubmissionsController : ControllerBase
             answer.SelectedOptionId,
             answer.IsMarkedForReview,
             answer.AnsweredAtUtc);
+
+    private static AttemptSectionStateResponse ToResponse(AttemptSectionState state) =>
+        new(
+            state.Id,
+            state.AttemptId,
+            state.SectionId,
+            state.EnteredAtUtc,
+            state.DeadlineUtc,
+            state.IsCompleted,
+            state.CompletedAtUtc);
 }

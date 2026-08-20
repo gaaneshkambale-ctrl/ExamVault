@@ -50,7 +50,18 @@ export interface SubmitAttemptRequest {
   isAutoSubmitted: boolean;
 }
 
+export interface AttemptSectionStateResponse {
+  id: string;
+  attemptId: string;
+  sectionId: string;
+  enteredAtUtc: string;
+  deadlineUtc: string;
+  isCompleted: boolean;
+  completedAtUtc: string | null;
+}
+
 export interface AttemptWithAnswersResponse {
   attempt: ExamAttemptResponse;
   answers: AttemptAnswerResponse[];
+  sectionStates: AttemptSectionStateResponse[];
 }

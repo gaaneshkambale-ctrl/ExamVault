@@ -6,16 +6,36 @@ import { isAxiosError } from 'axios';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
+import { useSections } from '../../hooks/useSections';
 import { useMyAssignmentForExam } from '../../hooks/useAssignments';
 import { useProctoringSettings } from '../../hooks/useProctoringSettings';
 import { useProctoring } from '../../hooks/useProctoring';
-import { getMyAttempt, recordFullscreenExit, saveAnswer, startAttempt, submitAttempt } from '../../api/submissionApi';
+import {
+  completeSection,
+  enterSection,
+  getMyAttempt,
+  recordFullscreenExit,
+  saveAnswer,
+  startAttempt,
+  submitAttempt,
+} from '../../api/submissionApi';
 import type { QuestionResponse } from '../../types/question';
-import type { ExamAttemptResponse } from '../../types/submission';
+import type { SectionResponse } from '../../types/section';
+import type { AttemptSectionStateResponse, ExamAttemptResponse } from '../../types/submission';
 
 type NavState = 'answered' | 'not-answered' | 'marked' | 'not-visited';
 type Mode = 'loading' | 'take' | 'review' | 'submitted';
 type NavFilter = 'all' | 'answered' | 'unanswered' | 'marked';
+
+interface SectionGroup {
+  section: SectionResponse | null;
+  questions: QuestionResponse[];
+}
+
+interface SectionTimerState {
+  deadlineUtc: string;
+  isCompleted: boolean;
+}
 
 const NAV_LEGEND: Array<{ state: NavState; label: string; color: string }> = [
   { state: 'answered', label: 'Answered', color: '#16a34a' },
@@ -117,6 +137,7 @@ export default function TakeExam() {
 
   const { data: exam, isLoading: isLoadingExam } = useExam(id);
   const { data: questions, isLoading: isLoadingQuestions } = useQuestions(id);
+  const { data: sections } = useSections(id, Boolean(exam?.containsSections));
   const { data: assignment } = useMyAssignmentForExam(id);
   const { data: proctoringSettings } = useProctoringSettings();
 
@@ -125,15 +146,21 @@ export default function TakeExam() {
   const [attemptStartedAtUtc, setAttemptStartedAtUtc] = useState<string | null>(null);
   const [submittedAttempt, setSubmittedAttempt] = useState<ExamAttemptResponse | null>(null);
   const [attemptError, setAttemptError] = useState('');
+  const [sectionIndex, setSectionIndex] = useState(-1);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [visited, setVisited] = useState<Set<string>>(new Set());
   const [answers, setAnswers] = useState<Record<string, AnswerState>>({});
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [sectionRemainingSeconds, setSectionRemainingSeconds] = useState<number | null>(null);
   const [navFilter, setNavFilter] = useState<NavFilter>('all');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
   const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
+  const [initialSectionStates, setInitialSectionStates] = useState<AttemptSectionStateResponse[]>([]);
+  const [sectionStates, setSectionStates] = useState<Record<string, SectionTimerState>>({});
+  const [sectionInitialized, setSectionInitialized] = useState(false);
+  const [sectionEntering, setSectionEntering] = useState(false);
 
   // Defaults to enabled while the global setting is still loading, so
   // behavior doesn't regress during that window - matches the fail-open
@@ -209,6 +236,7 @@ export default function TakeExam() {
         if (result) {
           setAttemptId(result.attempt.id);
           setAttemptStartedAtUtc(result.attempt.startedAtUtc);
+          setInitialSectionStates(result.sectionStates);
           if (result.attempt.status !== 'InProgress') {
             setSubmittedAttempt(result.attempt);
             setMode('submitted');
@@ -248,18 +276,147 @@ export default function TakeExam() {
     };
   }, [id, attemptId]);
 
-  const displayQuestions = useMemo<QuestionResponse[]>(() => {
+  const isSectioned = Boolean(exam?.containsSections) && !!sections && sections.length > 0;
+
+  const orderedSections = useMemo(
+    () => (sections ? [...sections].sort((a, b) => a.displayOrder - b.displayOrder) : []),
+    [sections],
+  );
+
+  // Every question, across every section - used for exam-wide totals (Review
+  // screen, Submitted screen), as opposed to `displayQuestions` below which
+  // is scoped to whichever section is currently open.
+  const allQuestions = questions ?? [];
+
+  const sectionGroups = useMemo<SectionGroup[]>(() => {
     if (!questions) {
       return [];
     }
-    const ordered = exam?.shuffleQuestions ? shuffle(questions) : questions;
-    if (!exam?.shuffleOptions) {
-      return ordered;
+    if (!isSectioned) {
+      const ordered = exam?.shuffleQuestions ? shuffle(questions) : questions;
+      const withOptions = exam?.shuffleOptions
+        ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
+        : ordered;
+      return [{ section: null, questions: withOptions }];
     }
-    return ordered.map((q) => ({ ...q, options: shuffle(q.options) }));
+    return orderedSections.map((section) => {
+      const sectionQuestions = questions.filter((q) => q.sectionId === section.id);
+      const ordered = section.shuffleQuestions ? shuffle(sectionQuestions) : sectionQuestions;
+      const withOptions = section.shuffleOptions
+        ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
+        : ordered;
+      return { section, questions: withOptions };
+    });
     // Deliberately keyed on the shuffle flags rather than the whole `exam`
     // object, so the layout doesn't reshuffle on unrelated exam refetches.
-  }, [questions, exam?.shuffleQuestions, exam?.shuffleOptions]);
+  }, [questions, isSectioned, orderedSections, exam?.shuffleQuestions, exam?.shuffleOptions]);
+
+  const currentGroup = sectionIndex >= 0 ? sectionGroups[sectionIndex] : undefined;
+  const displayQuestions = useMemo(() => currentGroup?.questions ?? [], [currentGroup]);
+  const navigationType = currentGroup?.section?.navigationType ?? 'Free';
+  const isForwardOnly = navigationType !== 'Free';
+
+  const persistAnswer = (questionId: string, answer: AnswerState) => {
+    if (!attemptId) {
+      return;
+    }
+    saveAnswerMutation.mutate({ questionId, answer });
+  };
+
+  // Enters a section (records/refreshes its per-section deadline server-side
+  // and enforces Sequential/Locked gating) and switches the view to it.
+  // No-op for the "virtual" null-section group non-sectioned exams use.
+  const switchToSection = async (targetIndex: number) => {
+    const targetGroup = sectionGroups[targetIndex];
+    if (!targetGroup) {
+      return;
+    }
+
+    const current = displayQuestions[currentIndex];
+    if (current) {
+      persistAnswer(current.id, answers[current.id] ?? { selectedOptionId: null, isMarkedForReview: false });
+    }
+
+    if (!targetGroup.section || !attemptId) {
+      setSectionIndex(targetIndex);
+      setCurrentIndex(0);
+      setMode('take');
+      return;
+    }
+
+    setSectionEntering(true);
+    setAttemptError('');
+    try {
+      const state = await enterSection(attemptId, targetGroup.section.id);
+      setSectionStates((prev) => ({
+        ...prev,
+        [targetGroup.section!.id]: { deadlineUtc: state.deadlineUtc, isCompleted: state.isCompleted },
+      }));
+      setSectionIndex(targetIndex);
+      setCurrentIndex(0);
+      setMode('take');
+    } catch (error) {
+      setAttemptError(extractError(error));
+    } finally {
+      setSectionEntering(false);
+    }
+  };
+
+  // Marks the current section done and moves on - to the next section if
+  // there is one, otherwise to Review (or straight to auto-submit when
+  // called because the section's own timer ran out on the last section).
+  const finishCurrentSectionAndAdvance = async (auto: boolean) => {
+    const group = sectionGroups[sectionIndex];
+    if (group?.section && attemptId) {
+      try {
+        const state = await completeSection(attemptId, group.section.id);
+        setSectionStates((prev) => ({
+          ...prev,
+          [group.section!.id]: { deadlineUtc: state.deadlineUtc, isCompleted: true },
+        }));
+      } catch {
+        // Best-effort - a network hiccup here shouldn't trap the student in
+        // a finished section; the server will still catch stale re-entry.
+      }
+    }
+
+    const nextIndex = sectionIndex + 1;
+    if (nextIndex < sectionGroups.length) {
+      await switchToSection(nextIndex);
+    } else if (auto) {
+      runSubmit(true);
+    } else {
+      const current = displayQuestions[currentIndex];
+      if (current) {
+        persistAnswer(current.id, answers[current.id] ?? { selectedOptionId: null, isMarkedForReview: false });
+      }
+      setMode('review');
+    }
+  };
+
+  // Resolve which section to land on once the attempt + section data are
+  // both ready: the first not-yet-completed section in order, so a resumed
+  // attempt skips sections already finished instead of restarting at 1.
+  useEffect(() => {
+    if (sectionInitialized || mode !== 'take' || !attemptId || sectionGroups.length === 0) {
+      return;
+    }
+    if (!isSectioned) {
+      setSectionInitialized(true);
+      setSectionIndex(0);
+      return;
+    }
+
+    const stateMap: Record<string, SectionTimerState> = {};
+    for (const s of initialSectionStates) {
+      stateMap[s.sectionId] = { deadlineUtc: s.deadlineUtc, isCompleted: s.isCompleted };
+    }
+    setSectionStates(stateMap);
+    const startIndex = orderedSections.findIndex((s) => !stateMap[s.id]?.isCompleted);
+    setSectionInitialized(true);
+    void switchToSection(startIndex === -1 ? 0 : startIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionInitialized, mode, attemptId, isSectioned, sectionGroups.length, initialSectionStates, orderedSections]);
 
   useEffect(() => {
     if (mode !== 'take') {
@@ -295,7 +452,7 @@ export default function TakeExam() {
     }
   };
 
-  // Countdown timer: exam.durationMinutes from Phase 5 + the attempt's real
+  // Overall exam countdown: exam.durationMinutes + the attempt's real
   // StartedAtUtc. Auto-submits once when it reaches zero.
   useEffect(() => {
     if (mode !== 'take' || !attemptStartedAtUtc || !exam) {
@@ -320,6 +477,40 @@ export default function TakeExam() {
     return () => clearInterval(intervalId);
   }, [mode, attemptStartedAtUtc, exam, runSubmit]);
 
+  // Per-section countdown - only runs while a real (non-null) section is
+  // open. Auto-advances to the next section (or submits, if this was the
+  // last one) once the section's own deadline passes.
+  useEffect(() => {
+    const section = currentGroup?.section;
+    if (mode !== 'take' || !section) {
+      setSectionRemainingSeconds(null);
+      return;
+    }
+    const state = sectionStates[section.id];
+    if (!state?.deadlineUtc) {
+      setSectionRemainingSeconds(null);
+      return;
+    }
+    const endTime = new Date(state.deadlineUtc).getTime();
+    let intervalId: ReturnType<typeof setInterval>;
+    let hasAdvanced = false;
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+      setSectionRemainingSeconds(remaining);
+      if (remaining <= 0 && !hasAdvanced) {
+        hasAdvanced = true;
+        clearInterval(intervalId);
+        void finishCurrentSectionAndAdvance(true);
+      }
+    };
+
+    tick();
+    intervalId = setInterval(tick, 1000);
+    return () => clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, currentGroup?.section?.id, sectionStates]);
+
   const saveAnswerMutation = useMutation({
     mutationFn: (payload: { questionId: string; answer: AnswerState }) =>
       saveAnswer(attemptId!, {
@@ -329,13 +520,6 @@ export default function TakeExam() {
       }),
     onSuccess: () => setLastSavedAt(new Date()),
   });
-
-  const persistAnswer = (questionId: string, answer: AnswerState) => {
-    if (!attemptId) {
-      return;
-    }
-    saveAnswerMutation.mutate({ questionId, answer });
-  };
 
   const updateAnswer = (questionId: string, updates: Partial<AnswerState>) => {
     setAnswers((prev) => {
@@ -350,6 +534,11 @@ export default function TakeExam() {
   };
 
   const goToIndex = (index: number) => {
+    // Forward-only sections still need to allow the one-step advance that
+    // "Save & Next" drives - only block backward jumps and skips ahead.
+    if (isForwardOnly && index !== currentIndex && index !== currentIndex + 1) {
+      return;
+    }
     const current = displayQuestions[currentIndex];
     if (current) {
       persistAnswer(current.id, answers[current.id] ?? { selectedOptionId: null, isMarkedForReview: false });
@@ -372,7 +561,7 @@ export default function TakeExam() {
     return 'not-visited';
   };
 
-  const isLoading = mode === 'loading' || isLoadingExam || isLoadingQuestions;
+  const isLoading = mode === 'loading' || isLoadingExam || isLoadingQuestions || (mode === 'take' && !sectionInitialized);
   const currentQuestion = displayQuestions[currentIndex];
   const currentAnswer = currentQuestion
     ? (answers[currentQuestion.id] ?? { selectedOptionId: null, isMarkedForReview: false })
@@ -381,9 +570,17 @@ export default function TakeExam() {
   // Bucketed off navState (not raw answer flags) so the grid colors, the
   // filter tabs, and the stats row can never disagree with each other - a
   // marked-and-answered question shows as "marked" everywhere consistently.
+  // Scoped to the current section (matches the Question Navigator sidebar);
+  // `totalAnsweredCount` etc. below cover the whole exam for Review/Submit.
   const answeredCount = displayQuestions.filter((q) => navState(q) === 'answered').length;
   const markedCount = displayQuestions.filter((q) => navState(q) === 'marked').length;
   const unansweredCount = displayQuestions.filter(
+    (q) => navState(q) === 'not-answered' || navState(q) === 'not-visited',
+  ).length;
+
+  const totalAnsweredCount = allQuestions.filter((q) => navState(q) === 'answered').length;
+  const totalMarkedCount = allQuestions.filter((q) => navState(q) === 'marked').length;
+  const totalUnansweredCount = allQuestions.filter(
     (q) => navState(q) === 'not-answered' || navState(q) === 'not-visited',
   ).length;
 
@@ -394,6 +591,58 @@ export default function TakeExam() {
     if (navFilter === 'marked') return state === 'marked';
     return state === 'not-answered' || state === 'not-visited';
   };
+
+  const isLastQuestionInSection = currentIndex === displayQuestions.length - 1;
+
+  const canOpenSection = (targetIndex: number): boolean => {
+    if (!isSectioned) {
+      return true;
+    }
+    for (let i = 0; i < targetIndex; i++) {
+      const earlier = orderedSections[i];
+      if (earlier.navigationType !== 'Free' && !sectionStates[earlier.id]?.isCompleted) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const sectionNavigator = isSectioned && (
+    <Card className="border-0 shadow-sm mb-3">
+      <Card.Body className="p-3">
+        <h2 className="h6 fw-bold mb-2">Sections</h2>
+        <div className="d-flex flex-wrap gap-2">
+          {orderedSections.map((section, index) => {
+            const isCurrent = index === sectionIndex;
+            const isCompleted = Boolean(sectionStates[section.id]?.isCompleted);
+            const isOpenable = canOpenSection(index);
+            return (
+              <button
+                key={section.id}
+                type="button"
+                disabled={sectionEntering || (!isOpenable && !isCurrent)}
+                onClick={() => void switchToSection(index)}
+                className="btn btn-sm fw-medium"
+                style={
+                  isCurrent
+                    ? { background: '#0f172a', color: 'white', border: '1px solid #0f172a' }
+                    : isCompleted
+                      ? { background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' }
+                      : isOpenable
+                        ? { background: 'white', color: '#0f172a', border: '1px solid #dee2e6' }
+                        : { background: '#f1f5f9', color: '#94a3b8', border: '1px solid #e2e8f0' }
+                }
+              >
+                {!isOpenable && !isCurrent && !isCompleted && '\u{1F512} '}
+                {isCompleted && !isCurrent && '✓ '}
+                {section.name}
+              </button>
+            );
+          })}
+        </div>
+      </Card.Body>
+    </Card>
+  );
 
   const questionNavigator = (
     <Card className="border-0 shadow-sm">
@@ -451,16 +700,19 @@ export default function TakeExam() {
               return null;
             }
             const isCurrent = mode === 'take' && index === currentIndex;
+            const isDisabled = isForwardOnly && index !== currentIndex;
             return (
               <button
                 key={question.id}
                 type="button"
+                disabled={isDisabled}
                 onClick={() => goToIndex(index)}
                 className="rounded-2 fw-medium"
                 style={{
                   width: 34,
                   height: 34,
                   border: isCurrent ? '2px solid #2563eb' : '1px solid #dee2e6',
+                  opacity: isDisabled ? 0.5 : 1,
                   ...navStateStyle[navState(question)],
                 }}
               >
@@ -544,6 +796,14 @@ export default function TakeExam() {
                   {remainingSeconds !== null ? formatDuration(remainingSeconds) : '--:--:--'}
                 </div>
               </div>
+              {currentGroup?.section && (
+                <div className="text-center">
+                  <div className="text-muted small mb-1">Section Time Left</div>
+                  <div className="border rounded-2 px-3 py-1 fw-bold" style={{ minWidth: 110 }}>
+                    {sectionRemainingSeconds !== null ? formatDuration(sectionRemainingSeconds) : '--:--:--'}
+                  </div>
+                </div>
+              )}
               <Badge bg={isOnline ? 'success' : 'danger'} className="fw-normal py-2 px-3">
                 {isOnline ? 'Connected' : 'Offline'}
               </Badge>
@@ -579,7 +839,7 @@ export default function TakeExam() {
         </div>
       )}
 
-      {!isLoading && !attemptError && mode !== 'submitted' && displayQuestions.length === 0 && (
+      {!isLoading && !attemptError && mode !== 'submitted' && allQuestions.length === 0 && (
         <Card className="border-0 shadow-sm">
           <Card.Body className="text-center text-muted py-5">
             This exam doesn't have any questions yet.
@@ -588,87 +848,110 @@ export default function TakeExam() {
       )}
 
       {!isLoading && !attemptError && mode === 'take' && currentQuestion && currentAnswer && (
-        <Row className="g-3">
-          <Col xs={12} lg={3}>
-            {questionNavigator}
-          </Col>
+        <>
+          {sectionNavigator}
+          <Row className="g-3">
+            <Col xs={12} lg={3}>
+              {questionNavigator}
+            </Col>
 
-          <Col xs={12} lg={9}>
-            <Card className="border-0 shadow-sm">
-              <Card.Body className="p-4">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <span className="text-muted small">
-                    Question {currentIndex + 1} of {displayQuestions.length}
-                  </span>
-                  <Form.Check
-                    type="checkbox"
-                    label="Mark for Review"
-                    checked={currentAnswer.isMarkedForReview}
-                    onChange={(e) => updateAnswer(currentQuestion.id, { isMarkedForReview: e.target.checked })}
-                  />
-                </div>
-
-                <p className="fw-medium mb-4">{currentQuestion.questionText}</p>
-
-                <Form>
-                  {currentQuestion.options.map((option, index) => {
-                    const selected = currentAnswer.selectedOptionId === option.id;
-                    return (
-                      <label
-                        key={option.id}
-                        htmlFor={`option-${option.id}`}
-                        className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2"
-                        style={{
-                          cursor: 'pointer',
-                          borderColor: selected ? '#16a34a' : undefined,
-                          background: selected ? '#f0fdf4' : undefined,
-                        }}
-                      >
-                        <Form.Check
-                          type="radio"
-                          name={`question-${currentQuestion.id}`}
-                          id={`option-${option.id}`}
-                          checked={selected}
-                          onChange={() => updateAnswer(currentQuestion.id, { selectedOptionId: option.id })}
-                          className="mb-0"
-                        />
-                        <span>
-                          {OPTION_LETTERS[index] ?? index + 1}. {option.optionText}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </Form>
-
-                <div className="small mt-2" style={{ minHeight: 20 }}>
-                  {saveAnswerMutation.isPending && <span className="text-muted">Saving...</span>}
-                  {!saveAnswerMutation.isPending && lastSavedAt && (
-                    <span className="text-success">
-                      &#10003; Answer saved &nbsp;|&nbsp; Last saved: {lastSavedAt.toLocaleTimeString()}
+            <Col xs={12} lg={9}>
+              <Card className="border-0 shadow-sm">
+                <Card.Body className="p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <span className="text-muted small">
+                      {currentGroup?.section && (
+                        <span className="fw-medium text-dark">{currentGroup.section.name}</span>
+                      )}
+                      {currentGroup?.section && ' · '}
+                      Question {currentIndex + 1} of {displayQuestions.length}
                     </span>
-                  )}
-                </div>
+                    <Form.Check
+                      type="checkbox"
+                      label="Mark for Review"
+                      checked={currentAnswer.isMarkedForReview}
+                      onChange={(e) => updateAnswer(currentQuestion.id, { isMarkedForReview: e.target.checked })}
+                    />
+                  </div>
 
-                <div className="d-flex justify-content-between mt-3">
-                  <Button
-                    variant="outline-secondary"
-                    disabled={currentIndex === 0}
-                    onClick={() => goToIndex(Math.max(0, currentIndex - 1))}
-                  >
-                    &larr; Save &amp; Previous
-                  </Button>
-                  <Button
-                    variant="primary"
-                    disabled={currentIndex === displayQuestions.length - 1}
-                    onClick={() => goToIndex(Math.min(displayQuestions.length - 1, currentIndex + 1))}
-                  >
-                    Save &amp; Next &rarr;
-                  </Button>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
+                  {currentGroup?.section?.instructions && (
+                    <Alert variant="light" className="border small">
+                      {currentGroup.section.instructions}
+                    </Alert>
+                  )}
+
+                  <p className="fw-medium mb-4">{currentQuestion.questionText}</p>
+
+                  <Form>
+                    {currentQuestion.options.map((option, index) => {
+                      const selected = currentAnswer.selectedOptionId === option.id;
+                      return (
+                        <label
+                          key={option.id}
+                          htmlFor={`option-${option.id}`}
+                          className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2"
+                          style={{
+                            cursor: 'pointer',
+                            borderColor: selected ? '#16a34a' : undefined,
+                            background: selected ? '#f0fdf4' : undefined,
+                          }}
+                        >
+                          <Form.Check
+                            type="radio"
+                            name={`question-${currentQuestion.id}`}
+                            id={`option-${option.id}`}
+                            checked={selected}
+                            onChange={() => updateAnswer(currentQuestion.id, { selectedOptionId: option.id })}
+                            className="mb-0"
+                          />
+                          <span>
+                            {OPTION_LETTERS[index] ?? index + 1}. {option.optionText}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </Form>
+
+                  <div className="small mt-2" style={{ minHeight: 20 }}>
+                    {saveAnswerMutation.isPending && <span className="text-muted">Saving...</span>}
+                    {!saveAnswerMutation.isPending && lastSavedAt && (
+                      <span className="text-success">
+                        &#10003; Answer saved &nbsp;|&nbsp; Last saved: {lastSavedAt.toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="d-flex justify-content-between mt-3">
+                    <Button
+                      variant="outline-secondary"
+                      disabled={isForwardOnly || currentIndex === 0}
+                      onClick={() => goToIndex(Math.max(0, currentIndex - 1))}
+                    >
+                      &larr; Save &amp; Previous
+                    </Button>
+                    <Button
+                      variant="primary"
+                      disabled={sectionEntering}
+                      onClick={() => {
+                        if (isLastQuestionInSection) {
+                          void finishCurrentSectionAndAdvance(false);
+                        } else {
+                          goToIndex(currentIndex + 1);
+                        }
+                      }}
+                    >
+                      {isLastQuestionInSection
+                        ? sectionIndex < sectionGroups.length - 1
+                          ? 'Next Section →'
+                          : 'Review & Submit'
+                        : 'Save & Next →'}
+                    </Button>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+        </>
       )}
 
       {!isLoading && !attemptError && mode === 'review' && (
@@ -684,21 +967,58 @@ export default function TakeExam() {
                 <Row className="g-3 mb-4">
                   <Col xs={6} sm={3}>
                     <div className="text-muted small">Total Questions</div>
-                    <div className="h4 fw-bold mb-0">{displayQuestions.length}</div>
+                    <div className="h4 fw-bold mb-0">{allQuestions.length}</div>
                   </Col>
                   <Col xs={6} sm={3}>
                     <div className="text-muted small">Answered</div>
-                    <div className="h4 fw-bold mb-0 text-success">{answeredCount}</div>
+                    <div className="h4 fw-bold mb-0 text-success">{totalAnsweredCount}</div>
                   </Col>
                   <Col xs={6} sm={3}>
                     <div className="text-muted small">Not Answered</div>
-                    <div className="h4 fw-bold mb-0 text-danger">{unansweredCount}</div>
+                    <div className="h4 fw-bold mb-0 text-danger">{totalUnansweredCount}</div>
                   </Col>
                   <Col xs={6} sm={3}>
                     <div className="text-muted small">Marked for Review</div>
-                    <div className="h4 fw-bold mb-0 text-warning">{markedCount}</div>
+                    <div className="h4 fw-bold mb-0 text-warning">{totalMarkedCount}</div>
                   </Col>
                 </Row>
+
+                {isSectioned && (
+                  <div className="mb-4">
+                    <h3 className="h6 fw-bold mb-2">Sections</h3>
+                    <div className="d-flex flex-column gap-2">
+                      {orderedSections.map((section, index) => {
+                        const sectionQuestions = sectionGroups[index]?.questions ?? [];
+                        const sectionAnswered = sectionQuestions.filter((q) => navState(q) === 'answered').length;
+                        const isCompleted = Boolean(sectionStates[section.id]?.isCompleted);
+                        const canReturn = section.navigationType === 'Free' || index === sectionIndex;
+                        return (
+                          <div
+                            key={section.id}
+                            className="d-flex justify-content-between align-items-center border rounded-2 px-3 py-2"
+                          >
+                            <div>
+                              <div className="fw-medium">{section.name}</div>
+                              <div className="text-muted small">
+                                {sectionAnswered} / {sectionQuestions.length} answered
+                                {isCompleted && ' · Completed'}
+                              </div>
+                            </div>
+                            {canReturn && (
+                              <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                onClick={() => void switchToSection(index)}
+                              >
+                                Go to Section
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <Alert variant="light" className="border small">
                   Please review all the questions marked for review before submitting.
@@ -748,7 +1068,7 @@ export default function TakeExam() {
                 <h2 className="h6 fw-bold mb-3">{exam?.title ?? 'Exam'}</h2>
                 <Row className="g-2">
                   <Col xs={6} className="text-muted small">Total Questions</Col>
-                  <Col xs={6} className="fw-medium">{displayQuestions.length || exam?.totalQuestions || 0}</Col>
+                  <Col xs={6} className="fw-medium">{allQuestions.length || exam?.totalQuestions || 0}</Col>
                   <Col xs={6} className="text-muted small">Submitted On</Col>
                   <Col xs={6} className="fw-medium">
                     {submittedAttempt.submittedAtUtc

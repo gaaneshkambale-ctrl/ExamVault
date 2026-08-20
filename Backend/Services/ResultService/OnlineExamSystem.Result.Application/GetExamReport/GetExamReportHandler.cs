@@ -49,10 +49,18 @@ public class GetExamReportHandler
                 query.BearerToken,
                 cancellationToken);
 
+            var sections = await _examLookupClient.GetSectionsAsync(query.ExamId, query.BearerToken, cancellationToken);
+            var sectionsById = sections.ToDictionary(s => s.Id);
+
             var attemptResults = attempts.Select(attempt =>
             {
                 var selectedOptionByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId, a => a.SelectedOptionId);
-                var (totalScore, questionResults) = AttemptScorer.Score(answerKey, selectedOptionByQuestionId);
+                var (totalScore, questionResults) = AttemptScorer.Score(
+                    answerKey,
+                    selectedOptionByQuestionId,
+                    sectionsById,
+                    exam.NegativeMarkingEnabled,
+                    exam.NegativeMarks);
 
                 return new AdminAttemptResult
                 {

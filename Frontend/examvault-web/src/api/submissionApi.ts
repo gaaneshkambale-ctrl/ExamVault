@@ -2,6 +2,7 @@ import { isAxiosError } from 'axios';
 import apiClient from './axiosClient';
 import type {
   AttemptAnswerResponse,
+  AttemptSectionStateResponse,
   AttemptWithAnswersResponse,
   ExamAttemptResponse,
   ProctoringViolationType,
@@ -65,4 +66,24 @@ export async function recordProctoringViolation(
   type: ProctoringViolationType,
 ): Promise<void> {
   await apiClient.post(`/api/submissions/${attemptId}/proctoring-violation`, { type });
+}
+
+export async function enterSection(
+  attemptId: string,
+  sectionId: string,
+): Promise<AttemptSectionStateResponse> {
+  const { data } = await apiClient.post<AttemptSectionStateResponse>(
+    `/api/submissions/${attemptId}/sections/${sectionId}/enter`,
+  );
+  return data;
+}
+
+export async function completeSection(
+  attemptId: string,
+  sectionId: string,
+): Promise<AttemptSectionStateResponse> {
+  const { data } = await apiClient.post<AttemptSectionStateResponse>(
+    `/api/submissions/${attemptId}/sections/${sectionId}/complete`,
+  );
+  return data;
 }

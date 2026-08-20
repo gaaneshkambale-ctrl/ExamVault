@@ -3,6 +3,8 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
+using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
@@ -56,6 +58,8 @@ public class Program
         builder.Services.AddScoped<ListAttemptsByUserHandler>();
         builder.Services.AddScoped<RecordFullscreenExitHandler>();
         builder.Services.AddScoped<RecordProctoringViolationHandler>();
+        builder.Services.AddScoped<EnterSectionHandler>();
+        builder.Services.AddScoped<CompleteSectionHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

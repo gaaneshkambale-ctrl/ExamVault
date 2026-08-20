@@ -85,6 +85,24 @@ public class SubmissionRepository : ISubmissionRepository
     public async Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default) =>
         await _dbContext.AttemptAnswers.AddAsync(answer, cancellationToken);
 
+    public Task<AttemptSectionState?> GetSectionStateAsync(
+        Guid attemptId,
+        Guid sectionId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.AttemptSectionStates.FirstOrDefaultAsync(
+            s => s.AttemptId == attemptId && s.SectionId == sectionId,
+            cancellationToken);
+
+    public async Task<IReadOnlyList<AttemptSectionState>> GetSectionStatesByAttemptIdAsync(
+        Guid attemptId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.AttemptSectionStates
+            .Where(s => s.AttemptId == attemptId)
+            .ToListAsync(cancellationToken);
+
+    public async Task AddSectionStateAsync(AttemptSectionState state, CancellationToken cancellationToken = default) =>
+        await _dbContext.AttemptSectionStates.AddAsync(state, cancellationToken);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

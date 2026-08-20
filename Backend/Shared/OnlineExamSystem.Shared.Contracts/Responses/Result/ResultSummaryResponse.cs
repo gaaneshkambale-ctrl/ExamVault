@@ -6,7 +6,7 @@ public record QuestionResultResponse(
     Guid QuestionId,
     string QuestionText,
     int Marks,
-    int MarksAwarded,
+    decimal MarksAwarded,
     Guid? SelectedOptionId,
     bool IsCorrect,
     IReadOnlyList<QuestionResultOptionResponse> Options);
@@ -15,7 +15,7 @@ public record ResultSummaryResponse(
     Guid AttemptId,
     Guid ExamId,
     string ExamTitle,
-    int TotalScore,
+    decimal TotalScore,
     int TotalMarks,
     int PassingMarks,
     bool Passed,

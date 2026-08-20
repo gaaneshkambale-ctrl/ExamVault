@@ -6,6 +6,7 @@ public record AnswerKeyQuestion(
     Guid QuestionId,
     string QuestionText,
     int Marks,
+    Guid? SectionId,
     IReadOnlyList<AnswerKeyOption> Options);
 
 public interface IQuestionAnswerKeyClient

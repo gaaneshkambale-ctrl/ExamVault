@@ -36,7 +36,38 @@ public class ExamServiceClient : IExamLookupClient
         var exam = await response.Content.ReadFromJsonAsync<ExamApiResponse>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("Empty response from Exam Service.");
 
-        return new ExamLookupResult(exam.Id, exam.Title, exam.TotalMarks, exam.PassingMarks, exam.ShowResult);
+        return new ExamLookupResult(
+            exam.Id,
+            exam.Title,
+            exam.TotalMarks,
+            exam.PassingMarks,
+            exam.ShowResult,
+            exam.NegativeMarkingEnabled,
+            exam.NegativeMarks);
+    }
+
+    public async Task<IReadOnlyList<SectionLookupResult>> GetSectionsAsync(
+        Guid examId,
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/exams/{examId}/sections");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return Array.Empty<SectionLookupResult>();
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var sections = await response.Content.ReadFromJsonAsync<List<SectionApiResponse>>(JsonOptions, cancellationToken)
+            ?? [];
+
+        return sections
+            .Select(s => new SectionLookupResult(s.Id, s.NegativeMarkingEnabled, s.NegativeMarks))
+            .ToList();
     }
 
     public async Task<bool> GetShowCorrectAnswersAsync(
@@ -68,10 +99,19 @@ public class ExamServiceClient : IExamLookupClient
         public int TotalMarks { get; init; }
         public int PassingMarks { get; init; }
         public bool ShowResult { get; init; } = true;
+        public bool NegativeMarkingEnabled { get; init; }
+        public decimal NegativeMarks { get; init; }
     }
 
     private sealed class MyAssignmentApiResponse
     {
         public bool ShowCorrectAnswers { get; init; }
+    }
+
+    private sealed class SectionApiResponse
+    {
+        public Guid Id { get; init; }
+        public bool NegativeMarkingEnabled { get; init; }
+        public decimal NegativeMarks { get; init; }
     }
 }

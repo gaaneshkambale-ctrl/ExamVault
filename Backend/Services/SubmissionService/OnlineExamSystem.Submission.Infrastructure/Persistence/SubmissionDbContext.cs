@@ -12,6 +12,7 @@ public class SubmissionDbContext : DbContext
 
     public DbSet<ExamAttempt> ExamAttempts => Set<ExamAttempt>();
     public DbSet<AttemptAnswer> AttemptAnswers => Set<AttemptAnswer>();
+    public DbSet<AttemptSectionState> AttemptSectionStates => Set<AttemptSectionState>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. System.Text.Json then
@@ -37,6 +38,16 @@ public class SubmissionDbContext : DbContext
         {
             entity.HasKey(a => a.Id);
             entity.HasIndex(a => new { a.AttemptId, a.QuestionId }).IsUnique();
+            entity.HasOne<ExamAttempt>()
+                .WithMany()
+                .HasForeignKey(a => a.AttemptId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AttemptSectionState>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.HasIndex(a => new { a.AttemptId, a.SectionId }).IsUnique();
             entity.HasOne<ExamAttempt>()
                 .WithMany()
                 .HasForeignKey(a => a.AttemptId)

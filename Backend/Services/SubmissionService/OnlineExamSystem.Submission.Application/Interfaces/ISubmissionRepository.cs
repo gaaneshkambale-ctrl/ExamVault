@@ -43,5 +43,16 @@ public interface ISubmissionRepository
 
     Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default);
 
+    Task<AttemptSectionState?> GetSectionStateAsync(
+        Guid attemptId,
+        Guid sectionId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AttemptSectionState>> GetSectionStatesByAttemptIdAsync(
+        Guid attemptId,
+        CancellationToken cancellationToken = default);
+
+    Task AddSectionStateAsync(AttemptSectionState state, CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

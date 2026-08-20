@@ -5,7 +5,7 @@ public record AdminAttemptResultResponse(
     Guid UserId,
     Guid ExamId,
     string ExamTitle,
-    int TotalScore,
+    decimal TotalScore,
     int TotalMarks,
     int PassingMarks,
     bool Passed,

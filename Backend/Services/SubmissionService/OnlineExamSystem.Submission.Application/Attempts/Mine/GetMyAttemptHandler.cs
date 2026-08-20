@@ -22,6 +22,7 @@ public class GetMyAttemptHandler
         }
 
         var answers = await _repository.GetAnswersByAttemptIdAsync(attempt.Id, cancellationToken);
-        return GetMyAttemptResult.Found(attempt, answers);
+        var sectionStates = await _repository.GetSectionStatesByAttemptIdAsync(attempt.Id, cancellationToken);
+        return GetMyAttemptResult.Found(attempt, answers, sectionStates);
     }
 }

@@ -13,7 +13,7 @@ public class AdminAttemptResult
 {
     public Guid AttemptId { get; init; }
     public Guid UserId { get; init; }
-    public int TotalScore { get; init; }
+    public decimal TotalScore { get; init; }
     public bool Passed { get; init; }
     public DateTime SubmittedAtUtc { get; init; }
     public IReadOnlyList<QuestionResult> Questions { get; init; } = [];
