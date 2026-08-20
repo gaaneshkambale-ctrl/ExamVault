@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Alert, Button, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
+import { Alert, Button, Col, Form, Modal, Nav, Row, Spinner } from 'react-bootstrap';
 import { createQuestion } from '../api/questionApi';
+import CsvImportPanel from './CsvImportPanel';
 import { validateCreateQuestion } from '../utils/createQuestionValidation';
 import { extractServerError } from '../utils/apiError';
 import type {
@@ -37,19 +38,22 @@ interface CreateQuestionModalProps {
   examId: string;
   sectionName?: string;
   defaultMarks?: number;
+  allowImport?: boolean;
   show: boolean;
   onClose: () => void;
-  onCreated: (question: QuestionResponse) => void;
+  onCreated: (questions: QuestionResponse[]) => void;
 }
 
 export default function CreateQuestionModal({
   examId,
   sectionName,
   defaultMarks,
+  allowImport = false,
   show,
   onClose,
   onCreated,
 }: CreateQuestionModalProps) {
+  const [mode, setMode] = useState<'manual' | 'import'>('manual');
   const [questionType, setQuestionType] = useState<QuestionType>('MultipleChoice');
   const [questionText, setQuestionText] = useState('');
   const [marks, setMarks] = useState(defaultMarks ?? 1);
@@ -65,6 +69,7 @@ export default function CreateQuestionModal({
   useEffect(() => {
     if (show) {
       setMarks(defaultMarks ?? 1);
+      setMode('manual');
     }
   }, [show, defaultMarks]);
 
@@ -127,7 +132,7 @@ export default function CreateQuestionModal({
     try {
       const created = await createQuestion(form);
       reset();
-      onCreated(created);
+      onCreated([created]);
     } catch (error) {
       setStatus('error');
       setServerError(extractServerError(error));
@@ -144,6 +149,32 @@ export default function CreateQuestionModal({
       </Modal.Header>
       <Form noValidate onSubmit={handleSubmit}>
         <Modal.Body>
+          {allowImport && (
+            <Nav
+              variant="tabs"
+              activeKey={mode}
+              onSelect={(key) => setMode((key as 'manual' | 'import') ?? 'manual')}
+              className="mb-3"
+            >
+              <Nav.Item>
+                <Nav.Link eventKey="manual">Manual Entry</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="import">Import CSV</Nav.Link>
+              </Nav.Item>
+            </Nav>
+          )}
+
+          {mode === 'import' ? (
+            <CsvImportPanel
+              examId={examId}
+              onImported={(questions) => {
+                reset();
+                onCreated(questions);
+              }}
+            />
+          ) : (
+            <>
           {status === 'error' && <Alert variant="danger">{serverError}</Alert>}
 
           <Row>
@@ -255,21 +286,25 @@ export default function CreateQuestionModal({
               ))}
             </Form.Select>
           </Form.Group>
+            </>
+          )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={handleClose}>
-            Cancel
+            {mode === 'import' ? 'Close' : 'Cancel'}
           </Button>
-          <Button type="submit" variant="primary" disabled={status === 'loading'}>
-            {status === 'loading' ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Saving...
-              </>
-            ) : (
-              'Save Question'
-            )}
-          </Button>
+          {mode === 'manual' && (
+            <Button type="submit" variant="primary" disabled={status === 'loading'}>
+              {status === 'loading' ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Saving...
+                </>
+              ) : (
+                'Save Question'
+              )}
+            </Button>
+          )}
         </Modal.Footer>
       </Form>
     </Modal>

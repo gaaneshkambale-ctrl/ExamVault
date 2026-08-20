@@ -2988,3 +2988,61 @@ ASG-5005) and confirmed the new "Assigned Students (1)" card renders
 correctly with Active status and working Edit/Delete; clicked Edit and
 confirmed it lands on Edit Assignment pre-filled with the existing
 assignee, sidebar showing "Exams" as active (not the removed item).
+
+=====================================================================
+FEATURE (DONE, 2026-08-20): CSV question import for Manual exams
+=====================================================================
+REQUESTED: "i want in if any user select manual add question then if
+he will click on add question then import question option will
+available create implemetntaion for that" - matches wireframe screen
+06's third tab ("Import Questions") that was explicitly deferred as
+out of scope when the Question Assignment layout was first built.
+Asked which import source to build since nothing like this existed
+anywhere in the codebase yet (no backend endpoint, no frontend UI,
+just a stray match on the word "import" from a JS import statement) -
+user picked CSV file upload over copy-from-existing-exam/section.
+
+IMPLEMENTATION (pure frontend, no backend changes - reuses the
+existing single-question POST /api/questions endpoint the same way
+AiGeneratedQuestionsPreview.tsx already batches AI-approved questions):
+new utils/csvQuestionImport.ts has a dependency-free RFC4180-ish CSV
+parser (handles quoted fields with embedded commas/escaped quotes) and
+parseQuestionImportCsv(), which maps a header row (Question Text,
+Type, Difficulty, Marks, Option A-D, Correct Answer, Shuffle Options)
+to per-row CsvImportRow results - each either fully valid or carrying
+a human-readable `error` string (missing text, unrecognized type/
+difficulty, non-positive marks, correct answer not matching a filled
+option letter, etc). buildCsvTemplate() generates a downloadable
+starter CSV. New components/CsvImportPanel.tsx: file input + Download
+Template button, parses on file select, shows a preview table (row #,
+question, type, marks) with invalid rows highlighted red and their
+checkbox disabled, valid rows pre-checked, "Import Selected (N)"
+button that Promise.allSettled-batches createQuestion calls and
+reports partial failures.
+
+WIRED INTO CreateQuestionModal.tsx: new `allowImport` prop gates a
+"Manual Entry" / "Import CSV" Nav-tabs switcher inside the same modal
+(matching the wireframe's tabbed design) - the Save Question footer
+button only shows in Manual Entry mode, CsvImportPanel replaces the
+form body in Import CSV mode. `onCreated` prop signature changed from
+a single QuestionResponse to QuestionResponse[] so both manual
+(array of 1) and bulk import feed the same path.
+SectionForm.tsx's handleQuestionCreated updated to add every created
+question's id to selectedIds (not just one), and passes
+allowImport={!useAiGenerate} - so Import CSV is only offered for
+Manual exams, matching the request exactly; AI-generated exams keep
+their dedicated "+ Generate with AI" flow instead of the modal
+entirely, so the two never overlap.
+
+VERIFIED: 10 new tests in csvQuestionImport.test.ts (valid MCQ/True-
+False rows, quoted-comma handling, each validation error case, empty
+file, blank trailing lines, template round-trips clean) - 36/36
+frontend tests pass overall. tsc --noEmit and oxlint clean. Live in
+Docker: created a fresh Manual exam with a section, opened Question
+Assignment, confirmed "+ Create Question" shows both tabs; uploaded a
+4-row test CSV (2 valid, 1 blank-text invalid, 1 header-only) - preview
+correctly showed "2 valid / 1 invalid" with the bad row disabled and
+its exact error message ("question text is required"); clicked "Import
+Selected (2)" and both questions were created, pre-selected in
+Available Questions, with working Edit/Delete. Test exam and its
+questions deleted afterward to keep the local DB clean.

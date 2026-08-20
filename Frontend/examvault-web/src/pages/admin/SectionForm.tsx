@@ -168,9 +168,13 @@ export default function SectionForm() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleQuestionCreated = (question: QuestionResponse) => {
+  const handleQuestionCreated = (questions: QuestionResponse[]) => {
     queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', examId] });
-    setSelectedIds((prev) => new Set(prev).add(question.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      questions.forEach((q) => next.add(q.id));
+      return next;
+    });
     setShowCreateQuestion(false);
   };
 
@@ -567,6 +571,7 @@ export default function SectionForm() {
           examId={examId}
           sectionName={form.name}
           defaultMarks={defaultQuestionMarks}
+          allowImport={!useAiGenerate}
           show={showCreateQuestion}
           onClose={() => setShowCreateQuestion(false)}
           onCreated={handleQuestionCreated}
