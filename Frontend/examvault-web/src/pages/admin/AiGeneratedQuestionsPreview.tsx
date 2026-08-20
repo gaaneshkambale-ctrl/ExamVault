@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import DraftEditorModal from '../../components/DraftEditorModal';
+import { EditIcon, TrashIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { generateQuestions } from '../../api/aiApi';
 import { createQuestion } from '../../api/questionApi';
 import type { DraftQuestion, GenerateDifficulty, GenerateQuestionsRequest, GenerateQuestionType } from '../../types/ai';
@@ -238,22 +239,38 @@ export default function AiGeneratedQuestionsPreview() {
                     </td>
                     <td className="pe-4">
                       <div className="d-flex gap-2">
-                        <Button variant="outline-secondary" size="sm" disabled>
-                          View
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          className="d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="View"
+                          aria-label="View question"
+                          disabled
+                        >
+                          <ViewIcon />
                         </Button>
                         <Button
                           variant="outline-primary"
                           size="sm"
+                          className="d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="Edit"
+                          aria-label="Edit question"
                           onClick={() => setEditingDraftId(draft.id)}
                         >
-                          Edit
+                          <EditIcon />
                         </Button>
                         <Button
                           variant="outline-danger"
                           size="sm"
+                          className="d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="Delete"
+                          aria-label="Delete question"
                           onClick={() => handleDeleteDraft(draft.id)}
                         >
-                          Delete
+                          <TrashIcon />
                         </Button>
                       </div>
                     </td>

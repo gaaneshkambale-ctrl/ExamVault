@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import CreateQuestionModal from '../../components/CreateQuestionModal';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
+import { EditIcon } from '../../components/icons/ActionIcons';
 import { createSection, updateSection } from '../../api/sectionApi';
 import { bulkAssignSection } from '../../api/questionApi';
 import { useExam } from '../../hooks/useExams';
@@ -521,13 +522,17 @@ export default function SectionForm() {
                               <div className="d-flex gap-2">
                                 <Link
                                   to={`/admin/questions/${q.id}/edit`}
-                                  className="btn btn-outline-primary btn-sm"
+                                  className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                                  style={{ width: 32, height: 32 }}
+                                  title="Edit"
+                                  aria-label="Edit question"
                                 >
-                                  Edit
+                                  <EditIcon />
                                 </Link>
                                 <DeleteQuestionButton
                                   questionId={q.id}
                                   examId={q.examId}
+                                  iconOnly
                                   onDeleted={() =>
                                     setSelectedIds((prev) => {
                                       const next = new Set(prev);

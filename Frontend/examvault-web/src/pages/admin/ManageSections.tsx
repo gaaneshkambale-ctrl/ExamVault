@@ -2,6 +2,7 @@ import { Badge, Card, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteSectionButton from '../../components/DeleteSectionButton';
+import { EditIcon } from '../../components/icons/ActionIcons';
 import { useExam } from '../../hooks/useExams';
 import { useSections } from '../../hooks/useSections';
 
@@ -91,9 +92,12 @@ export default function ManageSections() {
                       <div className="d-flex gap-2">
                         <Link
                           to={`/admin/exams/${examId}/sections/${section.id}/edit`}
-                          className="btn btn-outline-primary btn-sm"
+                          className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="Edit"
+                          aria-label={`Edit ${section.name}`}
                         >
-                          Edit
+                          <EditIcon />
                         </Link>
                         <DeleteSectionButton examId={examId!} sectionId={section.id} />
                       </div>

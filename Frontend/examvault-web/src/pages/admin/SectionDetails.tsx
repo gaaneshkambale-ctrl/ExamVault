@@ -2,6 +2,7 @@ import { Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
+import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useSection } from '../../hooks/useSections';
 import { useQuestionsBySection } from '../../hooks/useQuestions';
 
@@ -101,17 +102,23 @@ export default function SectionDetails() {
                           <div className="d-flex gap-2">
                             <Link
                               to={`/admin/questions/${q.id}`}
-                              className="btn btn-outline-secondary btn-sm"
+                              className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                              style={{ width: 32, height: 32 }}
+                              title="View"
+                              aria-label="View question"
                             >
-                              View
+                              <ViewIcon />
                             </Link>
                             <Link
                               to={`/admin/questions/${q.id}/edit`}
-                              className="btn btn-outline-primary btn-sm"
+                              className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                              style={{ width: 32, height: 32 }}
+                              title="Edit"
+                              aria-label="Edit question"
                             >
-                              Edit
+                              <EditIcon />
                             </Link>
-                            <DeleteQuestionButton questionId={q.id} examId={q.examId} />
+                            <DeleteQuestionButton questionId={q.id} examId={q.examId} iconOnly />
                           </div>
                         </td>
                       </tr>

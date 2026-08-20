@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteAssignment } from '../api/assignmentApi';
+import { TrashIcon } from './icons/ActionIcons';
 
 interface DeleteAssignmentButtonProps {
   assignmentId: string;
@@ -21,8 +22,16 @@ export default function DeleteAssignmentButton({ assignmentId }: DeleteAssignmen
 
   return (
     <>
-      <Button variant="outline-danger" size="sm" onClick={() => setShowConfirm(true)} title="Delete assignment">
-        &#128465;
+      <Button
+        variant="outline-danger"
+        size="sm"
+        className="d-inline-flex align-items-center justify-content-center"
+        style={{ width: 32, height: 32 }}
+        onClick={() => setShowConfirm(true)}
+        title="Delete assignment"
+        aria-label="Delete assignment"
+      >
+        <TrashIcon />
       </Button>
 
       <Modal show={showConfirm} onHide={() => setShowConfirm(false)} centered>

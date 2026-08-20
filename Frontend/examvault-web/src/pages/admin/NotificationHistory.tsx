@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import { useNotificationHistory } from '../../hooks/useNotifications';
 import NotificationTypeBadge from '../../components/notifications/NotificationTypeBadge';
+import { ViewIcon } from '../../components/icons/ActionIcons';
 import { NOTIFICATION_TYPES } from '../../types/notification';
 import type { NotificationType } from '../../types/notification';
 
@@ -92,9 +93,12 @@ export default function NotificationHistory() {
                     <td className="pe-4">
                       <Link
                         to={`/admin/notifications/history/${batch.batchId}`}
-                        className="btn btn-outline-secondary btn-sm"
+                        className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                        style={{ width: 32, height: 32 }}
+                        title="View"
+                        aria-label={`View ${batch.title}`}
                       >
-                        View
+                        <ViewIcon />
                       </Link>
                     </td>
                   </tr>

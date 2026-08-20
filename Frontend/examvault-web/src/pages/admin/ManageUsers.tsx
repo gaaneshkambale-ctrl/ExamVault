@@ -3,6 +3,7 @@ import { Badge, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-b
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteUserButton from '../../components/DeleteUserButton';
+import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useUsers } from '../../hooks/useUsers';
 import type { UserListItem, UserRole } from '../../types/user';
 
@@ -238,17 +239,23 @@ export default function ManageUsers() {
                       <div className="d-flex gap-2">
                         <Link
                           to={`/admin/users/${user.id}`}
-                          className="btn btn-outline-secondary btn-sm"
+                          className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="View"
+                          aria-label={`View ${user.fullName}`}
                         >
-                          View
+                          <ViewIcon />
                         </Link>
                         <Link
                           to={`/admin/users/${user.id}/edit`}
-                          className="btn btn-outline-primary btn-sm"
+                          className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="Edit"
+                          aria-label={`Edit ${user.fullName}`}
                         >
-                          Edit
+                          <EditIcon />
                         </Link>
-                        <DeleteUserButton userId={user.id} />
+                        <DeleteUserButton userId={user.id} userName={user.fullName} iconOnly />
                       </div>
                     </td>
                   </tr>

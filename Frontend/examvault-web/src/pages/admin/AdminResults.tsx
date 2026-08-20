@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import { ViewIcon } from '../../components/icons/ActionIcons';
 import { useExams } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
@@ -216,8 +217,14 @@ export default function AdminResults() {
                         )}
                       </td>
                       <td className="pe-4">
-                        <Link to={`/admin/reports/${result.examId}`} className="btn btn-outline-secondary btn-sm">
-                          View Report
+                        <Link
+                          to={`/admin/reports/${result.examId}`}
+                          className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="View Report"
+                          aria-label="View report"
+                        >
+                          <ViewIcon />
                         </Link>
                       </td>
                     </tr>

@@ -5,6 +5,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import ExamsTrendChart from '../../components/ExamsTrendChart';
 import PassRateDonutChart from '../../components/PassRateDonutChart';
 import NotificationTypeBadge from '../../components/notifications/NotificationTypeBadge';
+import { ViewIcon } from '../../components/icons/ActionIcons';
 import { useAuth } from '../../hooks/useAuth';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
@@ -479,8 +480,14 @@ export default function AdminDashboard() {
                           <Badge bg="secondary">{isLoadingExams ? '—' : draftExams}</Badge>
                         </td>
                         <td className="pe-4 text-end">
-                          <Link to="/admin/exams?status=Draft" className="btn btn-outline-secondary btn-sm">
-                            Review
+                          <Link
+                            to="/admin/exams?status=Draft"
+                            className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                            style={{ width: 32, height: 32 }}
+                            title="Review"
+                            aria-label="Review draft exams"
+                          >
+                            <ViewIcon />
                           </Link>
                         </td>
                       </tr>
@@ -490,8 +497,14 @@ export default function AdminDashboard() {
                           <Badge bg="primary">{isLoadingAssignments ? '—' : scheduledExamsCount}</Badge>
                         </td>
                         <td className="pe-4 text-end">
-                          <Link to="/admin/exams" className="btn btn-outline-secondary btn-sm">
-                            View
+                          <Link
+                            to="/admin/exams"
+                            className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                            style={{ width: 32, height: 32 }}
+                            title="View"
+                            aria-label="View scheduled exams"
+                          >
+                            <ViewIcon />
                           </Link>
                         </td>
                       </tr>

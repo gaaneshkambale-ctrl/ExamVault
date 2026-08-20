@@ -7,6 +7,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import { useGroup } from '../../hooks/useGroups';
 import { useUsers } from '../../hooks/useUsers';
 import { addGroupMember, removeGroupMember } from '../../api/groupApi';
+import { RemoveIcon } from '../../components/icons/ActionIcons';
 
 function extractError(error: unknown): string {
   if (isAxiosError(error) && typeof error.response?.data?.message === 'string') {
@@ -132,10 +133,14 @@ export default function GroupDetails() {
                           <Button
                             variant="outline-danger"
                             size="sm"
+                            className="d-inline-flex align-items-center justify-content-center"
+                            style={{ width: 32, height: 32 }}
+                            title="Remove"
+                            aria-label={`Remove ${member.fullName}`}
                             disabled={removeMutation.isPending}
                             onClick={() => removeMutation.mutate(member.id)}
                           >
-                            Remove
+                            <RemoveIcon />
                           </Button>
                         </td>
                       </tr>

@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteAssignmentButton from '../../components/DeleteAssignmentButton';
+import { EditIcon } from '../../components/icons/ActionIcons';
 import { archiveExam, publishExam, unpublishExam } from '../../api/examApi';
 import { getOrCreateDefaultSection } from '../../api/sectionApi';
 import { useExam } from '../../hooks/useExams';
@@ -282,9 +283,12 @@ export default function ExamDetails() {
                           <div className="d-flex gap-2">
                             <Link
                               to={`/admin/assignments/${a.id}/edit`}
-                              className="btn btn-outline-primary btn-sm"
+                              className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                              style={{ width: 32, height: 32 }}
+                              title="Edit"
+                              aria-label={`Edit assignment ASG-${a.assignmentNumber}`}
                             >
-                              Edit
+                              <EditIcon />
                             </Link>
                             <DeleteAssignmentButton assignmentId={a.id} />
                           </div>

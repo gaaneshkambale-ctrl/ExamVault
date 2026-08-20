@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteSection } from '../api/sectionApi';
+import { TrashIcon } from './icons/ActionIcons';
 
 interface DeleteSectionButtonProps {
   examId: string;
@@ -24,8 +25,16 @@ export default function DeleteSectionButton({ examId, sectionId, onDeleted }: De
 
   return (
     <>
-      <Button variant="outline-danger" size="sm" onClick={() => setShowConfirm(true)}>
-        Delete
+      <Button
+        variant="outline-danger"
+        size="sm"
+        className="d-inline-flex align-items-center justify-content-center"
+        style={{ width: 32, height: 32 }}
+        title="Delete"
+        aria-label="Delete section"
+        onClick={() => setShowConfirm(true)}
+      >
+        <TrashIcon />
       </Button>
 
       <Modal show={showConfirm} onHide={() => setShowConfirm(false)} centered>

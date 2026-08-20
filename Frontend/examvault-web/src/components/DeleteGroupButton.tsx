@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteGroup } from '../api/groupApi';
+import { TrashIcon } from './icons/ActionIcons';
 
 interface DeleteGroupButtonProps {
   groupId: string;
@@ -23,8 +24,16 @@ export default function DeleteGroupButton({ groupId, onDeleted }: DeleteGroupBut
 
   return (
     <>
-      <Button variant="outline-danger" size="sm" onClick={() => setShowConfirm(true)}>
-        Delete
+      <Button
+        variant="outline-danger"
+        size="sm"
+        className="d-inline-flex align-items-center justify-content-center"
+        style={{ width: 32, height: 32 }}
+        title="Delete"
+        aria-label="Delete group"
+        onClick={() => setShowConfirm(true)}
+      >
+        <TrashIcon />
       </Button>
 
       <Modal show={showConfirm} onHide={() => setShowConfirm(false)} centered>

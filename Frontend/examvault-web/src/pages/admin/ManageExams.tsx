@@ -4,6 +4,7 @@ import { Badge, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-b
 import { Link, useSearchParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteExamButton from '../../components/DeleteExamButton';
+import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { EXAM_CATEGORIES } from '../../types/exam';
@@ -261,15 +262,21 @@ export default function ManageExams() {
                       <div className="d-flex gap-2">
                         <Link
                           to={`/admin/exams/${exam.id}`}
-                          className="btn btn-outline-secondary btn-sm"
+                          className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="View"
+                          aria-label={`View ${exam.title}`}
                         >
-                          View
+                          <ViewIcon />
                         </Link>
                         <Link
                           to={`/admin/exams/${exam.id}/edit`}
-                          className="btn btn-outline-primary btn-sm"
+                          className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="Edit"
+                          aria-label={`Edit ${exam.title}`}
                         >
-                          Edit
+                          <EditIcon />
                         </Link>
                         <DeleteExamButton examId={exam.id} />
                       </div>

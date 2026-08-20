@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import { ViewIcon } from '../../components/icons/ActionIcons';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import type { ExamStatus, ExamType } from '../../types/exam';
@@ -83,8 +84,14 @@ export default function AdminReports() {
                       <Badge bg={statusVariant[exam.status]}>{exam.status}</Badge>
                     </td>
                     <td className="pe-4">
-                      <Link to={`/admin/reports/${exam.id}`} className="btn btn-outline-primary btn-sm">
-                        View Report
+                      <Link
+                        to={`/admin/reports/${exam.id}`}
+                        className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                        style={{ width: 32, height: 32 }}
+                        title="View Report"
+                        aria-label="View report"
+                      >
+                        <ViewIcon />
                       </Link>
                     </td>
                   </tr>

@@ -2,17 +2,23 @@ import { useState } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteQuestion } from '../api/questionApi';
+import { TrashIcon } from './icons/ActionIcons';
 
 interface DeleteQuestionButtonProps {
   questionId: string;
   examId: string;
   onDeleted?: () => void;
+  // Compact icon-only rendering for dense table rows (SectionForm's and
+  // SectionDetails' question lists) - QuestionDetails' page-level action
+  // bar keeps the labeled button since space isn't at a premium there.
+  iconOnly?: boolean;
 }
 
 export default function DeleteQuestionButton({
   questionId,
   examId,
   onDeleted,
+  iconOnly = false,
 }: DeleteQuestionButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const queryClient = useQueryClient();
@@ -28,13 +34,23 @@ export default function DeleteQuestionButton({
 
   return (
     <>
-      <Button
-        variant="outline-danger"
-        size="sm"
-        onClick={() => setShowConfirm(true)}
-      >
-        Delete
-      </Button>
+      {iconOnly ? (
+        <Button
+          variant="outline-danger"
+          size="sm"
+          className="d-inline-flex align-items-center justify-content-center"
+          style={{ width: 32, height: 32 }}
+          title="Delete"
+          aria-label="Delete question"
+          onClick={() => setShowConfirm(true)}
+        >
+          <TrashIcon />
+        </Button>
+      ) : (
+        <Button variant="outline-danger" size="sm" onClick={() => setShowConfirm(true)}>
+          Delete
+        </Button>
+      )}
 
       <Modal show={showConfirm} onHide={() => setShowConfirm(false)} centered>
         <Modal.Header closeButton>

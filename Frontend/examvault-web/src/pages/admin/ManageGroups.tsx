@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteGroupButton from '../../components/DeleteGroupButton';
+import { UsersIcon } from '../../components/icons/ActionIcons';
 import { useGroups } from '../../hooks/useGroups';
 import { createGroup } from '../../api/groupApi';
 
@@ -127,8 +128,14 @@ export default function ManageGroups() {
                     <td>{new Date(group.createdAtUtc).toLocaleDateString()}</td>
                     <td className="pe-4">
                       <div className="d-flex gap-2">
-                        <Link to={`/admin/users/groups/${group.id}`} className="btn btn-outline-secondary btn-sm">
-                          Manage Members
+                        <Link
+                          to={`/admin/users/groups/${group.id}`}
+                          className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                          style={{ width: 32, height: 32 }}
+                          title="Manage Members"
+                          aria-label={`Manage members of ${group.name}`}
+                        >
+                          <UsersIcon />
                         </Link>
                         <DeleteGroupButton groupId={group.id} />
                       </div>
