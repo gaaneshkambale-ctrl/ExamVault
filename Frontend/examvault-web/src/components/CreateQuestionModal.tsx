@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
 import { createQuestion } from '../api/questionApi';
@@ -35,6 +35,8 @@ function trueFalseOptions(): OptionFormState[] {
 
 interface CreateQuestionModalProps {
   examId: string;
+  sectionName?: string;
+  defaultMarks?: number;
   show: boolean;
   onClose: () => void;
   onCreated: (question: QuestionResponse) => void;
@@ -42,13 +44,15 @@ interface CreateQuestionModalProps {
 
 export default function CreateQuestionModal({
   examId,
+  sectionName,
+  defaultMarks,
   show,
   onClose,
   onCreated,
 }: CreateQuestionModalProps) {
   const [questionType, setQuestionType] = useState<QuestionType>('MultipleChoice');
   const [questionText, setQuestionText] = useState('');
-  const [marks, setMarks] = useState(1);
+  const [marks, setMarks] = useState(defaultMarks ?? 1);
   const [difficulty, setDifficulty] = useState<QuestionDifficulty>('Easy');
   const [shuffleOptions, setShuffleOptions] = useState(false);
   const [options, setOptions] = useState<OptionFormState[]>([newOption(), newOption()]);
@@ -56,10 +60,18 @@ export default function CreateQuestionModal({
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
 
+  // The section's planned Marks / Question Count gives a sensible per-question default -
+  // re-apply it each time the modal opens, since defaultMarks can change between opens.
+  useEffect(() => {
+    if (show) {
+      setMarks(defaultMarks ?? 1);
+    }
+  }, [show, defaultMarks]);
+
   const reset = () => {
     setQuestionType('MultipleChoice');
     setQuestionText('');
-    setMarks(1);
+    setMarks(defaultMarks ?? 1);
     setDifficulty('Easy');
     setShuffleOptions(false);
     setOptions([newOption(), newOption()]);
@@ -125,7 +137,10 @@ export default function CreateQuestionModal({
   return (
     <Modal show={show} onHide={handleClose} size="lg" centered>
       <Modal.Header closeButton>
-        <Modal.Title>Create Question</Modal.Title>
+        <div>
+          <Modal.Title>Create Question</Modal.Title>
+          {sectionName && <div className="text-muted small mt-1">Section: {sectionName}</div>}
+        </div>
       </Modal.Header>
       <Form noValidate onSubmit={handleSubmit}>
         <Modal.Body>

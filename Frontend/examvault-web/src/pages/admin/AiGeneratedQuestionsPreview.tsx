@@ -25,6 +25,7 @@ interface PreviewState {
   examId: string;
   request: GenerateQuestionsRequest;
   backTo: string;
+  returnTo?: string;
 }
 
 
@@ -61,7 +62,7 @@ export default function AiGeneratedQuestionsPreview() {
     );
   }
 
-  const { examId, request, backTo } = initialState;
+  const { examId, request, backTo, returnTo } = initialState;
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -145,7 +146,7 @@ export default function AiGeneratedQuestionsPreview() {
     }
 
     queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', examId] });
-    navigate('/admin/questions');
+    navigate(returnTo ?? '/admin/questions');
   };
 
   const counts = {

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import { useExam, useExams } from '../../hooks/useExams';
+import { useSection } from '../../hooks/useSections';
 import { generateQuestions } from '../../api/aiApi';
 import type {
   GenerateDifficulty,
@@ -16,9 +17,17 @@ import { extractServerError } from '../../utils/apiError';
 export default function AiGenerateQuestion() {
   const { examId: urlExamId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sectionId = searchParams.get('sectionId');
+  const fromWizard = searchParams.get('wizard') === 'true';
 
   const { data: lockedExam } = useExam(urlExamId);
   const { data: allExams, isLoading: isLoadingExams } = useExams();
+  const { data: lockedSection } = useSection(urlExamId, sectionId ?? undefined);
+
+  const sectionReturnTo = sectionId
+    ? `/admin/exams/${urlExamId}/sections/${sectionId}/edit?step=3${fromWizard ? '&wizard=true' : ''}`
+    : undefined;
 
   // This flow generates questions with AI - only exams tagged AI Generated
   // are eligible sources, so Manual exams (added to by hand) don't clutter
@@ -29,6 +38,15 @@ export default function AiGenerateQuestion() {
   const [source, setSource] = useState<GenerateSource>('ExistingExam');
   const [topic, setTopic] = useState('');
   const [questionCount, setQuestionCount] = useState(10);
+
+  // When generating for a specific section, default the count to whatever was
+  // planned for that section on the Information step, instead of the generic 10.
+  useEffect(() => {
+    if (lockedSection && lockedSection.questionCount > 0) {
+      setQuestionCount(lockedSection.questionCount);
+    }
+  }, [lockedSection]);
+
   const [questionTypes, setQuestionTypes] = useState<GenerateQuestionType[]>(['MultipleChoice']);
   const [difficultyLevels, setDifficultyLevels] = useState<GenerateDifficulty[]>(['Medium']);
   const [additionalInstructions, setAdditionalInstructions] = useState('');
@@ -52,13 +70,19 @@ export default function AiGenerateQuestion() {
     );
   };
 
+  // Generating from within a section's Question Assignment step should target that
+  // section's own topic, not the whole exam's - the exam title is too broad once
+  // questions are being scoped to one section.
+  const existingExamTopic = lockedSection
+    ? `${lockedSection.name}${lockedSection.description ? `: ${lockedSection.description}` : ''}`
+    : selectedExam
+      ? `${selectedExam.title}${selectedExam.description ? `: ${selectedExam.description}` : ''}`
+      : '';
+
   const buildRequest = (): GenerateQuestionsRequest => ({
     source,
     examId: selectedExamId || null,
-    topic:
-      source === 'ExistingExam'
-        ? (selectedExam ? `${selectedExam.title}${selectedExam.description ? `: ${selectedExam.description}` : ''}` : '')
-        : topic,
+    topic: source === 'ExistingExam' ? existingExamTopic : topic,
     questionCount,
     questionTypes,
     difficultyLevels,
@@ -85,6 +109,7 @@ export default function AiGenerateQuestion() {
           backTo: urlExamId
             ? `/admin/exams/${urlExamId}/questions/ai-generate`
             : '/admin/questions/ai-generate',
+          returnTo: sectionReturnTo,
         },
       });
     } catch (error) {
@@ -100,6 +125,7 @@ export default function AiGenerateQuestion() {
         <h1 className="h4 fw-bold mb-0 text-primary">AI Generate Questions</h1>
         <p className="text-muted mb-0">
           {selectedExam ? `Exam: ${selectedExam.title}` : 'Pick an exam to get started'}
+          {lockedSection ? ` · Section: ${lockedSection.name}` : ''}
         </p>
       </div>
 
@@ -236,7 +262,9 @@ export default function AiGenerateQuestion() {
 
             <div className="d-flex justify-content-end gap-2">
               <Link
-                to={urlExamId ? `/admin/exams/${urlExamId}/edit` : '/admin/questions'}
+                to={
+                  sectionReturnTo ?? (urlExamId ? `/admin/exams/${urlExamId}/edit` : '/admin/questions')
+                }
                 className="btn btn-outline-secondary"
               >
                 Cancel

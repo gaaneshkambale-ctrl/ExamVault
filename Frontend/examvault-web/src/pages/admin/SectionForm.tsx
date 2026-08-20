@@ -6,6 +6,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import CreateQuestionModal from '../../components/CreateQuestionModal';
 import { createSection, updateSection } from '../../api/sectionApi';
 import { bulkAssignSection } from '../../api/questionApi';
+import { useExam } from '../../hooks/useExams';
 import { useSection, useSections } from '../../hooks/useSections';
 import { useQuestionsBySection, useUnassignedQuestions } from '../../hooks/useQuestions';
 import type { NavigationType, SectionRequest } from '../../types/section';
@@ -46,6 +47,7 @@ export default function SectionForm() {
   const fromWizard = searchParams.get('wizard') === 'true';
   const queryClient = useQueryClient();
 
+  const { data: exam } = useExam(examId);
   const { data: existingSection, isLoading: isLoadingSection } = useSection(examId, sectionId);
   const { data: existingSections } = useSections(examId, !isEdit);
   const { data: unassignedQuestions, isLoading: isLoadingUnassigned } = useUnassignedQuestions(examId);
@@ -100,6 +102,42 @@ export default function SectionForm() {
   const totalMarksSelected = selectedQuestions.reduce((sum, q) => sum + q.marks, 0);
   const allFilteredSelected =
     filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id));
+
+  // AI-generated exams get the multi-step AI generator instead of the manual form.
+  const useAiGenerate = exam?.examType === 'AiGenerated';
+
+  // Average marks per question, from the section's own planned Marks / Question Count -
+  // used to default the manual Create Question modal's Marks field instead of always 1.
+  const defaultQuestionMarks =
+    form.questionCount > 0 ? Math.max(1, Math.round(form.marks / form.questionCount)) : 1;
+
+  const goToCreateQuestion = async () => {
+    if (!useAiGenerate) {
+      setShowCreateQuestion(true);
+      return;
+    }
+
+    const wizardParam = fromWizard ? '&wizard=true' : '';
+
+    if (isEdit && sectionId) {
+      navigate(`/admin/exams/${examId}/questions/ai-generate?sectionId=${sectionId}${wizardParam}`);
+      return;
+    }
+
+    // New, unsaved section: save it first so there's a real section to attach questions to -
+    // otherwise navigating to the AI generator would lose the in-progress Information/Rules data.
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const saved = await createSection(examId!, form);
+      invalidateAll();
+      navigate(`/admin/exams/${examId}/questions/ai-generate?sectionId=${saved.id}${wizardParam}`);
+    } catch (error) {
+      setSubmitError(extractServerError(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const toggleQuestion = (id: string) => {
     setSelectedIds((prev) => {
@@ -412,9 +450,14 @@ export default function SectionForm() {
                         variant="link"
                         size="sm"
                         className="p-0"
-                        onClick={() => setShowCreateQuestion(true)}
+                        disabled={submitting}
+                        onClick={goToCreateQuestion}
                       >
-                        + Create Question
+                        {useAiGenerate
+                          ? isEdit || submitting
+                            ? '+ Generate with AI'
+                            : 'Save & Generate with AI'
+                          : '+ Create Question'}
                       </Button>
                       {filteredQuestions.length > 0 && (
                         <Button variant="link" size="sm" className="p-0" onClick={toggleSelectAll}>
@@ -499,6 +542,8 @@ export default function SectionForm() {
       {examId && (
         <CreateQuestionModal
           examId={examId}
+          sectionName={form.name}
+          defaultMarks={defaultQuestionMarks}
           show={showCreateQuestion}
           onClose={() => setShowCreateQuestion(false)}
           onCreated={handleQuestionCreated}

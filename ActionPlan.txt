@@ -2756,3 +2756,140 @@ className.
 
 VERIFY: reload /admin/exams in the browser, confirm the header row is
 visibly light gray.
+
+=====================================================================
+FEATURE (DONE, 2026-08-20): Guided exam creation wizard + question
+creation moved into Question Assignment
+=====================================================================
+REQUESTED: "i want as per exam screen.jpg flow" - Create Exam should
+continue as one guided wizard (Create -> Manage Sections -> Exam
+Configuration -> Review & Publish), matching the wireframe instead of
+dropping back to the plain exam list. Then: "as per exam screen.jpg
+question assign is as per sectionwise question assign please check 06
+screen" - Question Assignment (screen 06) should be a two-column
+layout (filters left, question list + Select All right), not a filter
+bar above a table. Then: "i want our questions page move to question
+assignment under section" (clarified: "move means same functionality")
+- the standalone Create Question page / Question Bank's "+ Add
+Question" exam-picker flow should be fully removed; question creation
+only happens from within a section's Question Assignment step.
+
+WIZARD: new ExamWizardStepper component + ExamWizardSections /
+ExamWizardConfiguration / ExamWizardReview pages at
+/admin/exams/:id/wizard/{sections,configuration,review}. CreateExam
+now navigates into the wizard on success; SectionForm and
+ReorderSections detect a `?wizard=true` param and return into the
+wizard instead of the standalone Sections pages.
+
+QUESTION ASSIGNMENT LAYOUT: SectionForm.tsx step 3 restructured to a
+two-column Row (filters Col md=3, Available Questions Col md=9) with a
+Select All / Clear All toggle, matching wireframe screen 06's Manual
+Selection tab. (Subjects filter and the Auto Selection / Import
+Questions tabs from the wireframe were explicitly out of scope per
+user's choice - no Subject field exists on Question yet.)
+
+QUESTION CREATION RELOCATION: deleted CreateQuestion.tsx and the route
+/admin/exams/:examId/questions/create; removed QuestionBank's "+ Add
+Question" button/exam-picker modal. New reusable
+components/CreateQuestionModal.tsx (same fields/validation as the old
+page) opens from a "+ Create Question" link inside Question Assignment
+- on save it invalidates the questions query and pre-selects the new
+question in the current section's list. Non-sectioned exams have no
+Manage Sections list to reach Question Assignment from, so exams
+without ContainsSections now get an implicit "General" section
+on-demand: new backend endpoint GET /api/exams/{id}/sections/default
+(GetOrCreateDefaultSectionHandler, idempotent - reuses the first
+existing section if any, else creates one) backs a new "Manage
+Questions" button on ExamDetails that fetches-or-creates the default
+section then deep-links to its edit page at `?step=3` (SectionForm now
+reads `?step=` to land directly on Question Assignment). AI-generated
+exams keep their own "Generate Questions with AI" button (previously
+only reachable via the now-removed Question Bank picker) linking to
+the existing /admin/exams/:id/questions/ai-generate flow, which was
+left untouched.
+
+VERIFIED: 70/70 backend Exam.Application tests pass (3 new for
+GetOrCreateDefaultSectionHandler: creates-when-none,
+reuses-when-existing, unknown-exam-returns-null). 26/26 frontend tests
+pass. tsc --noEmit and oxlint both clean. Live in Docker: full wizard
+click-through (Create -> Sections -> Configuration -> Review ->
+Publish) verified end-to-end; Question Assignment's two-column layout
+and Select All/Clear All verified with a real question; "+ Create
+Question" verified from a sectioned exam's Question Assignment
+(question appeared pre-selected immediately after saving); "Manage
+Questions" verified on a non-sectioned exam - first click created a
+new default section and navigated to its Question Assignment step,
+second click reused the same section id (idempotency confirmed).
+Committed as d4beed2, 2c5b210, a5aa5c6 on dev and pushed.
+
+=====================================================================
+FOLLOW-UP (DONE, 2026-08-20): Question Assignment picks up section
+name and exam type; AI flow made section-aware; manual Marks default;
+"Save & Generate with AI" bug fix
+=====================================================================
+REQUESTED: "when click on add question then section name pickup and
+exam type pickup from exam type suppose exam type AI generation diff
+option come up like last time we hare create in question page" - the
+Create Question trigger should know which section it's for and branch
+on the exam's type like the old standalone flow did.
+
+SECTION NAME + EXAM TYPE BRANCHING: CreateQuestionModal.tsx gained an
+optional `sectionName` prop, shown under the modal title. SectionForm
+now fetches the exam (useExam) and branches: Manual exams keep "+
+Create Question" -> the modal; AI Generated exams show "+ Generate
+with AI" -> navigates to /admin/exams/:id/questions/ai-generate with
+`?sectionId=` so the AI flow knows its section.
+
+AI FLOW SECTION-AWARE: AiGenerateQuestion.tsx reads `sectionId` from
+the query string, shows "Exam: X - Section: Y" in the header, and -
+per two follow-up corrections - (1) "we are creating question as per
+section name by default not exam name": the topic sent to the AI
+generator now defaults to the section's name/description instead of
+the exam's when generating from a section context; (2) "number of
+question take from create section page": Number of Questions now
+defaults from the section's own planned Question Count (set on its
+Information step) instead of the hardcoded 10. After approving,
+AiGeneratedQuestionsPreview.tsx now returns to that section's Question
+Assignment step (`?step=3`, added to SectionForm's step state so it
+can be deep-linked) instead of the global Questions page.
+
+MANUAL MARKS DEFAULT: "then tell me - exam creating time - Duration/
+Total Marks/Passing Marks how to calculate" led into a straight
+explanation (none of the three are auto-calculated from
+questions/sections - Duration and Total Marks are plain admin-entered
+values with no sync back from actual question marks, same precedent
+as Section.QuestionCount; Passing Marks is the only one with real
+enforced meaning, compared against totalScore at grading time in
+Result.Application's GetResultHandler). Given that context, the manual
+Create Question modal's Marks field now defaults to
+section.marks / section.questionCount (rounded, minimum 1) instead of
+always 1.
+
+BUG FOUND AND FIXED: "you check i have created java exam as ai
+generation but generate with ai not coming" - reproduced on a brand
+new, not-yet-saved section (the normal +Add Section flow): the AI
+branch was gated on `isEdit` (only available once a section already
+existed), so a new AI-generated-exam section silently fell back to the
+manual modal. Root cause was deliberate at the time (avoid losing
+unsaved Information/Rules data by navigating away) but was the wrong
+tradeoff - user expects the AI option available immediately. FIX:
+`useAiGenerate` no longer depends on `isEdit`; for a new unsaved
+section the button now reads "Save & Generate with AI" and, on click,
+auto-saves the section via the same createSection call the final "Add
+Section" button uses, then continues into the AI generator with the
+newly-created section's real id.
+
+VERIFIED: tsc --noEmit and oxlint clean, 26/26 frontend tests pass
+after each change. Live in Docker: modal shows "Section: <name>" on a
+Manual exam; "+ Generate with AI" on a saved AI-generated exam's
+section shows "Exam: c# fundamental - Section: Inheritance" and all 5
+generated questions were specifically about inheritance (topic-from-
+section confirmed); Number of Questions field showed 5 matching the
+section's planned count; manual modal's Marks field showed 5 for a
+20-marks/4-questions section (20/4); reproduced the reported bug on
+exam "Java" (new unsaved section under +Add Section showed "+ Create
+Question" instead of any AI option), then re-verified after the fix -
+button read "Save & Generate with AI", clicking it created section
+"Basics" and landed on "Exam: Java - Section: Basics" in the AI
+generator; confirmed via Manage Sections that "Basics" was saved
+correctly, not orphaned.
