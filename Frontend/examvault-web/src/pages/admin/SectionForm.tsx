@@ -91,6 +91,8 @@ export default function SectionForm() {
 
   const selectedQuestions = availableQuestions.filter((q) => selectedIds.has(q.id));
   const totalMarksSelected = selectedQuestions.reduce((sum, q) => sum + q.marks, 0);
+  const allFilteredSelected =
+    filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id));
 
   const toggleQuestion = (id: string) => {
     setSelectedIds((prev) => {
@@ -99,6 +101,18 @@ export default function SectionForm() {
         next.delete(id);
       } else {
         next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredQuestions.forEach((q) => next.delete(q.id));
+      } else {
+        filteredQuestions.forEach((q) => next.add(q.id));
       }
       return next;
     });
@@ -341,88 +355,104 @@ export default function SectionForm() {
 
           {step === 3 && (
             <>
-              <Row className="g-2 mb-3">
+              <Row className="g-4">
                 <Col md={3}>
-                  <Form.Select
-                    value={typeFilter}
-                    onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-                  >
-                    <option value="All">All Types</option>
-                    <option value="MultipleChoice">Multiple Choice</option>
-                    <option value="TrueFalse">True/False</option>
-                  </Form.Select>
+                  <Form.Group className="mb-3" controlId="sectionQuestionTypeFilter">
+                    <Form.Label className="fw-bold small">Question Type</Form.Label>
+                    <Form.Select
+                      value={typeFilter}
+                      onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
+                    >
+                      <option value="All">All</option>
+                      <option value="MultipleChoice">Multiple Choice</option>
+                      <option value="TrueFalse">True/False</option>
+                    </Form.Select>
+                  </Form.Group>
+                  <Form.Group className="mb-3" controlId="sectionDifficultyFilter">
+                    <Form.Label className="fw-bold small">Difficulty</Form.Label>
+                    <Form.Select
+                      value={difficultyFilter}
+                      onChange={(e) => setDifficultyFilter(e.target.value as typeof difficultyFilter)}
+                    >
+                      <option value="All">All</option>
+                      <option value="Easy">Easy</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Hard">Hard</option>
+                    </Form.Select>
+                  </Form.Group>
+                  <Form.Group controlId="sectionQuestionSearch">
+                    <Form.Label className="fw-bold small">Search Question</Form.Label>
+                    <Form.Control
+                      type="search"
+                      placeholder="Search by keyword..."
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                    />
+                  </Form.Group>
                 </Col>
-                <Col md={3}>
-                  <Form.Select
-                    value={difficultyFilter}
-                    onChange={(e) => setDifficultyFilter(e.target.value as typeof difficultyFilter)}
-                  >
-                    <option value="All">All Difficulty</option>
-                    <option value="Easy">Easy</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Hard">Hard</option>
-                  </Form.Select>
-                </Col>
-                <Col md={6}>
-                  <Form.Control
-                    type="search"
-                    placeholder="Search questions..."
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
-                  />
+
+                <Col md={9}>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div className="fw-bold">Available Questions</div>
+                    {filteredQuestions.length > 0 && (
+                      <Button variant="link" size="sm" className="p-0" onClick={toggleSelectAll}>
+                        {allFilteredSelected ? 'Clear All' : 'Select All'}
+                      </Button>
+                    )}
+                  </div>
+
+                  {(isLoadingUnassigned || (isEdit && isLoadingSectionQuestions)) && (
+                    <div className="d-flex justify-content-center py-4">
+                      <Spinner animation="border" />
+                    </div>
+                  )}
+
+                  {!isLoadingUnassigned && filteredQuestions.length === 0 && (
+                    <div className="text-center text-muted py-4">
+                      No unassigned questions match these filters. Add questions to this exam first
+                      from the Exam page, then come back to assign them here.
+                    </div>
+                  )}
+
+                  {!isLoadingUnassigned && filteredQuestions.length > 0 && (
+                    <Table responsive hover className="align-middle">
+                      <thead className="text-muted small text-uppercase table-light">
+                        <tr>
+                          <th style={{ width: 40 }}></th>
+                          <th>Question</th>
+                          <th>Type</th>
+                          <th>Difficulty</th>
+                          <th>Marks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredQuestions.map((q) => (
+                          <tr
+                            key={q.id}
+                            role="button"
+                            onClick={() => toggleQuestion(q.id)}
+                            className={selectedIds.has(q.id) ? 'table-primary' : undefined}
+                          >
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <Form.Check
+                                type="checkbox"
+                                checked={selectedIds.has(q.id)}
+                                onChange={() => toggleQuestion(q.id)}
+                              />
+                            </td>
+                            <td>{q.questionText}</td>
+                            <td>{q.questionType === 'MultipleChoice' ? 'MCQ' : 'True/False'}</td>
+                            <td>
+                              <Badge bg="secondary">{q.difficulty}</Badge>
+                            </td>
+                            <td>{q.marks}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
                 </Col>
               </Row>
-
-              {(isLoadingUnassigned || (isEdit && isLoadingSectionQuestions)) && (
-                <div className="d-flex justify-content-center py-4">
-                  <Spinner animation="border" />
-                </div>
-              )}
-
-              {!isLoadingUnassigned && filteredQuestions.length === 0 && (
-                <div className="text-center text-muted py-4">
-                  No unassigned questions match these filters. Add questions to this exam first from
-                  the Exam page, then come back to assign them here.
-                </div>
-              )}
-
-              {!isLoadingUnassigned && filteredQuestions.length > 0 && (
-                <Table responsive hover className="align-middle">
-                  <thead className="text-muted small text-uppercase table-light">
-                    <tr>
-                      <th style={{ width: 40 }}></th>
-                      <th>Question</th>
-                      <th>Type</th>
-                      <th>Difficulty</th>
-                      <th>Marks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredQuestions.map((q) => (
-                      <tr
-                        key={q.id}
-                        role="button"
-                        onClick={() => toggleQuestion(q.id)}
-                        className={selectedIds.has(q.id) ? 'table-primary' : undefined}
-                      >
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <Form.Check
-                            type="checkbox"
-                            checked={selectedIds.has(q.id)}
-                            onChange={() => toggleQuestion(q.id)}
-                          />
-                        </td>
-                        <td>{q.questionText}</td>
-                        <td>{q.questionType === 'MultipleChoice' ? 'MCQ' : 'True/False'}</td>
-                        <td>
-                          <Badge bg="secondary">{q.difficulty}</Badge>
-                        </td>
-                        <td>{q.marks}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              )}
 
               <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
                 <div className="text-muted small">
