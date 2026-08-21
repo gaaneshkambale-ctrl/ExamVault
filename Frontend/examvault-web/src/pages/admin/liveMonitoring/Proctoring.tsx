@@ -8,7 +8,8 @@ import { useExams } from '../../../hooks/useExams';
 import { useUsers } from '../../../hooks/useUsers';
 import { useAssignmentsByExam } from '../../../hooks/useAssignments';
 import { useAttemptsByExam, useViolationsByExam } from '../../../hooks/useSubmissions';
-import { forceSubmitAttempt } from '../../../api/submissionApi';
+import { forceSubmitAttempt, setLiveWatchEnabled } from '../../../api/submissionApi';
+import LiveCameraCell from '../../../components/admin/LiveCameraCell';
 import type { ExamAttemptResponse } from '../../../types/submission';
 
 // "Live monitoring" - same polling mechanism the other Live Monitoring pages use.
@@ -33,6 +34,7 @@ interface SessionCard {
   examId: string;
   examTitle: string;
   alert: CardAlert;
+  liveVideoEnabled: boolean;
 }
 
 export default function Proctoring() {
@@ -41,6 +43,7 @@ export default function Proctoring() {
   const { data: users } = useUsers();
   const [searchText, setSearchText] = useState('');
   const [examFilter, setExamFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState<CardAlert | 'All'>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [confirmCard, setConfirmCard] = useState<SessionCard | null>(null);
   const [confirmEndAll, setConfirmEndAll] = useState(false);
@@ -77,10 +80,23 @@ export default function Proctoring() {
     return map;
   }, [publishedExamIds, assignmentsByExam]);
 
+  // Exam-creation-time "Allow Live Video Feed" setting - independent of
+  // EnableProctoring (detection keeps running either way). Same per-exam
+  // aggregation as proctoringEnabledByExam above, since this page only
+  // resolves settings at the exam level, not per specific assignment.
+  const liveVideoEnabledByExam = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const examId of publishedExamIds) {
+      map.set(examId, (assignmentsByExam[examId] ?? []).some((a) => a.enableProctoring && a.enableLiveVideo));
+    }
+    return map;
+  }, [publishedExamIds, assignmentsByExam]);
+
   const allCards: SessionCard[] = publishedExamIds.flatMap((examId) => {
     const inProgress = (attemptsByExam[examId] ?? []).filter((a) => a.status === 'InProgress');
     const violations = violationsByExam[examId] ?? [];
     const proctoringEnabled = proctoringEnabledByExam.get(examId) ?? false;
+    const liveVideoEnabled = liveVideoEnabledByExam.get(examId) ?? false;
     const examTitle = examById.get(examId) ?? '';
 
     return inProgress.map((attempt) => {
@@ -98,12 +114,15 @@ export default function Proctoring() {
           alert = openFaceAlert.type === 'MultipleFacesDetected' ? 'MultipleFaces' : 'NoFace';
         }
       }
-      return { attempt, examId, examTitle, alert };
+      return { attempt, examId, examTitle, alert, liveVideoEnabled };
     });
   });
 
   const cards = allCards.filter((card) => {
     if (examFilter !== 'All' && card.examId !== examFilter) {
+      return false;
+    }
+    if (statusFilter !== 'All' && card.alert !== statusFilter) {
       return false;
     }
     const term = searchText.trim().toLowerCase();
@@ -132,6 +151,17 @@ export default function Proctoring() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['submissions'] });
       setConfirmEndAll(false);
+    },
+  });
+
+  // Per-session live-watch authority - off by default even when proctoring
+  // is on. The server re-checks this on every watch request; this toggle is
+  // just the admin-facing control for it, not the actual authorization.
+  const liveWatchMutation = useMutation({
+    mutationFn: ({ attemptId, enabled }: { attemptId: string; enabled: boolean }) =>
+      setLiveWatchEnabled(attemptId, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['submissions'] });
     },
   });
 
@@ -171,13 +201,14 @@ export default function Proctoring() {
       </div>
 
       <div className="alert alert-light border small text-muted mb-4">
-        Live camera feeds aren't available here - proctoring analysis (face detection, tab/window activity) runs
-        privately in each student's own browser and only violation events are ever sent to the server. Cards below
-        reflect that real signal, not a video call.
+        Proctoring analysis (face detection, tab/window activity) runs privately in each student's own browser -
+        only violation events are ever sent to the server, and cards below reflect that real signal first. Live
+        video is opt-in per session and off by default: flip a card's "Live" switch to grant watch authority for
+        that one student, then use Watch Live to view it.
       </div>
 
       <Row className="g-2 mb-3">
-        <Col md={6}>
+        <Col md={5}>
           <Form.Control
             type="search"
             placeholder="Search students..."
@@ -191,6 +222,19 @@ export default function Proctoring() {
             {publishedExamIds.map((examId) => (
               <option key={examId} value={examId}>
                 {examById.get(examId) ?? examId}
+              </option>
+            ))}
+          </Form.Select>
+        </Col>
+        <Col md={3}>
+          <Form.Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as CardAlert | 'All')}
+          >
+            <option value="All">All Statuses</option>
+            {(Object.keys(alertMeta) as CardAlert[]).map((status) => (
+              <option key={status} value={status}>
+                {alertMeta[status].label}
               </option>
             ))}
           </Form.Select>
@@ -225,21 +269,35 @@ export default function Proctoring() {
             const meta = alertMeta[card.alert];
             const user = userById.get(card.attempt.userId);
             return (
-              <Col md={4} key={card.attempt.id}>
+              <Col md={6} lg={3} key={card.attempt.id}>
                 <Card
                   className="border-0 shadow-sm h-100"
                   style={{ borderTop: `4px solid ${meta.borderColor}` }}
                 >
                   <div
-                    className="d-flex align-items-center justify-content-center bg-light"
-                    style={{ height: 140 }}
+                    className="bg-light"
+                    style={{ height: 260 }}
                   >
-                    <UserAvatar
-                      userId={card.attempt.userId}
-                      fullName={user?.fullName ?? 'Student'}
-                      hasPhoto={user?.hasPhoto ?? false}
-                      size={72}
-                    />
+                    {card.alert !== 'ProctoringOff' && card.liveVideoEnabled ? (
+                      <LiveCameraCell
+                        attemptId={card.attempt.id}
+                        enabled={card.attempt.liveWatchEnabled}
+                        studentName={user?.fullName ?? 'Student'}
+                        size={72}
+                        onClose={() =>
+                          liveWatchMutation.mutate({ attemptId: card.attempt.id, enabled: false })
+                        }
+                      />
+                    ) : (
+                      <div className="d-flex align-items-center justify-content-center w-100 h-100">
+                        <UserAvatar
+                          userId={card.attempt.userId}
+                          fullName={user?.fullName ?? 'Student'}
+                          hasPhoto={user?.hasPhoto ?? false}
+                          size={72}
+                        />
+                      </div>
+                    )}
                   </div>
                   <Card.Body>
                     <div className="d-flex justify-content-between align-items-start mb-2">
@@ -249,15 +307,25 @@ export default function Proctoring() {
                     <div className="text-muted small mb-3">{user?.email ?? ''}</div>
                     <div className="text-muted small mb-3">{card.examTitle}</div>
 
-                    <div className="d-flex justify-content-between align-items-center">
+                    {card.alert !== 'ProctoringOff' && card.liveVideoEnabled && (
+                      <Form.Check
+                        type="switch"
+                        id={`live-watch-${card.attempt.id}`}
+                        label="Live"
+                        className="small mb-2"
+                        checked={card.attempt.liveWatchEnabled}
+                        disabled={liveWatchMutation.isPending}
+                        onChange={(e) =>
+                          liveWatchMutation.mutate({ attemptId: card.attempt.id, enabled: e.target.checked })
+                        }
+                      />
+                    )}
+
+                    <div className="d-flex justify-content-between align-items-center gap-2">
                       <Link to={`/admin/exams/${card.examId}`} className="small text-decoration-none">
                         View Exam →
                       </Link>
-                      <Button
-                        variant="outline-danger"
-                        size="sm"
-                        onClick={() => setConfirmCard(card)}
-                      >
+                      <Button variant="outline-danger" size="sm" onClick={() => setConfirmCard(card)}>
                         End
                       </Button>
                     </div>
@@ -278,6 +346,7 @@ export default function Proctoring() {
                   <th className="ps-4">Student</th>
                   <th>Exam</th>
                   <th>Status</th>
+                  <th>Live Watch</th>
                   <th className="pe-4">Actions</th>
                 </tr>
               </thead>
@@ -304,6 +373,34 @@ export default function Proctoring() {
                       <td>{card.examTitle}</td>
                       <td>
                         <Badge bg={meta.bg}>{meta.label}</Badge>
+                      </td>
+                      <td>
+                        {card.alert !== 'ProctoringOff' && card.liveVideoEnabled && (
+                          <div className="d-flex align-items-center gap-2">
+                            <Form.Check
+                              type="switch"
+                              id={`live-watch-list-${card.attempt.id}`}
+                              label="Live"
+                              className="small text-nowrap"
+                              checked={card.attempt.liveWatchEnabled}
+                              disabled={liveWatchMutation.isPending}
+                              onChange={(e) =>
+                                liveWatchMutation.mutate({ attemptId: card.attempt.id, enabled: e.target.checked })
+                              }
+                            />
+                            <div style={{ width: 56, height: 40 }}>
+                              <LiveCameraCell
+                                attemptId={card.attempt.id}
+                                enabled={card.attempt.liveWatchEnabled}
+                                studentName={user?.fullName ?? 'Student'}
+                                size={40}
+                                onClose={() =>
+                                  liveWatchMutation.mutate({ attemptId: card.attempt.id, enabled: false })
+                                }
+                              />
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className="pe-4">
                         <div className="d-flex align-items-center gap-3">

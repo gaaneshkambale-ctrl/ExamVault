@@ -8,6 +8,11 @@ namespace OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
 // publish into. Deliberately idempotent: the room name is deterministic
 // (attempt-{attemptId}), so a page refresh mid-exam just re-creates/re-joins
 // the same room rather than starting a second recording.
+//
+// Gated on BOTH EnableProctoring and EnableLiveVideo - the latter lets an
+// exam keep face-detection/violation-tracking on (that runs entirely
+// client-side in useProctoring.ts, unaffected by this handler) while still
+// refusing to ever publish the student's camera anywhere.
 public class JoinRecordingHandler
 {
     private readonly ISubmissionRepository _repository;
@@ -48,7 +53,7 @@ public class JoinRecordingHandler
             attempt.ExamId,
             command.BearerToken,
             cancellationToken);
-        if (assignment is not { EnableProctoring: true })
+        if (assignment is not { EnableProctoring: true, EnableLiveVideo: true })
         {
             return JoinRecordingResult.Ok(null, null);
         }

@@ -6,7 +6,8 @@ public record AssignmentLookupResult(
     DateTime StartAtUtc,
     DateTime EndAtUtc,
     int MaxAttempts,
-    bool EnableProctoring = false);
+    bool EnableProctoring = false,
+    bool EnableLiveVideo = false);
 
 public interface IAssignmentLookupClient
 {

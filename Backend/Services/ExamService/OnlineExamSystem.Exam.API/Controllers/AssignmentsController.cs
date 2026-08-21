@@ -88,6 +88,7 @@ public class AssignmentsController : ControllerBase
             request.AllowReviewAfterSubmit,
             request.AutoSubmitOnTimeOver,
             request.EnableProctoring,
+            request.EnableLiveVideo,
             bearerToken);
 
         var result = await _createAssignmentHandler.HandleAsync(command, cancellationToken);
@@ -150,6 +151,7 @@ public class AssignmentsController : ControllerBase
             request.AllowReviewAfterSubmit,
             request.AutoSubmitOnTimeOver,
             request.EnableProctoring,
+            request.EnableLiveVideo,
             bearerToken);
 
         var result = await _updateAssignmentHandler.HandleAsync(command, cancellationToken);
@@ -241,6 +243,7 @@ public class AssignmentsController : ControllerBase
             assignment.AllowReviewAfterSubmit,
             assignment.AutoSubmitOnTimeOver,
             assignment.EnableProctoring,
+            assignment.EnableLiveVideo,
             assignment.CreatedAtUtc);
 
     private static MyAssignmentResponse ToMyResponse(ExamAssignment assignment) =>
@@ -258,7 +261,8 @@ public class AssignmentsController : ControllerBase
             assignment.ShowCorrectAnswers,
             assignment.AllowReviewAfterSubmit,
             assignment.AutoSubmitOnTimeOver,
-            assignment.EnableProctoring);
+            assignment.EnableProctoring,
+            assignment.EnableLiveVideo);
 
     private static AssignmentListItemResponse ToListItemResponse(AssignmentWithExamTitle item) =>
         new(

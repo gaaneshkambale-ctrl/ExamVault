@@ -23,4 +23,10 @@ public class ExamAssignment : BaseEntity
     public bool AllowReviewAfterSubmit { get; set; }
     public bool AutoSubmitOnTimeOver { get; set; } = true;
     public bool EnableProctoring { get; set; }
+    // Independent of EnableProctoring: face-detection/violation-tracking
+    // (useProctoring.ts's own camera effect) runs regardless of this flag.
+    // This one gates only whether the student's camera ever gets published
+    // to Metered at all - JoinRecordingHandler in SubmissionService checks
+    // it before creating a room, so it's meaningless without proctoring on.
+    public bool EnableLiveVideo { get; set; }
 }

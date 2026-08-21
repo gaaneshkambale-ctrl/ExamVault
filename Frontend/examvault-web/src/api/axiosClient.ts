@@ -5,12 +5,31 @@ const REFRESH_TOKEN_STORAGE_KEY = 'examvault.refreshToken';
 let accessToken: string | null = null;
 let authFailureHandler: (() => void) | null = null;
 
+// localStorage is shared by every tab on this origin - without this cache, a
+// second tab logging in as a different user overwrites the one stored
+// refresh token, and this tab's next silent refresh would silently pick up
+// the OTHER tab's session (observed as an already-mid-exam student tab
+// getting logged into whatever account was last opened elsewhere). Caching
+// the value in memory the first time this tab reads it (page load, or its
+// own login) makes each tab authoritative over its own session from then on
+// - it stops reacting to storage writes made by other tabs, while a brand
+// new tab still correctly inherits whatever session is currently persisted.
+let cachedRefreshToken: string | null | undefined;
+let cachedRemember = true;
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
 }
 
 export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) ?? sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  if (cachedRefreshToken !== undefined) {
+    return cachedRefreshToken;
+  }
+  const fromLocal = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  const fromSession = sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  cachedRefreshToken = fromLocal ?? fromSession;
+  cachedRemember = fromLocal !== null;
+  return cachedRefreshToken;
 }
 
 /**
@@ -19,6 +38,8 @@ export function getRefreshToken(): string | null {
  * driven by the login form's "Remember me" checkbox.
  */
 export function setRefreshToken(token: string | null, remember = true) {
+  cachedRefreshToken = token;
+  cachedRemember = remember;
   if (!token) {
     localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
@@ -56,7 +77,7 @@ async function refreshAccessTokenSilently(): Promise<string | null> {
     return null;
   }
 
-  const remember = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) !== null;
+  const remember = cachedRemember;
   try {
     const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
       `${import.meta.env.VITE_API_BASE_URL}/api/users/refresh-token`,

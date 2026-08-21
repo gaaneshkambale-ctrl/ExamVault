@@ -42,7 +42,8 @@ public class AssignmentServiceClient : IAssignmentLookupClient
             body.StartAtUtc,
             body.EndAtUtc,
             body.MaxAttempts,
-            body.EnableProctoring);
+            body.EnableProctoring,
+            body.EnableLiveVideo);
     }
 
     private sealed class AssignmentApiResponse
@@ -53,5 +54,6 @@ public class AssignmentServiceClient : IAssignmentLookupClient
         public DateTime EndAtUtc { get; init; }
         public int MaxAttempts { get; init; }
         public bool EnableProctoring { get; init; }
+        public bool EnableLiveVideo { get; init; }
     }
 }

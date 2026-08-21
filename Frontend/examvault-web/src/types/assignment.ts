@@ -17,6 +17,7 @@ export interface CreateAssignmentRequest {
   allowReviewAfterSubmit: boolean;
   autoSubmitOnTimeOver: boolean;
   enableProctoring: boolean;
+  enableLiveVideo: boolean;
 }
 
 export interface UpdateAssignmentRequest {
@@ -35,6 +36,7 @@ export interface UpdateAssignmentRequest {
   allowReviewAfterSubmit: boolean;
   autoSubmitOnTimeOver: boolean;
   enableProctoring: boolean;
+  enableLiveVideo: boolean;
 }
 
 export interface ExamAssignmentResponse {
@@ -56,6 +58,7 @@ export interface ExamAssignmentResponse {
   allowReviewAfterSubmit: boolean;
   autoSubmitOnTimeOver: boolean;
   enableProctoring: boolean;
+  enableLiveVideo: boolean;
   createdAtUtc: string;
 }
 
@@ -74,6 +77,7 @@ export interface MyAssignmentResponse {
   allowReviewAfterSubmit: boolean;
   autoSubmitOnTimeOver: boolean;
   enableProctoring: boolean;
+  enableLiveVideo: boolean;
 }
 
 export interface AssignmentListItemResponse {

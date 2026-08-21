@@ -3046,3 +3046,372 @@ its exact error message ("question text is required"); clicked "Import
 Selected (2)" and both questions were created, pre-selected in
 Available Questions, with working Edit/Delete. Test exam and its
 questions deleted afterward to keep the local DB clean.
+
+=====================================================================
+FEATURE (DONE, 2026-08-21): Admin live-watch of a student's exam
+camera feed (Metered.ca), gated by a real per-session authority toggle
+=====================================================================
+REQUESTED: "yes, admin will watch live of use giving the exam" -
+follow-up to verifying the Metered.ca recording feature (b32f6ed)
+actually works (confirmed live: real room-create + token-mint calls,
+200s from Metered, live camera thumbnail during a real exam attempt).
+That commit only pipes the student's camera INTO Metered - nothing in
+the app reads it back out. The admin Proctoring page (Proctoring.tsx)
+explicitly says today: "Live camera feeds aren't available here...
+Cards below reflect that real signal, not a video call." This plan
+adds the missing watch-it-back-out half, scoped to LIVE viewing only
+(while the attempt is InProgress) - not a past-recordings/playback
+library, which is a separate, larger feature (Metered's composition/
+recording-file API) not requested here.
+
+Follow-up ask, after the first draft of this plan was shared: don't
+just trust the Admin role to gate watching (this plan's first version
+did) - "exam set time admin set as live then only live feed we see
+the admin... dynamic set... give that type authority". Clarified via
+two questions: the authority is a real-time toggle the admin flips
+during the exam (not a fixed checkbox at assignment-creation time),
+and it's scoped per student session, not per exam - each Proctoring
+card gets its own on/off switch, and only THAT attempt's watch
+authority is granted when it's on. This is a genuine server-side
+permission gate, not a UI convenience - WatchRecordingHandler must
+re-check it on every request, since the "which cards even show a
+toggle" logic that already exists client-side (proctoring-enabled
+filter) is exactly the kind of trust-the-client-side-filter mistake
+this request is correcting.
+
+BACKEND (SubmissionService):
+- ExamAttempt gains `LiveWatchEnabled` (bool, default false) - lives
+  on the attempt itself (not the assignment) since the authority is
+  genuinely per-session: a fresh attempt always starts un-watchable,
+  matching "dynamic, admin flips it during THIS exam" rather than
+  anything fixed at assignment setup. New EF Core migration on
+  SubmissionDb (sibling to 20260821032823_AddViolationEvents).
+- New Attempts/SetLiveWatch slice: SetLiveWatchCommand(AttemptId,
+  Enabled), SetLiveWatchHandler - 404 if attempt missing, Conflict if
+  not InProgress (can't grant/revoke watch authority on a session
+  that's already over), otherwise flips the flag and saves. Turning
+  it off does NOT force-disconnect an admin already watching (Metered
+  has no forced-eject-one-participant call in this SDK without a
+  second admin-scoped token flow - noted as an accepted limitation,
+  same class as the view-only-is-client-side-only note below); it
+  only blocks *new* watch/token requests from that point on.
+- SubmissionsController: `PUT {attemptId}/live-watch` (body:
+  `{ enabled: bool }`), `[Authorize(Roles = "Admin")]`. Returns the
+  updated `{ liveWatchEnabled }`.
+- WatchRecordingCommand/Handler/Result (as originally planned) get ONE
+  change from the first draft: the handler now re-reads
+  `attempt.LiveWatchEnabled` itself and returns a new
+  `IsNotAuthorized` outcome (-> 403) when false, instead of trusting
+  the Admin role alone. Room name still the deterministic
+  `attempt-{attempt.Id}` JoinRecording already uses;
+  EnsureRoomExistsAsync + CreateJoinTokenAsync unchanged from the
+  first draft.
+- ExamAttemptResponse (Shared.Contracts) gains `LiveWatchEnabled` so
+  the Proctoring page's existing 15s attempt poll (useAttemptsByExam)
+  carries current toggle state for every card with zero new polling -
+  no separate "get toggle state" endpoint needed.
+- IVideoRecordingService/MeteredVideoRecordingService/
+  NullVideoRecordingService/FakeVideoRecordingService: unchanged - see
+  first-draft rationale (CreateJoinTokenAsync already takes any
+  externalUserId; Metered's JS SDK has no server-enforced viewer-only
+  token role, confirmed against their docs - disableVideo/disableAudio
+  token fields are iframe-embed-only. View-only stays enforced purely
+  client-side by the admin page never calling shareCustomVideoStream -
+  still an accepted limitation, same trust level as every other
+  Admin-role action, now with the LiveWatchEnabled gate in front of it
+  instead of Admin-role alone).
+- New/updated tests: SetLiveWatchHandlerTests.cs (flips the flag,
+  404/Conflict cases). WatchRecordingHandlerTests.cs updated - add
+  IsNotAuthorized when LiveWatchEnabled is false even though InProgress
+  and proctoring is on; existing cases seed LiveWatchEnabled: true.
+
+FRONTEND (examvault-web):
+- submissionApi.ts: `setLiveWatchEnabled(attemptId, enabled)` -> PUT
+  `/api/submissions/{id}/live-watch`. `watchRecording(attemptId)` ->
+  POST `/api/submissions/{id}/recording/watch`, `{roomUrl, token}`
+  shape (both nullable), as originally planned - now can also come
+  back both-null because the toggle is off, same "no error, just
+  nothing to show" contract as the proctoring-off/Metered-down cases.
+- ExamAttemptResponse frontend type + useAttemptsByExam: add
+  `liveWatchEnabled: boolean`.
+- meteredSdk.ts: extend the typed `MeteredMeeting` interface with
+  `.on(event, callback)` for the events needed to receive (not
+  publish) video - `remoteTrackStarted`/`remoteTrackStopped`
+  (`{type, track, streamId, participantSessionId}`) and
+  `participantLeft`. No SDK/CDN version change.
+- New components/admin/WatchRecordingModal.tsx: opens on demand for
+  one attemptId. Calls watchRecording; both-null -> "No live
+  recording available for this session" empty state (toggle off,
+  proctoring off, or Metered down - modal doesn't need to distinguish,
+  the toggle itself is what's disabled/enabled on the card). Otherwise
+  loads the Metered SDK, joins with `joinWithVideo: false,
+  joinWithAudio: false` (view-only - never calls
+  shareCustomVideoStream), renders each incoming video track into a
+  `<video>` via `srcObject = new MediaStream([track])` as
+  remoteTrackStarted fires, removes it on remoteTrackStopped/
+  participantLeft. Shows "Waiting for student's camera..." until the
+  first video track arrives (covers the admin-clicks-first race).
+  Calls meeting.leaveMeeting() on close/unmount.
+- Proctoring.tsx: each card (grid + list) gets a "Live" Form.Check
+  switch next to the existing End action, shown only when
+  `card.alert !== 'ProctoringOff'` (no point offering it where no
+  camera stream can exist). Switch calls setLiveWatchEnabled on
+  toggle, optimistic-updates via the same `['submissions']` query
+  invalidation the End-session mutations already use. A "Watch Live"
+  button sits next to it, enabled only once the card's
+  `liveWatchEnabled` is true; opens WatchRecordingModal for that
+  attempt. Update the page's existing disclaimer text (currently
+  states no live video exists at all) to explain the new toggle: live
+  video is opt-in per session and off by default, violation cards
+  remain the primary always-on signal.
+
+OUT OF SCOPE (flagged, not building): past-recording playback/
+download (Metered's separate composition API), forcibly disconnecting
+an admin who's already watching when the toggle is switched back off
+mid-session, multi-admin simultaneous viewers of the same room
+(Metered supports it natively, just not tested here), audio.
+
+CHANGED FROM PLAN DURING BUILD - inline grid preview, not just a modal:
+after the toggle+backend gate was live, live-testing surfaced two more
+requests: "in grid as well video see if i want screen will big" (see
+the feed directly on the card, not only after a click, with a way to
+enlarge it) and "one row create four grid look will be inhance". Both
+addressed without a second Metered join per card: new
+hooks/useLiveWatch.ts holds the connect-on-`enabled` logic (moved out
+of the modal-only component from the first draft), and
+components/admin/LiveCameraCell.tsx renders it inline in the avatar
+slot - initials/photo until a track arrives, then a live thumbnail
+that fills the card's image area, with a "⤢ Expand" corner button
+opening a Modal that reuses the *same* MediaStream object at a bigger
+size (React's `srcObject` can back more than one <video> element at
+once, same trick useProctoring.ts's own local preview already relies
+on). WatchRecordingModal.tsx (the original standalone modal) deleted -
+folded into LiveCameraCell. Proctoring.tsx grid went from 3 to 4 cards
+per row (`Col md={4}` -> `Col md={6} lg={3}`, responsive rather than a
+flat 4-up that would cram on tablets) and the card image area grew
+140px -> 160px to give the live feed more room.
+
+REAL BUG FOUND AND FIXED (not part of the original ask, but blocking
+verification of it): "camera not active" was reported three times
+during live-testing despite the backend authorization and Metered
+connection both working end to end (confirmed via server logs - 200s
+from Metered's room/token endpoints, and a real live camera thumbnail
+during earlier verification of the underlying b32f6ed recording
+feature). Root cause, confirmed by watching `/api/assignments/mine`
+flip between 200 and 404 for the *same* still-in-progress
+student+exam pair with no data change: axiosClient.ts's refresh token
+lives in `localStorage`, shared by every tab on the origin. Logging
+into a second account (e.g. an admin tab, opened to test this very
+feature) in another tab overwrites the one stored refresh token: the
+next time the ALREADY-mid-exam student tab's access token needed a
+silent refresh, it silently picked up whichever account's refresh
+token happened to be sitting in storage at that moment - sometimes
+its own, sometimes the admin's - which is exactly what the 200/404
+flapping was. When it landed on the admin's token, the admin has no
+assignment for that exam, `assignment?.enableProctoring` in
+TakeExam.tsx went null, and the entire proctoring/camera pipeline
+silently turned off with no error shown to the student. Real bug,
+not scoped to this feature, but this feature's own testing (two
+roles, one browser) is exactly the scenario that triggers it, and a
+real admin+student pair testing this together would hit it too.
+
+FIX: axiosClient.ts now caches the refresh token (and which storage/
+"remember" choice it came from) in a module-level variable the first
+time each tab reads or sets it - at bootstrap (restoring a persisted
+session on page load) or at that tab's own login. Every later read
+(silent refresh on 401, logout's pre-revoke lookup) uses that cached
+value instead of re-reading localStorage, so a second tab's login/
+logout can no longer swap the session out from under a tab that's
+already running. A brand-new tab still correctly inherits whatever
+session is currently persisted (login persistence itself unchanged) -
+only an already-open tab's live session stops reacting to storage
+writes made elsewhere. Confirmed fixed live: after deploying this fix
+and resuming the same in-progress attempt, "Proctoring Active" and
+the camera feed came back and stayed up through the rest of testing
+across two tabs (admin logging in/out repeatedly) with no further
+drops - user directly confirmed ("camera window seen in examination").
+
+VERIFIED: dotnet build + 78/78 backend tests pass (incl. new
+SetLiveWatchHandlerTests.cs, WatchRecordingHandlerTests.cs). tsc
+--noEmit, oxlint, and 36/36 frontend tests clean after every round of
+changes. Live in Docker, two real accounts (fresh student +
+admin, promoted via Role=1 in UserDb - not password/credential
+access, which the session's auto-mode classifier correctly blocked
+me from reading even as a hash): admin's per-card "Live" switch
+persisted server-side (verified via SQL - LiveWatchEnabled flips in
+ExamAttempts), "Watch Live"/thumbnail stayed disabled until granted,
+WatchRecordingHandler mints a real Metered token only once granted
+(confirmed 200s from Metered in submission-api logs), and the admin's
+browser actually rendered the student's live camera feed inline in
+the Proctoring grid - confirmed directly by the user watching their
+own second browser tab, not just by me. Test accounts/DB tweaks
+(MaxAttempts bumps, extra ExamAssignmentTargets rows) left in place
+as regular local dev test data, same as prior feature verifications
+in this log.
+
+FOLLOW-UP POLISH (same day, live-tested by the user directly watching
+their own browser tab): "camera grid to small" -> grid card image area
+140px -> 260px, LiveCameraCell's live-video branch now fills 100% of
+whatever height its parent gives it (was capped to the `size` prop,
+same number used for the idle avatar's diameter). "one row create
+four grid look will be inhance" -> grid cards `Col md={4}` (3-up) ->
+`Col md={6} lg={3}` (responsive up to 4-up, not a flat 4-up that
+would cram on tablets). "show current image video close icon by
+default" -> new `onClose` prop on LiveCameraCell renders an always-
+visible (not hover-only) small "✕" button on the live thumbnail's
+top-left, wired in Proctoring.tsx to the same liveWatchMutation that
+drives the card's "Live" switch - one click stops watching without
+scrolling to the switch. "in proctoring page create combo for status
+wise filter" -> new statusFilter state + Form.Select next to the
+existing exam filter, options built directly from `alertMeta`'s keys
+so it can't drift from the four real card states (Active/Multiple
+Faces/No Face Detected/Proctoring Off).
+
+VERIFIED: tsc --noEmit, oxlint, 36/36 tests clean after each of the
+four changes above; each rebuilt and redeployed to the running
+frontend container individually rather than batched, so the user
+could confirm/redirect between rounds. Confirmed live in Docker by
+the user directly (4-per-row grid, taller inline video) rather than
+by me - repeated attempts to re-verify this specific round myself hit
+two unrelated obstacles worth recording: (1) the exam's Inheritance
+section has a ~10-minute limit that auto-submitted my test attempt
+mid-verification more than once, and (2) the browser tabs I was
+driving turned out to be the SAME tabs the user was independently
+browsing in (one jumped to an unrelated Google Stitch project, another
+showed a different exam entirely mid-session) - Chrome tab automation
+in this environment shares the user's actual browser, not an isolated
+instance, so parallel manual verification by both parties on the same
+tab group isn't reliable. Deferred final confirmation of this round to
+the user rather than continuing to fight for tab control.
+
+=====================================================================
+FEATURE (DONE, 2026-08-21): Exam-creation-time "Allow Live Video
+Feed" setting, separate from "Enable Proctoring"
+=====================================================================
+REQUESTED: "can do like proctoring on but video feed dont want live
+in setting of exam creation time?" - today EnableProctoring is one
+flag that gates BOTH the client-side detection suite (face/tab
+monitoring) AND whether the student's camera ever gets published to
+Metered at all (JoinRecordingHandler checks only EnableProctoring).
+There's no way to keep face-detection/violation-tracking on for an
+exam while refusing to ever capture/publish video for it. Confirmed
+scope with the user before this plan: proctoring analysis keeps
+working unchanged when the new setting is off; what stops is video
+capture itself, not just admin's ability to watch - no room ever gets
+created for that student's attempts, so the "Live" toggle shouldn't
+even appear on those cards.
+
+BACKEND (ExamService) - new `EnableLiveVideo` bool on ExamAssignment,
+parallel to the existing EnableProctoring, set at assignment create/
+edit time (same screen, nested checkbox - only meaningful when
+proctoring is on):
+- Domain: ExamAssignment.cs gains `EnableLiveVideo` (default false).
+  New EF Core migration on ExamDb (`bit`, default 0) sibling to
+  20260820060110_AddExamConfigurationFields.cs.
+- Application: CreateAssignmentCommand/Handler and
+  UpdateAssignmentCommand/Handler thread `EnableLiveVideo` through the
+  same way EnableProctoring already does (command field -> object
+  initializer / entity assignment). No new validator rule - a false
+  value is always valid, same as EnableProctoring today.
+- API: AssignmentsController's Create/Update actions read
+  `request.EnableLiveVideo` into both commands; ToResponse/ToMyResponse
+  add `EnableLiveVideo` to what's returned.
+- Shared.Contracts: CreateAssignmentRequest, UpdateAssignmentRequest,
+  ExamAssignmentResponse, MyAssignmentResponse each gain the field.
+
+BACKEND (SubmissionService) - this is the actual enforcement point:
+- IAssignmentLookupClient's AssignmentLookupResult record gains
+  `EnableLiveVideo` (default false); AssignmentServiceClient's private
+  AssignmentApiResponse + mapping add the same field (mirrors exactly
+  how EnableProctoring already flows through this client).
+- JoinRecordingHandler (the STUDENT's own join-on-camera-ready call):
+  currently only checks `assignment is not { EnableProctoring: true }`
+  before publishing. Add the second condition -
+  `assignment is not { EnableProctoring: true, EnableLiveVideo: true }`
+  - so a proctored-but-video-off assignment takes the exact same
+  both-null-no-error path JoinRecordingResult.Ok(null, null) already
+  uses for "proctoring isn't enabled at all". Face detection itself
+  lives entirely in useProctoring.ts's separate camera-permission
+  effect (unaffected by this flag) - only the Metered publish effect
+  depends on JoinRecording's roomUrl/token coming back non-null, so
+  disabling video here doesn't touch face detection at all.
+- WatchRecordingHandler: NOT changed. It already trusts
+  LiveWatchEnabled as the sole authorization gate (deliberate,
+  documented decision from the original Live-Watch feature - Admin
+  role + this flag, not a re-derived assignment lookup on every watch
+  call). If EnableLiveVideo was off, JoinRecording never published
+  anything, so a watch would just show "Waiting for camera..."
+  forever if somehow triggered - harmless, same class of outcome as
+  toggling Live on a ProctoringOff attempt today (not reachable
+  through the UI, since the frontend gates on the same signal below).
+
+FRONTEND:
+- types/assignment.ts: `enableLiveVideo: boolean` added to
+  CreateAssignmentRequest, UpdateAssignmentRequest,
+  ExamAssignmentResponse, MyAssignmentResponse.
+- AssignExam.tsx (single form handles both create and edit): new
+  `enableLiveVideo` state alongside `enableProctoring`, prefilled on
+  edit, included in both create/update payloads, a checkbox rendered
+  directly under "Enable Proctoring" - disabled and force-unchecked
+  whenever Enable Proctoring itself is off (mirrors the "nested,
+  only meaningful when proctoring is on" framing from the ask), and
+  added to the review-step summary list next to the existing
+  "Enable Proctoring" row.
+- Proctoring.tsx: new `liveVideoEnabledByExam` map (same per-exam
+  aggregation pattern `proctoringEnabledByExam` already uses - checks
+  whether any assignment for that exam has EnableLiveVideo on, since
+  this page already only resolves proctoring at the exam level, not
+  per-specific-assignment). The "Live" toggle + LiveCameraCell block
+  (grid and list) gains that as a second condition alongside the
+  existing `card.alert !== 'ProctoringOff'` check - when live video
+  is disabled for the exam, the card shows the plain avatar with no
+  toggle at all, same as a ProctoringOff card does today, rather than
+  a toggle that would just never produce a stream.
+
+OUT OF SCOPE: TakeExam.tsx's `proctoringActive` gate is NOT touched -
+it stays keyed on EnableProctoring alone (correct - detection must
+keep running regardless of this new flag). No change to
+WatchRecordingHandler per above. No UI copy changes to the page's
+existing disclaimer text beyond what's needed for the new checkbox
+itself.
+
+IMPLEMENTATION NOTE: the AssignExam.tsx checkbox is force-unchecked
+(not just hidden) whenever Enable Proctoring is toggled off, and both
+create/update payloads independently AND the state with
+enableProctoring again before sending (`enableLiveVideo:
+enableProctoring && enableLiveVideo`) - defense against the UI state
+getting out of sync with what's actually enabled, on top of the
+disabled-checkbox affordance. AssignmentListItemResponse (the
+now-otherwise-unused-by-the-admin-UI global list DTO from an earlier
+removed page) deliberately left untouched - it never carried
+EnableProctoring either, so adding EnableLiveVideo there would be
+inconsistent with the existing pattern for no benefit.
+
+VERIFIED: dotnet build on the full solution (all 8 backend services +
+every test project) - 0 errors. 79/79 SubmissionService tests (new:
+Returns_nulls_without_error_when_proctoring_is_on_but_live_video_is_off),
+70/70 ExamService tests (existing CreateAssignmentHandlerTests fixed
+for the new required command field). tsc --noEmit, oxlint, 36/36
+frontend tests all clean. Migration generated via `dotnet ef
+migrations add` (not hand-written) against ExamDb, confirmed applying
+cleanly on container startup ("Applying migration
+'...AddEnableLiveVideo'" in exam-api logs) with the EnableLiveVideo
+bit column landing on ExamAssignments.
+
+INFRASTRUCTURE HICCUP (unrelated to this feature's code, worth a
+note): mid-deploy, Docker Desktop's daemon hung completely (even a
+bare `docker ps` stopped responding) after this session's very heavy
+cumulative use - many container rebuilds/recreations plus extensive
+Chrome browser automation. Flagged to the user rather than force-
+killing anything unilaterally; user approved restarting Docker
+Desktop. That stopped every running container (expected - Docker
+Desktop restarts always do), so the full stack needed a plain `docker
+compose up -d` afterward, not just the three changed services -
+sqlserver/rabbitmq came back healthy, notification-worker hit its
+known once-in-a-while "started before rabbitmq's port was actually
+accepting connections" race again (same as earlier in this session)
+and needed one `docker compose start notification-worker` to recover.
+Gateway and frontend both confirmed 200 after full recovery. This
+DID interrupt whatever exam attempt/camera session was running in the
+user's own browser at the time - expected and called out to them
+before restarting, not a regression.

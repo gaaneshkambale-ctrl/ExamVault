@@ -17,4 +17,5 @@ public record UpdateAssignmentCommand(
     bool AllowReviewAfterSubmit,
     bool AutoSubmitOnTimeOver,
     bool EnableProctoring,
+    bool EnableLiveVideo,
     string BearerToken);

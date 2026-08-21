@@ -10,10 +10,28 @@ declare global {
   }
 }
 
+// Fired when a remote participant's audio/video track becomes available -
+// the view-only (admin watch) side listens for this instead of publishing
+// anything itself. `track` is a raw MediaStreamTrack - wrap it in
+// `new MediaStream([track])` to attach it to a <video> element.
+export interface MeteredRemoteTrackEvent {
+  type: 'video' | 'audio';
+  track: MediaStreamTrack;
+  streamId: string;
+  participantSessionId: string;
+}
+
+export interface MeteredParticipantEvent {
+  participantSessionId: string;
+}
+
 export interface MeteredMeeting {
   join(options: { roomURL: string; accessToken: string; joinWithVideo?: boolean; joinWithAudio?: boolean }): Promise<unknown>;
   shareCustomVideoStream(stream: MediaStream): Promise<unknown>;
   leaveMeeting(): void;
+  on(event: 'remoteTrackStarted', callback: (event: MeteredRemoteTrackEvent) => void): void;
+  on(event: 'remoteTrackStopped', callback: (event: MeteredRemoteTrackEvent) => void): void;
+  on(event: 'participantLeft', callback: (event: MeteredParticipantEvent) => void): void;
 }
 
 const SDK_URL = '//cdn.metered.ca/sdk/video/1.4.6/sdk.min.js';

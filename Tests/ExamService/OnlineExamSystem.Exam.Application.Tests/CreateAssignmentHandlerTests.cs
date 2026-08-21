@@ -39,6 +39,7 @@ public class CreateAssignmentHandlerTests
         AllowReviewAfterSubmit: false,
         AutoSubmitOnTimeOver: true,
         EnableProctoring: false,
+        EnableLiveVideo: false,
         BearerToken: "test-token");
 
     [Fact]

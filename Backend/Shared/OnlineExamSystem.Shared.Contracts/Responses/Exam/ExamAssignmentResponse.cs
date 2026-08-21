@@ -19,4 +19,5 @@ public record ExamAssignmentResponse(
     bool AllowReviewAfterSubmit,
     bool AutoSubmitOnTimeOver,
     bool EnableProctoring,
+    bool EnableLiveVideo,
     DateTime CreatedAtUtc);

@@ -70,6 +70,11 @@ export default function AssignExam() {
   const [allowReviewAfterSubmit, setAllowReviewAfterSubmit] = useState(false);
   const [autoSubmitOnTimeOver, setAutoSubmitOnTimeOver] = useState(true);
   const [enableProctoring, setEnableProctoring] = useState(false);
+  // Only meaningful when enableProctoring is on - detection itself always
+  // runs client-side, this just gates whether the camera ever gets
+  // published anywhere for admins to watch. Forced off whenever proctoring
+  // is off (see the toggle handler below) so the two can't disagree.
+  const [enableLiveVideo, setEnableLiveVideo] = useState(false);
 
   const [createdAssignment, setCreatedAssignment] = useState<ExamAssignmentResponse | null>(null);
   const [submitError, setSubmitError] = useState('');
@@ -96,6 +101,7 @@ export default function AssignExam() {
     setAllowReviewAfterSubmit(existingAssignment.allowReviewAfterSubmit);
     setAutoSubmitOnTimeOver(existingAssignment.autoSubmitOnTimeOver);
     setEnableProctoring(existingAssignment.enableProctoring);
+    setEnableLiveVideo(existingAssignment.enableLiveVideo);
     setStep(2);
     setPrefilled(true);
   }, [isEditMode, existingAssignment, prefilled]);
@@ -154,6 +160,7 @@ export default function AssignExam() {
         allowReviewAfterSubmit,
         autoSubmitOnTimeOver,
         enableProctoring,
+        enableLiveVideo: enableProctoring && enableLiveVideo,
       }),
     onSuccess: (assignment) => {
       setSubmitError('');
@@ -181,6 +188,7 @@ export default function AssignExam() {
         allowReviewAfterSubmit,
         autoSubmitOnTimeOver,
         enableProctoring,
+        enableLiveVideo: enableProctoring && enableLiveVideo,
       }),
     onSuccess: (assignment) => {
       setSubmitError('');
@@ -664,8 +672,27 @@ export default function AssignExam() {
                     id="enableProctoring"
                     label="Enable Proctoring"
                     checked={enableProctoring}
-                    onChange={(e) => setEnableProctoring(e.target.checked)}
+                    onChange={(e) => {
+                      setEnableProctoring(e.target.checked);
+                      if (!e.target.checked) {
+                        setEnableLiveVideo(false);
+                      }
+                    }}
                   />
+                  <Form.Check
+                    type="switch"
+                    id="enableLiveVideo"
+                    label="Allow Live Video Feed"
+                    className="ms-4 mt-1"
+                    checked={enableLiveVideo}
+                    disabled={!enableProctoring}
+                    onChange={(e) => setEnableLiveVideo(e.target.checked)}
+                  />
+                  <div className="form-text ms-4">
+                    Lets an admin watch this student's camera live during the exam. Face-detection and
+                    tab/window monitoring above work either way - this only controls whether the camera is
+                    ever published for watching.
+                  </div>
                 </div>
               </Col>
             </Row>
@@ -782,6 +809,7 @@ export default function AssignExam() {
                         ['Allow Late Join', allowLateJoin],
                         ['Auto Submit on Time Over', autoSubmitOnTimeOver],
                         ['Enable Proctoring', enableProctoring],
+                        ['Allow Live Video Feed', enableProctoring && enableLiveVideo],
                       ].map(([label, value]) => (
                         <div key={label as string} className="d-flex justify-content-between border-bottom py-1">
                           <span>{label}</span>

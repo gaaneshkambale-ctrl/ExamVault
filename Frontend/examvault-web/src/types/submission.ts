@@ -26,6 +26,7 @@ export interface ExamAttemptResponse {
   copyPasteCount: number;
   rightClickCount: number;
   multipleMonitorsCount: number;
+  liveWatchEnabled: boolean;
 }
 
 export type ProctoringViolationType =

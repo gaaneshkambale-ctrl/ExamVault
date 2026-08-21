@@ -19,4 +19,9 @@ public class ExamAttempt : BaseEntity
     public int CopyPasteCount { get; set; }
     public int RightClickCount { get; set; }
     public int MultipleMonitorsCount { get; set; }
+    // Per-session watch authority - off by default even when proctoring is
+    // enabled. An admin must explicitly grant it (Proctoring page's "Live"
+    // toggle) before WatchRecordingHandler will mint a viewer token; never
+    // set anywhere else (not at Start, not from JoinRecording).
+    public bool LiveWatchEnabled { get; set; }
 }

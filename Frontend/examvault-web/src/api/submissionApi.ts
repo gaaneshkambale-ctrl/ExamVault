@@ -118,6 +118,28 @@ export async function forceSubmitAttempt(attemptId: string): Promise<ExamAttempt
   return data;
 }
 
+// Live Monitoring's per-card "Live" switch - grants/revokes an admin's
+// authority to watch this one attempt's camera feed. Off by default even
+// when proctoring is enabled; watchRecording below will refuse to issue a
+// token until this has been turned on for the attempt in question.
+export async function setLiveWatchEnabled(attemptId: string, enabled: boolean): Promise<boolean> {
+  const { data } = await apiClient.put<{ liveWatchEnabled: boolean }>(
+    `/api/submissions/${attemptId}/live-watch`,
+    { enabled },
+  );
+  return data.liveWatchEnabled;
+}
+
+// Admin's side of the same Metered room the student's own client publishes
+// into via joinRecording. Both fields come back null (200, not an error)
+// whenever live-watch hasn't been granted for this attempt, proctoring was
+// never enabled for the student, or the video provider is unreachable - the
+// caller just shows "nothing to watch" in every case.
+export async function watchRecording(attemptId: string): Promise<JoinRecordingResponse> {
+  const { data } = await apiClient.post<JoinRecordingResponse>(`/api/submissions/${attemptId}/recording/watch`);
+  return data;
+}
+
 export async function enterSection(
   attemptId: string,
   sectionId: string,

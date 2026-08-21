@@ -13,9 +13,11 @@ using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
 using OnlineExamSystem.Submission.Application.Attempts.ListViolationsByExam;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
+using OnlineExamSystem.Submission.Application.Attempts.SetLiveWatch;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
 using OnlineExamSystem.Submission.Application.Attempts.Submit;
 using OnlineExamSystem.Submission.Application.Attempts.UpdateViolationStatus;
+using OnlineExamSystem.Submission.Application.Attempts.WatchRecording;
 using OnlineExamSystem.Submission.Domain.Entities;
 using OnlineExamSystem.Submission.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Submission;
@@ -33,6 +35,8 @@ public class SubmissionsController : ControllerBase
     private readonly SubmitAttemptHandler _submitAttemptHandler;
     private readonly ForceSubmitAttemptHandler _forceSubmitAttemptHandler;
     private readonly JoinRecordingHandler _joinRecordingHandler;
+    private readonly SetLiveWatchHandler _setLiveWatchHandler;
+    private readonly WatchRecordingHandler _watchRecordingHandler;
     private readonly GetMyAttemptHandler _getMyAttemptHandler;
     private readonly ListAttemptsByExamHandler _listAttemptsByExamHandler;
     private readonly ListLiveAttemptsByExamHandler _listLiveAttemptsByExamHandler;
@@ -51,6 +55,8 @@ public class SubmissionsController : ControllerBase
         SubmitAttemptHandler submitAttemptHandler,
         ForceSubmitAttemptHandler forceSubmitAttemptHandler,
         JoinRecordingHandler joinRecordingHandler,
+        SetLiveWatchHandler setLiveWatchHandler,
+        WatchRecordingHandler watchRecordingHandler,
         GetMyAttemptHandler getMyAttemptHandler,
         ListAttemptsByExamHandler listAttemptsByExamHandler,
         ListLiveAttemptsByExamHandler listLiveAttemptsByExamHandler,
@@ -68,6 +74,8 @@ public class SubmissionsController : ControllerBase
         _submitAttemptHandler = submitAttemptHandler;
         _forceSubmitAttemptHandler = forceSubmitAttemptHandler;
         _joinRecordingHandler = joinRecordingHandler;
+        _setLiveWatchHandler = setLiveWatchHandler;
+        _watchRecordingHandler = watchRecordingHandler;
         _getMyAttemptHandler = getMyAttemptHandler;
         _listAttemptsByExamHandler = listAttemptsByExamHandler;
         _listLiveAttemptsByExamHandler = listLiveAttemptsByExamHandler;
@@ -278,6 +286,66 @@ public class SubmissionsController : ControllerBase
         if (result.IsNotInProgress)
         {
             return Conflict(new { message = "This attempt is no longer in progress." });
+        }
+
+        return Ok(new { roomUrl = result.RoomUrl, token = result.Token });
+    }
+
+    // Live Monitoring's per-card "Live" switch - grants or revokes an admin's
+    // authority to watch THIS attempt's camera feed. Off by default even when
+    // proctoring is enabled; WatchRecording below refuses to mint a token
+    // until this has been explicitly turned on for the attempt in question.
+    [HttpPut("{attemptId:guid}/live-watch")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> SetLiveWatch(
+        Guid attemptId,
+        SetLiveWatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _setLiveWatchHandler.HandleAsync(
+            new SetLiveWatchCommand(attemptId, request.Enabled),
+            cancellationToken);
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsNotInProgress)
+        {
+            return Conflict(new { message = "This attempt is no longer in progress." });
+        }
+
+        return Ok(new { liveWatchEnabled = result.LiveWatchEnabled });
+    }
+
+    // Admin's side of the same Metered room the student's own client
+    // publishes into via JoinRecording above. Requires LiveWatchEnabled to
+    // already be set for this attempt (SetLiveWatch) - Admin role alone does
+    // not grant watch access.
+    [HttpPost("{attemptId:guid}/recording/watch")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> WatchRecording(Guid attemptId, CancellationToken cancellationToken)
+    {
+        var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await _watchRecordingHandler.HandleAsync(
+            new WatchRecordingCommand(attemptId, adminUserId),
+            cancellationToken);
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsNotInProgress)
+        {
+            return Conflict(new { message = "This attempt is no longer in progress." });
+        }
+
+        if (result.IsNotAuthorized)
+        {
+            return Forbid();
         }
 
         return Ok(new { roomUrl = result.RoomUrl, token = result.Token });
@@ -561,7 +629,8 @@ public class SubmissionsController : ControllerBase
             attempt.MultipleTabsCount,
             attempt.CopyPasteCount,
             attempt.RightClickCount,
-            attempt.MultipleMonitorsCount);
+            attempt.MultipleMonitorsCount,
+            attempt.LiveWatchEnabled);
 
     private static ViolationEventResponse ToResponse(ViolationEvent violationEvent, Guid examId, Guid userId) =>
         new(

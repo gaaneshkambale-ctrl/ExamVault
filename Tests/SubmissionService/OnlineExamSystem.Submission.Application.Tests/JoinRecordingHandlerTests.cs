@@ -34,7 +34,8 @@ public class JoinRecordingHandlerTests
         StartAtUtc: DateTime.UtcNow.AddDays(-1),
         EndAtUtc: DateTime.UtcNow.AddDays(1),
         MaxAttempts: 1,
-        EnableProctoring: true);
+        EnableProctoring: true,
+        EnableLiveVideo: true);
 
     [Fact]
     public async Task Returns_room_and_token_when_proctoring_is_enabled()
@@ -60,6 +61,24 @@ public class JoinRecordingHandlerTests
         var attempt = InProgressAttempt();
         repository.SeedAttempt(attempt);
         var assignment = ProctoredAssignment() with { EnableProctoring = false };
+        var video = new FakeVideoRecordingService();
+        var handler = CreateHandler(repository, assignment, video);
+
+        var result = await handler.HandleAsync(new JoinRecordingCommand(attempt.Id, UserId, "test-token"));
+
+        Assert.True(result.Success);
+        Assert.Null(result.RoomUrl);
+        Assert.Null(result.Token);
+        Assert.Empty(video.EnsuredRooms);
+    }
+
+    [Fact]
+    public async Task Returns_nulls_without_error_when_proctoring_is_on_but_live_video_is_off()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = InProgressAttempt();
+        repository.SeedAttempt(attempt);
+        var assignment = ProctoredAssignment() with { EnableLiveVideo = false };
         var video = new FakeVideoRecordingService();
         var handler = CreateHandler(repository, assignment, video);
 

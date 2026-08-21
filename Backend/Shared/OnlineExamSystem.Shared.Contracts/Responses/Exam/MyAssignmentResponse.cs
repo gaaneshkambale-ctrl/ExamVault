@@ -14,4 +14,5 @@ public record MyAssignmentResponse(
     bool ShowCorrectAnswers,
     bool AllowReviewAfterSubmit,
     bool AutoSubmitOnTimeOver,
-    bool EnableProctoring);
+    bool EnableProctoring,
+    bool EnableLiveVideo);
