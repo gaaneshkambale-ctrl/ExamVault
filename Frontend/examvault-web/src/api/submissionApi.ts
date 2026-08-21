@@ -62,6 +62,14 @@ export async function getExamAttempts(examId: string): Promise<ExamAttemptRespon
   return data.map((a) => a.attempt);
 }
 
+// Same /live endpoint as getExamAttempts, but keeps the answers array too -
+// Student Attempts needs per-attempt answered-question counts for its
+// progress column, which the attempt-only shape above can't provide.
+export async function getExamAttemptsWithAnswers(examId: string): Promise<AttemptWithAnswersResponse[]> {
+  const { data } = await apiClient.get<AttemptWithAnswersResponse[]>(`/api/submissions/by-exam/${examId}/live`);
+  return data;
+}
+
 // Best-effort proctoring signal - failures are swallowed by the caller, a
 // broker/network hiccup here must never interrupt the student's exam.
 export async function recordFullscreenExit(attemptId: string): Promise<void> {

@@ -7,6 +7,7 @@ import { useExams } from '../../../hooks/useExams';
 import { useUsers } from '../../../hooks/useUsers';
 import { useAssignments } from '../../../hooks/useAssignments';
 import { useAttemptsByExam } from '../../../hooks/useSubmissions';
+import { attemptViolationCount } from '../../../utils/proctoring';
 import type { ExamResponse } from '../../../types/exam';
 import type { ExamAttemptResponse } from '../../../types/submission';
 
@@ -23,18 +24,6 @@ const statusMeta: Record<CardStatus, { label: string; badgeBg: string; borderCol
   EndingSoon: { label: 'ENDING SOON', badgeBg: 'danger', borderColor: '#dc3545' },
   NeedsReview: { label: 'NEEDS REVIEW', badgeBg: 'warning', borderColor: '#ffc107' },
 };
-
-function attemptViolationCount(attempt: ExamAttemptResponse): number {
-  return (
-    attempt.noFaceDetectedCount +
-    attempt.multipleFacesDetectedCount +
-    attempt.tabSwitchCount +
-    attempt.multipleTabsCount +
-    attempt.copyPasteCount +
-    attempt.rightClickCount +
-    attempt.multipleMonitorsCount
-  );
-}
 
 function formatTime(value: string | null): string {
   if (!value) {
