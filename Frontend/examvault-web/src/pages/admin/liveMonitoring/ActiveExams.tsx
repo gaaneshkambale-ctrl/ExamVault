@@ -88,22 +88,17 @@ export default function ActiveExams() {
   // Time Started/Expected End: an exam's own startAtUtc/endAtUtc are often
   // never set (StartAttemptHandler only falls back to them when a student
   // has no assignment at all) - the real window students are testing under
-  // lives on their assignment(s). Spans the earliest start to the latest end
-  // across every assignment targeting this exam, since more than one batch
-  // can be assigned with different windows.
+  // lives on their assignment(s). When an exam has more than one assignment
+  // (separate batches with different windows), use the one with the
+  // soonest deadline - the next thing an admin needs to know about, not the
+  // furthest-out one (which would hide an imminent "Ending Soon" behind a
+  // cohort that still has days left).
   const windowByExam = useMemo(() => {
     const map = new Map<string, { start: string; end: string }>();
     for (const assignment of assignments ?? []) {
       const existing = map.get(assignment.examId);
-      if (!existing) {
+      if (!existing || new Date(assignment.endAtUtc) < new Date(existing.end)) {
         map.set(assignment.examId, { start: assignment.startAtUtc, end: assignment.endAtUtc });
-        continue;
-      }
-      if (new Date(assignment.startAtUtc) < new Date(existing.start)) {
-        existing.start = assignment.startAtUtc;
-      }
-      if (new Date(assignment.endAtUtc) > new Date(existing.end)) {
-        existing.end = assignment.endAtUtc;
       }
     }
     return map;
