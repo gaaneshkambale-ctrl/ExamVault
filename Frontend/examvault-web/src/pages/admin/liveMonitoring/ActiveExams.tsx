@@ -49,6 +49,8 @@ interface ActiveExamCard {
   inProgress: ExamAttemptResponse[];
   completedCount: number;
   totalAssigned: number;
+  startAtUtc: string | null;
+  endAtUtc: string | null;
 }
 
 export default function ActiveExams() {
@@ -83,6 +85,30 @@ export default function ActiveExams() {
     return map;
   }, [assignments]);
 
+  // Time Started/Expected End: an exam's own startAtUtc/endAtUtc are often
+  // never set (StartAttemptHandler only falls back to them when a student
+  // has no assignment at all) - the real window students are testing under
+  // lives on their assignment(s). Spans the earliest start to the latest end
+  // across every assignment targeting this exam, since more than one batch
+  // can be assigned with different windows.
+  const windowByExam = useMemo(() => {
+    const map = new Map<string, { start: string; end: string }>();
+    for (const assignment of assignments ?? []) {
+      const existing = map.get(assignment.examId);
+      if (!existing) {
+        map.set(assignment.examId, { start: assignment.startAtUtc, end: assignment.endAtUtc });
+        continue;
+      }
+      if (new Date(assignment.startAtUtc) < new Date(existing.start)) {
+        existing.start = assignment.startAtUtc;
+      }
+      if (new Date(assignment.endAtUtc) > new Date(existing.end)) {
+        existing.end = assignment.endAtUtc;
+      }
+    }
+    return map;
+  }, [assignments]);
+
   const now = Date.now();
   const allCards: ActiveExamCard[] = (exams ?? [])
     .filter((exam) => exam.status === 'Published')
@@ -93,13 +119,16 @@ export default function ActiveExams() {
         (a) => a.status === 'Submitted' || a.status === 'AutoSubmitted',
       ).length;
       const totalAssigned = assignedCountByExam.get(exam.id) ?? attempts.length;
+      const window = windowByExam.get(exam.id);
+      const startAtUtc = window?.start ?? exam.startAtUtc;
+      const endAtUtc = window?.end ?? exam.endAtUtc;
 
-      const endAtMs = exam.endAtUtc ? new Date(exam.endAtUtc).getTime() : null;
+      const endAtMs = endAtUtc ? new Date(endAtUtc).getTime() : null;
       const isEndingSoon = endAtMs !== null && endAtMs - now > 0 && endAtMs - now <= ENDING_SOON_WINDOW_MS;
       const needsReview = inProgress.some((a) => attemptViolationCount(a) > 0);
       const status: CardStatus = isEndingSoon ? 'EndingSoon' : needsReview ? 'NeedsReview' : 'InProgress';
 
-      return { exam, status, inProgress, completedCount, totalAssigned };
+      return { exam, status, inProgress, completedCount, totalAssigned, startAtUtc, endAtUtc };
     })
     // "Active" = actually has a live attempt right now, matching the page's
     // own subtitle ("exams currently in progress"), not just Published status.
@@ -232,11 +261,11 @@ export default function ActiveExams() {
                     <Row className="g-2 small mb-3">
                       <Col xs={6}>
                         <div className="text-muted">Time Started</div>
-                        <div className="fw-medium">{formatTime(card.exam.startAtUtc)}</div>
+                        <div className="fw-medium">{formatTime(card.startAtUtc)}</div>
                       </Col>
                       <Col xs={6}>
                         <div className="text-muted">Expected End</div>
-                        <div className="fw-medium">{formatTime(card.exam.endAtUtc)}</div>
+                        <div className="fw-medium">{formatTime(card.endAtUtc)}</div>
                       </Col>
                     </Row>
 
@@ -317,8 +346,8 @@ export default function ActiveExams() {
                       <td>
                         {card.completedCount}/{card.totalAssigned} ({pct}%)
                       </td>
-                      <td>{formatTime(card.exam.startAtUtc)}</td>
-                      <td>{formatTime(card.exam.endAtUtc)}</td>
+                      <td>{formatTime(card.startAtUtc)}</td>
+                      <td>{formatTime(card.endAtUtc)}</td>
                       <td className="pe-4">
                         <Link to={`/admin/exams/${card.exam.id}`} className="small text-decoration-none">
                           View Details →
