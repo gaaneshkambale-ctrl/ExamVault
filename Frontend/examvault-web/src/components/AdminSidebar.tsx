@@ -9,6 +9,11 @@ export type AdminNavItem =
   | 'Roles & Permissions'
   | 'Groups'
   | 'Exams'
+  | 'Live Monitoring'
+  | 'Active Exams'
+  | 'Student Attempts'
+  | 'Security Violations'
+  | 'Proctoring'
   | 'Results'
   | 'Reports'
   | 'Notifications'
@@ -40,6 +45,16 @@ const navItems: NavItem[] = [
     ],
   },
   { label: 'Exams', path: '/admin/exams' },
+  {
+    label: 'Live Monitoring',
+    path: '/admin/live-monitoring/active-exams',
+    children: [
+      { label: 'Active Exams', path: '/admin/live-monitoring/active-exams' },
+      { label: 'Student Attempts', path: '/admin/live-monitoring/student-attempts' },
+      { label: 'Security Violations', path: '/admin/live-monitoring/security-violations' },
+      { label: 'Proctoring', path: '/admin/live-monitoring/proctoring' },
+    ],
+  },
   { label: 'Results', path: '/admin/results' },
   { label: 'Reports', path: '/admin/reports' },
   {
@@ -77,6 +92,12 @@ const iconPaths: Partial<Record<AdminNavItem, ReactNode>> = {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
+    </>
+  ),
+  'Live Monitoring': (
+    <>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </>
   ),
   Results: (

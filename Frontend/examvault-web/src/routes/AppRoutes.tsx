@@ -31,6 +31,10 @@ import AiGeneratedQuestionsPreview from '../pages/admin/AiGeneratedQuestionsPrev
 import ManageGroups from '../pages/admin/ManageGroups';
 import GroupDetails from '../pages/admin/GroupDetails';
 import AssignExam from '../pages/admin/AssignExam';
+import ActiveExams from '../pages/admin/liveMonitoring/ActiveExams';
+import StudentAttempts from '../pages/admin/liveMonitoring/StudentAttempts';
+import SecurityViolations from '../pages/admin/liveMonitoring/SecurityViolations';
+import Proctoring from '../pages/admin/liveMonitoring/Proctoring';
 import AdminResults from '../pages/admin/AdminResults';
 import AdminReports from '../pages/admin/AdminReports';
 import AdminSettings from '../pages/admin/AdminSettings';
@@ -267,6 +271,38 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <SectionDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/live-monitoring/active-exams"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ActiveExams />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/live-monitoring/student-attempts"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <StudentAttempts />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/live-monitoring/security-violations"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <SecurityViolations />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/live-monitoring/proctoring"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <Proctoring />
           </ProtectedRoute>
         }
       />
