@@ -36,7 +36,13 @@ public class AssignmentServiceClient : IAssignmentLookupClient
         var body = await response.Content.ReadFromJsonAsync<AssignmentApiResponse>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("Empty response from Exam Service.");
 
-        return new AssignmentLookupResult(body.Id, body.ExamId, body.StartAtUtc, body.EndAtUtc, body.MaxAttempts);
+        return new AssignmentLookupResult(
+            body.Id,
+            body.ExamId,
+            body.StartAtUtc,
+            body.EndAtUtc,
+            body.MaxAttempts,
+            body.EnableProctoring);
     }
 
     private sealed class AssignmentApiResponse
@@ -46,5 +52,6 @@ public class AssignmentServiceClient : IAssignmentLookupClient
         public DateTime StartAtUtc { get; init; }
         public DateTime EndAtUtc { get; init; }
         public int MaxAttempts { get; init; }
+        public bool EnableProctoring { get; init; }
     }
 }

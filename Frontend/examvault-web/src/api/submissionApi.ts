@@ -78,6 +78,20 @@ export async function recordFullscreenExit(attemptId: string): Promise<void> {
   await apiClient.post(`/api/submissions/${attemptId}/fullscreen-exit`);
 }
 
+export interface JoinRecordingResponse {
+  roomUrl: string | null;
+  token: string | null;
+}
+
+// Called once the student's camera is ready - both fields come back null
+// (not an error) when proctoring isn't enabled for this assignment, or the
+// video provider is unconfigured/unreachable. The caller just skips joining
+// a room in that case; the exam itself is unaffected either way.
+export async function joinRecording(attemptId: string): Promise<JoinRecordingResponse> {
+  const { data } = await apiClient.post<JoinRecordingResponse>(`/api/submissions/${attemptId}/recording/join`);
+  return data;
+}
+
 export async function recordProctoringViolation(
   attemptId: string,
   type: ProctoringViolationType,

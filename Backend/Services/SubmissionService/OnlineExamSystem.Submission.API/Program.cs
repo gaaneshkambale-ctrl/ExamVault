@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
 using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
+using OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
@@ -51,6 +52,27 @@ public class Program
         builder.Services.AddHttpClient<IAssignmentLookupClient, AssignmentServiceClient>(client =>
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
+        // Optional: student exam recording via Metered.ca. Falls back to a
+        // no-op implementation when unconfigured, rather than requiring it
+        // like ExamServiceBaseUrl above - recording is an enhancement, not
+        // something every deployment needs to provide.
+        var meteredApiKey = builder.Configuration["Metered:ApiKey"];
+        var meteredAppDomain = builder.Configuration["Metered:AppDomain"];
+        if (!string.IsNullOrWhiteSpace(meteredApiKey) && !string.IsNullOrWhiteSpace(meteredAppDomain))
+        {
+            builder.Services.AddHttpClient("MeteredClient", client =>
+                client.BaseAddress = new Uri($"https://{meteredAppDomain.TrimEnd('/')}/"));
+            builder.Services.AddScoped<IVideoRecordingService>(sp => new MeteredVideoRecordingService(
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient("MeteredClient"),
+                meteredApiKey,
+                meteredAppDomain,
+                sp.GetRequiredService<ILogger<MeteredVideoRecordingService>>()));
+        }
+        else
+        {
+            builder.Services.AddScoped<IVideoRecordingService, NullVideoRecordingService>();
+        }
+
         builder.Services.AddScoped<IValidator<StartAttemptCommand>, StartAttemptValidator>();
         builder.Services.AddScoped<StartAttemptHandler>();
         builder.Services.AddScoped<IValidator<SaveAnswerCommand>, SaveAnswerValidator>();
@@ -58,6 +80,7 @@ public class Program
         builder.Services.AddScoped<IValidator<SubmitAttemptCommand>, SubmitAttemptValidator>();
         builder.Services.AddScoped<SubmitAttemptHandler>();
         builder.Services.AddScoped<ForceSubmitAttemptHandler>();
+        builder.Services.AddScoped<JoinRecordingHandler>();
         builder.Services.AddScoped<GetMyAttemptHandler>();
         builder.Services.AddScoped<ListAttemptsByExamHandler>();
         builder.Services.AddScoped<ListLiveAttemptsByExamHandler>();

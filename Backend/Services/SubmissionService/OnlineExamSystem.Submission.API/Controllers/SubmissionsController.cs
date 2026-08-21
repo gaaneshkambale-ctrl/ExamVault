@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
 using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
+using OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
@@ -31,6 +32,7 @@ public class SubmissionsController : ControllerBase
     private readonly SaveAnswerHandler _saveAnswerHandler;
     private readonly SubmitAttemptHandler _submitAttemptHandler;
     private readonly ForceSubmitAttemptHandler _forceSubmitAttemptHandler;
+    private readonly JoinRecordingHandler _joinRecordingHandler;
     private readonly GetMyAttemptHandler _getMyAttemptHandler;
     private readonly ListAttemptsByExamHandler _listAttemptsByExamHandler;
     private readonly ListLiveAttemptsByExamHandler _listLiveAttemptsByExamHandler;
@@ -48,6 +50,7 @@ public class SubmissionsController : ControllerBase
         SaveAnswerHandler saveAnswerHandler,
         SubmitAttemptHandler submitAttemptHandler,
         ForceSubmitAttemptHandler forceSubmitAttemptHandler,
+        JoinRecordingHandler joinRecordingHandler,
         GetMyAttemptHandler getMyAttemptHandler,
         ListAttemptsByExamHandler listAttemptsByExamHandler,
         ListLiveAttemptsByExamHandler listLiveAttemptsByExamHandler,
@@ -64,6 +67,7 @@ public class SubmissionsController : ControllerBase
         _saveAnswerHandler = saveAnswerHandler;
         _submitAttemptHandler = submitAttemptHandler;
         _forceSubmitAttemptHandler = forceSubmitAttemptHandler;
+        _joinRecordingHandler = joinRecordingHandler;
         _getMyAttemptHandler = getMyAttemptHandler;
         _listAttemptsByExamHandler = listAttemptsByExamHandler;
         _listLiveAttemptsByExamHandler = listLiveAttemptsByExamHandler;
@@ -243,6 +247,40 @@ public class SubmissionsController : ControllerBase
             rightClickCount = result.RightClickCount,
             multipleMonitorsCount = result.MultipleMonitorsCount,
         });
+    }
+
+    // Student's own exam client calls this once its camera is ready, to get
+    // a Metered room to publish/record into. Both fields come back null
+    // (200, not an error) whenever proctoring isn't enabled for this
+    // student's assignment, or the video provider is unconfigured/down -
+    // the frontend just doesn't attempt to join anything in that case.
+    [HttpPost("{attemptId:guid}/recording/join")]
+    public async Task<IActionResult> JoinRecording(Guid attemptId, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+
+        var result = await _joinRecordingHandler.HandleAsync(
+            new JoinRecordingCommand(attemptId, userId, bearerToken),
+            cancellationToken);
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
+
+        if (result.IsNotInProgress)
+        {
+            return Conflict(new { message = "This attempt is no longer in progress." });
+        }
+
+        return Ok(new { roomUrl = result.RoomUrl, token = result.Token });
     }
 
     [HttpPost("{attemptId:guid}/submit")]

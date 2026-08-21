@@ -115,6 +115,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Docker
       ConnectionStrings__SubmissionDb: Server=sqlserver;Database=ExamVault.SubmissionDb;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
       Services__ExamServiceBaseUrl: http://exam-api:8080
+      Metered__ApiKey: ${METERED_API_KEY}
+      Metered__AppDomain: ${METERED_APP_DOMAIN}
     depends_on:
       sqlserver:
         condition: service_healthy

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
-import { recordProctoringViolation } from '../api/submissionApi';
+import { joinRecording, recordProctoringViolation } from '../api/submissionApi';
+import { loadMeteredSdk, type MeteredMeeting } from '../utils/meteredSdk';
 import type { ProctoringViolationType } from '../types/submission';
 
 const FACE_CHECK_INTERVAL_MS = 3000;
@@ -53,6 +54,7 @@ export function useProctoring(
 ): ProctoringStatus {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const meetingRef = useRef<MeteredMeeting | null>(null);
   const modelsLoadedRef = useRef(false);
   const consecutiveNoFaceRef = useRef(0);
   const consecutiveMultiFaceRef = useRef(0);
@@ -164,6 +166,57 @@ export function useProctoring(
       setStream(null);
     };
   }, [enabled, settings.faceDetectionEnabled, settings.multiPersonDetectionEnabled]);
+
+  // Video recording (Metered.ca) - joins using the SAME camera stream
+  // face-api.js already opened above, via shareCustomVideoStream, rather
+  // than letting the SDK make its own getUserMedia call (one permission
+  // prompt, one active-camera indicator, not two). No npm package exists
+  // for this SDK - it's loaded from Metered's CDN on demand. roomUrl/token
+  // both come back null from the backend whenever proctoring isn't enabled
+  // for this student's assignment or Metered isn't configured server-side -
+  // this effect just no-ops in that case, same as every detector above.
+  useEffect(() => {
+    if (!enabled || !attemptId || !stream) {
+      return;
+    }
+    let cancelled = false;
+
+    const start = async () => {
+      try {
+        const { roomUrl, token } = await joinRecording(attemptId);
+        if (cancelled || !roomUrl || !token) {
+          return;
+        }
+        const Metered = await loadMeteredSdk();
+        if (cancelled || !Metered) {
+          return;
+        }
+        const meeting = new Metered.Meeting();
+        await meeting.join({
+          roomURL: roomUrl,
+          accessToken: token,
+          joinWithVideo: false,
+          joinWithAudio: false,
+        });
+        if (cancelled) {
+          meeting.leaveMeeting();
+          return;
+        }
+        await meeting.shareCustomVideoStream(stream);
+        meetingRef.current = meeting;
+      } catch {
+        // Best-effort - a recording failure must never interrupt the exam itself.
+      }
+    };
+
+    void start();
+
+    return () => {
+      cancelled = true;
+      meetingRef.current?.leaveMeeting();
+      meetingRef.current = null;
+    };
+  }, [enabled, attemptId, stream]);
 
   // Tab switch / browser minimize / switching to another application.
   // document.hidden alone misses one real case: alt-tabbing to another app

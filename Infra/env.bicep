@@ -52,6 +52,13 @@ param n8nNotificationWebhookUrl string = ''
 @description('n8n webhook URL for the AI question-generation workflow.')
 param n8nAiWebhookUrl string = ''
 
+@secure()
+@description('Metered.ca Secret Key - used server-side only to create private recording rooms and mint join tokens.')
+param meteredApiKey string = ''
+
+@description('Metered.ca app subdomain (yourapp.metered.live) - not a secret, just the room-URL prefix.')
+param meteredAppDomain string = ''
+
 @description('Bootstrap placeholder image every Container App starts with, before the CD pipeline pushes a real one.')
 param placeholderImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
@@ -384,6 +391,7 @@ resource submissionApi 'Microsoft.App/containerApps@2023-05-01' = {
       secrets: [
         { name: 'sql-connection', value: submissionDbConnection }
         { name: 'jwt-signing-key', value: jwtSigningKey }
+        { name: 'metered-api-key', value: meteredApiKey }
       ]
     }
     template: {
@@ -401,6 +409,8 @@ resource submissionApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Jwt__AccessTokenMinutes', value: '15' }
             { name: 'Jwt__RefreshTokenDays', value: '7' }
             { name: 'Services__ExamServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
+            { name: 'Metered__ApiKey', secretRef: 'metered-api-key' }
+            { name: 'Metered__AppDomain', value: meteredAppDomain }
           ]
         }
       ]

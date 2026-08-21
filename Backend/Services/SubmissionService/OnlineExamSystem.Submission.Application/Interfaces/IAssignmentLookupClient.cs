@@ -1,6 +1,12 @@
 namespace OnlineExamSystem.Submission.Application.Interfaces;
 
-public record AssignmentLookupResult(Guid Id, Guid ExamId, DateTime StartAtUtc, DateTime EndAtUtc, int MaxAttempts);
+public record AssignmentLookupResult(
+    Guid Id,
+    Guid ExamId,
+    DateTime StartAtUtc,
+    DateTime EndAtUtc,
+    int MaxAttempts,
+    bool EnableProctoring = false);
 
 public interface IAssignmentLookupClient
 {
