@@ -51,6 +51,7 @@ export interface UserListItem {
   createdAtUtc: string;
   isActive: boolean;
   phoneNumber: string | null;
+  hasPhoto: boolean;
 }
 
 export interface CreateUserRequest {

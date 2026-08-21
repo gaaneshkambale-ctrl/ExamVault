@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { getMyAttempt, getUserAttempts } from '../api/submissionApi';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { getExamAttempts, getMyAttempt, getUserAttempts } from '../api/submissionApi';
+import type { ExamAttemptResponse } from '../types/submission';
 
 export function useMyAttempt(examId: string | undefined) {
   return useQuery({
@@ -15,4 +16,27 @@ export function useUserAttempts(userId: string | undefined, enabled = true) {
     queryFn: () => getUserAttempts(userId!),
     enabled: !!userId && enabled,
   });
+}
+
+// Same per-exam aggregation pattern as useQuestionCountsByExam - one useQueries
+// call fanning out across every exam id, keyed so Live Monitoring's polling
+// refetch (refetchInterval) only refires these, not every other query on the
+// page. Returns the raw attempts per exam so the caller derives whatever
+// stats it needs (in-progress count, completed count, violation flags, etc).
+export function useAttemptsByExam(examIds: string[] | undefined, refetchInterval?: number) {
+  const ids = examIds ?? [];
+  const queries = useQueries({
+    queries: ids.map((examId) => ({
+      queryKey: ['submissions', 'byExam', examId],
+      queryFn: () => getExamAttempts(examId),
+      refetchInterval,
+    })),
+  });
+
+  const attemptsByExam: Record<string, ExamAttemptResponse[]> = {};
+  ids.forEach((examId, index) => {
+    attemptsByExam[examId] = queries[index]?.data ?? [];
+  });
+  const isLoading = queries.some((q) => q.isLoading);
+  return { attemptsByExam, isLoading };
 }

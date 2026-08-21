@@ -7,4 +7,5 @@ public record UserListItemResponse(
     string Role,
     DateTime CreatedAtUtc,
     bool IsActive,
-    string? PhoneNumber);
+    string? PhoneNumber,
+    bool HasPhoto = false);

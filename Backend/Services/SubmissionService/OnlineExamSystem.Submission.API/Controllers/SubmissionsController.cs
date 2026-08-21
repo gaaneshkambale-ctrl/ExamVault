@@ -5,6 +5,7 @@ using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
 using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
+using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
@@ -27,6 +28,7 @@ public class SubmissionsController : ControllerBase
     private readonly SubmitAttemptHandler _submitAttemptHandler;
     private readonly GetMyAttemptHandler _getMyAttemptHandler;
     private readonly ListAttemptsByExamHandler _listAttemptsByExamHandler;
+    private readonly ListLiveAttemptsByExamHandler _listLiveAttemptsByExamHandler;
     private readonly ListAttemptsByUserHandler _listAttemptsByUserHandler;
     private readonly RecordFullscreenExitHandler _recordFullscreenExitHandler;
     private readonly RecordProctoringViolationHandler _recordProctoringViolationHandler;
@@ -40,6 +42,7 @@ public class SubmissionsController : ControllerBase
         SubmitAttemptHandler submitAttemptHandler,
         GetMyAttemptHandler getMyAttemptHandler,
         ListAttemptsByExamHandler listAttemptsByExamHandler,
+        ListLiveAttemptsByExamHandler listLiveAttemptsByExamHandler,
         ListAttemptsByUserHandler listAttemptsByUserHandler,
         RecordFullscreenExitHandler recordFullscreenExitHandler,
         RecordProctoringViolationHandler recordProctoringViolationHandler,
@@ -52,6 +55,7 @@ public class SubmissionsController : ControllerBase
         _submitAttemptHandler = submitAttemptHandler;
         _getMyAttemptHandler = getMyAttemptHandler;
         _listAttemptsByExamHandler = listAttemptsByExamHandler;
+        _listLiveAttemptsByExamHandler = listLiveAttemptsByExamHandler;
         _listAttemptsByUserHandler = listAttemptsByUserHandler;
         _recordFullscreenExitHandler = recordFullscreenExitHandler;
         _recordProctoringViolationHandler = recordProctoringViolationHandler;
@@ -366,6 +370,25 @@ public class SubmissionsController : ControllerBase
     {
         var attempts = await _listAttemptsByExamHandler.HandleAsync(
             new ListAttemptsByExamQuery(examId),
+            cancellationToken);
+
+        return Ok(attempts
+            .Select(a => new AttemptWithAnswersResponse(
+                ToResponse(a.Attempt),
+                a.Answers.Select(ToResponse).ToList(),
+                Array.Empty<AttemptSectionStateResponse>()))
+            .ToList());
+    }
+
+    // Unlike ByExam above (Reports - Submitted/AutoSubmitted only), this
+    // includes InProgress attempts too - Live Monitoring's Active Exams
+    // screen needs to see exams with a student currently mid-attempt.
+    [HttpGet("by-exam/{examId:guid}/live")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> LiveByExam(Guid examId, CancellationToken cancellationToken)
+    {
+        var attempts = await _listLiveAttemptsByExamHandler.HandleAsync(
+            new ListLiveAttemptsByExamQuery(examId),
             cancellationToken);
 
         return Ok(attempts

@@ -67,6 +67,17 @@ export async function fetchMyPhotoObjectUrl(): Promise<string | null> {
   }
 }
 
+// Admin-only counterpart to fetchMyPhotoObjectUrl - lets an admin screen
+// render another user's photo (e.g. Live Monitoring's student avatars).
+export async function fetchUserPhotoObjectUrl(userId: string): Promise<string | null> {
+  try {
+    const { data } = await apiClient.get<Blob>(`/api/users/${userId}/photo`, { responseType: 'blob' });
+    return URL.createObjectURL(data);
+  } catch {
+    return null;
+  }
+}
+
 export async function getMySessions(): Promise<UserSession[]> {
   const { data } = await apiClient.get<UserSession[]>('/api/users/me/sessions', {
     headers: { 'X-Refresh-Token': getRefreshToken() ?? '' },

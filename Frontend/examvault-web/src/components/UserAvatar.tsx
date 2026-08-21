@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchMyPhotoObjectUrl } from '../api/userApi';
+import { fetchMyPhotoObjectUrl, fetchUserPhotoObjectUrl } from '../api/userApi';
 
 function getInitials(fullName: string): string {
   const parts = fullName.trim().split(/\s+/);
@@ -11,6 +11,11 @@ interface UserAvatarProps {
   fullName: string;
   hasPhoto: boolean;
   size?: number;
+  // Fetches this user's photo (Admin-only endpoint) instead of the logged-in
+  // user's own - used by admin screens rendering someone else's avatar (e.g.
+  // Live Monitoring's student avatars). Omit to keep the original "my photo"
+  // behavior NavBar/UserProfileMenu already rely on.
+  userId?: string;
 }
 
 // Shared by NavBar and UserProfileMenu - both previously always rendered the
@@ -18,13 +23,14 @@ interface UserAvatarProps {
 // page itself ever fetched it). Same fetch-as-object-URL approach as
 // Profile.tsx's ProfilePhoto: the endpoint needs the Bearer token, so a
 // plain <img src> can't hit it directly.
-export default function UserAvatar({ fullName, hasPhoto, size = 36 }: UserAvatarProps) {
+export default function UserAvatar({ fullName, hasPhoto, size = 36, userId }: UserAvatarProps) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
     if (hasPhoto) {
-      fetchMyPhotoObjectUrl().then((url) => {
+      const fetchPhoto = userId ? () => fetchUserPhotoObjectUrl(userId) : fetchMyPhotoObjectUrl;
+      fetchPhoto().then((url) => {
         objectUrl = url;
         setPhotoUrl(url);
       });
@@ -36,7 +42,7 @@ export default function UserAvatar({ fullName, hasPhoto, size = 36 }: UserAvatar
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [hasPhoto]);
+  }, [hasPhoto, userId]);
 
   if (photoUrl) {
     return (

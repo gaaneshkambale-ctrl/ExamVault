@@ -394,6 +394,22 @@ public class UsersController : ControllerBase
         return Ok(ToResponse(user));
     }
 
+    // Admin-only counterpart to GetMyPhoto - lets admin screens (e.g. Live
+    // Monitoring's student avatars) render another user's photo, which no
+    // endpoint supported before this.
+    [Authorize(Roles = "Admin")]
+    [HttpGet("{id:guid}/photo")]
+    public async Task<IActionResult> GetPhoto(Guid id, CancellationToken cancellationToken)
+    {
+        var user = await _getUserProfileHandler.HandleAsync(new GetUserProfileQuery(id), cancellationToken);
+        if (user?.PhotoData is null)
+        {
+            return NotFound();
+        }
+
+        return File(user.PhotoData, user.PhotoContentType ?? "application/octet-stream");
+    }
+
     [Authorize(Roles = "Admin")]
     [HttpGet("{id:guid}/sessions")]
     public async Task<IActionResult> ListSessions(Guid id, CancellationToken cancellationToken)
@@ -551,7 +567,15 @@ public class UsersController : ControllerBase
     }
 
     private static UserListItemResponse ToResponse(AppUser user) =>
-        new(user.Id, user.FullName, user.Email, user.Role.ToString(), user.CreatedAtUtc, user.IsActive, user.PhoneNumber);
+        new(
+            user.Id,
+            user.FullName,
+            user.Email,
+            user.Role.ToString(),
+            user.CreatedAtUtc,
+            user.IsActive,
+            user.PhoneNumber,
+            user.PhotoData is not null);
 
     private static UserSessionResponse ToResponse(RefreshToken token)
     {

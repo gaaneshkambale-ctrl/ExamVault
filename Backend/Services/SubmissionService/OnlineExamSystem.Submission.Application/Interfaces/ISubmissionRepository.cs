@@ -33,6 +33,13 @@ public interface ISubmissionRepository
         Guid examId,
         CancellationToken cancellationToken = default);
 
+    // Unlike GetSubmittedAttemptsByExamIdAsync (Reports - completed attempts
+    // only), this returns every attempt regardless of status, for Live
+    // Monitoring's Active Exams screen which needs InProgress attempts too.
+    Task<IReadOnlyList<ExamAttempt>> GetAllAttemptsByExamIdAsync(
+        Guid examId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ExamAttempt>> GetAttemptsByUserIdAsync(
         Guid userId,
         CancellationToken cancellationToken = default);

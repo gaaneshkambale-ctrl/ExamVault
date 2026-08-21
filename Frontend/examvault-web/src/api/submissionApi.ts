@@ -55,6 +55,13 @@ export async function getUserAttempts(userId: string): Promise<ExamAttemptRespon
   return data;
 }
 
+// /live includes InProgress attempts, unlike the plain by-exam endpoint
+// (Reports - Submitted/AutoSubmitted only) - needed for Live Monitoring.
+export async function getExamAttempts(examId: string): Promise<ExamAttemptResponse[]> {
+  const { data } = await apiClient.get<AttemptWithAnswersResponse[]>(`/api/submissions/by-exam/${examId}/live`);
+  return data.map((a) => a.attempt);
+}
+
 // Best-effort proctoring signal - failures are swallowed by the caller, a
 // broker/network hiccup here must never interrupt the student's exam.
 export async function recordFullscreenExit(attemptId: string): Promise<void> {
