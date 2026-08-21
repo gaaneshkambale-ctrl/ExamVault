@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Badge, Button, Card, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
+import { Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../../layouts/AdminLayout';
@@ -41,6 +41,7 @@ export default function Proctoring() {
   const { data: users } = useUsers();
   const [searchText, setSearchText] = useState('');
   const [examFilter, setExamFilter] = useState('All');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [confirmCard, setConfirmCard] = useState<SessionCard | null>(null);
   const [confirmEndAll, setConfirmEndAll] = useState(false);
 
@@ -146,9 +147,27 @@ export default function Proctoring() {
             {anomalyCount}
           </p>
         </div>
-        <Button variant="danger" disabled={cards.length === 0} onClick={() => setConfirmEndAll(true)}>
-          End All Sessions
-        </Button>
+        <div className="d-flex align-items-center gap-2">
+          <div className="btn-group" role="group" aria-label="View mode">
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => setViewMode('grid')}
+            >
+              Grid View
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => setViewMode('list')}
+            >
+              List View
+            </button>
+          </div>
+          <Button variant="danger" disabled={cards.length === 0} onClick={() => setConfirmEndAll(true)}>
+            End All Sessions
+          </Button>
+        </div>
       </div>
 
       <div className="alert alert-light border small text-muted mb-4">
@@ -200,7 +219,7 @@ export default function Proctoring() {
         </Card>
       )}
 
-      {!loading && !isExamsError && cards.length > 0 && (
+      {!loading && !isExamsError && cards.length > 0 && viewMode === 'grid' && (
         <Row className="g-3">
           {cards.map((card) => {
             const meta = alertMeta[card.alert];
@@ -248,6 +267,61 @@ export default function Proctoring() {
             );
           })}
         </Row>
+      )}
+
+      {!loading && !isExamsError && cards.length > 0 && viewMode === 'list' && (
+        <Card className="border-0 shadow-sm">
+          <Card.Body className="p-0">
+            <Table responsive hover className="mb-0 align-middle">
+              <thead className="text-muted small text-uppercase bg-light">
+                <tr>
+                  <th className="ps-4">Student</th>
+                  <th>Exam</th>
+                  <th>Status</th>
+                  <th className="pe-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cards.map((card) => {
+                  const meta = alertMeta[card.alert];
+                  const user = userById.get(card.attempt.userId);
+                  return (
+                    <tr key={card.attempt.id}>
+                      <td className="ps-4">
+                        <div className="d-flex align-items-center gap-2">
+                          <UserAvatar
+                            userId={card.attempt.userId}
+                            fullName={user?.fullName ?? 'Student'}
+                            hasPhoto={user?.hasPhoto ?? false}
+                            size={32}
+                          />
+                          <div>
+                            <div className="fw-medium">{user?.fullName ?? 'Unknown Student'}</div>
+                            <div className="text-muted small">{user?.email ?? ''}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{card.examTitle}</td>
+                      <td>
+                        <Badge bg={meta.bg}>{meta.label}</Badge>
+                      </td>
+                      <td className="pe-4">
+                        <div className="d-flex align-items-center gap-3">
+                          <Link to={`/admin/exams/${card.examId}`} className="small text-decoration-none">
+                            View Exam →
+                          </Link>
+                          <Button variant="outline-danger" size="sm" onClick={() => setConfirmCard(card)}>
+                            End
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </Card.Body>
+        </Card>
       )}
 
       <Modal show={confirmCard !== null} onHide={() => setConfirmCard(null)} centered>
