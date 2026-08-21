@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
 using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
+using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
@@ -56,6 +57,7 @@ public class Program
         builder.Services.AddScoped<SaveAnswerHandler>();
         builder.Services.AddScoped<IValidator<SubmitAttemptCommand>, SubmitAttemptValidator>();
         builder.Services.AddScoped<SubmitAttemptHandler>();
+        builder.Services.AddScoped<ForceSubmitAttemptHandler>();
         builder.Services.AddScoped<GetMyAttemptHandler>();
         builder.Services.AddScoped<ListAttemptsByExamHandler>();
         builder.Services.AddScoped<ListLiveAttemptsByExamHandler>();

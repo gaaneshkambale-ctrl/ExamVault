@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
 using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
+using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
@@ -29,6 +30,7 @@ public class SubmissionsController : ControllerBase
     private readonly StartAttemptHandler _startAttemptHandler;
     private readonly SaveAnswerHandler _saveAnswerHandler;
     private readonly SubmitAttemptHandler _submitAttemptHandler;
+    private readonly ForceSubmitAttemptHandler _forceSubmitAttemptHandler;
     private readonly GetMyAttemptHandler _getMyAttemptHandler;
     private readonly ListAttemptsByExamHandler _listAttemptsByExamHandler;
     private readonly ListLiveAttemptsByExamHandler _listLiveAttemptsByExamHandler;
@@ -45,6 +47,7 @@ public class SubmissionsController : ControllerBase
         StartAttemptHandler startAttemptHandler,
         SaveAnswerHandler saveAnswerHandler,
         SubmitAttemptHandler submitAttemptHandler,
+        ForceSubmitAttemptHandler forceSubmitAttemptHandler,
         GetMyAttemptHandler getMyAttemptHandler,
         ListAttemptsByExamHandler listAttemptsByExamHandler,
         ListLiveAttemptsByExamHandler listLiveAttemptsByExamHandler,
@@ -60,6 +63,7 @@ public class SubmissionsController : ControllerBase
         _startAttemptHandler = startAttemptHandler;
         _saveAnswerHandler = saveAnswerHandler;
         _submitAttemptHandler = submitAttemptHandler;
+        _forceSubmitAttemptHandler = forceSubmitAttemptHandler;
         _getMyAttemptHandler = getMyAttemptHandler;
         _listAttemptsByExamHandler = listAttemptsByExamHandler;
         _listLiveAttemptsByExamHandler = listLiveAttemptsByExamHandler;
@@ -281,6 +285,36 @@ public class SubmissionsController : ControllerBase
             attemptId,
             userId,
             request.IsAutoSubmitted);
+        return Ok(ToResponse(result.Attempt!));
+    }
+
+    // Live Monitoring's "End Session" - admin ends a student's attempt on
+    // their behalf, same terminal state (AutoSubmitted) the exam timer
+    // already produces when time runs out, just admin-initiated instead.
+    [HttpPost("{attemptId:guid}/force-submit")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ForceSubmit(Guid attemptId, CancellationToken cancellationToken)
+    {
+        var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await _forceSubmitAttemptHandler.HandleAsync(
+            new ForceSubmitAttemptCommand(attemptId, adminUserId),
+            cancellationToken);
+
+        if (result.IsAttemptNotFound)
+        {
+            return NotFound(new { message = "Attempt not found." });
+        }
+
+        if (result.IsAlreadySubmitted)
+        {
+            return Conflict(new { message = "This attempt has already been submitted." });
+        }
+
+        _logger.LogInformation(
+            "Attempt {AttemptId} force-submitted by admin {AdminUserId}.",
+            attemptId,
+            adminUserId);
         return Ok(ToResponse(result.Attempt!));
     }
 

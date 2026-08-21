@@ -97,6 +97,13 @@ export async function updateViolationStatus(violationId: string, status: Violati
   await apiClient.put(`/api/submissions/violations/${violationId}/status`, { status });
 }
 
+// Live Monitoring's "End Session" - admin ends a student's attempt on their
+// behalf (same terminal AutoSubmitted state the exam timer produces).
+export async function forceSubmitAttempt(attemptId: string): Promise<ExamAttemptResponse> {
+  const { data } = await apiClient.post<ExamAttemptResponse>(`/api/submissions/${attemptId}/force-submit`);
+  return data;
+}
+
 export async function enterSection(
   attemptId: string,
   sectionId: string,
