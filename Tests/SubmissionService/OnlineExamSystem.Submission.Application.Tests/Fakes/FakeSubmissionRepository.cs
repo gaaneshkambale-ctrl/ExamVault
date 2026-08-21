@@ -9,16 +9,20 @@ public class FakeSubmissionRepository : ISubmissionRepository
     private readonly List<ExamAttempt> _attempts = [];
     private readonly List<AttemptAnswer> _answers = [];
     private readonly List<AttemptSectionState> _sectionStates = [];
+    private readonly List<ViolationEvent> _violationEvents = [];
 
     public IReadOnlyList<ExamAttempt> Attempts => _attempts;
     public IReadOnlyList<AttemptAnswer> Answers => _answers;
     public IReadOnlyList<AttemptSectionState> SectionStates => _sectionStates;
+    public IReadOnlyList<ViolationEvent> ViolationEvents => _violationEvents;
 
     public void SeedAttempt(ExamAttempt attempt) => _attempts.Add(attempt);
 
     public void SeedAnswer(AttemptAnswer answer) => _answers.Add(answer);
 
     public void SeedSectionState(AttemptSectionState state) => _sectionStates.Add(state);
+
+    public void SeedViolationEvent(ViolationEvent violationEvent) => _violationEvents.Add(violationEvent);
 
     public Task<ExamAttempt?> GetInProgressAttemptAsync(
         Guid examId,
@@ -113,6 +117,21 @@ public class FakeSubmissionRepository : ISubmissionRepository
         _sectionStates.Add(state);
         return Task.CompletedTask;
     }
+
+    public Task AddViolationEventAsync(ViolationEvent violationEvent, CancellationToken cancellationToken = default)
+    {
+        _violationEvents.Add(violationEvent);
+        return Task.CompletedTask;
+    }
+
+    public Task<ViolationEvent?> GetViolationEventByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_violationEvents.FirstOrDefault(v => v.Id == id));
+
+    public Task<IReadOnlyList<ViolationEvent>> GetViolationEventsByAttemptIdsAsync(
+        IReadOnlyList<Guid> attemptIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ViolationEvent>>(
+            _violationEvents.Where(v => attemptIds.Contains(v.AttemptId)).ToList());
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

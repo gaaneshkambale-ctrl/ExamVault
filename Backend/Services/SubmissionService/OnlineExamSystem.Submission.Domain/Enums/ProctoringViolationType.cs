@@ -1,4 +1,4 @@
-namespace OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
+namespace OnlineExamSystem.Submission.Domain.Enums;
 
 public enum ProctoringViolationType
 {

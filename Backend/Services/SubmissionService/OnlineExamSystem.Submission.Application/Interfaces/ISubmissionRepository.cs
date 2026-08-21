@@ -61,5 +61,13 @@ public interface ISubmissionRepository
 
     Task AddSectionStateAsync(AttemptSectionState state, CancellationToken cancellationToken = default);
 
+    Task AddViolationEventAsync(ViolationEvent violationEvent, CancellationToken cancellationToken = default);
+
+    Task<ViolationEvent?> GetViolationEventByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ViolationEvent>> GetViolationEventsByAttemptIdsAsync(
+        IReadOnlyList<Guid> attemptIds,
+        CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

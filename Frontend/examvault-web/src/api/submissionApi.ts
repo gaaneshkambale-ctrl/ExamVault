@@ -7,6 +7,8 @@ import type {
   ExamAttemptResponse,
   ProctoringViolationType,
   SaveAnswerRequest,
+  ViolationEventResponse,
+  ViolationStatus,
 } from '../types/submission';
 
 export async function startAttempt(examId: string): Promise<ExamAttemptResponse> {
@@ -81,6 +83,18 @@ export async function recordProctoringViolation(
   type: ProctoringViolationType,
 ): Promise<void> {
   await apiClient.post(`/api/submissions/${attemptId}/proctoring-violation`, { type });
+}
+
+// Every individual violation occurrence for the exam (own timestamp,
+// severity, investigate/resolve status) - unlike the by-exam/live attempts
+// endpoint, which only carries running *Count totals with no per-event data.
+export async function getExamViolations(examId: string): Promise<ViolationEventResponse[]> {
+  const { data } = await apiClient.get<ViolationEventResponse[]>(`/api/submissions/by-exam/${examId}/violations`);
+  return data;
+}
+
+export async function updateViolationStatus(violationId: string, status: ViolationStatus): Promise<void> {
+  await apiClient.put(`/api/submissions/violations/${violationId}/status`, { status });
 }
 
 export async function enterSection(

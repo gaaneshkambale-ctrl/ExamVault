@@ -11,9 +11,11 @@ using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
+using OnlineExamSystem.Submission.Application.Attempts.ListViolationsByExam;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
 using OnlineExamSystem.Submission.Application.Attempts.Submit;
+using OnlineExamSystem.Submission.Application.Attempts.UpdateViolationStatus;
 using OnlineExamSystem.Submission.Application.Interfaces;
 using OnlineExamSystem.Submission.Infrastructure;
 using OnlineExamSystem.Submission.Infrastructure.Persistence;
@@ -60,6 +62,8 @@ public class Program
         builder.Services.AddScoped<ListAttemptsByUserHandler>();
         builder.Services.AddScoped<RecordFullscreenExitHandler>();
         builder.Services.AddScoped<RecordProctoringViolationHandler>();
+        builder.Services.AddScoped<ListViolationsByExamHandler>();
+        builder.Services.AddScoped<UpdateViolationStatusHandler>();
         builder.Services.AddScoped<EnterSectionHandler>();
         builder.Services.AddScoped<CompleteSectionHandler>();
 

@@ -110,6 +110,21 @@ public class SubmissionRepository : ISubmissionRepository
     public async Task AddSectionStateAsync(AttemptSectionState state, CancellationToken cancellationToken = default) =>
         await _dbContext.AttemptSectionStates.AddAsync(state, cancellationToken);
 
+    public async Task AddViolationEventAsync(
+        ViolationEvent violationEvent,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.ViolationEvents.AddAsync(violationEvent, cancellationToken);
+
+    public Task<ViolationEvent?> GetViolationEventByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        _dbContext.ViolationEvents.FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<ViolationEvent>> GetViolationEventsByAttemptIdsAsync(
+        IReadOnlyList<Guid> attemptIds,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.ViolationEvents
+            .Where(v => attemptIds.Contains(v.AttemptId))
+            .ToListAsync(cancellationToken);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

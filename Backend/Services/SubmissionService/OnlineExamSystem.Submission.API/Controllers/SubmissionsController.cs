@@ -9,10 +9,13 @@ using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
+using OnlineExamSystem.Submission.Application.Attempts.ListViolationsByExam;
 using OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
 using OnlineExamSystem.Submission.Application.Attempts.Start;
 using OnlineExamSystem.Submission.Application.Attempts.Submit;
+using OnlineExamSystem.Submission.Application.Attempts.UpdateViolationStatus;
 using OnlineExamSystem.Submission.Domain.Entities;
+using OnlineExamSystem.Submission.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Submission;
 using OnlineExamSystem.Shared.Contracts.Responses.Submission;
 
@@ -32,6 +35,8 @@ public class SubmissionsController : ControllerBase
     private readonly ListAttemptsByUserHandler _listAttemptsByUserHandler;
     private readonly RecordFullscreenExitHandler _recordFullscreenExitHandler;
     private readonly RecordProctoringViolationHandler _recordProctoringViolationHandler;
+    private readonly ListViolationsByExamHandler _listViolationsByExamHandler;
+    private readonly UpdateViolationStatusHandler _updateViolationStatusHandler;
     private readonly EnterSectionHandler _enterSectionHandler;
     private readonly CompleteSectionHandler _completeSectionHandler;
     private readonly ILogger<SubmissionsController> _logger;
@@ -46,6 +51,8 @@ public class SubmissionsController : ControllerBase
         ListAttemptsByUserHandler listAttemptsByUserHandler,
         RecordFullscreenExitHandler recordFullscreenExitHandler,
         RecordProctoringViolationHandler recordProctoringViolationHandler,
+        ListViolationsByExamHandler listViolationsByExamHandler,
+        UpdateViolationStatusHandler updateViolationStatusHandler,
         EnterSectionHandler enterSectionHandler,
         CompleteSectionHandler completeSectionHandler,
         ILogger<SubmissionsController> logger)
@@ -59,6 +66,8 @@ public class SubmissionsController : ControllerBase
         _listAttemptsByUserHandler = listAttemptsByUserHandler;
         _recordFullscreenExitHandler = recordFullscreenExitHandler;
         _recordProctoringViolationHandler = recordProctoringViolationHandler;
+        _listViolationsByExamHandler = listViolationsByExamHandler;
+        _updateViolationStatusHandler = updateViolationStatusHandler;
         _enterSectionHandler = enterSectionHandler;
         _completeSectionHandler = completeSectionHandler;
         _logger = logger;
@@ -410,6 +419,60 @@ public class SubmissionsController : ControllerBase
         return Ok(attempts.Select(ToResponse).ToList());
     }
 
+    // Live Monitoring's Security Violations feed - every individual
+    // violation occurrence for the exam (not just the running *Count totals
+    // on ExamAttempt), each with its own timestamp/severity/status.
+    [HttpGet("by-exam/{examId:guid}/violations")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ViolationsByExam(Guid examId, CancellationToken cancellationToken)
+    {
+        var events = await _listViolationsByExamHandler.HandleAsync(
+            new ListViolationsByExamQuery(examId),
+            cancellationToken);
+
+        return Ok(events.Select(e => ToResponse(e.Event, examId, e.UserId)).ToList());
+    }
+
+    [HttpPut("violations/{violationId:guid}/status")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateViolationStatus(
+        Guid violationId,
+        UpdateViolationStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!Enum.TryParse<ViolationStatus>(request.Status, ignoreCase: true, out var newStatus))
+        {
+            return BadRequest(new { message = $"Unknown violation status '{request.Status}'." });
+        }
+
+        var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _updateViolationStatusHandler.HandleAsync(
+            new UpdateViolationStatusCommand(violationId, newStatus, adminUserId),
+            cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Violation not found." });
+        }
+
+        _logger.LogInformation(
+            "Violation {ViolationId} status set to {Status} by admin {AdminUserId}.",
+            violationId,
+            newStatus,
+            adminUserId);
+
+        // ExamId/UserId aren't needed by the caller here (it already has
+        // them from the list it clicked the action from) - reuse ToResponse
+        // with Guid.Empty placeholders would be misleading, so this returns
+        // a smaller ack shape instead.
+        return Ok(new
+        {
+            id = result.Event!.Id,
+            status = result.Event.Status.ToString(),
+            resolvedAtUtc = result.Event.ResolvedAtUtc,
+        });
+    }
+
     private static ExamAttemptResponse ToResponse(ExamAttempt attempt) =>
         new(
             attempt.Id,
@@ -427,6 +490,18 @@ public class SubmissionsController : ControllerBase
             attempt.CopyPasteCount,
             attempt.RightClickCount,
             attempt.MultipleMonitorsCount);
+
+    private static ViolationEventResponse ToResponse(ViolationEvent violationEvent, Guid examId, Guid userId) =>
+        new(
+            violationEvent.Id,
+            violationEvent.AttemptId,
+            examId,
+            userId,
+            violationEvent.Type.ToString(),
+            violationEvent.Severity.ToString(),
+            violationEvent.Status.ToString(),
+            violationEvent.DetectedAtUtc,
+            violationEvent.ResolvedAtUtc);
 
     private static AttemptAnswerResponse ToResponse(AttemptAnswer answer) =>
         new(

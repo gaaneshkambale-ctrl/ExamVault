@@ -1,4 +1,5 @@
 using OnlineExamSystem.Submission.Application.Interfaces;
+using OnlineExamSystem.Submission.Domain.Entities;
 using OnlineExamSystem.Submission.Domain.Enums;
 
 namespace OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
@@ -11,6 +12,18 @@ public class RecordProctoringViolationHandler
     {
         _repository = repository;
     }
+
+    // Multiple-faces/monitors are the strongest real signals of someone else
+    // being involved - no-face and tab/window behavior are concerning but
+    // more often innocent (bad camera angle, alt-tabbing to a calculator);
+    // a bare right-click is the weakest signal, usually just habit.
+    private static ViolationSeverity SeverityFor(ProctoringViolationType type) => type switch
+    {
+        ProctoringViolationType.MultipleFacesDetected => ViolationSeverity.Critical,
+        ProctoringViolationType.MultipleMonitors => ViolationSeverity.Critical,
+        ProctoringViolationType.RightClick => ViolationSeverity.Low,
+        _ => ViolationSeverity.Medium,
+    };
 
     public async Task<RecordProctoringViolationResult> HandleAsync(
         RecordProctoringViolationCommand command,
@@ -56,6 +69,16 @@ public class RecordProctoringViolationHandler
                 attempt.MultipleMonitorsCount++;
                 break;
         }
+
+        await _repository.AddViolationEventAsync(
+            new ViolationEvent
+            {
+                AttemptId = attempt.Id,
+                Type = command.Type,
+                Severity = SeverityFor(command.Type),
+                DetectedAtUtc = DateTime.UtcNow,
+            },
+            cancellationToken);
 
         await _repository.SaveChangesAsync(cancellationToken);
 

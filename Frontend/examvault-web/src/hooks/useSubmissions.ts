@@ -2,10 +2,11 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   getExamAttempts,
   getExamAttemptsWithAnswers,
+  getExamViolations,
   getMyAttempt,
   getUserAttempts,
 } from '../api/submissionApi';
-import type { AttemptWithAnswersResponse, ExamAttemptResponse } from '../types/submission';
+import type { AttemptWithAnswersResponse, ExamAttemptResponse, ViolationEventResponse } from '../types/submission';
 
 export function useMyAttempt(examId: string | undefined) {
   return useQuery({
@@ -44,6 +45,26 @@ export function useAttemptsByExam(examIds: string[] | undefined, refetchInterval
   });
   const isLoading = queries.some((q) => q.isLoading);
   return { attemptsByExam, isLoading };
+}
+
+// Same aggregation pattern - fans the violations/live endpoint out across
+// every exam id for Security Violations' feed.
+export function useViolationsByExam(examIds: string[] | undefined, refetchInterval?: number) {
+  const ids = examIds ?? [];
+  const queries = useQueries({
+    queries: ids.map((examId) => ({
+      queryKey: ['submissions', 'violationsByExam', examId],
+      queryFn: () => getExamViolations(examId),
+      refetchInterval,
+    })),
+  });
+
+  const violationsByExam: Record<string, ViolationEventResponse[]> = {};
+  ids.forEach((examId, index) => {
+    violationsByExam[examId] = queries[index]?.data ?? [];
+  });
+  const isLoading = queries.some((q) => q.isLoading);
+  return { violationsByExam, isLoading };
 }
 
 // Same shape/purpose as useAttemptsByExam, but keeps each attempt's answers

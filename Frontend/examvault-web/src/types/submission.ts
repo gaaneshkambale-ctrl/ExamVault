@@ -65,3 +65,19 @@ export interface AttemptWithAnswersResponse {
   answers: AttemptAnswerResponse[];
   sectionStates: AttemptSectionStateResponse[];
 }
+
+export type ViolationSeverity = 'Low' | 'Medium' | 'Critical';
+
+export type ViolationStatus = 'Open' | 'UnderInvestigation' | 'Resolved';
+
+export interface ViolationEventResponse {
+  id: string;
+  attemptId: string;
+  examId: string;
+  userId: string;
+  type: ProctoringViolationType;
+  severity: ViolationSeverity;
+  status: ViolationStatus;
+  detectedAtUtc: string;
+  resolvedAtUtc: string | null;
+}
