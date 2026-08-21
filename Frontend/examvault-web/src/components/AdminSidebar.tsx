@@ -9,7 +9,6 @@ export type AdminNavItem =
   | 'Roles & Permissions'
   | 'Groups'
   | 'Exams'
-  | 'Categories'
   | 'Results'
   | 'Reports'
   | 'Notifications'
@@ -41,7 +40,6 @@ const navItems: NavItem[] = [
     ],
   },
   { label: 'Exams', path: '/admin/exams' },
-  { label: 'Categories', path: null },
   { label: 'Results', path: '/admin/results' },
   { label: 'Reports', path: '/admin/reports' },
   {
@@ -79,12 +77,6 @@ const iconPaths: Partial<Record<AdminNavItem, ReactNode>> = {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
-    </>
-  ),
-  Categories: (
-    <>
-      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-      <line x1="7" y1="7" x2="7.01" y2="7" />
     </>
   ),
   Results: (
