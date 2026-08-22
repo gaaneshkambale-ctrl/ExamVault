@@ -25,7 +25,8 @@ public record NotificationBatchDetails(
     int TotalRecipients,
     int Delivered,
     int Failed,
-    int Pending);
+    int Pending,
+    int Skipped);
 
 public interface INotificationRepository
 {

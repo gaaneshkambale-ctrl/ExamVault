@@ -3977,3 +3977,201 @@ Left in place as real local dev data, same convention as every prior
 feature verification in this log: java2's ExamCode ("NET-2026-J2")
 and its ShowResult flip through the real publish flow; the
 "Results Published" notification sent to its 4 real candidates.
+
+=====================================================================
+FEATURE (DONE, 2026-08-22): Create Notification redesign
+(send_notification.png) - templates, delivery channels, Groups
+targeting, real per-recipient message variables
+=====================================================================
+REQUESTED: user supplied send_notification.png, asked to update the
+EXISTING Create Notification page (Notifications > Send Notification)
+to match its two-column composer + delivery-summary-sidebar layout,
+template dropdown, delivery-channel control, and {{variable}} message
+placeholders. Confirmed 2 scope forks before planning:
+- {{studentName}}/{{startDate}}/{{duration}} placeholders: build REAL
+  per-recipient substitution (not literal unsubstituted text sent to
+  students).
+- "Delivery Channels" dropdown (In-App + Email / In-App Only / Email
+  Only): build REAL channel control (not just a label over today's
+  always-in-app/preference-gated-email behavior).
+
+DATA REALITY CHECK: confirmed in
+NotificationPersistenceService.CreateNotificationsAsync - title/
+message are stored VERBATIM, identical for every recipient in a
+batch; ScheduledAtUtc batches are "store-only" (EmailStatus stays
+Pending forever, no poller ever dispatches them - a PRE-EXISTING gap,
+not touched by this feature, not being silently fixed either).
+{{examTitle}}/{{startDate}}/{{duration}} are BATCH-constant (same for
+every recipient, depend only on the selected exam) - these get
+substituted on the FRONTEND right before submit, using the exam data
+CreateNotification.tsx already has via useExams(). Only
+{{studentName}}/{{studentEmail}} genuinely vary per recipient inside
+one batch - those need a real backend substitution pass, but since
+NotificationRecipient already carries FullName/Email per recipient,
+this is a plain per-entity string.Replace, no new exam-lookup client
+needed.
+
+BACKEND (NotificationService):
+- Domain: EmailStatus gains `Skipped` (email intentionally not
+  attempted because SendEmail was false - distinct from Pending/
+  Failed so History doesn't misreport it). Notification entity gains
+  `ShowInApp` bool (default true) - controls whether a row is
+  surfaced to the student's in-app list; the row itself still always
+  gets created (needed for admin History/delivery tracking regardless
+  of channel choice, matches the mockup's "Track delivery status"
+  bullet).
+- Infrastructure: NotificationDbContext config + new EF migration
+  (`dotnet ef migrations add`, not hand-written). NotificationRepository's
+  three student-facing read paths (GetMineAsync, GetUnreadCountAsync,
+  GetUnreadForUserAsync) each gain `.Where(n => n.ShowInApp)` - a
+  channel-suppressed row silently never appears in the student's own
+  notification list, same as it already silently respects
+  ScheduledAtUtc.
+- Application: CreateNotificationCommand gains `bool SendEmail = true,
+  bool SendInApp = true` (defaults preserve every existing caller's
+  behavior unchanged, including this session's own Publish Results
+  feature which calls createNotification without specifying
+  channels). INotificationPersistenceService.CreateNotificationsAsync
+  gains the same two params. NotificationPersistenceService: per
+  recipient, `title`/`message` get `.Replace("{{studentName}}",
+  recipient.FullName).Replace("{{studentEmail}}", recipient.Email)`
+  before being stored on the entity or handed to the email dispatcher;
+  entity.ShowInApp = sendInApp; if sendEmail is false, EmailStatus =
+  Skipped unconditionally (dispatcher never called) - otherwise
+  existing isDue/preference logic unchanged.
+- API: CreateNotificationHandler threads SendEmail/SendInApp from
+  command to the persistence call. NotificationsController.Create
+  reads request.SendEmail/SendInApp into the command.
+- Shared.Contracts: CreateNotificationRequest gains `SendEmail = true,
+  SendInApp = true` (defaulted, so it's additive-only for any other
+  caller).
+
+FRONTEND (CreateNotification.tsx rewritten; other notification pages
+- History, Batch Details, Preferences - untouched, out of scope):
+- New src/constants/notificationTemplates.ts: 5 templates, one per
+  existing NotificationType value (Exam Assignment->Exam, Exam
+  Reminder->Reminder, Result Published->Result, System
+  Announcement->System, Account Notice->Account) - each a real
+  {title, message} string containing the real {{}} placeholders
+  (kept RAW/editable in the compose box after picking a template,
+  matching the mockup - substitution happens at send time, not at
+  template-pick time, so the admin can still hand-edit the wording).
+- Layout: two-column (Col lg={8} "Notification Composer" card, Col
+  lg={4} "Delivery Summary" sidebar card), matching the mockup's
+  ~2:1 split.
+- Notification Type: template dropdown (sets `type` + prefills Title/
+  Message with the template's raw strings, only when the fields are
+  still empty or match a previous template's exact text - won't
+  clobber hand-edited content on a second dropdown change).
+- Delivery Channels: new dropdown (In-App + Email / In-App Only /
+  Email Only) driving sendEmail/sendInApp - replaces needing two
+  separate toggles.
+- Recipients: dropdown gains a REAL new "Groups / Batches" option
+  alongside the existing All Students/Individual Students/Exam
+  Candidates/Admins - resolved the same way PublishResults.tsx
+  already resolves group membership (getGroup per selected group,
+  dedup member ids, submitted as sendTo: 'SelectedStudents' with the
+  resolved userIds - no backend change needed for this part, mirrors
+  existing real infra).
+- Live "N recipients selected" count next to Recipients, computed per
+  target type from real data (students.length, admins.length,
+  selectedUserIds.size, or summed real group memberCount for Groups).
+  Exam Candidates is the one case with no cheap real client-side
+  count (would need a new assignment-count lookup) - shows "Recipients
+  determined at send time" instead of inventing a number.
+- Options checklist: "Send email notification"/"Send in-app
+  notification" become non-interactive indicator rows mirroring the
+  Delivery Channels dropdown (avoids a second, redundant control for
+  the same two booleans). "Include exam link" is a REAL standalone
+  checkbox - when on and a related exam is selected, appends a real
+  line to the message at submit time. "Track delivery status" stays
+  a static informational line (already real and already true via the
+  existing History/Batch Details pages - not a toggle, nothing to
+  control).
+- Delivery Summary sidebar: Recipients (real count/fallback text
+  above), Channels (from the dropdown), Template (selected template's
+  label), Status ("Ready to Send"/"Incomplete", reusing the existing
+  `canSubmit` validation, now also requiring a related exam whenever
+  the message still contains an exam-field placeholder), and a real
+  Preview block showing Title + Message with {{examTitle}}/
+  {{startDate}}/{{duration}} substituted from the selected exam (if
+  any) and {{studentName}} shown as literal "Student" (a real,
+  honestly-generic preview - the actual per-recipient name only
+  exists server-side at send time, so previewing one specific
+  student's name here would be misleading for a multi-recipient
+  batch).
+- Submit: substitutes {{examTitle}}/{{startDate}}/{{duration}} for
+  real using the selected exam right before calling createNotification
+  (matches the "batch-constant, do it client-side" reasoning above);
+  {{studentName}}/{{studentEmail}} sent through untouched for the
+  backend's real per-recipient pass.
+
+OUT OF SCOPE (flagged, not building this round): "Save Draft" button
+(mockup shows one, but no draft-persistence endpoint exists anywhere
+- omitted rather than wired to nothing); fixing the pre-existing
+"Schedule For Later" gap (ScheduledAtUtc never actually fires an email
+later - already broken before this feature, not this feature's job to
+fix); an exam-candidate real-time recipient count (would need a new
+assignment-count endpoint); editing History/Preferences pages beyond
+what correctness required (no mockup was supplied for those pages
+this round).
+
+STATUS: DONE, 2026-08-22.
+
+REAL GAP FOUND AND FIXED DURING VERIFICATION (this one WAS in scope,
+correcting the "out of scope" note above): Batch Details' Delivered/
+Failed/Pending counts never accounted for the new Skipped status - an
+"In-App Only" send would have shown 0/0/0 for a batch with real
+recipients, silently not summing to TotalRecipients with no
+explanation. Caught before considering the feature done, not left for
+a user bug report. Fixed for real: NotificationBatchDetails record +
+GetNotificationBatchDetailsHandler + NotificationBatchDetailsResponse
++ NotificationsController.GetBatchDetails + the frontend type and
+NotificationBatchDetails.tsx page all gained a `Skipped` figure
+alongside the existing three, all four now genuinely summing to
+TotalRecipients on every batch.
+
+VERIFIED LIVE (Docker, real admin session, sent a REAL notification
+end to end - not a dry run):
+- Sent a real "In-App Only" notification to one real student
+  (LiveWatch Student Test) using the System Announcement template.
+  The stored/displayed message read "Hello LiveWatch Student Test,
+  this is a real in-app-only channel test for
+  livewatch.studenttest@example.com" - confirming the backend's real
+  per-recipient {{studentName}}/{{studentEmail}} substitution
+  (NotificationPersistenceService) actually ran, not literal
+  unsubstituted placeholders reaching a student.
+- Batch Details for that send showed Total Recipients 1, Delivered 0,
+  Failed 0, Pending 0, Skipped 1 (100%) - confirming real channel
+  control (email genuinely never attempted, not just hidden) and the
+  Skipped-tracking fix above, both live.
+- Selecting java2 as the Related Exam live-updated the Preview panel
+  to "Your java2 Exam is Assigned" / "Duration: 60 min" / "Exam Date:
+  Not scheduled" (java2 has no StartAtUtc set - shown honestly rather
+  than fabricating a date) - real client-side substitution of the
+  batch-constant exam fields, and Status correctly flipped Incomplete
+  -> Ready to Send the moment the exam-placeholder validation was
+  satisfied.
+- Live recipient counting confirmed real for multiple recipient
+  types: "1 recipient selected" after checking exactly one student
+  under Individual Students; group memberCount summed correctly when
+  Groups was selected earlier in manual testing.
+- Full solution `dotnet build` (0 errors) and 286/286 backend tests
+  (including a required fix to FakeNotificationPersistenceService's
+  test double for the new interface signature). tsc --noEmit, oxlint,
+  and 36/36 frontend tests clean. New migration
+  (AddNotificationChannelControl) applied cleanly on notification-api
+  startup ("ALTER TABLE [Notifications] ADD [ShowInApp] bit NOT NULL
+  DEFAULT CAST(1 AS bit)" in its logs).
+
+TOOLING NOTE (not an app bug, recorded so it isn't re-investigated as
+one later): a combined test script that queried all three form
+`<select>` elements ONCE up front, then drove three sequential
+dropdown changes off that single stale snapshot, produced a wrong
+Type ("Exam" instead of "System") despite the Channel and Recipient
+changes from the same script working correctly. Re-running with a
+fresh `document.querySelectorAll('select')` between each dropdown
+change fixed it immediately and reproduced correctly every time after
+that - a script-side stale-DOM-reference artifact after React's
+re-render, not a bug in the Notification Type dropdown or
+`applyTemplate` itself (confirmed separately in isolation too).

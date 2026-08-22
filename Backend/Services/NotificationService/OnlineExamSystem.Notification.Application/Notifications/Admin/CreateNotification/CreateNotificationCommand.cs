@@ -10,4 +10,6 @@ public record CreateNotificationCommand(
     bool SendNow,
     DateTime? ScheduledAtUtc,
     Guid AdminUserId,
-    string BearerToken);
+    string BearerToken,
+    bool SendEmail = true,
+    bool SendInApp = true);

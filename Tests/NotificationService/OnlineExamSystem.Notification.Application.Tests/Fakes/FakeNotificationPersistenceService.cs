@@ -12,7 +12,9 @@ public record RecordedCreateCall(
     string Message,
     Guid? RelatedExamId,
     Guid? CreatedByAdminUserId,
-    DateTime? ScheduledAtUtc);
+    DateTime? ScheduledAtUtc,
+    bool SendEmail,
+    bool SendInApp);
 
 public class FakeNotificationPersistenceService : INotificationPersistenceService
 {
@@ -27,10 +29,13 @@ public class FakeNotificationPersistenceService : INotificationPersistenceServic
         Guid? relatedExamId = null,
         Guid? createdByAdminUserId = null,
         DateTime? scheduledAtUtc = null,
+        bool sendEmail = true,
+        bool sendInApp = true,
         CancellationToken cancellationToken = default)
     {
         Calls.Add(new RecordedCreateCall(
-            batchId, recipients, type, title, message, relatedExamId, createdByAdminUserId, scheduledAtUtc));
+            batchId, recipients, type, title, message, relatedExamId, createdByAdminUserId, scheduledAtUtc,
+            sendEmail, sendInApp));
 
         var entities = recipients
             .Select(r => new NotificationEntity
@@ -43,6 +48,7 @@ public class FakeNotificationPersistenceService : INotificationPersistenceServic
                 RelatedExamId = relatedExamId,
                 CreatedByAdminUserId = createdByAdminUserId,
                 ScheduledAtUtc = scheduledAtUtc,
+                ShowInApp = sendInApp,
             })
             .ToList();
 

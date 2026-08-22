@@ -29,6 +29,7 @@ public record NotificationBatchDetailsResponse(
     int TotalRecipients,
     int Delivered,
     int Failed,
-    int Pending);
+    int Pending,
+    int Skipped);
 
 public record ResendNotificationResponse(Guid NewBatchId, int RecipientCount);

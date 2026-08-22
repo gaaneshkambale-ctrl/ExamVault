@@ -1,6 +1,6 @@
 export type NotificationType = 'Exam' | 'Reminder' | 'Result' | 'System' | 'Account';
 
-export type EmailStatus = 'Pending' | 'Delivered' | 'Failed';
+export type EmailStatus = 'Pending' | 'Delivered' | 'Failed' | 'Skipped';
 
 export type NotificationSendToType = 'AllStudents' | 'SelectedStudents' | 'ExamCandidates' | 'Admins';
 
@@ -49,6 +49,8 @@ export interface CreateNotificationRequest {
   relatedExamId: string | null;
   sendNow: boolean;
   scheduledAtUtc: string | null;
+  sendEmail?: boolean;
+  sendInApp?: boolean;
 }
 
 export interface CreateNotificationResponse {
@@ -86,6 +88,7 @@ export interface NotificationBatchDetailsResponse {
   delivered: number;
   failed: number;
   pending: number;
+  skipped: number;
 }
 
 export interface ResendNotificationResponse {

@@ -34,6 +34,7 @@ public class NotificationDbContext : DbContext
             entity.HasIndex(n => n.BatchId);
             entity.Property(n => n.Type).HasConversion<string>();
             entity.Property(n => n.EmailStatus).HasConversion<string>();
+            entity.Property(n => n.ShowInApp).HasDefaultValue(true);
         });
 
         modelBuilder.Entity<NotificationPreference>(entity =>

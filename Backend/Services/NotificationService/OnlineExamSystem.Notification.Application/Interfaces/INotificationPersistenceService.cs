@@ -14,5 +14,7 @@ public interface INotificationPersistenceService
         Guid? relatedExamId = null,
         Guid? createdByAdminUserId = null,
         DateTime? scheduledAtUtc = null,
+        bool sendEmail = true,
+        bool sendInApp = true,
         CancellationToken cancellationToken = default);
 }

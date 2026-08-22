@@ -26,6 +26,8 @@ public class NotificationPersistenceService : INotificationPersistenceService
         Guid? relatedExamId = null,
         Guid? createdByAdminUserId = null,
         DateTime? scheduledAtUtc = null,
+        bool sendEmail = true,
+        bool sendInApp = true,
         CancellationToken cancellationToken = default)
     {
         var recipientIds = recipients.Select(r => r.UserId).ToList();
@@ -39,6 +41,17 @@ public class NotificationPersistenceService : INotificationPersistenceService
 
         foreach (var recipient in recipients)
         {
+            // The only genuinely per-recipient merge fields - exam-level
+            // fields ({{examTitle}}/{{startDate}}/{{duration}}) are already
+            // substituted client-side before this call, since they're the
+            // same for every recipient in the batch.
+            var recipientTitle = title
+                .Replace("{{studentName}}", recipient.FullName)
+                .Replace("{{studentEmail}}", recipient.Email);
+            var recipientMessage = message
+                .Replace("{{studentName}}", recipient.FullName)
+                .Replace("{{studentEmail}}", recipient.Email);
+
             var emailEnabled = !preferenceByUserId.TryGetValue(recipient.UserId, out var preference) || preference.EmailEnabled;
 
             var entity = new NotificationEntity
@@ -46,23 +59,28 @@ public class NotificationPersistenceService : INotificationPersistenceService
                 BatchId = batchId,
                 UserId = recipient.UserId,
                 Type = type,
-                Title = title,
-                Message = message,
+                Title = recipientTitle,
+                Message = recipientMessage,
                 RelatedExamId = relatedExamId,
                 CreatedByAdminUserId = createdByAdminUserId,
                 ScheduledAtUtc = scheduledAtUtc,
                 EmailStatus = EmailStatus.Pending,
+                ShowInApp = sendInApp,
             };
 
-            if (isDue)
+            if (!sendEmail)
+            {
+                entity.EmailStatus = EmailStatus.Skipped;
+            }
+            else if (isDue)
             {
                 if (emailEnabled)
                 {
                     var delivered = await _emailDispatcher.SendAsync(
                         recipient.Email,
                         recipient.FullName,
-                        title,
-                        message,
+                        recipientTitle,
+                        recipientMessage,
                         type.ToString(),
                         entity.Id,
                         cancellationToken);

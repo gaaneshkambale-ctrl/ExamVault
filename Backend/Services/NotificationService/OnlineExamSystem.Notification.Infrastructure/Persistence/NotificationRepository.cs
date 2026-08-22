@@ -24,7 +24,8 @@ public class NotificationRepository : INotificationRepository
     {
         var query = _dbContext.Notifications
             .Where(n => n.UserId == userId)
-            .Where(n => n.ScheduledAtUtc == null || n.ScheduledAtUtc <= DateTime.UtcNow);
+            .Where(n => n.ScheduledAtUtc == null || n.ScheduledAtUtc <= DateTime.UtcNow)
+            .Where(n => n.ShowInApp);
 
         if (unreadOnly)
         {
@@ -45,6 +46,7 @@ public class NotificationRepository : INotificationRepository
         _dbContext.Notifications
             .Where(n => n.UserId == userId && !n.IsRead)
             .Where(n => n.ScheduledAtUtc == null || n.ScheduledAtUtc <= DateTime.UtcNow)
+            .Where(n => n.ShowInApp)
             .CountAsync(cancellationToken);
 
     public Task<NotificationEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
@@ -56,6 +58,7 @@ public class NotificationRepository : INotificationRepository
         _dbContext.Notifications
             .Where(n => n.UserId == userId && !n.IsRead)
             .Where(n => n.ScheduledAtUtc == null || n.ScheduledAtUtc <= DateTime.UtcNow)
+            .Where(n => n.ShowInApp)
             .ToListAsync(cancellationToken)
             .ContinueWith(t => (IReadOnlyList<NotificationEntity>)t.Result, cancellationToken);
 

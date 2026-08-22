@@ -8,4 +8,6 @@ public record CreateNotificationRequest(
     IReadOnlyList<Guid>? UserIds,
     Guid? RelatedExamId,
     bool SendNow,
-    DateTime? ScheduledAtUtc);
+    DateTime? ScheduledAtUtc,
+    bool SendEmail = true,
+    bool SendInApp = true);

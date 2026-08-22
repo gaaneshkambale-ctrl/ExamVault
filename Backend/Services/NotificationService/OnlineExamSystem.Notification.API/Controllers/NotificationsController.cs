@@ -208,7 +208,9 @@ public class NotificationsController : ControllerBase
             request.SendNow,
             request.ScheduledAtUtc,
             CallerId,
-            BearerToken);
+            BearerToken,
+            request.SendEmail,
+            request.SendInApp);
 
         var result = await _createNotificationHandler.HandleAsync(command, cancellationToken);
 
@@ -283,7 +285,8 @@ public class NotificationsController : ControllerBase
             d.TotalRecipients,
             d.Delivered,
             d.Failed,
-            d.Pending));
+            d.Pending,
+            d.Skipped));
     }
 
     [HttpPost("admin/history/{batchId:guid}/resend")]

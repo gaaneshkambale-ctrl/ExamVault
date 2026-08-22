@@ -35,7 +35,8 @@ public class GetNotificationBatchDetailsHandler
             TotalRecipients: rows.Count,
             Delivered: rows.Count(r => r.EmailStatus == EmailStatus.Delivered),
             Failed: rows.Count(r => r.EmailStatus == EmailStatus.Failed),
-            Pending: rows.Count(r => r.EmailStatus == EmailStatus.Pending));
+            Pending: rows.Count(r => r.EmailStatus == EmailStatus.Pending),
+            Skipped: rows.Count(r => r.EmailStatus == EmailStatus.Skipped));
 
         return GetNotificationBatchDetailsResult.Ok(details);
     }

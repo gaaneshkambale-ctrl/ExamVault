@@ -76,7 +76,7 @@ export default function NotificationBatchDetails() {
 
           <h2 className="h6 fw-bold mb-3">Recipients Summary</h2>
           <Row className="g-3 mb-4">
-            <Col md={3}>
+            <Col md={4} lg>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
                   <div className="text-muted small mb-1">Total Recipients</div>
@@ -84,7 +84,7 @@ export default function NotificationBatchDetails() {
                 </Card.Body>
               </Card>
             </Col>
-            <Col md={3}>
+            <Col md={4} lg>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
                   <div className="text-muted small mb-1">Delivered</div>
@@ -102,7 +102,7 @@ export default function NotificationBatchDetails() {
                 </Card.Body>
               </Card>
             </Col>
-            <Col md={3}>
+            <Col md={4} lg>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
                   <div className="text-muted small mb-1">Failed</div>
@@ -120,7 +120,7 @@ export default function NotificationBatchDetails() {
                 </Card.Body>
               </Card>
             </Col>
-            <Col md={3}>
+            <Col md={4} lg>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
                   <div className="text-muted small mb-1">Pending</div>
@@ -131,6 +131,24 @@ export default function NotificationBatchDetails() {
                       (
                       {details.totalRecipients > 0
                         ? Math.round((details.pending / details.totalRecipients) * 100)
+                        : 0}
+                      %)
+                    </span>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col md={4} lg>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body>
+                  <div className="text-muted small mb-1">Skipped</div>
+                  <div className="h4 fw-bold mb-0 text-secondary">
+                    {details.skipped}
+                    <span className="fs-6 text-muted">
+                      {' '}
+                      (
+                      {details.totalRecipients > 0
+                        ? Math.round((details.skipped / details.totalRecipients) * 100)
                         : 0}
                       %)
                     </span>

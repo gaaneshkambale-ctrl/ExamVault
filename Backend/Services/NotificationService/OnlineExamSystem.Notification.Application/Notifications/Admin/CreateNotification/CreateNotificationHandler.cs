@@ -83,6 +83,8 @@ public class CreateNotificationHandler
             command.RelatedExamId,
             command.AdminUserId,
             scheduledAtUtc,
+            command.SendEmail,
+            command.SendInApp,
             cancellationToken);
 
         return CreateNotificationResult.Ok(batchId, recipients.Count);
