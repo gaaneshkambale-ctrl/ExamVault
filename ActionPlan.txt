@@ -4175,3 +4175,122 @@ change fixed it immediately and reproduced correctly every time after
 that - a script-side stale-DOM-reference artifact after React's
 re-render, not a bug in the Notification Type dropdown or
 `applyTemplate` itself (confirmed separately in isolation too).
+
+=====================================================================
+FEATURE (DONE, 2026-08-22): Notification History redesign
+(notification_history.png)
+=====================================================================
+REQUESTED: user supplied notification_history.png, asked to update
+the EXISTING Notification History page to match: 4 global KPI cards
+(Sent Today/Delivered/Failed/Scheduled), search + Type/Channel/Status
+filters, a richer table (Notification/Recipients/Channels/Sent-
+Scheduled/Status/Action), and per-row Retry/Cancel actions alongside
+View. No user scope-fork question needed this round - every mockup
+element maps onto either data already computable from existing
+EmailStatus/ShowInApp/ScheduledAtUtc columns, or the ALREADY-REAL
+Resend/Delete-batch endpoints (built for the Batch Details page)
+reused directly from the list. Nothing here needs a "build real vs
+placeholder" decision.
+
+BACKEND (NotificationService):
+- NotificationBatchSummary (Application/Interfaces record) gains, per
+  batch: Delivered/Failed/Skipped/Pending counts (same 4-way
+  EmailStatus split Batch Details already exposes for one batch, now
+  computed in the LIST's existing GroupBy) and HasInApp/HasEmail bools
+  (HasInApp = any row's ShowInApp true - uniform per batch already;
+  HasEmail = any row's EmailStatus != Skipped, i.e. email was actually
+  attempted for at least one recipient).
+- NotificationRepository.GetHistoryAsync: extend the existing
+  GroupBy(n => n.BatchId) projection with the counts/bools above (all
+  computable from columns already on the Notification entity, no
+  schema change). Also extend with optional `search` (Title contains,
+  case-insensitive) and post-group filters for `channel` (derived
+  HasInApp/HasEmail combination) and `status` (derived Failed>0 /
+  ScheduledAtUtc>now / else Delivered - same three-way rule the
+  frontend will use for display, computed once server-side so
+  filtering and display agree).
+- GetNotificationHistoryQuery gains Search/Channel/Status (all
+  optional, default no filter - existing Type filter untouched).
+  GetNotificationHistoryHandler threads them through.
+- New: GetNotificationHistoryStatsQuery/Handler (own small vertical
+  slice, same pattern as everything else) + INotificationRepository.
+  GetHistoryStatsAsync - four direct COUNT queries against
+  Notifications (row-level, not batch-grouped, since "1,248" in the
+  mockup is clearly a recipient count): SentToday = rows with
+  CreatedAtUtc on today's UTC date AND EmailStatus != Pending (really
+  processed today, whether delivered/failed/skipped - excludes a
+  same-day batch that's scheduled for later today and hasn't fired
+  yet); Delivered/Failed = all-time counts by EmailStatus (a running
+  total is more useful here than day-scoping two of four cards
+  differently); Scheduled = rows where ScheduledAtUtc is set and still
+  in the future (genuinely upcoming, not the pre-existing "never
+  actually dispatches once due" gap's stuck-Pending rows).
+- Shared.Contracts: NotificationBatchSummaryResponse gains delivered/
+  failed/skipped/pending ints + channels (string, pre-formatted
+  "In-App + Email"/"In-App"/"Email"/"-" so the frontend doesn't
+  reimplement the derivation). New NotificationHistoryStatsResponse
+  (sentToday, delivered, failed, scheduled).
+- NotificationsController: GetHistory action gains [FromQuery]
+  search/channel/status params. New GetHistoryStats action
+  (`GET /api/notifications/admin/history/stats`, Admin-only).
+
+FRONTEND (NotificationHistory.tsx rewritten; BatchDetails/Send/
+Preferences untouched):
+- 4 KPI cards (ReportStatCard-style, reusing the same component the
+  Reports/Results pages already use for visual consistency) - Sent
+  Today, Delivered, Failed (red icon tint like the mockup), Scheduled.
+- Filter row: search input (now genuinely server-side via the new
+  query param - the table is server-paginated, so a client-side-only
+  search would silently only search the current page), All Types
+  (existing), All Channels (new, 3 real options), All Status (new,
+  3 real options: Delivered/Failed/Scheduled).
+- Table: Notification (title) | Recipients (existing) | Channels (new,
+  server-formatted string) | Sent/Scheduled (existing sentAtUtc,
+  falls back to scheduledAtUtc display when still in the future) |
+  Status (Badge, same 3-way rule as the backend filter - danger
+  "Failed N" / info "Scheduled" / success "Delivered") | Action.
+- Action column: View (existing Link, unchanged). Retry - shown only
+  when Failed > 0, calls the EXISTING resendNotificationBatch mutation
+  directly from the row (same call Batch Details' "Resend
+  Notification" button already makes, no confirm dialog needed there
+  either - matches existing precedent). Cancel - shown only when
+  Status is Scheduled (still in the future), calls the EXISTING
+  deleteNotificationBatch mutation - DOES get a confirm step (a small
+  shared Modal, mirroring Batch Details' existing delete-confirm
+  pattern) since removing a scheduled batch is irreversible, unlike
+  Retry which just creates a new batch alongside the old one.
+
+OUT OF SCOPE (flagged, not building this round): fixing the
+pre-existing "scheduled notifications never actually dispatch once
+due" gap (the Scheduled KPI/filter/status all correctly account for
+it by only counting genuinely-still-future rows, not working around
+it); a Channels filter or Status filter on the exam-candidate/other
+non-history notification list pages (My Notifications, Preferences) -
+no mockup supplied for those this round.
+
+VERIFICATION (2026-08-22): dotnet build (NotificationService projects
++ full ExamVault.sln) - 0 errors/warnings. dotnet test on
+Notification.Application.Tests (FakeNotificationRepository updated to
+match the new INotificationRepository signature) - 22/22 passed.
+Frontend: tsc --noEmit and oxlint clean, vite build succeeds. Rebuilt
+and redeployed notification-api and frontend containers (single-
+service docker compose build/up, no full-stack --build). Live browser
+verification against real seeded data (70 existing batches):
+- KPI cards render real counts (Sent Today 5, Delivered 79, Failed 5,
+  Scheduled 0 initially) confirmed via network tab against
+  GET /api/notifications/admin/history/stats (200).
+- Status=Failed filter returned exactly 5 rows, matching the KPI card.
+- Search "Webhook" server-filtered correctly (8 matches, mixed
+  Delivered/Failed) via ?search= query param.
+- Retry button (shown only when failed>0) on a Failed row called the
+  real POST .../resend endpoint (201) and a new Delivered batch
+  ("Webhook Retest2 - Reminder") appeared in a follow-up search.
+- Created a real scheduled notification (System Announcement template,
+  5 Admin recipients, 3h out) via Create Notification to get a live
+  Scheduled row; Scheduled KPI went 0 -> 5 recipients/1 batch.
+- Cancel button (shown only when Scheduled) opened the confirm modal
+  with the correct title/recipient count, and confirming called the
+  real DELETE .../{batchId} endpoint (204); list and KPI (Scheduled
+  back to 0) both updated via query invalidation with no manual
+  refresh.
+No gaps found; feature matches the mockup and plan as built.

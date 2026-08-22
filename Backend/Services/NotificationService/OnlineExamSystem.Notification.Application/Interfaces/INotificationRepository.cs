@@ -11,7 +11,15 @@ public record NotificationBatchSummary(
     int RecipientCount,
     DateTime SentAtUtc,
     DateTime? ScheduledAtUtc,
-    Guid? CreatedByAdminUserId);
+    Guid? CreatedByAdminUserId,
+    int Delivered,
+    int Failed,
+    int Skipped,
+    int Pending,
+    bool HasInApp,
+    bool HasEmail);
+
+public record NotificationHistoryStats(int SentToday, int Delivered, int Failed, int Scheduled);
 
 public record NotificationBatchDetails(
     Guid BatchId,
@@ -49,9 +57,14 @@ public interface INotificationRepository
 
     Task<(IReadOnlyList<NotificationBatchSummary> Items, int TotalCount)> GetHistoryAsync(
         NotificationType? type,
+        string? search,
+        string? channel,
+        string? status,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
+
+    Task<NotificationHistoryStats> GetHistoryStatsAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<NotificationEntity>> GetByBatchIdAsync(
         Guid batchId,

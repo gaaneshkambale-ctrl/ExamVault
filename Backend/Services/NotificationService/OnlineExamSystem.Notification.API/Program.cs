@@ -10,6 +10,7 @@ using OnlineExamSystem.Notification.Application.Notifications.Admin.CreateNotifi
 using OnlineExamSystem.Notification.Application.Notifications.Admin.DeleteNotificationBatch;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationBatchDetails;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationHistory;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationHistoryStats;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.ResendNotificationBatch;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.DeleteMyNotification;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.GetMyNotifications;
@@ -74,6 +75,7 @@ public class Program
         builder.Services.AddScoped<IValidator<CreateNotificationCommand>, CreateNotificationValidator>();
         builder.Services.AddScoped<CreateNotificationHandler>();
         builder.Services.AddScoped<GetNotificationHistoryHandler>();
+        builder.Services.AddScoped<GetNotificationHistoryStatsHandler>();
         builder.Services.AddScoped<GetNotificationBatchDetailsHandler>();
         builder.Services.AddScoped<ResendNotificationBatchHandler>();
         builder.Services.AddScoped<DeleteNotificationBatchHandler>();

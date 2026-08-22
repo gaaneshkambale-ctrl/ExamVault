@@ -9,13 +9,20 @@ public record NotificationBatchSummaryResponse(
     int RecipientCount,
     DateTime SentAtUtc,
     DateTime? ScheduledAtUtc,
-    string Status);
+    string Status,
+    int Delivered,
+    int Failed,
+    int Skipped,
+    int Pending,
+    string Channels);
 
 public record NotificationHistoryResponse(
     IReadOnlyList<NotificationBatchSummaryResponse> Items,
     int TotalCount,
     int Page,
     int PageSize);
+
+public record NotificationHistoryStatsResponse(int SentToday, int Delivered, int Failed, int Scheduled);
 
 public record NotificationBatchDetailsResponse(
     Guid BatchId,

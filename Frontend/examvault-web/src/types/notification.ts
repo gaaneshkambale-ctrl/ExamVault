@@ -6,6 +6,10 @@ export type NotificationSendToType = 'AllStudents' | 'SelectedStudents' | 'ExamC
 
 export type NotificationBatchStatus = 'Sent' | 'Scheduled';
 
+export type NotificationHistoryStatus = 'Delivered' | 'Failed' | 'Scheduled';
+
+export type NotificationChannelFilter = 'InAppEmail' | 'InApp' | 'Email';
+
 export const NOTIFICATION_TYPES: NotificationType[] = ['Exam', 'Reminder', 'Result', 'System', 'Account'];
 
 export interface NotificationResponse {
@@ -65,7 +69,12 @@ export interface NotificationBatchSummaryResponse {
   recipientCount: number;
   sentAtUtc: string;
   scheduledAtUtc: string | null;
-  status: NotificationBatchStatus;
+  status: NotificationHistoryStatus;
+  delivered: number;
+  failed: number;
+  skipped: number;
+  pending: number;
+  channels: string;
 }
 
 export interface NotificationHistoryResponse {
@@ -73,6 +82,13 @@ export interface NotificationHistoryResponse {
   totalCount: number;
   page: number;
   pageSize: number;
+}
+
+export interface NotificationHistoryStatsResponse {
+  sentToday: number;
+  delivered: number;
+  failed: number;
+  scheduled: number;
 }
 
 export interface NotificationBatchDetailsResponse {

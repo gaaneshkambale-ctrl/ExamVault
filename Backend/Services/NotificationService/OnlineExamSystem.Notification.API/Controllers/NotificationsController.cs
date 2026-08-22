@@ -5,6 +5,7 @@ using OnlineExamSystem.Notification.Application.Notifications.Admin.CreateNotifi
 using OnlineExamSystem.Notification.Application.Notifications.Admin.DeleteNotificationBatch;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationBatchDetails;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationHistory;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationHistoryStats;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.ResendNotificationBatch;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.DeleteMyNotification;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.GetMyNotifications;
@@ -35,6 +36,7 @@ public class NotificationsController : ControllerBase
     private readonly SavePreferencesHandler _savePreferencesHandler;
     private readonly CreateNotificationHandler _createNotificationHandler;
     private readonly GetNotificationHistoryHandler _getNotificationHistoryHandler;
+    private readonly GetNotificationHistoryStatsHandler _getNotificationHistoryStatsHandler;
     private readonly GetNotificationBatchDetailsHandler _getNotificationBatchDetailsHandler;
     private readonly ResendNotificationBatchHandler _resendNotificationBatchHandler;
     private readonly DeleteNotificationBatchHandler _deleteNotificationBatchHandler;
@@ -51,6 +53,7 @@ public class NotificationsController : ControllerBase
         SavePreferencesHandler savePreferencesHandler,
         CreateNotificationHandler createNotificationHandler,
         GetNotificationHistoryHandler getNotificationHistoryHandler,
+        GetNotificationHistoryStatsHandler getNotificationHistoryStatsHandler,
         GetNotificationBatchDetailsHandler getNotificationBatchDetailsHandler,
         ResendNotificationBatchHandler resendNotificationBatchHandler,
         DeleteNotificationBatchHandler deleteNotificationBatchHandler,
@@ -66,6 +69,7 @@ public class NotificationsController : ControllerBase
         _savePreferencesHandler = savePreferencesHandler;
         _createNotificationHandler = createNotificationHandler;
         _getNotificationHistoryHandler = getNotificationHistoryHandler;
+        _getNotificationHistoryStatsHandler = getNotificationHistoryStatsHandler;
         _getNotificationBatchDetailsHandler = getNotificationBatchDetailsHandler;
         _resendNotificationBatchHandler = resendNotificationBatchHandler;
         _deleteNotificationBatchHandler = deleteNotificationBatchHandler;
@@ -239,6 +243,9 @@ public class NotificationsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetHistory(
         [FromQuery] string? type,
+        [FromQuery] string? search,
+        [FromQuery] string? channel,
+        [FromQuery] string? status,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
@@ -246,18 +253,46 @@ public class NotificationsController : ControllerBase
         NotificationType? parsedType = type is null ? null : Enum.Parse<NotificationType>(type, ignoreCase: true);
 
         var (items, totalCount) = await _getNotificationHistoryHandler.HandleAsync(
-            new GetNotificationHistoryQuery(parsedType, page, pageSize), cancellationToken);
+            new GetNotificationHistoryQuery(parsedType, page, pageSize, search, channel, status), cancellationToken);
 
-        var responses = items.Select(i => new NotificationBatchSummaryResponse(
-            i.BatchId,
-            i.Title,
-            i.Type.ToString(),
-            i.RecipientCount,
-            i.SentAtUtc,
-            i.ScheduledAtUtc,
-            i.ScheduledAtUtc > DateTime.UtcNow ? "Scheduled" : "Sent")).ToList();
+        var responses = items.Select(i =>
+        {
+            var isScheduled = i.ScheduledAtUtc.HasValue && i.ScheduledAtUtc.Value > DateTime.UtcNow;
+            var statusLabel = i.Failed > 0 ? "Failed" : isScheduled ? "Scheduled" : "Delivered";
+            var channels = (i.HasInApp, i.HasEmail) switch
+            {
+                (true, true) => "In-App + Email",
+                (true, false) => "In-App",
+                (false, true) => "Email",
+                _ => "-",
+            };
+
+            return new NotificationBatchSummaryResponse(
+                i.BatchId,
+                i.Title,
+                i.Type.ToString(),
+                i.RecipientCount,
+                i.SentAtUtc,
+                i.ScheduledAtUtc,
+                statusLabel,
+                i.Delivered,
+                i.Failed,
+                i.Skipped,
+                i.Pending,
+                channels);
+        }).ToList();
 
         return Ok(new NotificationHistoryResponse(responses, totalCount, page, pageSize));
+    }
+
+    [HttpGet("admin/history/stats")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetHistoryStats(CancellationToken cancellationToken)
+    {
+        var stats = await _getNotificationHistoryStatsHandler.HandleAsync(
+            new GetNotificationHistoryStatsQuery(), cancellationToken);
+
+        return Ok(new NotificationHistoryStatsResponse(stats.SentToday, stats.Delivered, stats.Failed, stats.Scheduled));
     }
 
     [HttpGet("admin/history/{batchId:guid}")]

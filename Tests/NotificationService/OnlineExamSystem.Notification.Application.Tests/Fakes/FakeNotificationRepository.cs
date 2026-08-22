@@ -59,6 +59,9 @@ public class FakeNotificationRepository : INotificationRepository
 
     public Task<(IReadOnlyList<NotificationBatchSummary> Items, int TotalCount)> GetHistoryAsync(
         NotificationType? type,
+        string? search,
+        string? channel,
+        string? status,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -69,6 +72,12 @@ public class FakeNotificationRepository : INotificationRepository
             query = query.Where(n => n.Type == type.Value);
         }
 
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(n => n.Title.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var now = DateTime.UtcNow;
         var grouped = query
             .GroupBy(n => n.BatchId)
             .Select(g => new NotificationBatchSummary(
@@ -78,13 +87,58 @@ public class FakeNotificationRepository : INotificationRepository
                 g.Count(),
                 g.Min(n => n.CreatedAtUtc),
                 g.First().ScheduledAtUtc,
-                g.First().CreatedByAdminUserId))
+                g.First().CreatedByAdminUserId,
+                g.Count(n => n.EmailStatus == EmailStatus.Delivered),
+                g.Count(n => n.EmailStatus == EmailStatus.Failed),
+                g.Count(n => n.EmailStatus == EmailStatus.Skipped),
+                g.Count(n => n.EmailStatus == EmailStatus.Pending),
+                g.Any(n => n.ShowInApp),
+                g.Any(n => n.EmailStatus != EmailStatus.Skipped)))
+            .Where(s =>
+            {
+                var isScheduled = s.ScheduledAtUtc.HasValue && s.ScheduledAtUtc.Value > now;
+                var statusLabel = s.Failed > 0 ? "Failed" : isScheduled ? "Scheduled" : "Delivered";
+                if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, statusLabel, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                if (!string.IsNullOrWhiteSpace(channel))
+                {
+                    var channelLabel = (s.HasInApp, s.HasEmail) switch
+                    {
+                        (true, true) => "InAppEmail",
+                        (true, false) => "InApp",
+                        (false, true) => "Email",
+                        _ => "None",
+                    };
+                    if (!string.Equals(channel, channelLabel, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            })
             .OrderByDescending(s => s.SentAtUtc)
             .ToList();
 
         var page1 = grouped.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
         return Task.FromResult<(IReadOnlyList<NotificationBatchSummary>, int)>((page1, grouped.Count));
+    }
+
+    public Task<NotificationHistoryStats> GetHistoryStatsAsync(CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var todayStartUtc = now.Date;
+
+        var sentToday = _notifications.Count(n => n.CreatedAtUtc >= todayStartUtc && n.EmailStatus != EmailStatus.Pending);
+        var delivered = _notifications.Count(n => n.EmailStatus == EmailStatus.Delivered);
+        var failed = _notifications.Count(n => n.EmailStatus == EmailStatus.Failed);
+        var scheduled = _notifications.Count(n => n.ScheduledAtUtc.HasValue && n.ScheduledAtUtc.Value > now);
+
+        return Task.FromResult(new NotificationHistoryStats(sentToday, delivered, failed, scheduled));
     }
 
     public Task<IReadOnlyList<NotificationEntity>> GetByBatchIdAsync(

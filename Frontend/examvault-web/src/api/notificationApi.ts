@@ -3,7 +3,10 @@ import type {
   CreateNotificationRequest,
   CreateNotificationResponse,
   NotificationBatchDetailsResponse,
+  NotificationChannelFilter,
   NotificationHistoryResponse,
+  NotificationHistoryStatsResponse,
+  NotificationHistoryStatus,
   NotificationListResponse,
   NotificationPreferenceResponse,
   NotificationResponse,
@@ -70,10 +73,18 @@ export async function getNotificationHistory(
   type?: NotificationType,
   page = 1,
   pageSize = 20,
+  search?: string,
+  channel?: NotificationChannelFilter,
+  status?: NotificationHistoryStatus,
 ): Promise<NotificationHistoryResponse> {
   const { data } = await apiClient.get<NotificationHistoryResponse>('/api/notifications/admin/history', {
-    params: { type, page, pageSize },
+    params: { type, page, pageSize, search: search || undefined, channel, status },
   });
+  return data;
+}
+
+export async function getNotificationHistoryStats(): Promise<NotificationHistoryStatsResponse> {
+  const { data } = await apiClient.get<NotificationHistoryStatsResponse>('/api/notifications/admin/history/stats');
   return data;
 }
 

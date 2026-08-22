@@ -5,9 +5,10 @@ import {
   getNotification,
   getNotificationBatchDetails,
   getNotificationHistory,
+  getNotificationHistoryStats,
   getUnreadCount,
 } from '../api/notificationApi';
-import type { NotificationType } from '../types/notification';
+import type { NotificationChannelFilter, NotificationHistoryStatus, NotificationType } from '../types/notification';
 
 export function useMyNotifications(unreadOnly = false, page = 1, pageSize = 20, enabled = true) {
   return useQuery({
@@ -40,10 +41,24 @@ export function useMyPreferences() {
   });
 }
 
-export function useNotificationHistory(type: NotificationType | undefined, page = 1, pageSize = 20) {
+export function useNotificationHistory(
+  type: NotificationType | undefined,
+  page = 1,
+  pageSize = 20,
+  search?: string,
+  channel?: NotificationChannelFilter,
+  status?: NotificationHistoryStatus,
+) {
   return useQuery({
-    queryKey: ['notifications', 'admin', 'history', type ?? 'All', page, pageSize],
-    queryFn: () => getNotificationHistory(type, page, pageSize),
+    queryKey: ['notifications', 'admin', 'history', type ?? 'All', page, pageSize, search ?? '', channel ?? 'All', status ?? 'All'],
+    queryFn: () => getNotificationHistory(type, page, pageSize, search, channel, status),
+  });
+}
+
+export function useNotificationHistoryStats() {
+  return useQuery({
+    queryKey: ['notifications', 'admin', 'history', 'stats'],
+    queryFn: getNotificationHistoryStats,
   });
 }
 

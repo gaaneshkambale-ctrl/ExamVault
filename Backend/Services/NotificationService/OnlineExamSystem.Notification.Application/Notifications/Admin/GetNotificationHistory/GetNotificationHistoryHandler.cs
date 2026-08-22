@@ -14,5 +14,6 @@ public class GetNotificationHistoryHandler
     public Task<(IReadOnlyList<NotificationBatchSummary> Items, int TotalCount)> HandleAsync(
         GetNotificationHistoryQuery query,
         CancellationToken cancellationToken = default) =>
-        _repository.GetHistoryAsync(query.Type, query.Page, query.PageSize, cancellationToken);
+        _repository.GetHistoryAsync(
+            query.Type, query.Search, query.Channel, query.Status, query.Page, query.PageSize, cancellationToken);
 }

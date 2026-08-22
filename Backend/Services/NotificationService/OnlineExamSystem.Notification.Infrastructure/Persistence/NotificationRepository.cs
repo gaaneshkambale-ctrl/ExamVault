@@ -70,6 +70,9 @@ public class NotificationRepository : INotificationRepository
 
     public async Task<(IReadOnlyList<NotificationBatchSummary> Items, int TotalCount)> GetHistoryAsync(
         NotificationType? type,
+        string? search,
+        string? channel,
+        string? status,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -78,6 +81,11 @@ public class NotificationRepository : INotificationRepository
         if (type.HasValue)
         {
             query = query.Where(n => n.Type == type.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(n => n.Title.Contains(search));
         }
 
         var grouped = query
@@ -91,21 +99,84 @@ public class NotificationRepository : INotificationRepository
                 SentAtUtc = g.Min(n => n.CreatedAtUtc),
                 ScheduledAtUtc = g.Min(n => n.ScheduledAtUtc),
                 CreatedByAdminUserId = g.Min(n => n.CreatedByAdminUserId),
+                Delivered = g.Count(n => n.EmailStatus == EmailStatus.Delivered),
+                Failed = g.Count(n => n.EmailStatus == EmailStatus.Failed),
+                Skipped = g.Count(n => n.EmailStatus == EmailStatus.Skipped),
+                Pending = g.Count(n => n.EmailStatus == EmailStatus.Pending),
+                HasInApp = g.Any(n => n.ShowInApp),
+                HasEmail = g.Any(n => n.EmailStatus != EmailStatus.Skipped),
             });
 
-        var totalCount = await grouped.CountAsync(cancellationToken);
-        var items = await grouped
+        // Channel/status are derived from per-batch aggregates rather than
+        // stored columns, so they're filtered here in memory after grouping
+        // (batch counts, not recipient-row counts, so this stays small even
+        // at real scale) rather than trying to push a derived predicate
+        // through EF's SQL translation.
+        var now = DateTime.UtcNow;
+        var all = await grouped.ToListAsync(cancellationToken);
+
+        var filtered = all.Where(i =>
+        {
+            var isScheduled = i.ScheduledAtUtc.HasValue && i.ScheduledAtUtc.Value > now;
+            var statusLabel = i.Failed > 0 ? "Failed" : isScheduled ? "Scheduled" : "Delivered";
+            if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, statusLabel, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(channel))
+            {
+                var channelLabel = (i.HasInApp, i.HasEmail) switch
+                {
+                    (true, true) => "InAppEmail",
+                    (true, false) => "InApp",
+                    (false, true) => "Email",
+                    _ => "None",
+                };
+                if (!string.Equals(channel, channelLabel, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }).ToList();
+
+        var totalCount = filtered.Count;
+        var items = filtered
             .OrderByDescending(g => g.SentAtUtc)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         var summaries = items
             .Select(i => new NotificationBatchSummary(
-                i.BatchId, i.Title!, i.Type, i.RecipientCount, i.SentAtUtc, i.ScheduledAtUtc, i.CreatedByAdminUserId))
+                i.BatchId, i.Title!, i.Type, i.RecipientCount, i.SentAtUtc, i.ScheduledAtUtc, i.CreatedByAdminUserId,
+                i.Delivered, i.Failed, i.Skipped, i.Pending, i.HasInApp, i.HasEmail))
             .ToList();
 
         return (summaries, totalCount);
+    }
+
+    public async Task<NotificationHistoryStats> GetHistoryStatsAsync(CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var todayStartUtc = now.Date;
+
+        var sentToday = await _dbContext.Notifications
+            .Where(n => n.CreatedAtUtc >= todayStartUtc && n.EmailStatus != EmailStatus.Pending)
+            .CountAsync(cancellationToken);
+        var delivered = await _dbContext.Notifications
+            .Where(n => n.EmailStatus == EmailStatus.Delivered)
+            .CountAsync(cancellationToken);
+        var failed = await _dbContext.Notifications
+            .Where(n => n.EmailStatus == EmailStatus.Failed)
+            .CountAsync(cancellationToken);
+        var scheduled = await _dbContext.Notifications
+            .Where(n => n.ScheduledAtUtc != null && n.ScheduledAtUtc > now)
+            .CountAsync(cancellationToken);
+
+        return new NotificationHistoryStats(sentToday, delivered, failed, scheduled);
     }
 
     public Task<IReadOnlyList<NotificationEntity>> GetByBatchIdAsync(
