@@ -5008,3 +5008,14 @@ No gaps found; feature matches the mockup and plan as built, with the
 documented out-of-scope items (2FA, Trusted Devices, Account Recovery
 Email, Restrict-Login-to-IP, Primary Color picker, Dashboard
 Preferences, Location columns) genuinely absent rather than faked.
+
+FIX (DONE, 2026-08-22): Active Exams grid - 4 cards per row
+=====================================================================
+REQUESTED: user wants the Active Exams page's Grid view to show 4
+cards per row instead of 2. Pure layout change, no data/logic touched.
+
+CHANGE: ActiveExams.tsx - grid Col changed from `md={6}` (2 per row)
+to `xs={12} sm={6} lg={3}` (1 per row on phones, 2 on tablets, 4 on
+desktop - same responsive-collapse convention used elsewhere in this
+app rather than a fixed always-4 layout that would overflow narrow
+screens).

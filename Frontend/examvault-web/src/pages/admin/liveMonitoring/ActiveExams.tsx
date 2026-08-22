@@ -230,7 +230,7 @@ export default function ActiveExams() {
             const overflow = card.inProgress.length - shownAvatars.length;
 
             return (
-              <Col md={6} key={card.exam.id}>
+              <Col xs={12} sm={6} lg={3} key={card.exam.id}>
                 <Card
                   className="border-0 shadow-sm h-100"
                   style={{ borderLeft: `4px solid ${meta.borderColor}` }}
