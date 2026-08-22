@@ -61,6 +61,7 @@ import CertificateDetails from '../pages/student/CertificateDetails';
 import ResultDetails from '../pages/student/ResultDetails';
 import MyNotifications from '../pages/student/MyNotifications';
 import NotificationDetails from '../pages/student/NotificationDetails';
+import SettingsPage from '../pages/student/SettingsPage';
 import NotificationSettings from '../pages/student/NotificationSettings';
 import AdminNotifications from '../pages/admin/AdminNotifications';
 import AdminNotificationDetails from '../pages/admin/AdminNotificationDetails';
@@ -518,6 +519,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <MyNotifications />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
           </ProtectedRoute>
         }
       />

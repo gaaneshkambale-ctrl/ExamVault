@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Badge, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Badge, Button, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import UserAvatar from '../../components/UserAvatar';
 import DeleteUserButton from '../../components/DeleteUserButton';
 import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useUsers } from '../../hooks/useUsers';
@@ -50,14 +51,23 @@ function ActiveIcon() {
   );
 }
 
-function InactiveIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="9" />
-      <line x1="15" y1="9" x2="9" y2="15" strokeLinecap="round" />
-      <line x1="9" y1="9" x2="15" y2="15" strokeLinecap="round" />
-    </svg>
-  );
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}`;
+}
+
+function countCreatedInMonth(dates: string[], monthsAgo: number): number {
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
+  return dates.filter((d) => monthKey(new Date(d)) === monthKey(target)).length;
+}
+
+function percentChangeVsLastMonth(dates: string[]): number | null {
+  const thisMonth = countCreatedInMonth(dates, 0);
+  const lastMonth = countCreatedInMonth(dates, 1);
+  if (lastMonth === 0) {
+    return thisMonth === 0 ? null : 100;
+  }
+  return ((thisMonth - lastMonth) / lastMonth) * 100;
 }
 
 interface StatCardProps {
@@ -65,11 +75,12 @@ interface StatCardProps {
   value: number;
   variant: string;
   icon: React.ReactNode;
+  deltaPercent?: number | null;
 }
 
-function StatCard({ label, value, variant, icon }: StatCardProps) {
+function StatCard({ label, value, variant, icon, deltaPercent }: StatCardProps) {
   return (
-    <Col xs={12} sm={6} lg={4} xl={2}>
+    <Col xs={12} sm={6} lg={3}>
       <Card className="border-0 shadow-sm h-100">
         <Card.Body className="d-flex align-items-center gap-3">
           <div
@@ -81,11 +92,37 @@ function StatCard({ label, value, variant, icon }: StatCardProps) {
           <div>
             <div className="text-muted small">{label}</div>
             <div className="h4 fw-bold mb-0">{value}</div>
+            {deltaPercent != null && (
+              <div className={`small ${deltaPercent >= 0 ? 'text-success' : 'text-danger'}`}>
+                {deltaPercent >= 0 ? '▲' : '▼'} {Math.abs(deltaPercent).toFixed(1)}% this month
+              </div>
+            )}
           </div>
         </Card.Body>
       </Card>
     </Col>
   );
+}
+
+function exportUsersToCsv(users: UserListItem[]) {
+  const header = ['Full Name', 'Email', 'Role', 'Status', 'Joined On'];
+  const rows = users.map((u) => [
+    u.fullName,
+    u.email,
+    u.role,
+    u.isActive ? 'Active' : 'Inactive',
+    new Date(u.createdAtUtc).toISOString(),
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 const PAGE_SIZE = 8;
@@ -94,7 +131,9 @@ export default function ManageUsers() {
   const { data: users, isLoading, isError } = useUsers();
   const [searchText, setSearchText] = useState('');
   const [roleFilter, setRoleFilter] = useState<'All' | UserRole>('All');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('Active');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [joinedAfter, setJoinedAfter] = useState('');
   const [page, setPage] = useState(1);
 
   const counts = {
@@ -102,14 +141,24 @@ export default function ManageUsers() {
     admins: users?.filter((u) => u.role === 'Admin').length ?? 0,
     students: users?.filter((u) => u.role === 'Student').length ?? 0,
     active: users?.filter((u) => u.isActive).length ?? 0,
-    inactive: users?.filter((u) => !u.isActive).length ?? 0,
   };
+
+  const totalDelta = users ? percentChangeVsLastMonth(users.map((u) => u.createdAtUtc)) : null;
+  const studentsDelta = users
+    ? percentChangeVsLastMonth(users.filter((u) => u.role === 'Student').map((u) => u.createdAtUtc))
+    : null;
+  const adminsDelta = users
+    ? percentChangeVsLastMonth(users.filter((u) => u.role === 'Admin').map((u) => u.createdAtUtc))
+    : null;
 
   const filteredUsers: UserListItem[] = (users ?? []).filter((user) => {
     if (roleFilter !== 'All' && user.role !== roleFilter) {
       return false;
     }
     if (statusFilter !== 'All' && user.isActive !== (statusFilter === 'Active')) {
+      return false;
+    }
+    if (joinedAfter && new Date(user.createdAtUtc) < new Date(joinedAfter)) {
       return false;
     }
     const term = searchText.trim().toLowerCase();
@@ -121,7 +170,7 @@ export default function ManageUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchText, roleFilter, statusFilter]);
+  }, [searchText, roleFilter, statusFilter, joinedAfter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -129,17 +178,27 @@ export default function ManageUsers() {
   const rangeStart = filteredUsers.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredUsers.length);
 
+  const resetFilters = () => {
+    setSearchText('');
+    setRoleFilter('All');
+    setStatusFilter('All');
+    setJoinedAfter('');
+  };
+
   return (
-    <AdminLayout active="Users">
+    <AdminLayout active="All Users">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="h4 fw-bold mb-0 text-primary">Users</h1>
-          <p className="text-muted mb-0">View and manage all users in the system.</p>
+          <h1 className="h4 fw-bold mb-0 text-primary">All Users</h1>
+          <p className="text-muted mb-0">Manage all users, view details and control access.</p>
         </div>
         <div className="d-flex gap-2">
-          <Link to="/admin/users/import" className="btn btn-outline-primary">
-            Import Users
+          <Link to="/admin/users/import" className="btn btn-outline-secondary">
+            Bulk Import
           </Link>
+          <Button variant="outline-primary" disabled={!users || users.length === 0} onClick={() => exportUsersToCsv(filteredUsers)}>
+            Export
+          </Button>
           <Link to="/admin/users/create" className="btn btn-primary">
             + Add User
           </Link>
@@ -147,15 +206,14 @@ export default function ManageUsers() {
       </div>
 
       <Row className="g-3 mb-4">
-        <StatCard label="Total Users" value={counts.total} variant="primary" icon={<TotalUsersIcon />} />
-        <StatCard label="Admins" value={counts.admins} variant="success" icon={<AdminIcon />} />
-        <StatCard label="Students" value={counts.students} variant="warning" icon={<StudentIcon />} />
+        <StatCard label="Total Users" value={counts.total} variant="primary" icon={<TotalUsersIcon />} deltaPercent={totalDelta} />
+        <StatCard label="Students" value={counts.students} variant="warning" icon={<StudentIcon />} deltaPercent={studentsDelta} />
+        <StatCard label="Admins" value={counts.admins} variant="info" icon={<AdminIcon />} deltaPercent={adminsDelta} />
         <StatCard label="Active Users" value={counts.active} variant="success" icon={<ActiveIcon />} />
-        <StatCard label="Inactive Users" value={counts.inactive} variant="danger" icon={<InactiveIcon />} />
       </Row>
 
-      <Row className="g-2 mb-3">
-        <Col md={6}>
+      <Row className="g-2 mb-2">
+        <Col md={4}>
           <Form.Control
             type="search"
             placeholder="Search by name or email..."
@@ -163,17 +221,14 @@ export default function ManageUsers() {
             onChange={(e) => setSearchText(e.target.value)}
           />
         </Col>
-        <Col md={3}>
-          <Form.Select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value as 'All' | UserRole)}
-          >
+        <Col md={2}>
+          <Form.Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as 'All' | UserRole)}>
             <option value="All">All Roles</option>
             <option value="Admin">Admin</option>
             <option value="Student">Student</option>
           </Form.Select>
         </Col>
-        <Col md={3}>
+        <Col md={2}>
           <Form.Select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'All' | 'Active' | 'Inactive')}
@@ -183,9 +238,28 @@ export default function ManageUsers() {
             <option value="Inactive">Inactive</option>
           </Form.Select>
         </Col>
+        <Col md={2}>
+          <Button variant="outline-secondary" className="w-100" onClick={() => setShowMoreFilters((v) => !v)}>
+            More Filters
+          </Button>
+        </Col>
+        <Col md={2}>
+          <Button variant="outline-secondary" className="w-100" onClick={resetFilters}>
+            Reset
+          </Button>
+        </Col>
       </Row>
 
-      <Card className="border-0 shadow-sm">
+      {showMoreFilters && (
+        <Row className="g-2 mb-3">
+          <Col md={4}>
+            <Form.Label className="small text-muted mb-1">Joined After</Form.Label>
+            <Form.Control type="date" value={joinedAfter} onChange={(e) => setJoinedAfter(e.target.value)} />
+          </Col>
+        </Row>
+      )}
+
+      <Card className="border-0 shadow-sm mt-3">
         <Card.Body className={isLoading || isError || filteredUsers.length === 0 ? '' : 'p-0'}>
           {isLoading && (
             <div className="d-flex justify-content-center py-5">
@@ -213,8 +287,7 @@ export default function ManageUsers() {
             <Table responsive hover className="mb-0 align-middle">
               <thead className="text-muted small text-uppercase bg-light">
                 <tr>
-                  <th className="ps-4">Name</th>
-                  <th>Email</th>
+                  <th className="ps-4">User</th>
                   <th>Role</th>
                   <th>Status</th>
                   <th>Joined On</th>
@@ -224,8 +297,15 @@ export default function ManageUsers() {
               <tbody>
                 {pagedUsers.map((user) => (
                   <tr key={user.id}>
-                    <td className="ps-4 fw-medium">{user.fullName}</td>
-                    <td>{user.email}</td>
+                    <td className="ps-4">
+                      <div className="d-flex align-items-center gap-2">
+                        <UserAvatar fullName={user.fullName} hasPhoto={user.hasPhoto} userId={user.id} size={32} />
+                        <div>
+                          <div className="fw-medium">{user.fullName}</div>
+                          <div className="text-muted small">{user.email}</div>
+                        </div>
+                      </div>
+                    </td>
                     <td>
                       <Badge bg={roleVariant[user.role]}>{user.role}</Badge>
                     </td>
@@ -269,7 +349,7 @@ export default function ManageUsers() {
       {!isLoading && !isError && filteredUsers.length > 0 && (
         <div className="d-flex justify-content-between align-items-center mt-3">
           <div className="text-muted small">
-            Showing {rangeStart} to {rangeEnd} of {filteredUsers.length} entries
+            Showing {rangeStart} to {rangeEnd} of {filteredUsers.length} users
           </div>
           <Pagination className="mb-0">
             <Pagination.Prev

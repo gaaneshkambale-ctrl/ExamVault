@@ -6,8 +6,10 @@ import BrandMark from './BrandMark';
 export type AdminNavItem =
   | 'Dashboard'
   | 'Users'
+  | 'All Users'
+  | 'Add User'
   | 'Roles & Permissions'
-  | 'Groups'
+  | 'User Groups'
   | 'Exams'
   | 'Live Monitoring'
   | 'Active Exams'
@@ -48,8 +50,10 @@ const navItems: NavItem[] = [
     label: 'Users',
     path: '/admin/users',
     children: [
+      { label: 'All Users', path: '/admin/users' },
+      { label: 'Add User', path: '/admin/users/create' },
       { label: 'Roles & Permissions', path: '/admin/users/roles' },
-      { label: 'Groups', path: '/admin/users/groups' },
+      { label: 'User Groups', path: '/admin/users/groups' },
     ],
   },
   { label: 'Exams', path: '/admin/exams' },

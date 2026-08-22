@@ -8,6 +8,7 @@ import { useUsers } from '../../../hooks/useUsers';
 import { useAssignments } from '../../../hooks/useAssignments';
 import { useAttemptsByExam } from '../../../hooks/useSubmissions';
 import { attemptViolationCount } from '../../../utils/proctoring';
+import { EXAM_CATEGORIES } from '../../../types/exam';
 import type { ExamResponse } from '../../../types/exam';
 import type { ExamAttemptResponse } from '../../../types/submission';
 
@@ -46,7 +47,8 @@ export default function ActiveExams() {
   const { data: exams, isLoading: isLoadingExams, isError: isExamsError } = useExams();
   const { data: users } = useUsers();
   const { data: assignments } = useAssignments();
-  const [searchText, setSearchText] = useState('');
+  const [examNameFilter, setExamNameFilter] = useState<'All' | string>('All');
+  const [categoryFilter, setCategoryFilter] = useState<'All' | string>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const publishedExamIds = useMemo(
@@ -118,9 +120,22 @@ export default function ActiveExams() {
     // own subtitle ("exams currently in progress"), not just Published status.
     .filter((card) => card.inProgress.length > 0);
 
-  const cards = allCards.filter((card) =>
-    card.exam.title.toLowerCase().includes(searchText.trim().toLowerCase()),
+  // Dropdown options are derived from the currently-active exams only,
+  // matching this page's live-monitoring scope - no point offering a name
+  // that has no active card to filter down to.
+  const examNameOptions = Array.from(new Set(allCards.map((card) => card.exam.title))).sort((a, b) =>
+    a.localeCompare(b),
   );
+
+  const cards = allCards.filter((card) => {
+    if (categoryFilter !== 'All' && card.exam.category !== categoryFilter) {
+      return false;
+    }
+    if (examNameFilter !== 'All' && card.exam.title !== examNameFilter) {
+      return false;
+    }
+    return true;
+  });
 
   const totals = {
     totalActive: allCards.length,
@@ -186,13 +201,25 @@ export default function ActiveExams() {
       </Row>
 
       <Row className="g-2 mb-3">
-        <Col md={6}>
-          <Form.Control
-            type="search"
-            placeholder="Search active exams..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
+        <Col md={4}>
+          <Form.Select value={examNameFilter} onChange={(e) => setExamNameFilter(e.target.value)}>
+            <option value="All">All Exams</option>
+            {examNameOptions.map((title) => (
+              <option key={title} value={title}>
+                {title}
+              </option>
+            ))}
+          </Form.Select>
+        </Col>
+        <Col md={3}>
+          <Form.Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <option value="All">All Categories</option>
+            {EXAM_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </Form.Select>
         </Col>
       </Row>
 
@@ -216,7 +243,7 @@ export default function ActiveExams() {
 
       {!loading && !isExamsError && allCards.length > 0 && cards.length === 0 && (
         <Card className="border-0 shadow-sm">
-          <Card.Body className="text-center text-muted py-5">No active exams match your search.</Card.Body>
+          <Card.Body className="text-center text-muted py-5">No active exams match your filters.</Card.Body>
         </Card>
       )}
 

@@ -48,6 +48,14 @@ export default function ExamWizardConfiguration() {
     saveMutation.mutate(form);
   };
 
+  const handleBack = () => {
+    if (exam?.containsSections) {
+      navigate(`/admin/exams/${examId}/wizard/sections`);
+    } else {
+      navigate('/admin/exams');
+    }
+  };
+
   return (
     <AdminLayout active="Exams">
       <div className="mb-1">
@@ -118,7 +126,10 @@ export default function ExamWizardConfiguration() {
               </Col>
             </Row>
 
-            <div className="d-flex justify-content-end mt-2">
+            <div className="d-flex justify-content-between mt-2">
+              <Button variant="outline-secondary" onClick={handleBack}>
+                Back
+              </Button>
               <Button variant="primary" disabled={saveMutation.isPending} onClick={handleNext}>
                 {saveMutation.isPending ? 'Saving...' : 'Next: Review & Publish'}
               </Button>

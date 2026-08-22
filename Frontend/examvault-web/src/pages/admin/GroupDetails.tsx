@@ -54,7 +54,7 @@ export default function GroupDetails() {
   });
 
   return (
-    <AdminLayout active="Groups">
+    <AdminLayout active="User Groups">
       <Link to="/admin/users/groups" className="text-decoration-none small d-inline-block mb-3">
         &larr; Back to Groups
       </Link>

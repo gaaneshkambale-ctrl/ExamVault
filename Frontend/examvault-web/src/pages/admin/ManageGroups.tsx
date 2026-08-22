@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Alert, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
+import { useEffect, useState } from 'react';
+import { Alert, Button, Card, Col, Form, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
@@ -16,11 +16,14 @@ function extractError(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
+const PAGE_SIZE = 5;
+
 export default function ManageGroups() {
   const { data: groups, isLoading, isError } = useGroups();
   const [searchText, setSearchText] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
@@ -36,6 +39,16 @@ export default function ManageGroups() {
     group.name.toLowerCase().includes(searchText.trim().toLowerCase()),
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchText]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedGroups = filteredGroups.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const rangeStart = filteredGroups.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredGroups.length);
+
   const openCreate = () => {
     createMutation.reset();
     setName('');
@@ -43,11 +56,12 @@ export default function ManageGroups() {
   };
 
   return (
-    <AdminLayout active="Groups">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <AdminLayout active="User Groups">
+      <div className="d-flex justify-content-between align-items-center mb-1">
         <div>
-          <h1 className="h4 fw-bold mb-0 text-primary">Groups</h1>
-          <p className="text-muted mb-0">Organize students into groups for exam assignment.</p>
+          <p className="text-muted small mb-1">Users / User Groups</p>
+          <h1 className="h4 fw-bold mb-1 text-primary">User Groups</h1>
+          <p className="text-muted mb-0">Create and manage groups to organize users.</p>
         </div>
         <Button variant="primary" onClick={openCreate}>
           + Create Group
@@ -79,7 +93,7 @@ export default function ManageGroups() {
         </Modal.Footer>
       </Modal>
 
-      <Row className="g-2 mb-3">
+      <Row className="g-2 mb-3 mt-3">
         <Col md={6}>
           <Form.Control
             type="search"
@@ -91,7 +105,7 @@ export default function ManageGroups() {
       </Row>
 
       <Card className="border-0 shadow-sm">
-        <Card.Body className={isLoading || isError || filteredGroups.length === 0 ? '' : 'p-0'}>
+        <Card.Body className={isLoading || isError || pagedGroups.length === 0 ? '' : 'p-0'}>
           {isLoading && (
             <div className="d-flex justify-content-center py-5">
               <Spinner animation="border" />
@@ -110,18 +124,18 @@ export default function ManageGroups() {
             <div className="text-center text-muted py-5">No groups match your search.</div>
           )}
 
-          {!isLoading && !isError && filteredGroups.length > 0 && (
+          {!isLoading && !isError && pagedGroups.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
               <thead className="text-muted small text-uppercase bg-light">
                 <tr>
                   <th className="ps-4">Group Name</th>
-                  <th>Members</th>
+                  <th>Users</th>
                   <th>Created On</th>
                   <th className="pe-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredGroups.map((group) => (
+                {pagedGroups.map((group) => (
                   <tr key={group.id}>
                     <td className="ps-4 fw-medium">{group.name}</td>
                     <td>{group.memberCount}</td>
@@ -147,6 +161,26 @@ export default function ManageGroups() {
           )}
         </Card.Body>
       </Card>
+
+      {!isLoading && !isError && filteredGroups.length > 0 && (
+        <div className="d-flex justify-content-between align-items-center mt-3">
+          <div className="text-muted small">
+            Showing {rangeStart} to {rangeEnd} of {filteredGroups.length} groups
+          </div>
+          <Pagination className="mb-0">
+            <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                {p}
+              </Pagination.Item>
+            ))}
+            <Pagination.Next
+              disabled={currentPage === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            />
+          </Pagination>
+        </div>
+      )}
     </AdminLayout>
   );
 }

@@ -1,20 +1,24 @@
 import { useMemo, useState } from 'react';
-import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
+import type { ReactNode } from 'react';
+import { Badge, Card, Col, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import ExamsTrendChart from '../../components/ExamsTrendChart';
-import PassRateDonutChart from '../../components/PassRateDonutChart';
+import DualTrendChart from '../../components/DualTrendChart';
+import SegmentDonutChart from '../../components/SegmentDonutChart';
 import NotificationTypeBadge from '../../components/notifications/NotificationTypeBadge';
-import { ViewIcon } from '../../components/icons/ActionIcons';
+import DeleteExamButton from '../../components/DeleteExamButton';
+import { ViewIcon, EditIcon } from '../../components/icons/ActionIcons';
 import { useAuth } from '../../hooks/useAuth';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { useUsers } from '../../hooks/useUsers';
 import { useAssignments } from '../../hooks/useAssignments';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
+import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { useNotificationHistory } from '../../hooks/useNotifications';
 import { getAssignmentStatus } from '../../types/assignment';
-import type { ExamStatus } from '../../types/exam';
+import type { ExamStatus, ExamType } from '../../types/exam';
 
 const statusVariant: Record<ExamStatus, string> = {
   Draft: 'secondary',
@@ -22,10 +26,15 @@ const statusVariant: Record<ExamStatus, string> = {
   Archived: 'dark',
 };
 
-const RECENT_EXAMS_COUNT = 5;
+const examTypeLabel: Record<ExamType, string> = {
+  Manual: 'Manual',
+  AiGenerated: 'AI Generated',
+};
+
 const UPCOMING_EXAMS_COUNT = 5;
 const RECENT_NOTIFICATIONS_COUNT = 5;
-const PERIOD_OPTIONS = [3, 6, 12] as const;
+const ACTIVITY_DAYS = 7;
+const RECENT_EXAMS_PAGE_SIZE = 5;
 
 function UsersIcon() {
   return (
@@ -94,14 +103,59 @@ function PassRateIcon() {
   );
 }
 
+function ActiveExamsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="9 6 15 12 9 18" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function DateIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
 function monthKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}`;
+}
+
+function dayKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
 function countCreatedInMonth(dates: string[], monthsAgo: number): number {
   const now = new Date();
   const target = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
   return dates.filter((d) => monthKey(new Date(d)) === monthKey(target)).length;
+}
+
+// Percentage change vs the prior month, matching the wireframe's "vs last
+// month" stat cards. Returns null when there's no meaningful comparison
+// (both periods empty), so the caller can hide the badge instead of
+// showing a misleading "+100%" or divide-by-zero artifact.
+function percentChangeVsLastMonth(dates: string[]): number | null {
+  const thisMonth = countCreatedInMonth(dates, 0);
+  const lastMonth = countCreatedInMonth(dates, 1);
+  if (lastMonth === 0) {
+    return thisMonth === 0 ? null : 100;
+  }
+  return ((thisMonth - lastMonth) / lastMonth) * 100;
 }
 
 function buildMonthlyTrend(dates: string[], months: number) {
@@ -115,6 +169,23 @@ function buildMonthlyTrend(dates: string[], months: number) {
     label,
     value: dates.filter((d) => monthKey(new Date(d)) === key).length,
   }));
+}
+
+function buildDailyActivity(results: { examId: string; userId: string; submittedAtUtc: string }[], days: number) {
+  const now = new Date();
+  const buckets = Array.from({ length: days }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - i));
+    return { key: dayKey(d), label: d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) };
+  });
+
+  return buckets.map(({ key, label }) => {
+    const dayResults = results.filter((r) => dayKey(new Date(r.submittedAtUtc)) === key);
+    return {
+      label,
+      valueA: new Set(dayResults.map((r) => r.examId)).size,
+      valueB: new Set(dayResults.map((r) => r.userId)).size,
+    };
+  });
 }
 
 function timeAgo(isoDate: string): string {
@@ -131,37 +202,51 @@ function timeAgo(isoDate: string): string {
 interface StatCardProps {
   label: string;
   value: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   variant: string;
   isLoading: boolean;
-  delta?: number;
+  deltaPercent?: number | null;
+  caption?: string;
 }
 
-function StatCard({ label, value, icon, variant, isLoading, delta }: StatCardProps) {
+function StatCard({ label, value, icon, variant, isLoading, deltaPercent, caption }: StatCardProps) {
   return (
     <Col xs={12} sm={6} lg={3}>
       <Card className="border-0 shadow-sm h-100">
         <Card.Body>
-          <div className="d-flex align-items-start justify-content-between mb-2">
+          <div className="d-flex align-items-center gap-3 mb-2">
             <div
               className={`rounded-3 bg-${variant}-subtle text-${variant}-emphasis d-flex align-items-center justify-content-center flex-shrink-0`}
               style={{ width: 40, height: 40 }}
             >
               {icon}
             </div>
-            {delta !== undefined && delta > 0 && (
-              <Badge bg="success-subtle" text="success-emphasis">
-                +{delta} this month
-              </Badge>
+            <div className="text-muted small">{label}</div>
+          </div>
+          <div className="d-flex align-items-baseline gap-2">
+            <div className="h3 fw-bold mb-0">{isLoading ? <Spinner animation="border" size="sm" /> : value}</div>
+            {deltaPercent != null && (
+              <span className={`small fw-medium ${deltaPercent >= 0 ? 'text-success' : 'text-danger'}`}>
+                {deltaPercent >= 0 ? '▲' : '▼'} {Math.abs(deltaPercent).toFixed(1)}%
+              </span>
             )}
           </div>
-          <div className="text-muted small mb-1">{label}</div>
-          <div className="h3 fw-bold mb-0">
-            {isLoading ? <Spinner animation="border" size="sm" /> : value}
-          </div>
+          {caption && <div className="text-muted small">{caption}</div>}
         </Card.Body>
       </Card>
     </Col>
+  );
+}
+
+function QuickActionRow({ to, label }: { to: string; label: string }) {
+  return (
+    <Link
+      to={to}
+      className="d-flex justify-content-between align-items-center w-100 py-2 px-3 rounded-2 text-decoration-none text-body border mb-2"
+    >
+      <span className="small fw-medium">{label}</span>
+      <ChevronRightIcon />
+    </Link>
   );
 }
 
@@ -178,7 +263,19 @@ export default function AdminDashboard() {
     1,
     RECENT_NOTIFICATIONS_COUNT,
   );
-  const [trendMonths, setTrendMonths] = useState<(typeof PERIOD_OPTIONS)[number]>(6);
+
+  const publishedExamIds = useMemo(
+    () => (exams ?? []).filter((exam) => exam.status === 'Published').map((exam) => exam.id),
+    [exams],
+  );
+  const { attemptsByExam, isLoading: isLoadingAttempts } = useAttemptsByExam(isAdmin ? publishedExamIds : undefined);
+  const activeExamsCount = publishedExamIds.filter((id) =>
+    (attemptsByExam[id] ?? []).some((a) => a.status === 'InProgress'),
+  ).length;
+
+  const [recentExamsPage, setRecentExamsPage] = useState(1);
+
+  const now = new Date();
 
   // exam.totalQuestions is a legacy field that's never kept in sync with
   // Question Service, so it's always 0 - use the real live counts instead.
@@ -186,11 +283,7 @@ export default function AdminDashboard() {
   const publishedExams = exams?.filter((exam) => exam.status === 'Published').length ?? 0;
   const draftExams = exams?.filter((exam) => exam.status === 'Draft').length ?? 0;
 
-  const newUsersThisMonth = users ? countCreatedInMonth(users.map((u) => u.createdAtUtc), 0) : 0;
-  const newExamsThisMonth = exams ? countCreatedInMonth(exams.map((e) => e.createdOn), 0) : 0;
-
   const passedCount = allResults.filter((r) => r.passed).length;
-  const failedCount = allResults.length - passedCount;
   const averageScore =
     allResults.length === 0
       ? 0
@@ -200,9 +293,39 @@ export default function AdminDashboard() {
         );
   const passRate = allResults.length === 0 ? 0 : Math.round((passedCount / allResults.length) * 100);
 
-  const recentExams = [...(exams ?? [])]
-    .sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime())
-    .slice(0, RECENT_EXAMS_COUNT);
+  const usersDelta = useMemo(() => percentChangeVsLastMonth((users ?? []).map((u) => u.createdAtUtc)), [users]);
+  const examsDelta = useMemo(() => percentChangeVsLastMonth((exams ?? []).map((e) => e.createdOn)), [exams]);
+  const attemptsDelta = useMemo(
+    () => percentChangeVsLastMonth(allResults.map((r) => r.submittedAtUtc)),
+    [allResults],
+  );
+
+  const manualCount = exams?.filter((e) => e.examType === 'Manual').length ?? 0;
+  const aiCount = exams?.filter((e) => e.examType === 'AiGenerated').length ?? 0;
+
+  // Sorted newest-first, with real pagination (not just a fixed top-5 slice)
+  // now that the wireframe wants "Showing X to Y of Z" controls on the
+  // dashboard itself, not only on Manage Exams.
+  const allExamsSorted = useMemo(
+    () => [...(exams ?? [])].sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime()),
+    [exams],
+  );
+  const recentExamsTotalPages = Math.max(1, Math.ceil(allExamsSorted.length / RECENT_EXAMS_PAGE_SIZE));
+  const recentExamsCurrentPage = Math.min(recentExamsPage, recentExamsTotalPages);
+  const pagedRecentExams = allExamsSorted.slice(
+    (recentExamsCurrentPage - 1) * RECENT_EXAMS_PAGE_SIZE,
+    recentExamsCurrentPage * RECENT_EXAMS_PAGE_SIZE,
+  );
+
+  // Same "sum assignment targetCount per exam" pattern Active Exams already
+  // uses to answer "how many students are expected to take this exam".
+  const participantsByExam = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const assignment of assignments ?? []) {
+      map.set(assignment.examId, (map.get(assignment.examId) ?? 0) + assignment.targetCount);
+    }
+    return map;
+  }, [assignments]);
 
   const upcomingAssignments = [...(assignments ?? [])]
     .map((a) => ({ ...a, status: getAssignmentStatus(a.startAtUtc, a.endAtUtc) }))
@@ -214,23 +337,35 @@ export default function AdminDashboard() {
     (a) => getAssignmentStatus(a.startAtUtc, a.endAtUtc) === 'Upcoming',
   ).length;
 
-  const completedAttemptsTrend = useMemo(
-    () => buildMonthlyTrend(allResults.map((r) => r.submittedAtUtc), trendMonths),
-    [allResults, trendMonths],
-  );
+  const dailyActivity = useMemo(() => buildDailyActivity(allResults, ACTIVITY_DAYS), [allResults]);
 
   const studentsCount = users?.filter((u) => u.role === 'Student').length ?? 0;
   const adminsCount = users?.filter((u) => u.role === 'Admin').length ?? 0;
   const userRegistrationTrend = useMemo(
-    () => buildMonthlyTrend((users ?? []).map((u) => u.createdAtUtc), trendMonths),
-    [users, trendMonths],
+    () => buildMonthlyTrend((users ?? []).map((u) => u.createdAtUtc), 6),
+    [users],
   );
 
   return (
     <AdminLayout active="Dashboard">
-      <div className="mb-4">
-        <h1 className="h4 fw-bold mb-1">Welcome back, {user?.fullName ?? 'Admin'}!</h1>
-        <p className="text-muted mb-0">Here's what's happening across ExamVault.</p>
+      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+        <div>
+          <h1 className="h4 fw-bold mb-1">Welcome back, {user?.fullName ?? 'Admin'}! 👋</h1>
+          <p className="text-muted mb-0">Here's what's happening across ExamVault today.</p>
+        </div>
+        <Card className="border-0 shadow-sm">
+          <Card.Body className="d-flex align-items-center gap-2 py-2 px-3">
+            <DateIcon />
+            <div>
+              <div className="small fw-medium">
+                {now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </div>
+              <div className="text-muted" style={{ fontSize: 12 }}>
+                {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+          </Card.Body>
+        </Card>
       </div>
 
       {!isAdmin && (
@@ -250,7 +385,8 @@ export default function AdminDashboard() {
               icon={<UsersIcon />}
               variant="primary"
               isLoading={isLoadingUsers}
-              delta={newUsersThisMonth}
+              deltaPercent={usersDelta}
+              caption="vs last month"
             />
             <StatCard
               label="Total Exams"
@@ -258,14 +394,33 @@ export default function AdminDashboard() {
               icon={<ExamsIcon />}
               variant="warning"
               isLoading={isLoadingExams}
-              delta={newExamsThisMonth}
+              deltaPercent={examsDelta}
+              caption="vs last month"
             />
             <StatCard
-              label="Total Questions"
-              value={String(totalQuestions)}
-              icon={<QuestionsIcon />}
+              label="Total Attempts"
+              value={String(allResults.length)}
+              icon={<AttemptsIcon />}
               variant="info"
-              isLoading={isLoadingExams}
+              isLoading={isLoadingResults}
+              deltaPercent={attemptsDelta}
+              caption="vs last month"
+            />
+            <StatCard
+              label="Average Score"
+              value={allResults.length === 0 ? '—' : `${averageScore}%`}
+              icon={<AverageIcon />}
+              variant="success"
+              isLoading={isLoadingResults}
+              caption="Across all exams"
+            />
+            <StatCard
+              label="Active Exams"
+              value={String(activeExamsCount)}
+              icon={<ActiveExamsIcon />}
+              variant="danger"
+              isLoading={isLoadingExams || isLoadingAttempts}
+              caption="Ongoing"
             />
             <StatCard
               label="Published Exams"
@@ -275,46 +430,30 @@ export default function AdminDashboard() {
               isLoading={isLoadingExams}
             />
             <StatCard
-              label="Total Attempts"
-              value={String(allResults.length)}
-              icon={<AttemptsIcon />}
-              variant="primary"
-              isLoading={isLoadingResults}
-            />
-            <StatCard
-              label="Average Score"
-              value={allResults.length === 0 ? '—' : `${averageScore}%`}
-              icon={<AverageIcon />}
-              variant="warning"
-              isLoading={isLoadingResults}
+              label="Total Questions"
+              value={String(totalQuestions)}
+              icon={<QuestionsIcon />}
+              variant="info"
+              isLoading={isLoadingExams}
             />
             <StatCard
               label="Pass Rate"
               value={allResults.length === 0 ? '—' : `${passRate}%`}
               icon={<PassRateIcon />}
-              variant="success"
+              variant="warning"
               isLoading={isLoadingResults}
             />
           </Row>
 
           <Row className="g-3 mb-3">
-            <Col xs={12} lg={7}>
+            <Col xs={12} lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
                   <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h2 className="h6 fw-bold mb-0">Completed Attempts</h2>
-                    <Form.Select
-                      size="sm"
-                      style={{ width: 'auto' }}
-                      value={trendMonths}
-                      onChange={(e) => setTrendMonths(Number(e.target.value) as (typeof PERIOD_OPTIONS)[number])}
-                    >
-                      {PERIOD_OPTIONS.map((months) => (
-                        <option key={months} value={months}>
-                          Last {months} months
-                        </option>
-                      ))}
-                    </Form.Select>
+                    <h2 className="h6 fw-bold mb-0">Exam Activity (Last 7 Days)</h2>
+                    <Badge bg="light" text="dark" className="border fw-normal">
+                      Last 7 Days
+                    </Badge>
                   </div>
 
                   {isLoadingResults ? (
@@ -322,40 +461,70 @@ export default function AdminDashboard() {
                       <Spinner animation="border" size="sm" />
                     </div>
                   ) : (
-                    <ExamsTrendChart data={completedAttemptsTrend} />
+                    <DualTrendChart data={dailyActivity} seriesALabel="Exams Conducted" seriesBLabel="Users Participated" />
                   )}
-                  <p className="text-muted small mb-0 mt-2">Exam attempts submitted per month.</p>
+                  <p className="text-muted small mb-0 mt-2">
+                    Based on submitted attempts - exams still in progress aren't counted until submitted.
+                  </p>
                 </Card.Body>
               </Card>
             </Col>
 
-            <Col xs={12} lg={5}>
+            <Col xs={12} lg={4}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Results Overview</h2>
-                  {isLoadingResults ? (
+                  <h2 className="h6 fw-bold mb-3">Exam Type Distribution</h2>
+                  {isLoadingExams ? (
                     <div className="d-flex justify-content-center py-5">
                       <Spinner animation="border" size="sm" />
                     </div>
                   ) : (
                     <>
-                      <PassRateDonutChart passed={passedCount} failed={failedCount} />
+                      <SegmentDonutChart
+                        centerLabel="Total Exams"
+                        segments={[
+                          { label: 'Manual Exams', value: manualCount, color: '#4f46e5' },
+                          { label: 'AI Exams', value: aiCount, color: '#16a34a' },
+                        ]}
+                      />
                       <div className="mt-3">
-                        <div className="d-flex justify-content-between border-bottom py-2">
-                          <span className="text-muted small">Average Score</span>
-                          <span className="fw-medium">{allResults.length === 0 ? '—' : `${averageScore}%`}</span>
-                        </div>
-                        <div className="d-flex justify-content-between border-bottom py-2">
-                          <span className="text-muted small">Passed</span>
-                          <span className="fw-medium text-success">{passedCount}</span>
-                        </div>
-                        <div className="d-flex justify-content-between py-2">
-                          <span className="text-muted small">Failed</span>
-                          <span className="fw-medium text-danger">{failedCount}</span>
-                        </div>
+                        {[
+                          { label: 'Manual Exams', count: manualCount, color: '#4f46e5' },
+                          { label: 'AI Exams', count: aiCount, color: '#16a34a' },
+                        ].map((seg) => {
+                          const total = manualCount + aiCount;
+                          const pct = total === 0 ? 0 : Math.round((seg.count / total) * 100);
+                          return (
+                            <div key={seg.label} className="d-flex justify-content-between align-items-center py-1 small">
+                              <span className="d-flex align-items-center gap-2">
+                                <span
+                                  className="rounded-circle d-inline-block"
+                                  style={{ width: 8, height: 8, background: seg.color }}
+                                />
+                                {seg.label}
+                              </span>
+                              <span>
+                                {pct}% ({seg.count})
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </>
                   )}
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col xs={12} lg={3}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body>
+                  <h2 className="h6 fw-bold mb-3">Quick Actions</h2>
+                  <QuickActionRow to="/admin/exams/create" label="Create New Exam" />
+                  <QuickActionRow to="/admin/exams" label="Manage Exams" />
+                  <QuickActionRow to="/admin/users" label="Manage Users" />
+                  <QuickActionRow to="/admin/results/exams" label="View All Results" />
+                  <QuickActionRow to="/admin/reports" label="System Reports" />
                 </Card.Body>
               </Card>
             </Col>
@@ -364,7 +533,7 @@ export default function AdminDashboard() {
           <Row className="g-3 mb-3">
             <Col xs={12} lg={6}>
               <Card className="border-0 shadow-sm h-100">
-                <Card.Body className={recentExams.length === 0 ? '' : 'p-0'}>
+                <Card.Body className={pagedRecentExams.length === 0 ? '' : 'p-0'}>
                   <div className="d-flex justify-content-between align-items-center p-4 pb-3">
                     <h2 className="h6 fw-bold mb-0">Recent Exams</h2>
                     <Link to="/admin/exams" className="small">
@@ -378,39 +547,89 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-                  {!isLoadingExams && recentExams.length === 0 && (
+                  {!isLoadingExams && pagedRecentExams.length === 0 && (
                     <div className="text-center text-muted py-5">
                       No exams yet. Create one to see analytics here.
                     </div>
                   )}
 
-                  {!isLoadingExams && recentExams.length > 0 && (
-                    <Table responsive hover className="mb-0 align-middle">
-                      <thead className="text-muted small text-uppercase">
-                        <tr>
-                          <th className="ps-4">Title</th>
-                          <th>Status</th>
-                          <th>Questions</th>
-                          <th className="pe-4">Created On</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentExams.map((exam) => (
-                          <tr key={exam.id}>
-                            <td className="ps-4 fw-medium">
-                              <Link to={`/admin/exams/${exam.id}`} className="text-decoration-none">
-                                {exam.title}
-                              </Link>
-                            </td>
-                            <td>
-                              <Badge bg={statusVariant[exam.status]}>{exam.status}</Badge>
-                            </td>
-                            <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
-                            <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
+                  {!isLoadingExams && pagedRecentExams.length > 0 && (
+                    <>
+                      <Table responsive hover className="mb-0 align-middle">
+                        <thead className="text-muted small text-uppercase">
+                          <tr>
+                            <th className="ps-4">Title</th>
+                            <th>Type</th>
+                            <th>Questions</th>
+                            <th>Participants</th>
+                            <th>Status</th>
+                            <th className="pe-4">Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </Table>
+                        </thead>
+                        <tbody>
+                          {pagedRecentExams.map((exam) => (
+                            <tr key={exam.id}>
+                              <td className="ps-4 fw-medium">
+                                <Link to={`/admin/exams/${exam.id}`} className="text-decoration-none">
+                                  {exam.title}
+                                </Link>
+                              </td>
+                              <td>{examTypeLabel[exam.examType]}</td>
+                              <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
+                              <td>{participantsByExam.get(exam.id) ?? 0}</td>
+                              <td>
+                                <Badge bg={statusVariant[exam.status]}>{exam.status}</Badge>
+                              </td>
+                              <td className="pe-4">
+                                <div className="d-flex gap-2">
+                                  <Link
+                                    to={`/admin/exams/${exam.id}`}
+                                    className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                                    style={{ width: 32, height: 32 }}
+                                    title="View"
+                                    aria-label={`View ${exam.title}`}
+                                  >
+                                    <ViewIcon />
+                                  </Link>
+                                  <Link
+                                    to={`/admin/exams/${exam.id}/edit`}
+                                    className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                                    style={{ width: 32, height: 32 }}
+                                    title="Edit"
+                                    aria-label={`Edit ${exam.title}`}
+                                  >
+                                    <EditIcon />
+                                  </Link>
+                                  <DeleteExamButton examId={exam.id} />
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                      <div className="d-flex justify-content-between align-items-center p-3 px-4">
+                        <div className="text-muted small">
+                          Showing {(recentExamsCurrentPage - 1) * RECENT_EXAMS_PAGE_SIZE + 1} to{' '}
+                          {Math.min(recentExamsCurrentPage * RECENT_EXAMS_PAGE_SIZE, allExamsSorted.length)} of{' '}
+                          {allExamsSorted.length} exams
+                        </div>
+                        <Pagination className="mb-0" size="sm">
+                          <Pagination.Prev
+                            disabled={recentExamsCurrentPage === 1}
+                            onClick={() => setRecentExamsPage((p) => Math.max(1, p - 1))}
+                          />
+                          {Array.from({ length: recentExamsTotalPages }, (_, i) => i + 1).map((p) => (
+                            <Pagination.Item key={p} active={p === recentExamsCurrentPage} onClick={() => setRecentExamsPage(p)}>
+                              {p}
+                            </Pagination.Item>
+                          ))}
+                          <Pagination.Next
+                            disabled={recentExamsCurrentPage === recentExamsTotalPages}
+                            onClick={() => setRecentExamsPage((p) => Math.min(recentExamsTotalPages, p + 1))}
+                          />
+                        </Pagination>
+                      </div>
+                    </>
                   )}
                 </Card.Body>
               </Card>
@@ -557,8 +776,8 @@ export default function AdminDashboard() {
           </Row>
 
           <Row className="g-3 mb-3">
-            <Col xs={12}>
-              <Card className="border-0 shadow-sm">
+            <Col xs={12} lg={8}>
+              <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
                   <h2 className="h6 fw-bold mb-3">User Overview</h2>
                   <Row className="g-4 align-items-center">
@@ -573,7 +792,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="d-flex justify-content-between py-2">
                         <span className="text-muted small">New Users This Month</span>
-                        <span className="fw-medium">{isLoadingUsers ? '—' : newUsersThisMonth}</span>
+                        <span className="fw-medium">{isLoadingUsers ? '—' : countCreatedInMonth((users ?? []).map((u) => u.createdAtUtc), 0)}</span>
                       </div>
                     </Col>
                     <Col xs={12} md={8}>
@@ -590,27 +809,15 @@ export default function AdminDashboard() {
                 </Card.Body>
               </Card>
             </Col>
-          </Row>
 
-          <Row className="g-3">
-            <Col xs={12}>
-              <Card className="border-0 shadow-sm">
+            <Col xs={12} lg={4}>
+              <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Quick Actions</h2>
-                  <div className="d-flex flex-wrap gap-2">
-                    <Link to="/admin/exams/create" className="btn btn-outline-primary">
-                      + Create Exam
-                    </Link>
-                    <Link to="/admin/assignments/new" className="btn btn-outline-primary">
-                      Assign Exam
-                    </Link>
-                    <Link to="/admin/notifications/create" className="btn btn-outline-primary">
-                      Create Notification
-                    </Link>
-                    <Link to="/admin/reports" className="btn btn-outline-primary">
-                      View Reports
-                    </Link>
-                  </div>
+                  <h2 className="h6 fw-bold mb-1">System Overview</h2>
+                  <p className="text-muted small mb-0">
+                    Server storage, database health, uptime, and active-session metrics aren't wired up to any
+                    backend yet - this section is a placeholder rather than fabricated numbers.
+                  </p>
                 </Card.Body>
               </Card>
             </Col>

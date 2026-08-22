@@ -101,7 +101,10 @@ export default function ExamWizardSections() {
         </Card.Body>
       </Card>
 
-      <div className="d-flex justify-content-end mt-3">
+      <div className="d-flex justify-content-between mt-3">
+        <Button variant="outline-secondary" onClick={() => navigate('/admin/exams')}>
+          Back
+        </Button>
         <Button
           variant="primary"
           onClick={() => navigate(`/admin/exams/${examId}/wizard/configuration`)}

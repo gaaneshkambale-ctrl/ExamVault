@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { Alert, Badge, Button, Card, Spinner, Table } from 'react-bootstrap';
+import type { DragEvent } from 'react';
+import { Alert, Badge, Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import readXlsxFile from 'read-excel-file/browser';
@@ -22,6 +23,8 @@ interface ImportRow {
 const TEMPLATE_HEADERS = ['Full Name', 'Email', 'Role', 'Phone Number'];
 
 const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
+
+const STEPS = ['Upload File', 'Preview & Validate', 'Import'] as const;
 
 function validateRow(row: ImportRow, allRows: ImportRow[]): string {
   if (!row.fullName.trim()) {
@@ -65,10 +68,12 @@ export default function ImportUsers() {
   const [parseError, setParseError] = useState('');
   const [isParsing, setIsParsing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createdCount, setCreatedCount] = useState(0);
 
   const validRows = rows.filter((r) => r.status === 'Valid');
+  const currentStepIndex = createdCount > 0 ? 2 : rows.length > 0 ? 1 : 0;
 
   const handleFileSelected = async (file: File) => {
     setIsParsing(true);
@@ -102,6 +107,15 @@ export default function ImportUsers() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      void handleFileSelected(file);
     }
   };
 
@@ -154,60 +168,113 @@ export default function ImportUsers() {
 
   return (
     <AdminLayout active="Users">
-      <Link to="/admin/users" className="text-decoration-none small d-inline-block mb-3">
-        &larr; Back to Users
-      </Link>
-
-      <div className="mb-4">
-        <h1 className="h4 fw-bold mb-0 text-primary">Import Users</h1>
-        <p className="text-muted mb-0">Bulk-create users from an Excel (.xlsx) file.</p>
+      <div className="d-flex justify-content-between align-items-center mb-1">
+        <div>
+          <p className="text-muted small mb-1">Users / Bulk Import Users</p>
+          <h1 className="h4 fw-bold mb-1 text-primary">Bulk Import Users</h1>
+          <p className="text-muted mb-0">Import multiple users at once using an Excel (.xlsx) file.</p>
+        </div>
+        <Button variant="outline-primary" onClick={() => void downloadTemplate()}>
+          Download Sample File
+        </Button>
       </div>
 
-      <Card className="border-0 shadow-sm mb-4">
-        <Card.Body className="p-4">
-          <h2 className="h6 fw-bold mb-3">1. Download the template</h2>
-          <p className="text-muted small mb-3">
-            Columns: Full Name, Email, Role (Student or Admin), Phone Number (optional).
-          </p>
-          <Button variant="outline-primary" onClick={() => void downloadTemplate()} className="mb-4">
-            Download Template
-          </Button>
+      <div className="d-flex gap-2 my-3 flex-wrap">
+        {STEPS.map((step, index) => (
+          <Badge
+            key={step}
+            bg={index === currentStepIndex ? 'primary' : index < currentStepIndex ? 'success' : 'light'}
+            text={index <= currentStepIndex ? undefined : 'dark'}
+            className="fw-normal py-2 px-3"
+          >
+            {index + 1}. {step}
+          </Badge>
+        ))}
+      </div>
 
-          <h2 className="h6 fw-bold mb-3">2. Upload your filled-in file</h2>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx"
-            className="form-control"
-            style={{ maxWidth: 360 }}
-            disabled={isParsing}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                void handleFileSelected(file);
-              }
-            }}
-          />
-          {isParsing && (
-            <div className="mt-3 d-flex align-items-center gap-2 text-muted">
-              <Spinner animation="border" size="sm" />
-              Reading file...
-            </div>
-          )}
-          {parseError && (
-            <Alert variant="danger" className="mt-3 mb-0">
-              {parseError}
-            </Alert>
-          )}
-        </Card.Body>
-      </Card>
+      <Row className="g-3">
+        <Col xs={12} md={7}>
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body className="p-4">
+              <h2 className="h6 fw-bold mb-1">Upload File</h2>
+              <p className="text-muted small mb-3">Upload an Excel file with user details.</p>
+
+              <div
+                className="border border-2 border-dashed rounded-3 text-center py-5 px-3"
+                style={{
+                  borderColor: isDragOver ? '#4f46e5' : '#dee2e6',
+                  background: isDragOver ? '#eef2ff' : '#f8f9fa',
+                  cursor: 'pointer',
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(true);
+                }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleDrop}
+              >
+                <div className="text-muted mb-2">Drag and drop your file here</div>
+                <div className="text-muted small mb-3">or</div>
+                <Button variant="primary" size="sm" onClick={(e) => e.stopPropagation()}>
+                  Browse File
+                </Button>
+                <div className="text-muted small mt-3">Supported format: .xlsx only</div>
+                <div className="text-muted small">Maximum file size: 5MB</div>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx"
+                className="d-none"
+                disabled={isParsing}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    void handleFileSelected(file);
+                  }
+                }}
+              />
+
+              {isParsing && (
+                <div className="mt-3 d-flex align-items-center gap-2 text-muted">
+                  <Spinner animation="border" size="sm" />
+                  Reading file...
+                </div>
+              )}
+              {parseError && (
+                <Alert variant="danger" className="mt-3 mb-0">
+                  {parseError}
+                </Alert>
+              )}
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col xs={12} md={5}>
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body className="p-4">
+              <h2 className="h6 fw-bold mb-3">File Guidelines</h2>
+              <ul className="small text-muted ps-3 mb-0">
+                <li className="mb-2">Download the sample file and follow the format.</li>
+                <li className="mb-2">
+                  Required columns: Full Name, Email, Role (<code>Student</code> or <code>Admin</code>).
+                </li>
+                <li className="mb-2">Email must be unique, both within the file and across existing users.</li>
+                <li className="mb-2">Password isn't collected here - it's auto-generated and emailed on creation.</li>
+                <li>Phone Number is optional.</li>
+              </ul>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
 
       {rows.length > 0 && (
-        <Card className="border-0 shadow-sm">
+        <Card className="border-0 shadow-sm mt-3">
           <Card.Body className="p-4">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h2 className="h6 fw-bold mb-0">
-                3. Review ({validRows.length} of {rows.length} rows ready to import)
+                Preview &amp; Validate ({validRows.length} of {rows.length} rows ready to import)
               </h2>
               <div className="d-flex gap-2">
                 <Link to="/admin/users" className="btn btn-outline-secondary">
@@ -220,7 +287,7 @@ export default function ImportUsers() {
                       Creating...
                     </>
                   ) : (
-                    `Create ${validRows.length} User${validRows.length === 1 ? '' : 's'}`
+                    `Import ${validRows.length} User${validRows.length === 1 ? '' : 's'}`
                   )}
                 </Button>
               </div>

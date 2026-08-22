@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
   { label: 'My Certificates', path: '/certificates' },
   { label: 'Profile', path: '/profile' },
   { label: 'Notifications', path: '/notifications' },
-  { label: 'Settings', path: null },
+  { label: 'Settings', path: '/settings' },
 ];
 
 interface DashboardSidebarProps {
