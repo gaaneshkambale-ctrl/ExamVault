@@ -7,4 +7,5 @@ public record UserSessionResponse(
     DateTime? RevokedAtUtc,
     string Status,
     string DeviceLabel = "Unknown device",
-    bool IsCurrent = false);
+    bool IsCurrent = false,
+    string? IpAddress = null);

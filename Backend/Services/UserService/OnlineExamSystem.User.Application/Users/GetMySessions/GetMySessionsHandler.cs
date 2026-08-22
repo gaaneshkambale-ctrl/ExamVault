@@ -38,7 +38,8 @@ public class GetMySessionsHandler
                 token.ExpiresAtUtc,
                 token.RevokedAtUtc,
                 status,
-                currentHash is not null && token.TokenHash == currentHash);
+                currentHash is not null && token.TokenHash == currentHash,
+                token.IpAddress);
         }).ToList();
     }
 }

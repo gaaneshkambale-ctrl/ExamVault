@@ -11,6 +11,7 @@ import type {
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UserListItem,
+  UserPreferences,
   UserProfile,
   UserSession,
 } from '../types/user';
@@ -138,4 +139,23 @@ export async function activateUser(id: string): Promise<UserListItem> {
 export async function getUserSessions(id: string): Promise<UserSession[]> {
   const { data } = await apiClient.get<UserSession[]>(`/api/users/${id}/sessions`);
   return data;
+}
+
+export async function getMyPreferences(): Promise<UserPreferences> {
+  const { data } = await apiClient.get<UserPreferences>('/api/users/me/preferences');
+  return data;
+}
+
+export async function updateMyPreferences(request: UserPreferences): Promise<UserPreferences> {
+  const { data } = await apiClient.put<UserPreferences>('/api/users/me/preferences', request);
+  return data;
+}
+
+// Student-only, real - immediately blocks the caller's own next login the
+// same way admin-deactivating a user already does. Never call this for an
+// Admin caller; the backend rejects it with 409 anyway, but the frontend
+// hides the control entirely for Admins rather than showing a button that
+// can never succeed.
+export async function deactivateMyAccount(): Promise<void> {
+  await apiClient.post('/api/users/me/deactivate');
 }

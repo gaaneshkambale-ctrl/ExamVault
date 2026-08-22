@@ -7,4 +7,5 @@ public record MySessionItem(
     DateTime ExpiresAtUtc,
     DateTime? RevokedAtUtc,
     string Status,
-    bool IsCurrent);
+    bool IsCurrent,
+    string? IpAddress = null);

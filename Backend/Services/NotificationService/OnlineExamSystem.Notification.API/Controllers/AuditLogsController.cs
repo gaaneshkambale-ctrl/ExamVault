@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Notification.Application.Audit.Admin.ListAuditLogs;
@@ -61,6 +62,24 @@ public class AuditLogsController : ControllerBase
 
         var items = await _listAuditLogsHandler.HandleAsync(
             new ListAuditLogsQuery(fromUtc, toUtc, parsedModule, userId), cancellationToken);
+
+        return Ok(items.Select(ToResponse).ToList());
+    }
+
+    // Self-service Activity Log for the Profile page - reuses the same
+    // ListAuditLogsHandler the admin view uses, but the UserId filter is
+    // forced to the caller's own id here rather than accepted from the
+    // client, so a non-admin can never see anyone else's activity.
+    [HttpGet("mine")]
+    [Authorize]
+    public async Task<IActionResult> ListMine(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var toUtc = DateTime.UtcNow;
+        var fromUtc = toUtc.AddYears(-1);
+
+        var items = await _listAuditLogsHandler.HandleAsync(
+            new ListAuditLogsQuery(fromUtc, toUtc, Module: null, UserId: userId), cancellationToken);
 
         return Ok(items.Select(ToResponse).ToList());
     }

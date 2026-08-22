@@ -15,5 +15,10 @@ public interface IUserRepository
     Task RevokeAllRefreshTokensForUserAsync(Guid userId, CancellationToken cancellationToken = default);
     Task RevokeOtherRefreshTokensForUserAsync(Guid userId, string currentTokenHash, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the given user's single UserPreferences row, creating it
+    /// with the entity's own defaults if it doesn't exist yet.</summary>
+    Task<UserPreferences> GetOrCreateUserPreferencesAsync(Guid userId, CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

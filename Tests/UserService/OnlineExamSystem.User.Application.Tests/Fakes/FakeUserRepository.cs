@@ -7,6 +7,7 @@ public class FakeUserRepository : IUserRepository
 {
     private readonly List<AppUser> _users = [];
     private readonly List<RefreshToken> _refreshTokens = [];
+    private readonly List<UserPreferences> _userPreferences = [];
 
     public IReadOnlyList<RefreshToken> RefreshTokens => _refreshTokens;
 
@@ -65,6 +66,17 @@ public class FakeUserRepository : IUserRepository
     public Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<RefreshToken>>(
             _refreshTokens.Where(t => t.UserId == userId).OrderByDescending(t => t.CreatedAtUtc).ToList());
+
+    public Task<UserPreferences> GetOrCreateUserPreferencesAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var preferences = _userPreferences.FirstOrDefault(p => p.UserId == userId);
+        if (preferences is null)
+        {
+            preferences = new UserPreferences { UserId = userId };
+            _userPreferences.Add(preferences);
+        }
+        return Task.FromResult(preferences);
+    }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

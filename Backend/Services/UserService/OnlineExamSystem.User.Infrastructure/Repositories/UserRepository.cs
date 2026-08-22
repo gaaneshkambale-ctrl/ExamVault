@@ -64,6 +64,21 @@ public class UserRepository : IUserRepository
             .OrderByDescending(t => t.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public async Task<UserPreferences> GetOrCreateUserPreferencesAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var preferences = await _dbContext.UserPreferences.FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+        if (preferences is null)
+        {
+            preferences = new UserPreferences { UserId = userId };
+            await _dbContext.UserPreferences.AddAsync(preferences, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return preferences;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

@@ -12,3 +12,8 @@ export async function getAuditLogs(
   });
   return data;
 }
+
+export async function getMyAuditLogs(): Promise<AuditLogResponse[]> {
+  const { data } = await apiClient.get<AuditLogResponse[]>('/api/audit-logs/mine');
+  return data;
+}

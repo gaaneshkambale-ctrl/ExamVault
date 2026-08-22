@@ -1,5 +1,6 @@
 using FluentValidation;
 using OnlineExamSystem.User.Application.Interfaces;
+using GenderEnum = OnlineExamSystem.User.Domain.Enums.Gender;
 
 namespace OnlineExamSystem.User.Application.Users.UpdateMyProfile;
 
@@ -33,6 +34,14 @@ public class UpdateMyProfileHandler
 
         user.FullName = command.FullName;
         user.PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim();
+        user.Username = string.IsNullOrWhiteSpace(command.Username) ? null : command.Username.Trim();
+        user.AlternateEmail = string.IsNullOrWhiteSpace(command.AlternateEmail) ? null : command.AlternateEmail.Trim();
+        user.Gender = string.IsNullOrWhiteSpace(command.Gender)
+            ? null
+            : Enum.Parse<GenderEnum>(command.Gender, ignoreCase: true);
+        user.DateOfBirth = command.DateOfBirth;
+        user.Location = string.IsNullOrWhiteSpace(command.Location) ? null : command.Location.Trim();
+        user.Department = string.IsNullOrWhiteSpace(command.Department) ? null : command.Department.Trim();
 
         await _userRepository.SaveChangesAsync(cancellationToken);
 

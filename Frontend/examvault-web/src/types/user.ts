@@ -10,6 +10,8 @@ export interface RegisterResponse {
   email: string;
 }
 
+export type Gender = 'Male' | 'Female' | 'Other' | 'PreferNotToSay';
+
 export interface UserProfile {
   id: string;
   fullName: string;
@@ -18,11 +20,36 @@ export interface UserProfile {
   mustChangePassword: boolean;
   phoneNumber: string | null;
   hasPhoto: boolean;
+  username: string | null;
+  alternateEmail: string | null;
+  gender: Gender | null;
+  dateOfBirth: string | null;
+  location: string | null;
+  department: string | null;
+  lastLoginAtUtc: string | null;
+  joinedOnUtc: string | null;
+  formattedUserId: string | null;
+  isActive: boolean;
 }
 
 export interface UpdateMyProfileRequest {
   fullName: string;
   phoneNumber: string;
+  username?: string | null;
+  alternateEmail?: string | null;
+  gender?: Gender | null;
+  dateOfBirth?: string | null;
+  location?: string | null;
+  department?: string | null;
+}
+
+export type TimeFormat = 'Hour12' | 'Hour24';
+
+export interface UserPreferences {
+  language: string;
+  timezone: string;
+  dateFormat: string;
+  timeFormat: TimeFormat;
 }
 
 export interface LoginRequest {
@@ -91,4 +118,5 @@ export interface UserSession {
   status: UserSessionStatus;
   deviceLabel: string;
   isCurrent: boolean;
+  ipAddress: string | null;
 }

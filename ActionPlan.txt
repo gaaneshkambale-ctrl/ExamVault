@@ -4690,3 +4690,190 @@ Live browser verification against the real running stack:
   recurs - it's browser-automation-tooling flakiness under a very
   long-lived tab/session, not application code.
 No gaps found; feature matches the mockup and plan as built.
+
+FEATURE (DONE, 2026-08-22): My Profile redesign (profile.png)
+=====================================================================
+REQUESTED: user supplied profile.png, a two-column redesign of the
+existing 4-tab Profile page (Personal Info/Security/Preferences/
+Sessions) into: left column (avatar, name/role, contact + last login,
+a read-only Account Information card, Quick Actions) + right column,
+5 tabs (Profile Information/Security/Preferences/Sessions/Activity
+Log). Asked two scope questions since two Quick Actions are genuine
+forks: "Download My Data" (how much data) - user chose profile +
+Activity Log only, no cross-service aggregation. "Deactivate Account"
+(this page is shared by Admin and Student, and the backend already
+HARD-BLOCKS an Admin from deactivating their own account with a 409,
+by design) - user chose Student-only; for Admins this action is
+hidden entirely rather than shown as a button that can never succeed.
+
+RESEARCH FIRST (via Explore subagent) established what's already real
+vs net-new before planning:
+- Real already: FullName/PhoneNumber edit (PersonalInfoPanel ->
+  updateMyProfile), Change Password (ChangePasswordForm, real current-
+  password-verified flow), Sessions (SessionsPanel - genuinely backed
+  by the RefreshToken table: issued/expires/revoked/deviceLabel/
+  current-session detection, real revoke-others action), photo upload,
+  AppUser.IsActive (admin-only deactivate/activate today, blocks login
+  on next auth check).
+- Net-new needed: Username/AlternateEmail/Gender/DateOfBirth/Location/
+  Department fields (none exist on AppUser); a formatted human-
+  readable User ID ("EV-ADM-0001" style - needs a real sequential
+  counter, not just formatting the GUID); LastLoginAtUtc (not tracked
+  anywhere yet); a PER-USER Account Preferences entity (Language/
+  Timezone/DateFormat/TimeFormat) - explicitly NOT the same thing as
+  the GLOBAL GeneralSettings singleton just built for the Settings hub,
+  which is one org-wide row, not per-user; an Activity Log view (CAN
+  reuse the AuditLog infra already built this session, just needs a
+  new self-service "mine" endpoint); IP Address on sessions (RefreshToken
+  doesn't store it yet, but the same HttpContext-capture pattern
+  AuditLog already uses applies directly); self-service account
+  deactivation (doesn't exist - today deactivation is admin-only).
+
+INTERPRETATION - tab content the mockup doesn't show: the screenshot
+only shows the "Profile Information" tab's content (Personal
+Information + Change Password + Account Preferences cards together).
+What Security/Preferences/Sessions/Activity Log individually contain
+isn't visible in a single static frame. Rather than guess a layout
+that duplicates Change Password in two places, this round moves
+Change Password to live under the "Security" tab only (its natural
+conceptual home) and keeps "Profile Information" to Personal
+Information + Account Preferences - a deliberate, documented deviation
+from the exact card grouping shown, not a gap. "Preferences" tab stays
+the existing NotificationPreferencesPanel unchanged. "Sessions" tab
+keeps the existing real table, adding a real IP Address column but
+DROPPING the mockup's "Location" column entirely (geolocating an IP
+needs a GeoIP dependency this app doesn't have, and in a local Docker
+dev environment every address would resolve to a meaningless internal
+IP anyway - an always-empty column would look broken, so it's left out
+rather than faked).
+
+BACKEND (UserService):
+- AppUser gains: Username (nullable, free text, no login use, no
+  uniqueness constraint enforced this round - keeps scope bounded,
+  it's genuinely just a display field for now), AlternateEmail
+  (nullable), Gender (new enum: Male/Female/Other/PreferNotToSay,
+  nullable), DateOfBirth (nullable DateTime), Location (nullable free
+  text), Department (nullable free text - editable via the Personal
+  Information form even though the mockup shows it read-only in the
+  Account Information card, since without an edit path it would be
+  unsettable and therefore fake), LastLoginAtUtc (nullable, set in
+  LoginUserHandler on every successful login), UserNumber (int,
+  UseIdentityColumn() - same real auto-increment pattern ExamService's
+  ExamAssignment.AssignmentNumber already uses - powers the formatted
+  "EV-{ADM|STU}-{UserNumber:D4}" User ID display, computed in the
+  response DTO, not stored as a string).
+- New singleton-per-user entity UserPreferences (UserId unique index,
+  same get-or-create-if-missing pattern as every other Settings entity
+  this session): Language, Timezone, DateFormat, TimeFormat (new enum
+  Hour12/Hour24). New GetMyPreferences/UpdateMyPreferencesHandler +
+  controller actions (GET/PUT api/users/me/preferences).
+- RefreshToken gains IpAddress (nullable) - captured from HttpContext
+  at the two places a RefreshToken row is created (login, token
+  refresh), same "captured by the writing service from its own
+  HttpContext" convention AuditLog already established.
+- UpdateMyProfileCommand/Handler/Request extended with the 6 new
+  fields (all optional/nullable - a user can leave any of them blank).
+- New self-service deactivation: POST api/users/me/deactivate,
+  [Authorize] any role, but the HANDLER itself (not just the frontend)
+  rejects Admin callers with the same 409 the existing admin-target
+  endpoint already returns - the rule is enforced server-side, the
+  hidden button is just UX, not the actual guard. Sets IsActive=false
+  and revokes every RefreshToken for that user immediately (same
+  "immediately blocks next auth check" effect admin-deactivation
+  already has), matching the existing IsAccountDeactivated login block.
+- UserProfile response DTO gains: username, alternateEmail, gender,
+  dateOfBirth, location, department, lastLoginAtUtc, formattedUserId,
+  joinedOnUtc (=CreatedAtUtc, already exists, just newly exposed).
+
+BACKEND (NotificationService):
+- New AuditLogsController action: GET api/audit-logs/mine,
+  [Authorize] any role - calls the EXISTING ListAuditLogsHandler but
+  forces UserId to the caller's own id, ignoring any client-supplied
+  filter, so a non-admin can never see anyone else's activity. Already
+  covered by the Gateway's existing GET-only audit-logs-route
+  ({**catch-all}) - no Gateway change needed.
+
+FRONTEND:
+- types/user.ts + api/userApi.ts: extend UserProfile/
+  UpdateMyProfileRequest with the new fields; add UserPreferences
+  types + getMyPreferences/updateMyPreferences; add deactivateMyAccount.
+- types/audit.ts + api/auditApi.ts: add getMyAuditLogs (mine endpoint).
+- PersonalInfoPanel.tsx: gains Username/Alternate Email/Gender
+  (select)/Date of Birth (date input)/Location/Department fields
+  alongside the existing Full Name/Phone Number.
+- New AccountPreferencesPanel.tsx: Language/Timezone/Date Format/Time
+  Format form bound to the new per-user UserPreferences endpoint (NOT
+  the org-wide Settings > General page - genuinely different data).
+- New ActivityLogPanel.tsx: real table (Date/Module/Activity/Details)
+  from GET api/audit-logs/mine, same row shape AuditReports.tsx
+  already renders admin-side.
+- SessionsPanel.tsx: table gains a real IP Address column; Location
+  column omitted (see INTERPRETATION above).
+- Profile.tsx rewritten to the two-column mockup layout: left column
+  = avatar (existing real upload, unchanged) + name/role badge +
+  email/phone/last-login + Account Information card (formatted User
+  ID/Role/Department/Joined On/Status - all real) + Quick Actions
+  (Download My Data - real, client-side-composed JSON of profile +
+  own activity log, downloaded as a file; Deactivate Account - Student
+  role only, hidden entirely for Admin, real confirm modal since it
+  immediately blocks the user's own login). Right column = 5 tabs:
+  Profile Information (Personal Info form + Account Preferences),
+  Security (Change Password), Preferences (existing notification
+  prefs, unchanged), Sessions (existing + new IP column), Activity Log
+  (new).
+
+OUT OF SCOPE (flagged, not building this round): Username uniqueness/
+login-by-username; Session "Location" column (needs GeoIP, meaningless
+in local dev); Download My Data pulling in cross-service data (exam
+results, certificates, submissions - user chose profile + activity
+only); Admin self-deactivation (blocked by existing rule, staying
+blocked); any change to how Admins deactivate OTHER users (unchanged,
+already real).
+
+DEVIATION (frontend, decided while building): Sessions table shows
+"Signed In" (the real issuedAtUtc) rather than the mockup's "Last
+Active" label - this app only tracks token issuance, not a live
+per-request activity heartbeat, so "Last Active" would imply data that
+doesn't exist. Per-row "Sign Out" in the mockup's Action column wasn't
+built - only bulk "Sign Out All Other Sessions" exists on the backend
+(RevokeOtherRefreshTokensForUserAsync has no single-token counterpart);
+adding one was out of scope for a visual redesign.
+
+VERIFICATION (2026-08-22): dotnet build (UserService + NotificationService
+projects + full ExamVault.sln) - 0 errors/warnings. dotnet test -
+UserService 51/51 passed (FakeUserRepository updated for the new
+GetOrCreateUserPreferencesAsync method), NotificationService unaffected
+(22/22 still passing from the last check). Frontend: tsc --noEmit and
+oxlint clean, vite build succeeds. EF migration AddProfileFields applied
+for real via `docker compose build/up user-api` - confirmed in container
+logs: all 6 nullable AppUser columns added, UserNumber added as a real
+SQL Server IDENTITY column (auto-backfilling existing rows, not a fake
+default), RefreshTokens.IpAddress added, UserPreferences table created.
+notification-api redeployed for the new self-service audit-logs/mine
+action (no schema change needed there).
+
+Live browser verification against the real running stack (signed in as
+the real Admin user):
+- Hub renders exactly per mockup structure: formatted User ID shown as
+  "EV-ADM-0001" (real UserNumber-derived, not a GUID trick), real Joined
+  On date, real Active status badge, Quick Actions correctly shows ONLY
+  "Download My Data" for this Admin account - "Deactivate Account" is
+  absent (confirmed via DOM query), matching the Student-only scope
+  decision.
+- All 5 tabs render with real data: Profile Information (Personal Info
+  form + Account Preferences), Security (Change Password), Preferences
+  (existing notification prefs, unchanged), Sessions (real table with a
+  live IP address - "::ffff:172.18.0.12" - on the current session, "—"
+  on pre-migration older sessions, correctly not fabricated), Activity
+  Log (showed this admin's own real audit trail, correctly scoped to
+  just their own actions).
+- Wrote through and confirmed persistence via reload: Personal
+  Information (Location + Department, the latter also correctly
+  reflected back in the read-only Account Information card) and Account
+  Preferences (Time Format) both round-tripped correctly.
+- Download My Data: real GET /api/audit-logs/mine + GET /api/users/me
+  both fired and returned 200 with no error surfaced, confirming the
+  underlying data fetch (the download itself can't be verified through
+  browser automation, but the data it's built from is confirmed real).
+No gaps found; feature matches the mockup and plan as built, with the
+two documented deviations above.

@@ -7,6 +7,7 @@ using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
+using OnlineExamSystem.User.Application.Users.GetMyPreferences;
 using OnlineExamSystem.User.Application.Users.GetMySessions;
 using OnlineExamSystem.User.Application.Users.GetProfile;
 using OnlineExamSystem.User.Application.Users.List;
@@ -20,8 +21,10 @@ using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
+using OnlineExamSystem.User.Application.Users.UpdateMyPreferences;
 using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 
 namespace OnlineExamSystem.User.API.Controllers;
 
@@ -46,6 +49,8 @@ public class UsersController : ControllerBase
     private readonly UpdateMyPhotoHandler _updateMyPhotoHandler;
     private readonly GetMySessionsHandler _getMySessionsHandler;
     private readonly RevokeOtherSessionsHandler _revokeOtherSessionsHandler;
+    private readonly GetMyPreferencesHandler _getMyPreferencesHandler;
+    private readonly UpdateMyPreferencesHandler _updateMyPreferencesHandler;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<UsersController> _logger;
 
@@ -76,6 +81,8 @@ public class UsersController : ControllerBase
         UpdateMyPhotoHandler updateMyPhotoHandler,
         GetMySessionsHandler getMySessionsHandler,
         RevokeOtherSessionsHandler revokeOtherSessionsHandler,
+        GetMyPreferencesHandler getMyPreferencesHandler,
+        UpdateMyPreferencesHandler updateMyPreferencesHandler,
         IAuditClient auditClient,
         ILogger<UsersController> logger)
     {
@@ -96,6 +103,8 @@ public class UsersController : ControllerBase
         _updateMyPhotoHandler = updateMyPhotoHandler;
         _getMySessionsHandler = getMySessionsHandler;
         _revokeOtherSessionsHandler = revokeOtherSessionsHandler;
+        _getMyPreferencesHandler = getMyPreferencesHandler;
+        _updateMyPreferencesHandler = updateMyPreferencesHandler;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -134,7 +143,11 @@ public class UsersController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginUserRequest request, CancellationToken cancellationToken)
     {
-        var command = new LoginUserCommand(request.Email, request.Password, Request.Headers.UserAgent.ToString());
+        var command = new LoginUserCommand(
+            request.Email,
+            request.Password,
+            Request.Headers.UserAgent.ToString(),
+            HttpContext.Connection.RemoteIpAddress?.ToString());
         var result = await _loginUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsAccountDeactivated)
@@ -162,14 +175,7 @@ public class UsersController : ControllerBase
             user.FullName,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
-        var profile = new UserProfileResponse(
-            user.Id,
-            user.FullName,
-            user.Email,
-            user.Role.ToString(),
-            user.MustChangePassword,
-            user.PhoneNumber,
-            user.PhotoData is not null);
+        var profile = ToProfileResponse(user);
         var response = new LoginResponse(profile, result.AccessToken!, result.RefreshToken!);
         return Ok(response);
     }
@@ -177,7 +183,10 @@ public class UsersController : ControllerBase
     [HttpPost("refresh-token")]
     public async Task<IActionResult> RefreshToken(RefreshTokenRequest request, CancellationToken cancellationToken)
     {
-        var command = new RefreshTokenCommand(request.RefreshToken, Request.Headers.UserAgent.ToString());
+        var command = new RefreshTokenCommand(
+            request.RefreshToken,
+            Request.Headers.UserAgent.ToString(),
+            HttpContext.Connection.RemoteIpAddress?.ToString());
         var result = await _refreshTokenHandler.HandleAsync(command, cancellationToken);
 
         if (!result.Success)
@@ -460,14 +469,7 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "User not found." });
         }
 
-        var response = new UserProfileResponse(
-            user.Id,
-            user.FullName,
-            user.Email,
-            user.Role.ToString(),
-            user.MustChangePassword,
-            user.PhoneNumber,
-            user.PhotoData is not null);
+        var response = ToProfileResponse(user);
         return Ok(response);
     }
 
@@ -476,7 +478,16 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> UpdateMyProfile(UpdateMyProfileRequest request, CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var command = new UpdateMyProfileCommand(userId, request.FullName, request.PhoneNumber);
+        var command = new UpdateMyProfileCommand(
+            userId,
+            request.FullName,
+            request.PhoneNumber,
+            request.Username,
+            request.AlternateEmail,
+            request.Gender,
+            request.DateOfBirth,
+            request.Location,
+            request.Department);
         var result = await _updateMyProfileHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
@@ -495,15 +506,68 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} updated their own profile.", userId);
-        var response = new UserProfileResponse(
-            user.Id,
-            user.FullName,
-            user.Email,
-            user.Role.ToString(),
-            user.MustChangePassword,
-            user.PhoneNumber,
-            user.PhotoData is not null);
+        var response = ToProfileResponse(user);
         return Ok(response);
+    }
+
+    [Authorize]
+    [HttpGet("me/preferences")]
+    public async Task<IActionResult> GetMyPreferences(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var preferences = await _getMyPreferencesHandler.HandleAsync(new GetMyPreferencesQuery(userId), cancellationToken);
+        return Ok(new UserPreferencesResponse(
+            preferences.Language, preferences.Timezone, preferences.DateFormat, preferences.TimeFormat.ToString()));
+    }
+
+    [Authorize]
+    [HttpPut("me/preferences")]
+    public async Task<IActionResult> UpdateMyPreferences(UpdateUserPreferencesRequest request, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var preferences = await _updateMyPreferencesHandler.HandleAsync(
+            new UpdateMyPreferencesCommand(userId, request.Language, request.Timezone, request.DateFormat, request.TimeFormat),
+            cancellationToken);
+        return Ok(new UserPreferencesResponse(
+            preferences.Language, preferences.Timezone, preferences.DateFormat, preferences.TimeFormat.ToString()));
+    }
+
+    // Self-service counterpart to the admin-only {id}/deactivate above.
+    // Deliberately Student-only, enforced HERE (not just hidden client-side)
+    // because Admins already have a real, deliberate protection against
+    // deactivating their own account - this must not become a backdoor
+    // around that rule.
+    [Authorize]
+    [HttpPost("me/deactivate")]
+    public async Task<IActionResult> DeactivateMyAccount(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        if (!string.Equals(role, nameof(UserRole.Student), StringComparison.OrdinalIgnoreCase))
+        {
+            return Conflict(new { message = "Only student accounts can be self-deactivated." });
+        }
+
+        var result = await _setUserActiveStatusHandler.HandleAsync(
+            new SetUserActiveStatusCommand(userId, false),
+            cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        _logger.LogInformation("User {UserId} deactivated their own account.", userId);
+        await _auditClient.RecordAsync(
+            "Auth",
+            "Self-deactivated account",
+            null,
+            null,
+            userId,
+            result.User!.FullName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
+        return NoContent();
     }
 
     [Authorize]
@@ -574,7 +638,8 @@ public class UsersController : ControllerBase
             s.RevokedAtUtc,
             s.Status,
             s.DeviceLabel,
-            s.IsCurrent)));
+            s.IsCurrent,
+            s.IpAddress)));
     }
 
     [Authorize]
@@ -622,6 +687,36 @@ public class UsersController : ControllerBase
             token.ExpiresAtUtc,
             token.RevokedAtUtc,
             status,
-            token.DeviceLabel ?? "Unknown device");
+            token.DeviceLabel ?? "Unknown device",
+            IpAddress: token.IpAddress);
     }
+
+    // "EV-ADM-0001" / "EV-STU-0001" - a real formatted id built from the
+    // user's own real auto-increment UserNumber, not a display trick over
+    // the GUID.
+    private static string FormatUserId(AppUser user)
+    {
+        var roleCode = user.Role == UserRole.Admin ? "ADM" : "STU";
+        return $"EV-{roleCode}-{user.UserNumber:D4}";
+    }
+
+    private static UserProfileResponse ToProfileResponse(AppUser user) =>
+        new(
+            user.Id,
+            user.FullName,
+            user.Email,
+            user.Role.ToString(),
+            user.MustChangePassword,
+            user.PhoneNumber,
+            user.PhotoData is not null,
+            user.Username,
+            user.AlternateEmail,
+            user.Gender?.ToString(),
+            user.DateOfBirth,
+            user.Location,
+            user.Department,
+            user.LastLoginAtUtc,
+            user.CreatedAtUtc,
+            FormatUserId(user),
+            user.IsActive);
 }

@@ -9,6 +9,7 @@ public class RefreshToken : BaseEntity
     public DateTime ExpiresAtUtc { get; set; }
     public DateTime? RevokedAtUtc { get; set; }
     public string? DeviceLabel { get; set; }
+    public string? IpAddress { get; set; }
 
     public bool IsActive => RevokedAtUtc is null && ExpiresAtUtc > DateTime.UtcNow;
 }

@@ -61,7 +61,9 @@ public class LoginUserHandler
             TokenHash = _jwtTokenService.HashToken(refreshToken),
             ExpiresAtUtc = _jwtTokenService.GetRefreshTokenExpiry(),
             DeviceLabel = UserAgentDeviceParser.Describe(command.UserAgent),
+            IpAddress = command.IpAddress,
         }, cancellationToken);
+        user.LastLoginAtUtc = DateTime.UtcNow;
         await _userRepository.SaveChangesAsync(cancellationToken);
 
         return LoginUserResult.Ok(user, accessToken, refreshToken);

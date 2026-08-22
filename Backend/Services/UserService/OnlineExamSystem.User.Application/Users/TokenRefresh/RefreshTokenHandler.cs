@@ -43,6 +43,7 @@ public class RefreshTokenHandler
             TokenHash = _jwtTokenService.HashToken(newRefreshToken),
             ExpiresAtUtc = _jwtTokenService.GetRefreshTokenExpiry(),
             DeviceLabel = UserAgentDeviceParser.Describe(command.UserAgent),
+            IpAddress = command.IpAddress,
         }, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
