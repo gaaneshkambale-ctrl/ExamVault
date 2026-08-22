@@ -86,6 +86,10 @@ export async function getMySessions(): Promise<UserSession[]> {
   return data;
 }
 
+export async function revokeSession(sessionId: string): Promise<void> {
+  await apiClient.post(`/api/users/me/sessions/${sessionId}/revoke`);
+}
+
 export async function revokeOtherSessions(): Promise<void> {
   await apiClient.post(
     '/api/users/me/sessions/revoke-others',

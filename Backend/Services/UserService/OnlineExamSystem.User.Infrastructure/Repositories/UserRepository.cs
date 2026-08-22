@@ -56,6 +56,17 @@ public class UserRepository : IUserRepository
             .Where(t => t.UserId == userId && t.RevokedAtUtc == null && t.TokenHash != currentTokenHash)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, DateTime.UtcNow), cancellationToken);
 
+    public async Task<bool> RevokeRefreshTokenByIdAsync(
+        Guid userId,
+        Guid tokenId,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = await _dbContext.RefreshTokens
+            .Where(t => t.Id == tokenId && t.UserId == userId && t.RevokedAtUtc == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAtUtc, DateTime.UtcNow), cancellationToken);
+        return rows > 0;
+    }
+
     public async Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(
         Guid userId,
         CancellationToken cancellationToken = default) =>

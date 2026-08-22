@@ -58,6 +58,7 @@ public class UserDbContext : DbContext
             entity.Property(p => p.Timezone).HasMaxLength(100);
             entity.Property(p => p.DateFormat).HasMaxLength(50);
             entity.Property(p => p.TimeFormat).HasConversion<string>();
+            entity.Property(p => p.Theme).HasConversion<string>();
         });
 
         modelBuilder.Entity<Group>(entity =>

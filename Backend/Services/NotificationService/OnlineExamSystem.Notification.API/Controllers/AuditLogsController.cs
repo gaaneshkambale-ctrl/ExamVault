@@ -72,14 +72,21 @@ public class AuditLogsController : ControllerBase
     // client, so a non-admin can never see anyone else's activity.
     [HttpGet("mine")]
     [Authorize]
-    public async Task<IActionResult> ListMine(CancellationToken cancellationToken)
+    public async Task<IActionResult> ListMine(
+        [FromQuery] DateTime? fromUtc,
+        [FromQuery] DateTime? toUtc,
+        [FromQuery] string? module,
+        CancellationToken cancellationToken = default)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var toUtc = DateTime.UtcNow;
-        var fromUtc = toUtc.AddYears(-1);
+        var resolvedToUtc = toUtc ?? DateTime.UtcNow;
+        var resolvedFromUtc = fromUtc ?? resolvedToUtc.AddYears(-1);
+        AuditModule? parsedModule = string.IsNullOrWhiteSpace(module)
+            ? null
+            : Enum.Parse<AuditModule>(module, ignoreCase: true);
 
         var items = await _listAuditLogsHandler.HandleAsync(
-            new ListAuditLogsQuery(fromUtc, toUtc, Module: null, UserId: userId), cancellationToken);
+            new ListAuditLogsQuery(resolvedFromUtc, resolvedToUtc, parsedModule, UserId: userId), cancellationToken);
 
         return Ok(items.Select(ToResponse).ToList());
     }

@@ -44,12 +44,14 @@ export interface UpdateMyProfileRequest {
 }
 
 export type TimeFormat = 'Hour12' | 'Hour24';
+export type AppTheme = 'Light' | 'Dark' | 'System';
 
 export interface UserPreferences {
   language: string;
   timezone: string;
   dateFormat: string;
   timeFormat: TimeFormat;
+  theme: AppTheme;
 }
 
 export interface LoginRequest {

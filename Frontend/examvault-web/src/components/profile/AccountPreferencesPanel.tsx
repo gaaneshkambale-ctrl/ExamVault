@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Form, Spinner } from 'react-bootstrap';
+import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { getMyPreferences, updateMyPreferences } from '../../api/userApi';
-import type { TimeFormat } from '../../types/user';
+import { useTheme } from '../../hooks/useTheme';
+import type { AppTheme, TimeFormat } from '../../types/user';
 
 const LANGUAGES = ['English (United States)', 'English (United Kingdom)', 'Hindi', 'Spanish', 'French'];
 const TIMEZONES = ['UTC', '(GMT+05:30) Asia/Kolkata', '(GMT-05:00) America/New_York', '(GMT+00:00) Europe/London'];
 const DATE_FORMATS = ['DD MMM YYYY', 'MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD'];
+const THEMES: AppTheme[] = ['Light', 'Dark', 'System'];
 
 // Per-user preferences, genuinely distinct from the global Settings > General
 // page built for the Settings hub - that's one org-wide row, this is the
-// signed-in user's own.
+// signed-in user's own. Theme applies live (via the app-wide ThemeProvider)
+// as soon as it's picked; the rest save together with the button below.
 export default function AccountPreferencesPanel() {
+  const { theme, setTheme } = useTheme();
   const [language, setLanguage] = useState(LANGUAGES[0]);
   const [timezone, setTimezone] = useState(TIMEZONES[0]);
   const [dateFormat, setDateFormat] = useState(DATE_FORMATS[0]);
@@ -25,9 +29,13 @@ export default function AccountPreferencesPanel() {
         setTimezone(prefs.timezone);
         setDateFormat(prefs.dateFormat);
         setTimeFormat(prefs.timeFormat);
+        setTheme(prefs.theme);
         setStatus('idle');
       })
       .catch(() => setStatus('error'));
+    // Only sync from the server once on mount - after that, theme changes
+    // flow the other way (user picks -> context -> saved on submit).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -39,11 +47,12 @@ export default function AccountPreferencesPanel() {
   const handleSave = async () => {
     setStatus('saving');
     try {
-      const updated = await updateMyPreferences({ language, timezone, dateFormat, timeFormat });
+      const updated = await updateMyPreferences({ language, timezone, dateFormat, timeFormat, theme });
       setLanguage(updated.language);
       setTimezone(updated.timezone);
       setDateFormat(updated.dateFormat);
       setTimeFormat(updated.timeFormat);
+      setTheme(updated.theme);
       setStatus('success');
     } catch {
       setStatus('error');
@@ -53,7 +62,7 @@ export default function AccountPreferencesPanel() {
   return (
     <Card className="border-0 shadow-sm h-100">
       <Card.Body className="p-4">
-        <h2 className="h6 fw-bold mb-3">Account Preferences</h2>
+        <h2 className="h6 fw-bold mb-3">Appearance</h2>
 
         {status === 'success' && (
           <Alert variant="success" className="py-2">
@@ -72,6 +81,23 @@ export default function AccountPreferencesPanel() {
           </div>
         ) : (
           <>
+            <Form.Group className="mb-3">
+              <Form.Label className="small text-muted d-block">Theme</Form.Label>
+              <Row className="g-2">
+                {THEMES.map((t) => (
+                  <Col xs={4} key={t}>
+                    <Button
+                      variant={theme === t ? 'primary' : 'outline-secondary'}
+                      className="w-100"
+                      onClick={() => setTheme(t)}
+                    >
+                      {t}
+                    </Button>
+                  </Col>
+                ))}
+              </Row>
+            </Form.Group>
+
             <Form.Group className="mb-3">
               <Form.Label className="small text-muted">Language</Form.Label>
               <Form.Select value={language} onChange={(e) => setLanguage(e.target.value)}>

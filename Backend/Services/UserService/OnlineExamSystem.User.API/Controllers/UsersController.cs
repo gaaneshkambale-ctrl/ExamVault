@@ -17,6 +17,7 @@ using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
 using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
+using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
@@ -49,6 +50,7 @@ public class UsersController : ControllerBase
     private readonly UpdateMyPhotoHandler _updateMyPhotoHandler;
     private readonly GetMySessionsHandler _getMySessionsHandler;
     private readonly RevokeOtherSessionsHandler _revokeOtherSessionsHandler;
+    private readonly RevokeSessionHandler _revokeSessionHandler;
     private readonly GetMyPreferencesHandler _getMyPreferencesHandler;
     private readonly UpdateMyPreferencesHandler _updateMyPreferencesHandler;
     private readonly IAuditClient _auditClient;
@@ -81,6 +83,7 @@ public class UsersController : ControllerBase
         UpdateMyPhotoHandler updateMyPhotoHandler,
         GetMySessionsHandler getMySessionsHandler,
         RevokeOtherSessionsHandler revokeOtherSessionsHandler,
+        RevokeSessionHandler revokeSessionHandler,
         GetMyPreferencesHandler getMyPreferencesHandler,
         UpdateMyPreferencesHandler updateMyPreferencesHandler,
         IAuditClient auditClient,
@@ -103,6 +106,7 @@ public class UsersController : ControllerBase
         _updateMyPhotoHandler = updateMyPhotoHandler;
         _getMySessionsHandler = getMySessionsHandler;
         _revokeOtherSessionsHandler = revokeOtherSessionsHandler;
+        _revokeSessionHandler = revokeSessionHandler;
         _getMyPreferencesHandler = getMyPreferencesHandler;
         _updateMyPreferencesHandler = updateMyPreferencesHandler;
         _auditClient = auditClient;
@@ -517,7 +521,7 @@ public class UsersController : ControllerBase
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var preferences = await _getMyPreferencesHandler.HandleAsync(new GetMyPreferencesQuery(userId), cancellationToken);
         return Ok(new UserPreferencesResponse(
-            preferences.Language, preferences.Timezone, preferences.DateFormat, preferences.TimeFormat.ToString()));
+            preferences.Language, preferences.Timezone, preferences.DateFormat, preferences.TimeFormat.ToString(), preferences.Theme.ToString()));
     }
 
     [Authorize]
@@ -526,10 +530,10 @@ public class UsersController : ControllerBase
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var preferences = await _updateMyPreferencesHandler.HandleAsync(
-            new UpdateMyPreferencesCommand(userId, request.Language, request.Timezone, request.DateFormat, request.TimeFormat),
+            new UpdateMyPreferencesCommand(userId, request.Language, request.Timezone, request.DateFormat, request.TimeFormat, request.Theme),
             cancellationToken);
         return Ok(new UserPreferencesResponse(
-            preferences.Language, preferences.Timezone, preferences.DateFormat, preferences.TimeFormat.ToString()));
+            preferences.Language, preferences.Timezone, preferences.DateFormat, preferences.TimeFormat.ToString(), preferences.Theme.ToString()));
     }
 
     // Self-service counterpart to the admin-only {id}/deactivate above.
@@ -658,6 +662,25 @@ public class UsersController : ControllerBase
             cancellationToken);
 
         _logger.LogInformation("User {UserId} signed out their other sessions.", userId);
+        return NoContent();
+    }
+
+    // Per-row Sign Out - single-session counterpart to revoke-others above.
+    // The handler enforces ownership (userId + sessionId must match the same
+    // row), so a user can never revoke someone else's session by guessing an id.
+    [Authorize]
+    [HttpPost("me/sessions/{id:guid}/revoke")]
+    public async Task<IActionResult> RevokeSession(Guid id, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var revoked = await _revokeSessionHandler.HandleAsync(new RevokeSessionCommand(userId, id), cancellationToken);
+
+        if (!revoked)
+        {
+            return NotFound(new { message = "Session not found." });
+        }
+
+        _logger.LogInformation("User {UserId} signed out session {SessionId}.", userId, id);
         return NoContent();
     }
 

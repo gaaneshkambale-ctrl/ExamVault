@@ -14,6 +14,11 @@ public interface IUserRepository
     Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
     Task RevokeAllRefreshTokensForUserAsync(Guid userId, CancellationToken cancellationToken = default);
     Task RevokeOtherRefreshTokensForUserAsync(Guid userId, string currentTokenHash, CancellationToken cancellationToken = default);
+
+    /// <summary>Revokes exactly one of the given user's own sessions. No-ops if the
+    /// token id doesn't belong to that user (ownership check, not a lookup by id
+    /// alone) or is already revoked. Returns true if a row was actually revoked.</summary>
+    Task<bool> RevokeRefreshTokenByIdAsync(Guid userId, Guid tokenId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the given user's single UserPreferences row, creating it

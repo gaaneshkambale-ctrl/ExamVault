@@ -26,6 +26,7 @@ using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.GetMySessions;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
 using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
+using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
@@ -96,6 +97,7 @@ public class Program
         builder.Services.AddScoped<UpdateMyPhotoHandler>();
         builder.Services.AddScoped<GetMySessionsHandler>();
         builder.Services.AddScoped<RevokeOtherSessionsHandler>();
+        builder.Services.AddScoped<RevokeSessionHandler>();
 
         builder.Services.AddScoped<IValidator<CreateGroupCommand>, CreateGroupValidator>();
         builder.Services.AddScoped<CreateGroupHandler>();

@@ -8,6 +8,7 @@ import ProfileAvatarIllustration from '../components/illustrations/ProfileAvatar
 import PersonalInfoPanel from '../components/profile/PersonalInfoPanel';
 import AccountPreferencesPanel from '../components/profile/AccountPreferencesPanel';
 import ChangePasswordForm from '../components/profile/ChangePasswordForm';
+import SecuritySettingsCard from '../components/profile/SecuritySettingsCard';
 import SessionsPanel from '../components/profile/SessionsPanel';
 import ActivityLogPanel from '../components/profile/ActivityLogPanel';
 import QuickActionsCard from '../components/profile/QuickActionsCard';
@@ -190,17 +191,28 @@ export default function Profile() {
             <Card.Body className="p-4">
               <Tabs defaultActiveKey="profile-information" className="mb-4">
                 <Tab eventKey="profile-information" title="Profile Information">
-                  <div className="mb-4">
-                    <h2 className="h6 fw-bold mb-3">Personal Information</h2>
-                    <PersonalInfoPanel />
-                  </div>
-                  <AccountPreferencesPanel />
+                  <h2 className="h6 fw-bold mb-3">Personal Information</h2>
+                  <PersonalInfoPanel />
                 </Tab>
                 <Tab eventKey="security" title="Security">
-                  <ChangePasswordForm />
+                  <Row className="g-4">
+                    <Col xs={12} lg={6}>
+                      <ChangePasswordForm />
+                    </Col>
+                    <Col xs={12} lg={6}>
+                      <SecuritySettingsCard />
+                    </Col>
+                  </Row>
                 </Tab>
                 <Tab eventKey="preferences" title="Preferences">
-                  <NotificationPreferencesPanel />
+                  <Row className="g-4">
+                    <Col xs={12} lg={6}>
+                      <AccountPreferencesPanel />
+                    </Col>
+                    <Col xs={12} lg={6}>
+                      <NotificationPreferencesPanel />
+                    </Col>
+                  </Row>
                 </Tab>
                 <Tab eventKey="sessions" title="Sessions">
                   <SessionsPanel />

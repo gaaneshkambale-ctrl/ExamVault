@@ -13,7 +13,13 @@ export async function getAuditLogs(
   return data;
 }
 
-export async function getMyAuditLogs(): Promise<AuditLogResponse[]> {
-  const { data } = await apiClient.get<AuditLogResponse[]>('/api/audit-logs/mine');
+export async function getMyAuditLogs(
+  fromUtc?: string,
+  toUtc?: string,
+  module?: AuditModule,
+): Promise<AuditLogResponse[]> {
+  const { data } = await apiClient.get<AuditLogResponse[]>('/api/audit-logs/mine', {
+    params: { fromUtc, toUtc, module },
+  });
   return data;
 }

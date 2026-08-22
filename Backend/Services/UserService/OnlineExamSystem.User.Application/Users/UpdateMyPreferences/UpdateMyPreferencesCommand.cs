@@ -5,4 +5,5 @@ public record UpdateMyPreferencesCommand(
     string Language,
     string Timezone,
     string DateFormat,
-    string TimeFormat);
+    string TimeFormat,
+    string Theme = "System");

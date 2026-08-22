@@ -4877,3 +4877,134 @@ the real Admin user):
   browser automation, but the data it's built from is confirmed real).
 No gaps found; feature matches the mockup and plan as built, with the
 two documented deviations above.
+
+FEATURE (DONE, 2026-08-22): Security/Preferences/Sessions/Activity
+Log tab redesign (fourpage.png)
+=====================================================================
+REQUESTED: user supplied fourpage.png (4 separate mockup screens: full
+Security/Preferences/Sessions/Activity Log page layouts) asking to
+update those 4 tabs on the existing Profile page to match. Asked one
+scope question since the mockup packs in several genuinely new
+subsystems (2FA, Trusted Devices, Account Recovery Email, IP-
+restricted login, a full Light/Dark/color theme picker, Dashboard
+Preferences) - user chose the bounded option PLUS real Light/Dark/
+System theme switching app-wide (not just this page).
+
+OUT OF SCOPE this round (shown nowhere, not faked as inert toggles):
+Two-Factor Authentication, Trusted Devices, Account Recovery Email,
+Restrict-Login-to-IP, the Primary Color picker, Dashboard Preferences
+(Default Dashboard/Items Per Page/Compact View). Each is a real
+standalone feature (2FA and IP-restriction are security-sensitive
+enough to deserve their own dedicated round, not a bundled add-on to a
+visual redesign). Sessions/Activity Log "Location" columns stay
+omitted too (same GeoIP gap as the last round).
+
+CORRECTION from the previous round: profile.png (single frame) didn't
+show what the Preferences tab actually contained, so Account
+Preferences (Language/Timezone/Date/Time Format) was placed under the
+"Profile Information" tab as a guess. fourpage.png now shows the real
+Preferences page layout (Appearance + Notifications side by side), so
+AccountPreferencesPanel moves there, and "Profile Information" reverts
+to just the Personal Information form. Real Theme joins Appearance
+there too.
+
+BACKEND (UserService):
+- UserPreferences gains Theme (new enum Light/Dark/System, default
+  System). Get/UpdateMyPreferences + contracts extended.
+- New IUserRepository.RevokeRefreshTokenAsync(userId, tokenId) -
+  revokes exactly one of the caller's own sessions (checks ownership -
+  can't revoke someone else's token by guessing an id). New endpoint
+  POST api/users/me/sessions/{id}/revoke, powering the mockup's
+  per-row Sign Out.
+- Migration for the new Theme column.
+
+BACKEND (NotificationService):
+- AuditLogsController.ListMine gains optional fromUtc/toUtc query
+  params (default stays the existing 1-year window when omitted) -
+  powers the Activity Log date-range filter for real, server-side.
+
+FRONTEND:
+- New ThemeContext/ThemeProvider (localStorage-cached for instant
+  apply + synced to the new per-user backend field once loaded),
+  applying Bootstrap 5.3's native data-bs-theme attribute on
+  <html> - real, app-wide, though custom-hardcoded-hex-color elements
+  (sidebar, brand accents) won't reskin since they're not Bootstrap
+  CSS-variable-driven; only bootstrap components/react-bootstrap
+  components genuinely change. Flagged here as an honest limit, not
+  hidden.
+- AccountPreferencesPanel: gains the Theme selector (Light/Dark/
+  System), moves from the "Profile Information" tab to "Preferences".
+- NotificationPreferencesPanel: drops its old local-only-fake Theme
+  and display-only Language pickers (redundant/contradictory now that
+  the real versions live in AccountPreferencesPanel on the same tab).
+  Per-type rows gain a real Email toggle alongside the existing
+  In-App toggle (the backend already returns emailEnabled per type;
+  the old UI just never exposed a control for it) - a more accurate
+  real mapping of the mockup's "Email/In-App Notifications" section
+  than trying to force two master switches onto genuinely per-type
+  data.
+- Profile.tsx: "Preferences" tab becomes AccountPreferencesPanel +
+  NotificationPreferencesPanel side by side; "Profile Information"
+  reverts to just PersonalInfoPanel.
+- SessionsPanel: restructured into a "Current Session" card + "Other
+  Active Sessions" table with a real per-row Sign Out action (new
+  endpoint) plus the existing bulk "Sign Out All Other Sessions".
+  Column stays "Signed In" (real issuedAtUtc), not "Last Active" (no
+  heartbeat tracking exists) - same honest label as last round.
+- ActivityLogPanel: real date-range filter (two date inputs -> the
+  new fromUtc/toUtc params), a Module filter dropdown (the mockup's
+  finer-grained "Login Success/Password Changed/..." activity-type
+  filter doesn't exist server-side - Module is the real filter
+  granularity that does, e.g. Auth/Users/Exams/Security), a real CSV
+  Export button (client-side, composed from the currently-filtered,
+  already-fetched rows - same pattern as Download My Data), and
+  client-side pagination reusing the existing TablePagination
+  component.
+- ChangePasswordForm: adds real show/hide toggles on the three
+  password fields; restyled into the Security tab's two-column layout
+  alongside a trimmed "Security Settings" card containing only what's
+  real - "Logout from All Other Devices" (the existing
+  revokeOtherSessions action, relabeled/relocated here to match the
+  mockup, not duplicated).
+
+VERIFICATION (2026-08-22): dotnet build (UserService + NotificationService
++ full ExamVault.sln) - 0 errors/warnings. dotnet test - UserService
+51/51 passed (FakeUserRepository updated for the new
+RevokeRefreshTokenByIdAsync method), NotificationService 22/22 passed.
+Frontend: tsc --noEmit and oxlint clean, vite build succeeds. EF
+migration AddUserPreferencesTheme applied for real via `docker compose
+build/up user-api` (default value corrected from EF's generated "" to
+"System" to match the entity default, same class of fix as the
+Settings-hub round's SessionTimeoutMinutes). notification-api and
+frontend redeployed for the audit-logs/mine date-range params and the
+UI changes; no Gateway changes needed (every new route sits under an
+existing catch-all).
+
+Live browser verification against the real running stack (as the real
+Admin user):
+- Profile Information tab correctly reverted to just Personal
+  Information (Account Preferences no longer duplicated there).
+- Security tab: two-column Change Password + Security Settings
+  (Logout All) layout confirmed.
+- Preferences tab: Appearance (Theme/Language/Timezone/Date+Time
+  Format) and Notifications (real per-type Email + In-App toggles)
+  side by side, matching the mockup's layout.
+- Theme: clicking Dark applied data-bs-theme="dark" to <html>
+  immediately (confirmed via DOM query); Save Preferences fired a real
+  PUT (200); a full page reload confirmed the theme persisted (still
+  "dark" after reload, Dark button showing as selected) - genuinely
+  real, app-wide (for Bootstrap-driven components), not local-only.
+- Sessions tab: per-row Sign Out confirmed via network log - POST
+  .../sessions/{id}/revoke returned 204 and the list refreshed
+  immediately.
+- Activity Log tab: confirmed real IP Address column populated,
+  module filter dropdown present, Export button ran with no error
+  (real CSV composed from already-fetched data), and changing the
+  from-date filter fired a new real GET with the updated
+  fromUtc/toUtc query params (confirmed via network log) - both
+  server-side date filtering and the existing 1-year default still
+  work.
+No gaps found; feature matches the mockup and plan as built, with the
+documented out-of-scope items (2FA, Trusted Devices, Account Recovery
+Email, Restrict-Login-to-IP, Primary Color picker, Dashboard
+Preferences, Location columns) genuinely absent rather than faked.
