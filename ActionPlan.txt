@@ -4443,3 +4443,34 @@ verification against the real running stack:
   correctly presets both Title/Message AND the Delivery Channels
   dropdown from the template's own SendEmail/SendInApp defaults.
 No gaps found; feature matches the mockup and plan as built.
+
+FIX (DONE, 2026-08-22): Remove duplicate Change Password from Admin
+Settings
+=====================================================================
+REQUESTED: user pointed out /admin/settings had its own "Change
+Password" card (calling the admin-reset-style resetUserPassword(user.id,
+...) endpoint, no current-password check) that duplicated the Change
+Password form already on Profile > Security (ChangePasswordForm.tsx,
+calls changeMyPassword with current-password verification - the
+safer, more correct flow). Removed the Admin Settings card entirely
+rather than keeping a second weaker path to the same action.
+
+CHANGE: AdminSettings.tsx - deleted the Change Password Card/Col and
+all its state (newPassword/confirmPassword/fieldError/status/
+serverError), the success-timeout effect for that status, the
+`if (!user) return null` guard and useAuth() call (both only existed
+for the password form), the requirements array, handleSubmit, and the
+now-unused resetUserPassword/extractServerError imports. Remaining
+Notification Settings/Exam Reminders/AI Proctoring cards widened from
+Col lg={5} to Col lg={8} (single column, was previously the narrower
+half of a two-column layout) since there's no longer a second column
+sharing the row. resetUserPassword itself stays in userApi.ts - still
+used for real by admin/ResetPassword.tsx (resetting OTHER users'
+passwords from Manage Users, a distinct legitimate flow, not touched).
+
+VERIFICATION: tsc --noEmit and oxlint clean, vite build succeeds.
+Rebuilt/redeployed the frontend container. Live browser check:
+/admin/settings no longer shows any password card (Notification
+Settings/Exam Reminders/AI Proctoring render fine at the new width);
+/profile Security tab still has the real Change Password form,
+unaffected.
