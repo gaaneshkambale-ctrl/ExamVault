@@ -40,6 +40,29 @@ public class CreateExamHandlerTests
     }
 
     [Fact]
+    public async Task ExamCode_is_auto_generated_from_category_and_year()
+    {
+        var repository = new FakeExamRepository();
+        var handler = CreateHandler(repository);
+        var command = new CreateExamCommand(
+            "C# Fundamentals",
+            "Covers the basics of C#.",
+            "Technical",
+            false,
+            "Manual",
+            60,
+            50,
+            25,
+            "Answer all questions.",
+            Guid.NewGuid());
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.Matches($@"^TEC-{DateTime.UtcNow.Year}-[0-9A-F]{{6}}$", result.Exam!.ExamCode);
+    }
+
+    [Fact]
     public async Task Invalid_command_returns_validation_errors_without_saving()
     {
         var repository = new FakeExamRepository();

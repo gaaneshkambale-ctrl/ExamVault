@@ -30,7 +30,6 @@ public class CreateExamHandler
         var exam = new ExamPaper
         {
             Title = command.Title,
-            ExamCode = string.IsNullOrWhiteSpace(command.ExamCode) ? null : command.ExamCode.Trim(),
             Description = command.Description,
             Category = command.Category,
             ContainsSections = command.ContainsSections,
@@ -41,10 +40,26 @@ public class CreateExamHandler
             Instructions = command.Instructions,
             CreatedByUserId = command.CreatedByUserId,
         };
+        exam.ExamCode = GenerateExamCode(command.Category, exam.Id);
 
         await _examRepository.AddAsync(exam, cancellationToken);
         await _examRepository.SaveChangesAsync(cancellationToken);
 
         return CreateExamResult.Ok(exam);
+    }
+
+    /// <summary>Admins no longer type an Exam Code - it's derived from the exam's own
+    /// newly-assigned Id, which is already unique, so this needs no DB round-trip or
+    /// counter table and can never collide.</summary>
+    private static string GenerateExamCode(string category, Guid examId)
+    {
+        var prefix = new string(category.Where(char.IsLetter).Take(3).ToArray()).ToUpperInvariant();
+        if (prefix.Length == 0)
+        {
+            prefix = "EXM";
+        }
+
+        var suffix = examId.ToString("N")[..6].ToUpperInvariant();
+        return $"{prefix}-{DateTime.UtcNow.Year}-{suffix}";
     }
 }
