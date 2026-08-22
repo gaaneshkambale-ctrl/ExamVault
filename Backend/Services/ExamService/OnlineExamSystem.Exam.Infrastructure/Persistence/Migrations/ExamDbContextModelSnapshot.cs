@@ -166,6 +166,10 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("EndAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ExamCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<int>("ExamType")
                         .HasColumnType("int");
 

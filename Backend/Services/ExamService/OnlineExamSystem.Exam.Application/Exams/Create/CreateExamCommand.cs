@@ -10,4 +10,5 @@ public record CreateExamCommand(
     int TotalMarks,
     int PassingMarks,
     string Instructions,
-    Guid CreatedByUserId);
+    Guid CreatedByUserId,
+    string? ExamCode = null);

@@ -3,6 +3,8 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Notification.Application.Audit.Admin.ListAuditLogs;
+using OnlineExamSystem.Notification.Application.Audit.RecordAuditLog;
 using OnlineExamSystem.Notification.Application.Interfaces;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.CreateNotification;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.DeleteNotificationBatch;
@@ -38,6 +40,9 @@ public class Program
         builder.Services.AddDbContext<NotificationDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationDb")));
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+        builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        builder.Services.AddScoped<RecordAuditLogHandler>();
+        builder.Services.AddScoped<ListAuditLogsHandler>();
 
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();

@@ -53,6 +53,11 @@ public class Program
             options.UseSqlServer(builder.Configuration.GetConnectionString("ExamDb")));
         builder.Services.AddScoped<IExamRepository, ExamRepository>();
 
+        var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
+
         var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
         // Trailing slash is required: HttpClient/Uri combine a relative request path against

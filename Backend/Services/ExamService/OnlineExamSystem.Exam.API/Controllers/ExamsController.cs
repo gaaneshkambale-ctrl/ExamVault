@@ -7,6 +7,7 @@ using OnlineExamSystem.Exam.Application.Exams.Delete;
 using OnlineExamSystem.Exam.Application.Exams.GetById;
 using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Exams.Update;
+using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Exam.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
@@ -25,6 +26,7 @@ public class ExamsController : ControllerBase
     private readonly UpdateExamHandler _updateExamHandler;
     private readonly ChangeExamStatusHandler _changeExamStatusHandler;
     private readonly DeleteExamHandler _deleteExamHandler;
+    private readonly IAuditClient _auditClient;
     private readonly ILogger<ExamsController> _logger;
 
     public ExamsController(
@@ -34,6 +36,7 @@ public class ExamsController : ControllerBase
         UpdateExamHandler updateExamHandler,
         ChangeExamStatusHandler changeExamStatusHandler,
         DeleteExamHandler deleteExamHandler,
+        IAuditClient auditClient,
         ILogger<ExamsController> logger)
     {
         _createExamHandler = createExamHandler;
@@ -42,6 +45,7 @@ public class ExamsController : ControllerBase
         _updateExamHandler = updateExamHandler;
         _changeExamStatusHandler = changeExamStatusHandler;
         _deleteExamHandler = deleteExamHandler;
+        _auditClient = auditClient;
         _logger = logger;
     }
 
@@ -60,7 +64,8 @@ public class ExamsController : ControllerBase
             request.TotalMarks,
             request.PassingMarks,
             request.Instructions,
-            createdByUserId);
+            createdByUserId,
+            request.ExamCode);
 
         var result = await _createExamHandler.HandleAsync(command, cancellationToken);
 
@@ -79,6 +84,15 @@ public class ExamsController : ControllerBase
 
         var exam = result.Exam!;
         _logger.LogInformation("Exam {ExamId} created by {UserId}.", exam.Id, createdByUserId);
+        await _auditClient.RecordAsync(
+            "Exams",
+            "Created exam",
+            exam.Title,
+            exam.Id.ToString(),
+            createdByUserId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return StatusCode(StatusCodes.Status201Created, ToResponse(exam));
     }
 
@@ -134,7 +148,8 @@ public class ExamsController : ControllerBase
             request.AllowCalculator,
             request.AllowNotes,
             request.AutoSubmitOnTimeEnd,
-            request.ConfirmBeforeSubmit);
+            request.ConfirmBeforeSubmit,
+            request.ExamCode);
 
         var result = await _updateExamHandler.HandleAsync(command, cancellationToken);
 
@@ -210,6 +225,18 @@ public class ExamsController : ControllerBase
         }
 
         _logger.LogInformation("Exam {ExamId} moved to {Status}.", id, targetStatus);
+        if (targetStatus == ExamStatus.Published)
+        {
+            await _auditClient.RecordAsync(
+                "Exams",
+                "Published exam",
+                result.Exam!.Title,
+                id.ToString(),
+                Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!),
+                User.FindFirstValue(ClaimTypes.Email),
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
+        }
         return Ok(ToResponse(result.Exam!));
     }
 
@@ -217,6 +244,7 @@ public class ExamsController : ControllerBase
         new(
             exam.Id,
             exam.Title,
+            exam.ExamCode,
             exam.Description,
             exam.Category,
             exam.ContainsSections,

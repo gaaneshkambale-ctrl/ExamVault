@@ -213,6 +213,7 @@ resource userApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'ServiceBus__ConnectionString', secretRef: 'servicebus-connection' }
             { name: 'ServiceBus__TopicName', value: 'examvault.events' }
             { name: 'N8n__WebhookUrl', secretRef: 'n8n-webhook-url' }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]
@@ -266,6 +267,7 @@ resource examApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'ServiceBus__TopicName', value: 'examvault.events' }
             { name: 'Services__UserServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/user-api/method' }
             { name: 'Services__QuestionServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/question-api/method' }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]
@@ -313,6 +315,7 @@ resource questionApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Jwt__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'Jwt__AccessTokenMinutes', value: '15' }
             { name: 'Jwt__RefreshTokenDays', value: '7' }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]

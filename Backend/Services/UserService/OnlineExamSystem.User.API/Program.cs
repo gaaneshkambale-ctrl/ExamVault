@@ -32,6 +32,7 @@ using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
 using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Infrastructure.Authentication;
+using OnlineExamSystem.User.Infrastructure.Clients;
 using OnlineExamSystem.User.Infrastructure.Email;
 using OnlineExamSystem.User.Infrastructure.Messaging;
 using OnlineExamSystem.User.Infrastructure.Persistence;
@@ -61,6 +62,11 @@ public class Program
         builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
+
+        var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
         builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
         builder.Services.AddScoped<RegisterUserHandler>();
         builder.Services.AddScoped<GetUserProfileHandler>();

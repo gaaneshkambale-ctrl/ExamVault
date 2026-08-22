@@ -58,6 +58,7 @@ public class CreateUserHandler
             Role = Enum.Parse<UserRole>(command.Role, ignoreCase: true),
             IsActive = command.IsActive,
             PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim(),
+            RollNumber = string.IsNullOrWhiteSpace(command.RollNumber) ? null : command.RollNumber.Trim(),
             MustChangePassword = true,
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, temporaryPassword);

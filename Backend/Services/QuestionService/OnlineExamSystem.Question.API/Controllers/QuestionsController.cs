@@ -9,6 +9,7 @@ using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
+using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Question;
 using OnlineExamSystem.Shared.Contracts.Responses.Question;
@@ -27,6 +28,7 @@ public class QuestionsController : ControllerBase
     private readonly DeleteQuestionHandler _deleteQuestionHandler;
     private readonly BulkAssignSectionHandler _bulkAssignSectionHandler;
     private readonly UnassignSectionHandler _unassignSectionHandler;
+    private readonly IAuditClient _auditClient;
     private readonly ILogger<QuestionsController> _logger;
 
     public QuestionsController(
@@ -37,6 +39,7 @@ public class QuestionsController : ControllerBase
         DeleteQuestionHandler deleteQuestionHandler,
         BulkAssignSectionHandler bulkAssignSectionHandler,
         UnassignSectionHandler unassignSectionHandler,
+        IAuditClient auditClient,
         ILogger<QuestionsController> logger)
     {
         _createQuestionHandler = createQuestionHandler;
@@ -46,6 +49,7 @@ public class QuestionsController : ControllerBase
         _deleteQuestionHandler = deleteQuestionHandler;
         _bulkAssignSectionHandler = bulkAssignSectionHandler;
         _unassignSectionHandler = unassignSectionHandler;
+        _auditClient = auditClient;
         _logger = logger;
     }
 
@@ -85,6 +89,15 @@ public class QuestionsController : ControllerBase
             question.Id,
             request.ExamId,
             createdByUserId);
+        await _auditClient.RecordAsync(
+            "Questions",
+            "Created question",
+            request.QuestionText,
+            question.Id.ToString(),
+            createdByUserId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return StatusCode(StatusCodes.Status201Created, ToResponse(question, result.Options, revealAnswers: true));
     }
 

@@ -22,4 +22,5 @@ public record UpdateExamRequest(
     bool AllowCalculator,
     bool AllowNotes,
     bool AutoSubmitOnTimeEnd,
-    bool ConfirmBeforeSubmit);
+    bool ConfirmBeforeSubmit,
+    string? ExamCode = null);

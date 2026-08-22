@@ -12,6 +12,7 @@ import ExamWizardStepper from '../../components/ExamWizardStepper';
 
 const initialFormState: CreateExamRequest = {
   title: '',
+  examCode: '',
   description: '',
   category: '',
   containsSections: false,
@@ -74,7 +75,7 @@ export default function CreateExam() {
         <Card.Body className="p-4">
           <Form noValidate onSubmit={handleSubmit}>
             <Row>
-              <Col md={8}>
+              <Col md={6}>
                 <Form.Group className="mb-3" controlId="examTitle">
                   <Form.Label className="fw-bold">Exam Title</Form.Label>
                   <Form.Control
@@ -87,7 +88,18 @@ export default function CreateExam() {
                   <Form.Control.Feedback type="invalid">{fieldErrors.title}</Form.Control.Feedback>
                 </Form.Group>
               </Col>
-              <Col md={4}>
+              <Col md={3}>
+                <Form.Group className="mb-3" controlId="examCode">
+                  <Form.Label className="fw-bold">Exam Code</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="e.g. NET-2026-01"
+                    value={form.examCode ?? ''}
+                    onChange={(e) => updateField('examCode', e.target.value)}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={3}>
                 <Form.Group className="mb-3" controlId="examType">
                   <Form.Label className="fw-bold">Exam Type</Form.Label>
                   <Form.Select

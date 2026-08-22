@@ -52,6 +52,7 @@ export interface UserListItem {
   isActive: boolean;
   phoneNumber: string | null;
   hasPhoto: boolean;
+  rollNumber: string | null;
 }
 
 export interface CreateUserRequest {
@@ -60,6 +61,7 @@ export interface CreateUserRequest {
   role: UserRole;
   isActive: boolean;
   phoneNumber: string;
+  rollNumber?: string | null;
 }
 
 export interface UpdateUserRequest {
@@ -67,6 +69,7 @@ export interface UpdateUserRequest {
   email: string;
   role: UserRole;
   phoneNumber: string;
+  rollNumber?: string | null;
 }
 
 export interface ResetPasswordRequest {

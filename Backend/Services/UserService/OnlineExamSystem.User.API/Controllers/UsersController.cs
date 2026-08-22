@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
+using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
@@ -45,6 +46,7 @@ public class UsersController : ControllerBase
     private readonly UpdateMyPhotoHandler _updateMyPhotoHandler;
     private readonly GetMySessionsHandler _getMySessionsHandler;
     private readonly RevokeOtherSessionsHandler _revokeOtherSessionsHandler;
+    private readonly IAuditClient _auditClient;
     private readonly ILogger<UsersController> _logger;
 
     private static readonly HashSet<string> AllowedPhotoContentTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -74,6 +76,7 @@ public class UsersController : ControllerBase
         UpdateMyPhotoHandler updateMyPhotoHandler,
         GetMySessionsHandler getMySessionsHandler,
         RevokeOtherSessionsHandler revokeOtherSessionsHandler,
+        IAuditClient auditClient,
         ILogger<UsersController> logger)
     {
         _registerUserHandler = registerUserHandler;
@@ -93,6 +96,7 @@ public class UsersController : ControllerBase
         _updateMyPhotoHandler = updateMyPhotoHandler;
         _getMySessionsHandler = getMySessionsHandler;
         _revokeOtherSessionsHandler = revokeOtherSessionsHandler;
+        _auditClient = auditClient;
         _logger = logger;
     }
 
@@ -149,6 +153,15 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} logged in successfully.", user.Id);
+        await _auditClient.RecordAsync(
+            "Auth",
+            "User login",
+            null,
+            null,
+            user.Id,
+            user.FullName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         var profile = new UserProfileResponse(
             user.Id,
             user.FullName,
@@ -200,7 +213,8 @@ public class UsersController : ControllerBase
             request.Email,
             request.Role,
             request.IsActive,
-            request.PhoneNumber);
+            request.PhoneNumber,
+            request.RollNumber);
         var result = await _createUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.EmailAlreadyExists)
@@ -231,7 +245,13 @@ public class UsersController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateUserRequest request, CancellationToken cancellationToken)
     {
-        var command = new UpdateUserCommand(id, request.FullName, request.Email, request.Role, request.PhoneNumber);
+        var command = new UpdateUserCommand(
+            id,
+            request.FullName,
+            request.Email,
+            request.Role,
+            request.PhoneNumber,
+            request.RollNumber);
         var result = await _updateUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
@@ -258,6 +278,16 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} updated by admin.", id);
+        var adminId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await _auditClient.RecordAsync(
+            "Users",
+            "Updated user details",
+            result.User!.FullName,
+            id.ToString(),
+            adminId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return Ok(ToResponse(result.User!));
     }
 
@@ -575,7 +605,8 @@ public class UsersController : ControllerBase
             user.CreatedAtUtc,
             user.IsActive,
             user.PhoneNumber,
-            user.PhotoData is not null);
+            user.PhotoData is not null,
+            user.RollNumber);
 
     private static UserSessionResponse ToResponse(RefreshToken token)
     {

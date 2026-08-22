@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import Home from '../pages/Home';
 import Pricing from '../pages/Pricing';
 import About from '../pages/About';
@@ -35,8 +35,14 @@ import ActiveExams from '../pages/admin/liveMonitoring/ActiveExams';
 import StudentAttempts from '../pages/admin/liveMonitoring/StudentAttempts';
 import SecurityViolations from '../pages/admin/liveMonitoring/SecurityViolations';
 import Proctoring from '../pages/admin/liveMonitoring/Proctoring';
-import AdminResults from '../pages/admin/AdminResults';
+import ExamResults from '../pages/admin/ExamResults';
+import StudentResults from '../pages/admin/StudentResults';
+import ResultAnalytics from '../pages/admin/ResultAnalytics';
+import PublishResults from '../pages/admin/PublishResults';
 import AdminReports from '../pages/admin/AdminReports';
+import StudentReports from '../pages/admin/StudentReports';
+import PerformanceReports from '../pages/admin/PerformanceReports';
+import AuditReports from '../pages/admin/AuditReports';
 import AdminSettings from '../pages/admin/AdminSettings';
 import ExamReportDetails from '../pages/admin/ExamReportDetails';
 import StudentDashboard from '../pages/student/StudentDashboard';
@@ -306,19 +312,69 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="/admin/results" element={<Navigate to="/admin/results/exams" replace />} />
       <Route
-        path="/admin/results"
+        path="/admin/results/exams"
         element={
           <ProtectedRoute roles={['Admin']}>
-            <AdminResults />
+            <ExamResults />
           </ProtectedRoute>
         }
       />
       <Route
-        path="/admin/reports"
+        path="/admin/results/students"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <StudentResults />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/results/analytics"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ResultAnalytics />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/results/publish"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <PublishResults />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/admin/reports" element={<Navigate to="/admin/reports/exams" replace />} />
+      <Route
+        path="/admin/reports/exams"
         element={
           <ProtectedRoute roles={['Admin']}>
             <AdminReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/students"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <StudentReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/performance"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <PerformanceReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/audit"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AuditReports />
           </ProtectedRoute>
         }
       />

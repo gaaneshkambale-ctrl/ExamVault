@@ -90,9 +90,9 @@ export default function ExamReportDetails() {
   }, [attempts]);
 
   return (
-    <AdminLayout active="Reports">
-      <Link to="/admin/reports" className="text-decoration-none small d-inline-block mb-3">
-        &larr; Back to Reports
+    <AdminLayout active="Exam Reports">
+      <Link to="/admin/reports/exams" className="text-decoration-none small d-inline-block mb-3">
+        &larr; Back to Exam Reports
       </Link>
 
       {loading && (

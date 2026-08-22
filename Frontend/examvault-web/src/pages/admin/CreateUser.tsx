@@ -16,6 +16,7 @@ const initialFormState: CreateUserFormState = {
   role: 'Student',
   isActive: false,
   phoneNumber: '',
+  rollNumber: '',
 };
 
 const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
@@ -107,7 +108,7 @@ export default function CreateUser() {
             </Alert>
 
             <Row>
-              <Col md={6}>
+              <Col md={4}>
                 <Form.Group className="mb-4" controlId="createUserRole">
                   <Form.Label className="fw-bold">Role</Form.Label>
                   <Form.Select
@@ -119,7 +120,18 @@ export default function CreateUser() {
                   </Form.Select>
                 </Form.Group>
               </Col>
-              <Col md={6}>
+              <Col md={4}>
+                <Form.Group className="mb-4" controlId="createUserRollNumber">
+                  <Form.Label className="fw-bold">Roll No.</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="Enter roll number (optional)"
+                    value={form.rollNumber ?? ''}
+                    onChange={(e) => updateField('rollNumber', e.target.value)}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
                 <Form.Group className="mb-4" controlId="createUserPhoneNumber">
                   <Form.Label className="fw-bold">Phone Number</Form.Label>
                   <Form.Control

@@ -30,6 +30,7 @@ public class CreateExamHandler
         var exam = new ExamPaper
         {
             Title = command.Title,
+            ExamCode = string.IsNullOrWhiteSpace(command.ExamCode) ? null : command.ExamCode.Trim(),
             Description = command.Description,
             Category = command.Category,
             ContainsSections = command.ContainsSections,

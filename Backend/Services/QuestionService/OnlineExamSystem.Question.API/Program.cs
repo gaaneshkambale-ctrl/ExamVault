@@ -11,6 +11,7 @@ using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
+using OnlineExamSystem.Question.Infrastructure.Clients;
 using OnlineExamSystem.Question.Infrastructure.Persistence;
 using OnlineExamSystem.Question.Infrastructure.Repositories;
 
@@ -42,6 +43,11 @@ public class Program
         builder.Services.AddScoped<DeleteQuestionHandler>();
         builder.Services.AddScoped<BulkAssignSectionHandler>();
         builder.Services.AddScoped<UnassignSectionHandler>();
+
+        var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

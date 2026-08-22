@@ -8,4 +8,5 @@ public record UserListItemResponse(
     DateTime CreatedAtUtc,
     bool IsActive,
     string? PhoneNumber,
-    bool HasPhoto = false);
+    bool HasPhoto = false,
+    string? RollNumber = null);

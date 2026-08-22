@@ -6,6 +6,7 @@ namespace OnlineExamSystem.Exam.Domain.Entities;
 public class ExamPaper : BaseEntity
 {
     public string Title { get; set; } = string.Empty;
+    public string? ExamCode { get; set; }
     public string Description { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public bool ContainsSections { get; set; }

@@ -3,6 +3,7 @@ namespace OnlineExamSystem.Shared.Contracts.Responses.Exam;
 public record ExamResponse(
     Guid Id,
     string Title,
+    string? ExamCode,
     string Description,
     string Category,
     bool ContainsSections,

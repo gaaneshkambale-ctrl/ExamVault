@@ -9,4 +9,5 @@ public record CreateExamRequest(
     int DurationMinutes,
     int TotalMarks,
     int PassingMarks,
-    string Instructions);
+    string Instructions,
+    string? ExamCode = null);

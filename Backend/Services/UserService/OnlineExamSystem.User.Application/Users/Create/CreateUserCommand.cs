@@ -5,4 +5,5 @@ public record CreateUserCommand(
     string Email,
     string Role,
     bool IsActive = true,
-    string? PhoneNumber = null);
+    string? PhoneNumber = null,
+    string? RollNumber = null);

@@ -4,6 +4,7 @@
     <ProjectReference Include="..\OnlineExamSystem.Question.Application\OnlineExamSystem.Question.Application.csproj" />
     <ProjectReference Include="..\OnlineExamSystem.Question.Domain\OnlineExamSystem.Question.Domain.csproj" />
     <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Events\OnlineExamSystem.Shared.Events.csproj" />
+    <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Contracts\OnlineExamSystem.Shared.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

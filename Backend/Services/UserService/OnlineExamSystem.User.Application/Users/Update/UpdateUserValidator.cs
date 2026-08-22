@@ -24,5 +24,8 @@ public class UpdateUserValidator : AbstractValidator<UpdateUserCommand>
             .Matches(@"^[0-9+\-\s()]{7,20}$")
             .WithMessage("Enter a valid phone number.")
             .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber));
+
+        RuleFor(x => x.RollNumber)
+            .MaximumLength(40);
     }
 }

@@ -20,6 +20,9 @@ public class CreateUserValidator : AbstractValidator<CreateUserCommand>
             .NotEmpty()
             .IsEnumName(typeof(UserRole), caseSensitive: false);
 
+        RuleFor(x => x.RollNumber)
+            .MaximumLength(40);
+
         RuleFor(x => x.PhoneNumber)
             .Matches(@"^[0-9+\-\s()]{7,20}$")
             .WithMessage("Enter a valid phone number.")

@@ -15,7 +15,15 @@ export type AdminNavItem =
   | 'Security Violations'
   | 'Proctoring'
   | 'Results'
+  | 'Exam Results'
+  | 'Student Results'
+  | 'Result Analytics'
+  | 'Publish Results'
   | 'Reports'
+  | 'Exam Reports'
+  | 'Student Reports'
+  | 'Performance Reports'
+  | 'Audit Reports'
   | 'Notifications'
   | 'Create Notification'
   | 'History'
@@ -55,8 +63,26 @@ const navItems: NavItem[] = [
       { label: 'Proctoring', path: '/admin/live-monitoring/proctoring' },
     ],
   },
-  { label: 'Results', path: '/admin/results' },
-  { label: 'Reports', path: '/admin/reports' },
+  {
+    label: 'Results',
+    path: '/admin/results/exams',
+    children: [
+      { label: 'Exam Results', path: '/admin/results/exams' },
+      { label: 'Student Results', path: '/admin/results/students' },
+      { label: 'Result Analytics', path: '/admin/results/analytics' },
+      { label: 'Publish Results', path: '/admin/results/publish' },
+    ],
+  },
+  {
+    label: 'Reports',
+    path: '/admin/reports/exams',
+    children: [
+      { label: 'Exam Reports', path: '/admin/reports/exams' },
+      { label: 'Student Reports', path: '/admin/reports/students' },
+      { label: 'Performance Reports', path: '/admin/reports/performance' },
+      { label: 'Audit Reports', path: '/admin/reports/audit' },
+    ],
+  },
   {
     label: 'Notifications',
     path: '/admin/notifications',

@@ -23,4 +23,5 @@ public record UpdateExamCommand(
     bool AllowCalculator,
     bool AllowNotes,
     bool AutoSubmitOnTimeEnd,
-    bool ConfirmBeforeSubmit);
+    bool ConfirmBeforeSubmit,
+    string? ExamCode = null);

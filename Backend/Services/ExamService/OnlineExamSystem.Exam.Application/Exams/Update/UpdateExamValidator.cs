@@ -11,6 +11,9 @@ public class UpdateExamValidator : AbstractValidator<UpdateExamCommand>
             .NotEmpty()
             .MaximumLength(200);
 
+        RuleFor(x => x.ExamCode)
+            .MaximumLength(40);
+
         RuleFor(x => x.Description)
             .MaximumLength(2000);
 

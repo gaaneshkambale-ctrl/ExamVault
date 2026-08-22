@@ -37,6 +37,7 @@ public class ExamDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.ExamCode).HasMaxLength(40);
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Category).HasMaxLength(100);
             entity.Property(e => e.Instructions).HasMaxLength(2000);

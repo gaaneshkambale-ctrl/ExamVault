@@ -33,6 +33,7 @@ public class UpdateExamHandler
         }
 
         exam.Title = command.Title;
+        exam.ExamCode = string.IsNullOrWhiteSpace(command.ExamCode) ? null : command.ExamCode.Trim();
         exam.Description = command.Description;
         exam.ExamType = Enum.Parse<ExamType>(command.ExamType, ignoreCase: true);
         exam.DurationMinutes = command.DurationMinutes;

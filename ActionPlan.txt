@@ -3415,3 +3415,565 @@ Gateway and frontend both confirmed 200 after full recovery. This
 DID interrupt whatever exam attempt/camera session was running in the
 user's own browser at the time - expected and called out to them
 before restarting, not a regression.
+
+=====================================================================
+FEATURE (DONE, 2026-08-22): Reports submenu - Exam/Student/
+Performance/Audit Reports dashboards
+=====================================================================
+REQUESTED: add a "Reports" submenu with 4 items (Exam Reports,
+Student Reports, Performance Reports, Audit Reports); user then
+supplied report.png - a 4-panel mockup showing each page's exact
+layout (KPI stat cards with vs-prior-period deltas, trend/donut/bar
+charts, summary tables, date-range + category/exam/user filters, an
+Export dropdown). Ask is to build the real functionality behind that
+look, not a static mock. Confirmed with the user: for Audit Reports
+(no backend audit-log exists anywhere today), build a real minimal
+audit log now rather than a placeholder or reusing only Security
+Violations data.
+
+DATA REALITY CHECK (why this is 2 phases): Exam/Student/Performance
+Reports need zero new backend - they're all derivable from data the
+frontend already fetches in full via useExams, useUsers, and
+useAdminResultsForAllExams (per-exam admin results, same dataset
+AdminResults.tsx and ExamReportDetails.tsx already join and aggregate
+client-side today). Audit Reports needs an entirely new cross-service
+activity log that doesn't exist in any of the 7 backend services -
+that's the part requiring real backend work, confirmed with the user
+as in-scope for this round rather than deferred.
+
+PHASE B (frontend-only, no backend dependency) - Exam/Student/
+Performance Reports:
+
+Sidebar/routing (AdminSidebar.tsx, AppRoutes.tsx):
+- AdminNavItem union gains 'Exam Reports' | 'Student Reports' |
+  'Performance Reports' | 'Audit Reports'. 'Reports' navItems entry
+  changes from a flat leaf to a parent with `path: null` and 4
+  children (mirrors the existing 'Live Monitoring' pattern), no new
+  icons needed - child links render as plain text, same as
+  'Roles & Permissions'/'Groups' today.
+- Route moves: current AdminReports.tsx (today's exam-picker-only
+  page) is REPLACED in place - existing route `/admin/reports/:examId`
+  -> ExamReportDetails.tsx stays untouched (still the per-exam
+  drill-down, still reached via an eye icon). New static routes added
+  BEFORE the `:examId` dynamic route: `/admin/reports/exams` (new
+  Exam Reports dashboard, replaces old AdminReports.tsx content),
+  `/admin/reports/students` (new StudentReports.tsx),
+  `/admin/reports/performance` (new PerformanceReports.tsx),
+  `/admin/reports/audit` (new AuditReports.tsx, Phase C). Old
+  `/admin/reports` becomes a redirect to `/admin/reports/exams` (one
+  <Navigate> route) so no existing links break. ExamReportDetails.tsx's
+  "Back to Reports" link updated to `/admin/reports/exams`.
+
+New shared components (hand-rolled inline SVG, matching the existing
+ScoreDistributionChart convention - no charting library added, keeps
+the zero-chart-dependency pattern already in this codebase):
+- components/charts/LineTrendChart.tsx - 1-2 series line chart over a
+  date axis (used by Exam Attempts Overview, Performance Trend's dual
+  avg-score/pass-% lines, and Phase C's Activity Overview).
+- components/charts/DonutChart.tsx - generic {label, value, color}[]
+  donut w/ center total label (Score Distribution, and Phase C's
+  Activity by Type).
+- ScoreDistributionChart.tsx reused as-is for "Score Range Analysis"
+  bars (Performance Reports) - same {label, count} shape it already
+  takes.
+- components/reports/ReportStatCard.tsx - the repeated KPI card
+  (icon, label, big value, small vs-prior-period delta w/ up/down
+  arrow colored green/red). Delta is REAL, not decorative: every page
+  fetches an equal-length immediately-preceding period alongside the
+  selected range and computes the % change from actual prior data.
+- components/reports/ReportFilters.tsx - shared date-range (two native
+  `Form.Control type="date"` inputs, defaults to last 30 days - not a
+  custom calendar dropdown, flagged as a deliberate simplification
+  vs. the mockup's calendar icon control) + category/exam/student/
+  module select row + Export dropdown, reused across all 4 pages with
+  page-specific filter props.
+- utils/exportCsv.ts - small Blob-based CSV download helper. Export
+  dropdown offers "Export as CSV" only for v1 (exports the
+  currently-filtered table's real rows); PDF export flagged as an
+  easy follow-up reusing the existing jsPDF pattern from
+  generateResultPdf.ts if wanted later.
+
+Exam Reports (pages/admin/AdminReports.tsx rewritten; still `active=
+"Exam Reports"`... wait: AdminLayout `active` prop must be one of the
+new AdminNavItem children, e.g. `active="Exam Reports"`):
+- Filters: date range, Category (EXAM_CATEGORIES), Exam Type
+  (Manual/AiGenerated) - both real fields already on ExamResponse.
+- KPIs: Total Exams (filtered count), Total Attempts, Average Score,
+  Pass Percentage (all from useAdminResultsForAllExams rows in range),
+  Completion Rate = submitted attempts / all-started attempts, pulled
+  from the existing per-exam attempts endpoint (useAttemptsByExam,
+  already used elsewhere for status) rather than invented.
+- Exam Attempts Overview: LineTrendChart, attempts-per-day bucketed
+  from the same rows.
+- Top 5 Exams by Attempts: rows sorted desc by attempt count, sliced
+  to 5.
+- Exam Summary table: every filtered exam w/ category, total
+  attempts, avg score, pass %, completion rate, eye-icon Action ->
+  existing `/admin/reports/:examId`.
+
+Student Reports (new pages/admin/StudentReports.tsx):
+- Filters: date range, Student (useUsers, role=Student), Exam.
+- KPIs: Total Students, Active Students (>=1 attempt in range),
+  Average Score, Pass Percentage, At Risk Students - defined as
+  students whose average % across in-range attempts is below the
+  exam's own passing threshold (documented constant, confirm/adjust
+  after first look rather than guessing further).
+- Score Distribution: DonutChart using the mockup's 4-bucket scheme
+  (90-100/75-89/50-74/Below 50) - a DIFFERENT bucket scheme than
+  ExamReportDetails' existing 5-bucket 0-20/20-40/etc (that page is
+  untouched, this is a new page matching the new mockup's buckets).
+- Top Students: ranked by average %, Status label derived from
+  thresholds (>=90 Excellent, >=75 Very Good, >=50 Good, else Needs
+  Improvement - documented constants).
+- Student Performance Overview table: per student - attempted,
+  average/highest/lowest score, pass %, last attempt date, eye-icon
+  Action opens a lightweight modal (no new route) showing that
+  student's per-exam breakdown from already-fetched data.
+
+Performance Reports (new pages/admin/PerformanceReports.tsx):
+- Filters: date range, Category, Exam.
+- KPIs: Average/Highest/Lowest Score, Pass Percentage, Improvement
+  (current-period avg % minus prior-period avg %, real delta).
+- Performance Trend: LineTrendChart, 2 series (avg score %, pass %)
+  per day/week depending on range length.
+- Score Range Analysis: reuse ScoreDistributionChart w/ the same
+  4-bucket scheme as Student Reports.
+- Performance by Exam table: per exam - avg/highest/lowest score,
+  pass %, improvement vs prior period.
+
+PHASE A (backend) - minimal real audit log, hosted on
+NotificationService (reuses its existing DB/API/Worker rather than a
+new microservice):
+- Domain (Notification.Domain/Entities/AuditLog.cs): Id, TimestampUtc,
+  Module (new enum AuditModule: Auth, Users, Exams, Questions,
+  Results, Security - Results left unwired for now, see below),
+  Activity (short label), Details (free text, caller-formatted),
+  EntityId (nullable), UserId (nullable - some events, e.g. future
+  system-initiated ones, may have none), UserName (denormalized at
+  write time, avoids a join on read), IpAddress (nullable, captured
+  by the WRITING service from its own HttpContext since a
+  service-to-service call would otherwise report the calling
+  container's IP, not the real client's).
+- Infrastructure: DbSet<AuditLog> + config on NotificationDbContext,
+  new EF Core migration `AddAuditLogs` (same `dotnet ef migrations
+  add`, Notification.Infrastructure as target / Notification.API as
+  startup project, auto-applies via the existing
+  `Database.Migrate()` call in Notification.API's Program.cs - no
+  manual step needed on deploy).
+- Application (same handler-class-no-MediatR pattern as
+  CreateNotificationCommand/Handler): Audit/RecordAuditLog (internal
+  write) and Audit/Admin/ListAuditLogs (admin read, filters:
+  fromUtc/toUtc required + optional module/userId, returns full
+  matching rows capped at a sane max - e.g. 5,000 - for client-side
+  aggregation, same convention as every other report page in this
+  app; no new pagination scheme invented).
+- API (new AuditLogsController on Notification.API):
+  `POST /api/audit-logs` (write) and `GET /api/audit-logs`
+  (`[Authorize(Roles = "Admin")]`, read). The write endpoint is
+  DELIBERATELY NOT exposed through the Gateway (no gateway route
+  added for it) - it's reachable only inside the docker network via
+  `http://notification-api:8080/api/audit-logs`, which the browser/
+  outside world can never reach since the Gateway is the only
+  externally published entrypoint. This is the chosen protection
+  instead of a shared internal-secret header (simpler, no new config
+  sprawl across 4 more services) - flagged explicitly as a tradeoff
+  to confirm, not a silent decision.
+- Gateway: new `audit-logs-route`/cluster (GET-only via YARP's
+  `Methods: ["GET"]` route match, matching notifications-cluster's
+  destination) in both appsettings.json and appsettings.Docker.json,
+  so only the admin-facing GET is externally reachable.
+- Shared.Contracts: RecordAuditLogRequest, AuditLogResponse DTOs.
+- New inter-service HTTP wiring (same typed-HttpClient-via-
+  `Services__XxxServiceBaseUrl` pattern Notification.API's own
+  UserDirectoryClient already uses) added to User.API, Exam.API,
+  Question.API: `Services__NotificationServiceBaseUrl` config +
+  IAuditClient/AuditClient. Per the project's three-config-targets
+  lesson, each gets the new setting in ALL THREE places:
+  appsettings.Development.json, docker-compose.yml (new env var per
+  service), AND Infra/env.bicep - not just the first two. Every audit
+  write is fire-and-forget / best-effort: wrapped so a failed audit
+  call never fails the real operation (login/exam-create/question-
+  create still succeeds even if NotificationService is down).
+- Instrumentation (5 hook points, matching what report.png's Recent
+  Activities table actually shows):
+  - User.API LoginUserHandler.HandleAsync - after the existing
+    successful-login SaveChangesAsync, before returning Ok: module=
+    Auth, activity="User login". IP captured in the controller
+    (HttpContext.Connection.RemoteIpAddress) and threaded through
+    LoginUserCommand since the handler itself has no HttpContext
+    today.
+  - User.API's user-update handler - module=Users, activity="Updated
+    user details", entityId=userId.
+  - Exam.API CreateExamHandler - module=Exams, activity="Created
+    exam", entityId=examId.
+  - Exam.API ChangeExamStatusHandler.HandleAsync, only when
+    TargetStatus == Published - module=Exams, activity="Published
+    exam".
+  - Question.API QuestionsController.Create path - module=Questions,
+    activity="Created question".
+  - Results module deliberately NOT wired yet: ResultService has no
+    stateful "publish" action today (results are computed on demand
+    from GetResultHandler/GetExamReportHandler - logging every read
+    would spam an audit entry per admin page-view, not a real
+    "activity"). Left as a future item once/if ResultService gains an
+    explicit publish workflow.
+
+PHASE C (frontend, depends on Phase A) - Audit Reports
+(new pages/admin/AuditReports.tsx):
+- Filters: date range, Activity/module (All Activities + the 6 enum
+  values), User.
+- KPIs: Total Activities (row count in range), User Logins (module=
+  Auth), Data Changes (module=Users OR Questions), Exam Actions
+  (module=Exams), Security Events - this last one is READ DIRECTLY
+  from the existing, already-real ViolationEvent data (same
+  by-exam-fan-out pattern AdminResults.tsx already uses for results),
+  NOT duplicated into the new audit table - avoids double-writing the
+  same event from two places.
+- Activity Overview: LineTrendChart, activities-per-day.
+- Activity by Type: DonutChart grouping Auth+Users into "User
+  Management", Exams into "Exam Management", Questions into "Data
+  Changes", Security (violations) into "Security Events" - matches
+  report.png's exact 4 categories.
+- Recent Activities table: Time, User, Activity, Module, Details, IP
+  Address, most recent first, capped at latest 100 shown (Export CSV
+  covers the full filtered range).
+
+OUT OF SCOPE (flagged, not building this round): PDF export (CSV
+only for v1), custom calendar-dropdown date picker (native date
+inputs instead), per-student dedicated report ROUTE (a modal instead,
+reusing already-fetched data), Results-module audit events (no
+publish action exists to hook), any change to ExamReportDetails.tsx's
+existing 5-bucket distribution scheme, an internal-secret header for
+the audit write endpoint (network-isolation-only, flagged above).
+
+BUILD ORDER: Phase B ships first (fully independent, no backend
+changes, lower risk given this session's earlier Docker/RAM
+constraints on this machine) - Exam/Student/Performance Reports live
+and real immediately. Phase A+C follow as one connected unit since
+Audit Reports can't render anything real without Phase A's backend
+existing first.
+
+TWO REAL BUGS FOUND AND FIXED DURING VERIFICATION:
+- PerformanceReports.tsx's "Improvement" KPI rendered "00%" whenever
+  there was no prior-period data to compare against (computeDelta
+  returns `{percent: null}` for that case) - the template string had
+  one branch substitute a literal 0 for the null case AND a second
+  `?? 0` fallback on the same value, so both fired and concatenated.
+  Fixed to render "New" (matching how ReportStatCard already handles
+  the same null-percent case elsewhere) instead of a fake-looking
+  number.
+- LineTrendChart.tsx always force-rendered the LAST x-axis label
+  regardless of how close it fell to the last regularly-spaced label,
+  overlapping text when the range didn't divide evenly (visible as
+  "Aug 22"/"Aug 2" overlapping). Fixed by only adding the forced last
+  label when it's at least half a label-interval away from the
+  previous one.
+
+VERIFIED: dotnet build on the full solution (all 8 backend services +
+every test project) - 0 errors. 286/286 backend tests pass across all
+7 services (no regressions from the 5 new controller constructor
+params). tsc --noEmit, oxlint, and 36/36 frontend tests clean.
+EF Core migration (AddAuditLogs) generated via `dotnet ef migrations
+add` (not hand-written), confirmed applying cleanly on
+notification-api startup ("CREATE TABLE [AuditLogs]..." in its logs).
+Live in Docker, all 5 rebuilt services (notification-api, gateway,
+user-api, exam-api, question-api) plus frontend redeployed
+individually (not full-stack rebuilds, to stay within this machine's
+8GB RAM after two earlier Docker Desktop crashes this session from
+parallel multi-service builds). Confirmed live in the browser as the
+actual admin: Exam/Student/Performance Reports render real computed
+numbers (25 real attempts across 3 real exams, real per-student
+averages). Audit Reports confirmed end-to-end both directions - GET
+read real Security Events (57, pulled live from existing
+ViolationEvent data, not duplicated into the new table) with honest
+zero counts for modules with no activity yet under the new code; then
+triggered a real write by editing a test user (LiveWatch Student
+Test) through the actual admin UI - the resulting "Updated user
+details" row appeared in Recent Activities within one page load with
+real timestamp, real caller email (from JWT claim), real target-user
+name in Details, and a real captured IP address
+(`::ffff:172.18.0.12`, the gateway's container-network IP - expected
+given no X-Forwarded-For handling exists in the Gateway yet, flagged
+as a known limitation rather than a bug: the IP is real, just not the
+original browser's public IP, since nothing forwards it through the
+reverse-proxy hop).
+
+=====================================================================
+FEATURE (PLANNED, 2026-08-22): Results submenu - Exam/Student Results,
+Result Analytics, Publish Results
+=====================================================================
+REQUESTED: user supplied result.png - a 4-panel mockup for a new
+"Results" submenu (Exam Results, Student Results, Result Analytics,
+Publish Results), same treatment as the just-shipped Reports submenu.
+Confirmed 2 scope forks with the user before planning:
+- Publish Results' "Schedule for Later" control: NOT built as real for
+  this round (checked: NotificationService's ScheduledAtUtc is only a
+  read-time filter, nothing polls/fires at the scheduled moment today
+  - reusing it would be a UI control that silently does nothing).
+  "Publish Now" ships as fully real; scheduling flagged as a future
+  item once a real poller exists, not exposed in the UI meanwhile.
+- Mockup's "Exam Code" and "Roll No." columns have no backing field
+  today - user chose to add REAL fields (ExamCode on Exam, RollNumber
+  on AppUser) rather than omit the columns. Both optional/nullable,
+  no uniqueness enforcement (documented simplification - Title has no
+  uniqueness check either, this matches existing convention rather
+  than inventing new machinery).
+
+DATA REALITY CHECK: ShowResult (ExamSettings) already exists and
+already GATES the student-facing GetResultHandler - `if
+(!exam.ShowResult) return GetResultResult.NotRevealed();`
+(Result.Application/GetResult/GetResultHandler.cs:54). There is no
+dedicated publish/unpublish action for it today - only the generic
+exam-update endpoint sets it (UpdateExamHandler.cs:44). This means
+Publish Results' core mechanic needs ZERO new backend endpoint - it's
+real today via the EXISTING `PUT /api/exams/{id}`, just never exposed
+as a dedicated bulk admin action. NOTE FOR LATER: ExamPaper.ShowResult
+defaults to `true` on create, so most exams in this dev DB already
+show as "Published" - that's an accurate reflection of real state,
+not a bug in the new page. Not changing that default as part of this
+feature (a broader behavior change than asked for) - flagged, not
+silently altered.
+
+PHASE D (backend) - ExamCode + RollNumber fields:
+- ExamService: `ExamPaper.ExamCode` (Domain/Entities/ExamPaper.cs),
+  nullable string, EF migration on ExamDb (nullable column, no
+  backfill needed for existing rows - shown as "—" in the UI).
+  CreateExamCommand/Handler and UpdateExamCommand/Handler thread it
+  through (optional, no MaxLength beyond a sane cap e.g. 40, no
+  uniqueness check per the scope decision above). Shared.Contracts:
+  CreateExamRequest, UpdateExamRequest, ExamResponse each gain
+  `ExamCode`. ExamsController's Create/Update actions + ToResponse
+  updated to match.
+- UserService: `AppUser.RollNumber` (Domain/Entities/AppUser.cs),
+  nullable string, EF migration on UserDb (nullable, same "—"
+  fallback for existing users). CreateUserCommand/Handler and
+  UpdateUserCommand/Handler thread it through - ADMIN-side only
+  (Create/Edit User forms); RegisterUserCommand (self-signup) is NOT
+  touched, since roll numbers are institution-assigned, not
+  self-chosen at signup. Shared.Contracts: CreateUserRequest,
+  UpdateUserRequest, UserListItemResponse gain `RollNumber`.
+  UsersController's Create/Update actions + ToResponse updated.
+
+PHASE E (frontend, depends on D) - thread the two new fields through
+existing forms/tables:
+- types/exam.ts: `examCode?: string | null` on CreateExamRequest,
+  UpdateExamRequest, ExamResponse. CreateExam.tsx and EditExam.tsx
+  gain an optional "Exam Code" text input alongside Title.
+- types/user.ts: `rollNumber?: string | null` on the equivalent User
+  DTOs. CreateUser.tsx and EditUser.tsx gain an optional "Roll No."
+  text input alongside Full Name (admin-created users only, matching
+  the backend scope above).
+- ManageExams.tsx / ManageUsers.tsx list tables: no new column added
+  here (out of scope - those pages aren't part of this ask); the new
+  fields surface in the new Exam Results / Student Results pages
+  below instead, which is where the mockup actually shows them.
+
+PHASE F (frontend, no new backend beyond D) - Exam Results, Student
+Results, Result Analytics. Same building blocks as the Reports
+submenu (LineTrendChart, DonutChart, ScoreDistributionChart,
+ReportStatCard, ReportFilters, dateRange/scoreBuckets utils) - no
+new chart components needed, just new page assemblies:
+
+Sidebar/routing: 'Results' navItems entry changes from a flat leaf to
+a parent (mirrors 'Reports'), AdminNavItem gains 'Exam Results' |
+'Student Results' | 'Result Analytics' | 'Publish Results'. Old
+`/admin/results` -> redirect to `/admin/results/exams` (new landing,
+matches mockup's sidebar order). Existing AdminResults.tsx content
+(today's flat all-students-all-exams table) is renamed/adapted into
+the new `/admin/results/students` page - it already has almost
+exactly the right shape (search + exam filter + per-attempt rows with
+grade/status), extended with a Batch (Group) filter, Roll No. column,
+pagination, and the KPI row.
+
+Exam Results (new pages/admin/ExamResults.tsx, `/admin/results/exams`):
+- KPIs: Total Exams, Completed Exams (status=Published AND every
+  assigned attempt submitted - real, derived same way Exam Reports'
+  Completion Rate already is), Total Candidates (distinct students
+  with attempts, all-time not date-scoped per the mockup - this page
+  has no date picker), Average Pass %, Pass Percentage. Deltas compare
+  current calendar month vs previous calendar month (real, fixed
+  window - matches mockup's "vs last month" copy, distinct from
+  Reports' adjustable-range prior-period pattern).
+- Search by name/code (real - matches against title AND the new
+  ExamCode field, "—" exams excluded from code matches gracefully).
+- All Exam Results table: Exam Name, Exam Code ("—" if unset),
+  Category, Total Candidates, Completed, Average Score, Pass %,
+  Status (Published/Ongoing/Processing - Ongoing = any InProgress
+  attempt exists, Processing = exam.Status still Draft or all
+  attempts submitted but exam not Published yet, Published =
+  exam.Status Published; real, derived from exam.Status + attempts,
+  not a new field), real pagination (8/page, matches mockup's
+  "Showing 1 to 8 of 56").
+
+Student Results (adapted pages/admin/StudentResults.tsx ->
+`/admin/results/students`... NAME COLLISION NOTE: the Reports
+submenu already has a components/pages file understanding of
+"StudentReports" - this is a DIFFERENT file, existing
+pages/admin/AdminResults.tsx renamed to pages/admin/StudentResults.tsx
+would collide with the Reports feature's StudentReports.tsx name only
+if misnamed - keeping AdminResults.tsx's filename as-is and just
+changing its route/content is simpler and avoids any collision):
+- KPIs: Total Students, Passed Students, Failed Students, Average
+  Score, Highest Score, Lowest Score (all real, same
+  AdminAttemptResultResponse dataset the page already fetches).
+- Filters: search (name/email/roll no), All Exams (existing), All
+  Batches (NEW - Group list from `/api/users/groups`, filters to
+  students who are members of the selected group via
+  GroupDetailResponse.MemberUserIds).
+- Table gains: Roll No. column (from the new field, "—" if unset),
+  Percentage + Grade columns (grade already computed via existing
+  getGrade - was missing a dedicated Grade column before, mockup adds
+  one), pagination (8/page). Existing proctoring-violation columns
+  (fullscreen exits, suspicious activity, etc.) are KEPT, not removed
+  - real data, just not shown in the mockup's simplified view; a
+  legitimate value-add already built, no reason to delete it.
+- Action column gains a download icon reusing the EXISTING
+  generateResultPdf.ts (already wired for the student's own
+  ResultDetails.tsx) - admin can download any student's result PDF
+  from this table, no new PDF generation code.
+
+Result Analytics (new pages/admin/ResultAnalytics.tsx,
+`/admin/results/analytics`):
+- Filters: date range (adjustable, like Reports pages), All Exams,
+  All Categories.
+- KPIs: Average Score, Pass Percentage, Total Candidates, Highest
+  Score, Lowest Score, Standard Deviation (NEW metric, real - computed
+  from the same in-range percentage array every other KPI here uses).
+- Score Distribution: reuse ScoreDistributionChart, same 4-bucket
+  scheme as Student/Performance Reports.
+- Pass/Fail Trend: LineTrendChart, 2 series (pass % and fail % per
+  day) - fail % = 100 - pass % per day, both real.
+- Top Performing Exams table: exams sorted desc by average score
+  (distinct metric from Exam Reports' "Top 5 by Attempts", which
+  sorts by volume not quality - both real, different lens).
+- Category-wise Performance: NEW DonutChart grouping by exam.category
+  (real field, EXAM_CATEGORIES), weighted by average score OR attempt
+  count per category (attempt count chosen - matches mockup's
+  "687"/"3,781"-style large counts better than an averaged percentage
+  would).
+
+PHASE G (real feature) - Publish Results
+(new pages/admin/PublishResults.tsx, `/admin/results/publish`):
+- Tabs: "Ready to Publish" (exams where Status=Published AND
+  ShowResult=false AND has >=1 submitted attempt), "Published"
+  (ShowResult=true), no "Scheduled" tab per the scope decision above
+  (would be empty/misleading with no real mechanism behind it).
+- Bulk-select exams (checkboxes) + "Publish Selected Results" button.
+  Real action, sequential per-exam calls to the EXISTING
+  `PUT /api/exams/{id}` (via updateExam, reusing the exam's full
+  current settings with only `showResult: true` changed - not a new
+  endpoint).
+- Publishing Options panel: Result Visibility (All Students / Selected
+  Groups - if Selected Groups, only send notifications to those
+  groups' members, but ShowResult itself is exam-wide since that's
+  how the field actually works today, not per-group - flagged,
+  not silently narrowed to imply per-student visibility control that
+  doesn't exist). Publish Date & Time: "Publish Now" only (see scope
+  decision). Notify Students toggle: when on, calls the EXISTING
+  admin CreateNotification flow (`POST /api/notifications/admin`,
+  NotificationSendToType.ExamCandidates or SelectedStudents depending
+  on the Result Visibility choice) with a real "Results Published"
+  notification per exam - reuses existing infra, no new notification
+  type needed. Include Report Card toggle: folded into the
+  notification message copy only (mentions the report card is
+  downloadable) - no new gating, since generateResultPdf.ts is
+  already available to any student who can see their result once
+  ShowResult is true.
+
+OUT OF SCOPE (flagged, not building this round): "Schedule for Later"
+(no real poller exists - see decision above), uniqueness enforcement
+on ExamCode/RollNumber (matches Title's existing no-uniqueness
+convention), per-group ShowResult granularity (the field is exam-wide
+today), editing ExamCode/RollNumber on the ManageExams/ManageUsers
+list pages (only in Create/Edit forms + the new Results pages), any
+change to ShowResult's `true` default on new exams.
+
+BUILD ORDER: Phase D ships first (backend fields, needed by
+everything else that displays them) - kept small (2 nullable columns,
+no uniqueness machinery) specifically so it doesn't balloon the way
+the Reports feature's audit-log backend did. Phase E (form wiring)
+follows immediately since it's small and unblocks real data for
+Phase F. Phase F (3 dashboard pages) and Phase G (Publish Results)
+can ship in either order once D+E land - Phase G chosen to go last
+since it's the one genuinely new admin workflow (bulk-select + real
+notification send) rather than another read-only dashboard, worth
+extra care testing against real exam state.
+
+STATUS: DONE, 2026-08-22. All phases (D/E field additions, F dashboard
+pages, G Publish Results) implemented and deployed.
+
+REAL BUG CAUGHT AND FIXED BEFORE DEPLOY: ExamCode was first inserted
+as a required (no-default) positional parameter in the MIDDLE of
+CreateExamCommand/UpdateExamCommand/CreateExamRequest/UpdateExamRequest
+(right after Title). Records with positional construction meant every
+existing caller after that point would silently receive the wrong
+value for the wrong field (ExamCode and Description are both
+`string`, so this compiles cleanly with no error - it would have
+been a silent data-corruption bug, not a build failure). Caught by
+grepping for existing positional `new CreateExamCommand(...)` call
+sites before deploy - found one in
+Tests/ExamService/.../CreateExamHandlerTests.cs. Fixed by moving
+ExamCode to the END of each record with a `= null` default,
+matching the already-safe pattern used for RollNumber on the User
+side from the start. Full solution rebuild + 286/286 backend tests
+re-confirmed clean after the fix.
+
+DATA REALITY CONFIRMED LIVE: ExamPaper.ShowResult defaults to `true`,
+so as predicted, all 6 real exams in this dev DB already showed
+"Published (6)" / "Ready to Publish (0)" on first load - not a bug,
+accurately reflecting real state. To verify the actual publish
+mechanic (not just its empty state), flipped one real exam (java2)
+to ShowResult=false via its real Edit Exam form, which moved it into
+"Ready to Publish (1)" as expected, then published it back through
+the new page's real per-row Publish button.
+
+VERIFIED LIVE (Docker, real admin session, real backend round-trips
+throughout - no mocked data at any point):
+- Exam Results: real per-exam candidate/completion/status figures
+  (status correctly derived as Ongoing when a real InProgress attempt
+  exists, Processing for still-Draft exams, Published otherwise);
+  multi-attempt exams correctly show Completed (total attempts) >
+  Total Candidates (distinct students) where students re-attempted.
+- Student Results: Batch filter populated from real Groups
+  ("Advanced Learners Group", "Batch 2026 - Morning/Evening"); Roll
+  No. column correctly shows "—" for the many real users that don't
+  have one set yet; pagination correct (25 real results -> 4 pages
+  of 8).
+- Result Analytics: Standard Deviation and Category-wise Performance
+  (donut) computed live from real attempt data, not hardcoded.
+- Publish Results: set a real ExamCode ("NET-2026-J2") AND toggled
+  real ShowResult off via the actual Edit Exam form (both new Phase
+  D/E fields persisted correctly through a real backend round-trip,
+  confirmed by reloading the edit page cold and re-reading the saved
+  values) - this simultaneously verified Phase D/E's ExamCode field
+  end-to-end. Then published it through the new page: ShowResult
+  flipped back to true via the existing PUT /api/exams/{id} (no new
+  endpoint, as planned), tab counts updated live (Ready to Publish
+  1->0, Published 5->6), and a REAL "Results Published" notification
+  (type=Result) was created and sent to 4 real exam candidates -
+  confirmed by finding it in Notification History with the correct
+  recipient count and "Sent" status, not just trusting the success
+  toast.
+- Full solution `dotnet build` (0 errors) and 286/286 backend tests
+  after the ExamCode fix. tsc --noEmit, oxlint, and 36/36 frontend
+  tests all clean. Both EF migrations (AddExamCode, AddRollNumber)
+  applied cleanly on their services' startup ("ALTER TABLE [Exams]
+  ADD [ExamCode]..." / RollNumber column in their respective logs).
+
+TOOLING NOTE (not an app bug): mid-verification, the claude-in-chrome
+extension's screenshot and mouse-click delivery both stopped working
+in this browser session (screenshot: a param-serialization error from
+the extension itself; clicks: silently not reaching the page - two
+real click attempts on a tab-toggle button produced zero DOM/state
+change). Confirmed this was the extension/session, not the app, by
+dispatching a real `.click()` via javascript_tool on the same button,
+which worked immediately and correctly. Rest of this feature's
+verification was completed via get_page_text + javascript_tool-driven
+real clicks and form input (native input value setters +
+dispatchEvent, so React's controlled-input handlers fire exactly as
+they would for a real user) rather than the mouse/screenshot tools.
+
+Left in place as real local dev data, same convention as every prior
+feature verification in this log: java2's ExamCode ("NET-2026-J2")
+and its ShowResult flip through the real publish flow; the
+"Results Published" notification sent to its 4 real candidates.

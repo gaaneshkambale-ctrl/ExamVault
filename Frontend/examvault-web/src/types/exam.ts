@@ -12,6 +12,7 @@ export const EXAM_CATEGORIES = [
 
 export interface CreateExamRequest {
   title: string;
+  examCode?: string | null;
   description: string;
   category: string;
   containsSections: boolean;
