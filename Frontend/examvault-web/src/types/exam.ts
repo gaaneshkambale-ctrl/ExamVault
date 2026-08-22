@@ -53,6 +53,7 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
 export interface ReminderSettingsResponse {
   enable24HourReminder: boolean;
   enable1HourReminder: boolean;
+  updatedAtUtc?: string;
 }
 
 export interface ProctoringSettingsResponse {
@@ -65,4 +66,31 @@ export interface ProctoringSettingsResponse {
   copyPasteBlockingEnabled: boolean;
   rightClickBlockingEnabled: boolean;
   multipleMonitorsEnabled: boolean;
+  sessionTimeoutMinutes: number;
+  updatedAtUtc?: string;
+}
+
+export interface GeneralSettingsResponse {
+  organizationName: string;
+  supportEmail: string;
+  language: string;
+  timezone: string;
+  dateFormat: string;
+  updatedAtUtc: string;
+}
+
+export type QuestionNavigationMode = 'Free' | 'Sequential';
+export type ResultPublishingMode = 'Automatic' | 'Manual';
+
+export interface ExamDefaultsResponse {
+  defaultDurationMinutes: number;
+  passingScorePercent: number;
+  defaultMaxAttempts: number;
+  negativeMarkingEnabled: boolean;
+  negativeMarkingValue: number;
+  autoSaveEnabled: boolean;
+  autoSubmitEnabled: boolean;
+  questionNavigationMode: QuestionNavigationMode;
+  resultPublishingMode: ResultPublishingMode;
+  updatedAtUtc: string;
 }

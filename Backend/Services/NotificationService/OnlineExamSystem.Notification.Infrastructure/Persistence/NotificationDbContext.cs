@@ -15,6 +15,7 @@ public class NotificationDbContext : DbContext
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+    public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. Forcing Kind=Utc on
@@ -64,6 +65,13 @@ public class NotificationDbContext : DbContext
             entity.Property(t => t.Name).HasMaxLength(200);
             entity.Property(t => t.Subject).HasMaxLength(300);
             entity.HasData(NotificationTemplateSeed.Templates);
+        });
+
+        modelBuilder.Entity<SystemSettings>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.BackupFrequency).HasConversion<string>();
+            entity.Property(s => s.LogLevel).HasConversion<string>();
         });
     }
 }

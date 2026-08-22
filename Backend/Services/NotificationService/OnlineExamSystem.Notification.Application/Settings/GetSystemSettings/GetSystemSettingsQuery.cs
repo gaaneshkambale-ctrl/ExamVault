@@ -1,0 +1,3 @@
+namespace OnlineExamSystem.Notification.Application.Settings.GetSystemSettings;
+
+public record GetSystemSettingsQuery;

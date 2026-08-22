@@ -10,4 +10,5 @@ public class ReminderSettings : BaseEntity
 {
     public bool Enable24HourReminder { get; set; } = true;
     public bool Enable1HourReminder { get; set; } = true;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

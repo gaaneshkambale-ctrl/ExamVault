@@ -9,4 +9,6 @@ public record ProctoringSettingsResponse(
     bool MultipleTabsEnabled,
     bool CopyPasteBlockingEnabled,
     bool RightClickBlockingEnabled,
-    bool MultipleMonitorsEnabled);
+    bool MultipleMonitorsEnabled,
+    int SessionTimeoutMinutes = 30,
+    DateTime UpdatedAtUtc = default);

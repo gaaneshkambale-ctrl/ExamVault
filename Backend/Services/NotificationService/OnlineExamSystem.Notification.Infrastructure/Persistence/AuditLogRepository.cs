@@ -47,6 +47,11 @@ public class AuditLogRepository : IAuditLogRepository
             .ToListAsync(cancellationToken);
     }
 
+    public Task<int> DeleteOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default) =>
+        _dbContext.AuditLogs
+            .Where(a => a.CreatedAtUtc < cutoffUtc)
+            .ExecuteDeleteAsync(cancellationToken);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

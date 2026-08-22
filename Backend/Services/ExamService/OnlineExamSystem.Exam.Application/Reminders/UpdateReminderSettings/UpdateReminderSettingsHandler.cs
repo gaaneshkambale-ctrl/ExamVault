@@ -19,6 +19,7 @@ public class UpdateReminderSettingsHandler
         var settings = await _examRepository.GetOrCreateReminderSettingsAsync(cancellationToken);
         settings.Enable24HourReminder = command.Enable24HourReminder;
         settings.Enable1HourReminder = command.Enable1HourReminder;
+        settings.UpdatedAtUtc = DateTime.UtcNow;
 
         await _examRepository.SaveChangesAsync(cancellationToken);
 

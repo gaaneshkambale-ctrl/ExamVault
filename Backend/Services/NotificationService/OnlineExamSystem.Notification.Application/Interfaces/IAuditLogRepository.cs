@@ -15,5 +15,9 @@ public interface IAuditLogRepository
         int take,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Deletes every AuditLog row older than the cutoff - the retention-policy
+    /// cleanup job's write. Returns the number of rows removed.</summary>
+    Task<int> DeleteOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

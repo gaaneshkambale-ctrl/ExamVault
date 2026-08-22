@@ -17,6 +17,8 @@ public class ExamDbContext : DbContext
     public DbSet<ExamReminderLog> ExamReminderLogs => Set<ExamReminderLog>();
     public DbSet<ReminderSettings> ReminderSettings => Set<ReminderSettings>();
     public DbSet<ProctoringSettings> ProctoringSettings => Set<ProctoringSettings>();
+    public DbSet<GeneralSettings> GeneralSettings => Set<GeneralSettings>();
+    public DbSet<ExamDefaults> ExamDefaults => Set<ExamDefaults>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. System.Text.Json then
@@ -87,6 +89,24 @@ public class ExamDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(r => r.AssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<GeneralSettings>(entity =>
+        {
+            entity.HasKey(g => g.Id);
+            entity.Property(g => g.OrganizationName).HasMaxLength(200);
+            entity.Property(g => g.SupportEmail).HasMaxLength(200);
+            entity.Property(g => g.Language).HasMaxLength(100);
+            entity.Property(g => g.Timezone).HasMaxLength(100);
+            entity.Property(g => g.DateFormat).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<ExamDefaults>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.NegativeMarkingValue).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.QuestionNavigationMode).HasConversion<string>();
+            entity.Property(e => e.ResultPublishingMode).HasConversion<string>();
         });
     }
 }

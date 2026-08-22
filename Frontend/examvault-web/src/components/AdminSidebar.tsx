@@ -28,7 +28,6 @@ export type AdminNavItem =
   | 'Create Notification'
   | 'History'
   | 'Notification Templates'
-  | 'Notification Settings'
   | 'Settings'
   | 'Profile';
 
@@ -91,7 +90,6 @@ const navItems: NavItem[] = [
       { label: 'Create Notification', path: '/admin/notifications/create' },
       { label: 'History', path: '/admin/notifications/history' },
       { label: 'Notification Templates', path: '/admin/notifications/templates' },
-      { label: 'Notification Settings', path: '/notifications/settings' },
     ],
   },
   { label: 'Settings', path: '/admin/settings' },

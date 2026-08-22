@@ -26,6 +26,8 @@ public class UpdateProctoringSettingsHandler
         settings.CopyPasteBlockingEnabled = command.CopyPasteBlockingEnabled;
         settings.RightClickBlockingEnabled = command.RightClickBlockingEnabled;
         settings.MultipleMonitorsEnabled = command.MultipleMonitorsEnabled;
+        settings.SessionTimeoutMinutes = command.SessionTimeoutMinutes;
+        settings.UpdatedAtUtc = DateTime.UtcNow;
 
         await _examRepository.SaveChangesAsync(cancellationToken);
 

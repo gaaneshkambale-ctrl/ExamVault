@@ -4474,3 +4474,219 @@ Rebuilt/redeployed the frontend container. Live browser check:
 Settings/Exam Reminders/AI Proctoring render fine at the new width);
 /profile Security tab still has the real Change Password form,
 unaffected.
+
+FEATURE (DONE, 2026-08-22): Settings hub + 6 detail pages
+(settings.png)
+=====================================================================
+REQUESTED: user supplied settings.png (the hub/overview screen only)
+plus a full text tree of everything each of the 6 categories should
+eventually contain (General/Exam/Security/Proctoring/Notification/
+System Settings). Asked two scope questions since this is far larger
+than anything built so far this session: (1) build order given only
+the hub has a mockup - user chose "hub first, details later" (each
+category's real detail page comes as its own future round); (2) how
+real "Backup"/"System Health" under System Settings should be - user
+chose "real but safe" (live reachability checks yes, no button that
+triggers an actual database backup).
+
+INTERPRETATION - what "hub first" ends up meaning: the hub's summary
+rows must show REAL numbers (per the "never fake data" rule), which
+means the backing entities/endpoints have to exist regardless of
+whether a fancy detail UI does. Shipping a real GET with no way to
+ever PUT it is its own kind of fake (a value that LOOKS editable via
+a settings page but silently has no page). So every one of the 6
+"Manage X Settings" buttons gets a REAL, WORKING page this round -
+"details later" instead means those pages are plain Card+Form pages
+(no mockup exists for them, so no attempt to invent a polished design
+for them), not that they're placeholders. Two of the six already have
+real working UI today (Proctoring, Reminders, both currently inline
+on AdminSettings.tsx) - those get relocated, not rebuilt. The hub's
+"Save All Changes" header button and inline-editable chevron rows are
+NOT built - that implies bulk cross-category inline editing, a
+materially different interaction model the static mockup doesn't
+specify; each category is edited on its own detail page instead.
+
+BACKEND - ExamService (owns Proctoring/Reminder settings already,
+same service houses the new Exam-adjacent ones too - no new
+microservice):
+- Migration: ProctoringSettings gains SessionTimeoutMinutes (int,
+  default 30 - Security card's one genuinely-new field, bundled onto
+  the existing singleton table alongside the 4 toggles it already
+  shares with the Proctoring card, rather than a new table for one
+  field) and UpdatedAtUtc (set explicitly by the update handler, same
+  manual-timestamp convention as NotificationTemplate). ReminderSettings
+  gains UpdatedAtUtc too, same reason (see "Recently Updated" below).
+- New singleton entity GeneralSettings (same get-or-create-single-row
+  pattern as ProctoringSettings): OrganizationName, SupportEmail,
+  Language, Timezone, DateFormat, CreatedAtUtc/UpdatedAtUtc. Defaults:
+  OrganizationName="ExamVault" (the product's real name, not the
+  mockup's fictional "ExamVault Education"), SupportEmail="", Language
+  ="English (United States)", Timezone="UTC", DateFormat="DD MMM YYYY".
+  Logo/Branding from the tree is OUT OF SCOPE this round (needs a real
+  file-storage decision, isn't even shown on the hub card - future
+  round).
+- New singleton entity ExamDefaults: DefaultDurationMinutes (int),
+  PassingScorePercent (int), DefaultMaxAttempts (int),
+  NegativeMarkingEnabled (bool) + NegativeMarkingValue (decimal),
+  AutoSaveEnabled (bool), AutoSubmitEnabled (bool),
+  QuestionNavigationMode (enum Free/Sequential), ResultPublishingMode
+  (enum Automatic/Manual), CreatedAtUtc/UpdatedAtUtc. OUT OF SCOPE this
+  round: actually wiring these into CreateExam.tsx as real prefill
+  defaults - that's a change to a different, already-shipped page/flow,
+  not part of the Settings feature itself. This round only makes the
+  values real and editable in Settings; a future round can wire the
+  prefill.
+- GET endpoints for GeneralSettings/ExamDefaults are Admin-only
+  (nothing else consumes them, unlike Proctoring's GET which the exam
+  client itself needs) - PUT Admin-only like all the others.
+
+BACKEND - NotificationService (already houses AuditLog, the other
+cross-cutting admin-only concern from the Reports round):
+- New singleton entity SystemSettings: MaintenanceModeEnabled (bool),
+  BackupFrequency (enum Daily/Weekly/Monthly), AuditLogRetentionDays
+  (int, default 180), LogLevel (enum Trace/Debug/Information/Warning/
+  Error/Critical, default Information), CreatedAtUtc/UpdatedAtUtc.
+  MaintenanceModeEnabled is a REAL persisted flag but does NOT actually
+  block traffic yet (that needs Gateway middleware reading it on every
+  request - a bigger, separate infra change) - labeled plainly in the
+  UI, not implied as enforced. LogLevel is a REAL persisted value but
+  does NOT yet change any service's actual runtime logging (would need
+  a LoggingLevelSwitch-style mechanism per service) - same honest
+  labeling. BackupFrequency is a REAL persisted policy value only - no
+  action that triggers an actual database backup, per the "real but
+  safe" answer.
+- AuditLogRetentionDays gets REAL enforcement (unlike the two above,
+  this is bounded/safe/single-service): new AuditLogRetentionCleanupService
+  background hosted service, same pattern as ExamService's existing
+  ExamReminderCheckService, running roughly daily and deleting AuditLog
+  rows older than the configured retention.
+- "System Health" (live reachability across services) and any actual
+  backup-triggering are OUT OF SCOPE this round - not shown on the hub
+  card at all (only Maintenance Mode/Backup Frequency/Audit Log
+  Retention/System Environment/Log Level are), and per the "hub first"
+  boundary they belong in the System Settings detail-page round later.
+  When that round happens, the answered policy stands: live per-service
+  reachability checks yes, live backup-triggering no.
+- System Environment on the System Settings page is read-only, wired
+  to the real IHostEnvironment.EnvironmentName (genuinely real, no
+  storage needed).
+
+FRONTEND:
+- AdminSettings.tsx rewritten into the Settings hub matching
+  settings.png's visual language (6 colored icon cards in a 3x2 grid +
+  a bottom "Settings Overview" stats strip), fetching all 5 settings
+  resources (General/ExamDefaults/Proctoring+Security shared/
+  Reminder/System) and rendering each card's real summary rows from
+  them. A plain client-side search box filters the 6 cards by
+  title/row-label text (cheap, real, no backend search needed).
+- Settings Overview stats strip - all computed client-side from the
+  already-fetched settings, real not fabricated: Total Configurations
+  = count of individual fields across all 5 entities; Enabled = count
+  of boolean fields currently true; Recently Updated = count of the 5
+  entities whose UpdatedAtUtc falls in the last 7 days; Require
+  Attention = a narrow, documented rule (count of: MaintenanceMode on,
+  ProctoringEnabled off, any of the 4 shared security/proctoring
+  toggles off) - not a vibes-based number, an auditable one.
+- 6 new detail pages under /admin/settings/{general,exams,security,
+  proctoring,notifications,system}, each a plain Card+Form (no mockup
+  exists for these, so no attempt at elaborate design) bound to real
+  GET/PUT:
+  - general: Organization Name/Support Email/Language/Timezone/Date
+    Format form.
+  - exams: the 8 ExamDefaults fields.
+  - security: the 4 shared Fullscreen/TabSwitching/CopyPaste/
+    RightClick toggles (same PUT as proctoring) + Session Timeout.
+  - proctoring: the EXISTING working fieldset relocated verbatim from
+    the old AdminSettings.tsx (master switch + 6 detector checkboxes),
+    unchanged behavior.
+  - notifications: the EXISTING working Reminder toggles (24h/1h)
+    relocated verbatim, plus a card linking through to the existing
+    real personal-preferences page (/notifications/settings) for the
+    per-type email/in-app toggles - keeps "global reminder policy"
+    (admin-only) and "my personal preferences" (per-user) honestly
+    separate rather than conflating them into one form.
+  - system: Maintenance Mode/Backup Frequency/Audit Log Retention Days
+    (editable) + System Environment (read-only) + Log Level (editable,
+    honestly labeled as not-yet-enforced per above).
+- Every hub card's "Manage X Settings" button links to its real page -
+  none are dead-end/coming-soon stubs.
+
+OUT OF SCOPE (flagged, not building this round): Logo/Branding upload;
+wiring ExamDefaults into CreateExam.tsx's actual prefill values; Login
+Security (spans into UserService, not shown on the hub); live
+cross-service System Health checks; any action that actually triggers
+a database backup; Maintenance Mode actually blocking traffic; Log
+Level actually changing runtime logger behavior; the hub's "Save All
+Changes" bulk-save button and inline-editable summary rows; Quiet
+Hours (shown in the tree/mockup card text but no existing concept to
+back it - would need its own new field, deferred to a future
+Notification-detail round once that page's real scope is decided).
+
+MID-BUILD CHANGES (from user feedback during this round):
+- Removed "Notification Settings" from the Notifications sidebar
+  submenu (AdminSidebar.tsx) - now reachable only via Settings >
+  Notification Settings, avoiding the same destination being listed in
+  two different sidebar menus. pages/student/NotificationSettings.tsx
+  (the personal-preferences page, shared by both roles) now sets
+  active="Settings" instead of the removed sidebar label so it doesn't
+  point at a nav item that no longer exists.
+- NotificationSettingsPage.tsx: "My Notification Preferences" now
+  embeds the real NotificationPreferencesPanel component directly
+  (same component /notifications/settings itself renders) instead of
+  linking out to a separate page - everything for this category is
+  visible and editable on one page.
+
+VERIFICATION (2026-08-22): dotnet build (ExamService + NotificationService
+projects + full ExamVault.sln) - 0 errors/warnings. dotnet test -
+ExamService 70/70 passed (FakeExamRepository updated for the 2 new
+GetOrCreate methods), NotificationService 22/22 passed. Frontend:
+tsc --noEmit and oxlint clean, vite build succeeds. Both new EF
+migrations (ExamService AddGeneralAndExamDefaultsSettings,
+NotificationService AddSystemSettings) applied for real via `docker
+compose build/up` - confirmed in container logs: new tables created,
+ProctoringSettings/ReminderSettings altered with the new columns
+(SessionTimeoutMinutes default corrected to 30 to match the entity
+default, since EF's generated migration defaulted it to 0). New
+Gateway route (system-settings-route) added and confirmed loading
+without error on redeploy. AuditLogRetentionCleanupService confirmed
+actually running on notification-api startup via container logs (real
+DELETE query executed against AuditLogs on first tick).
+
+Live browser verification against the real running stack:
+- Settings hub (/admin/settings) loads all 6 cards with real fetched
+  data exactly matching the mockup's row layout and values (Organization
+  Profile/Language/Timezone/Date Format/Support Email; Default Exam
+  Duration/Passing Score/Maximum Attempts/Negative Marking/Auto Submit;
+  the 4 shared security toggles + Session Timeout; the Proctoring
+  toggles; Exam Reminders count + preference-derived notification rows;
+  Maintenance Mode/Backup Frequency/Audit Log Retention/System
+  Environment [real "Docker" from IHostEnvironment]/Log Level) -
+  confirmed via network log that all 6 GET endpoints (general-settings,
+  defaults, proctoring-settings, reminder-settings, system-settings,
+  notifications/preferences) returned 200. Stats strip computed real
+  30 Total Configurations / 14 Enabled / 0 Require Attention / 3
+  Recently Updated (freshly-created entities all counting as "recent").
+  Client-side search filter confirmed narrowing to the matching card
+  only.
+- Wrote through and confirmed persistence (via PUT + full page reload)
+  on General (Organization Name/Support Email), Exam (Default
+  Duration), Security (Session Timeout - also confirmed the Proctoring
+  page shows the same persisted value, proving the two pages really do
+  share one entity/endpoint as designed), and System (Audit Log
+  Retention Days) - all 4 round-tripped correctly.
+- Notification Settings page confirmed rendering the real, fully
+  interactive NotificationPreferencesPanel inline (not a link-out).
+- TOOLING NOTE (not an app bug): mid-session, one long-lived browser
+  tab exhibited erratic auto-navigation between unrelated settings
+  routes during rapid chained javascript_exec calls, once even
+  throwing "Illegal invocation" on a stale element reference. Ruled
+  out as a real bug: passive reads (no DOM interaction) never drifted;
+  a brand-new tab behaved correctly; the app has zero setTimeout/
+  setInterval/navigate() calls anywhere in the Settings feature that
+  could explain it. Worked around by using a fresh tab and bundling
+  each fill+save into a single exec call (with a short in-script
+  await) instead of splitting across separate tool calls, which then
+  verified cleanly and repeatably. Documented here in case it
+  recurs - it's browser-automation-tooling flakiness under a very
+  long-lived tab/session, not application code.
+No gaps found; feature matches the mockup and plan as built.

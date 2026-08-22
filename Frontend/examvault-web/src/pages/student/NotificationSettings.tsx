@@ -8,7 +8,7 @@ export default function NotificationSettings() {
 
   if (user?.role === 'Admin') {
     return (
-      <AdminLayout active="Notification Settings">
+      <AdminLayout active="Settings">
         <NotificationPreferencesPanel />
       </AdminLayout>
     );

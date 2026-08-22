@@ -1,7 +1,9 @@
 import apiClient from './axiosClient';
 import type {
   CreateExamRequest,
+  ExamDefaultsResponse,
   ExamResponse,
+  GeneralSettingsResponse,
   ProctoringSettingsResponse,
   ReminderSettingsResponse,
   UpdateExamRequest,
@@ -67,5 +69,29 @@ export async function updateProctoringSettings(
   request: ProctoringSettingsResponse,
 ): Promise<ProctoringSettingsResponse> {
   const { data } = await apiClient.put<ProctoringSettingsResponse>('/api/exams/proctoring-settings', request);
+  return data;
+}
+
+export async function getGeneralSettings(): Promise<GeneralSettingsResponse> {
+  const { data } = await apiClient.get<GeneralSettingsResponse>('/api/exams/general-settings');
+  return data;
+}
+
+export async function updateGeneralSettings(
+  request: Omit<GeneralSettingsResponse, 'updatedAtUtc'>,
+): Promise<GeneralSettingsResponse> {
+  const { data } = await apiClient.put<GeneralSettingsResponse>('/api/exams/general-settings', request);
+  return data;
+}
+
+export async function getExamDefaults(): Promise<ExamDefaultsResponse> {
+  const { data } = await apiClient.get<ExamDefaultsResponse>('/api/exams/defaults');
+  return data;
+}
+
+export async function updateExamDefaults(
+  request: Omit<ExamDefaultsResponse, 'updatedAtUtc'>,
+): Promise<ExamDefaultsResponse> {
+  const { data } = await apiClient.put<ExamDefaultsResponse>('/api/exams/defaults', request);
   return data;
 }

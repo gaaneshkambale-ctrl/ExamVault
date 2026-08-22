@@ -43,5 +43,5 @@ public class ReminderSettingsController : ControllerBase
     }
 
     private static ReminderSettingsResponse ToResponse(ReminderSettingsEntity settings) =>
-        new(settings.Enable24HourReminder, settings.Enable1HourReminder);
+        new(settings.Enable24HourReminder, settings.Enable1HourReminder, settings.UpdatedAtUtc);
 }

@@ -120,6 +120,52 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.ToTable("ExamAssignmentTargets");
                 });
 
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamDefaults", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AutoSaveEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AutoSubmitEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DefaultDurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DefaultMaxAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("NegativeMarkingEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("NegativeMarkingValue")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int>("PassingScorePercent")
+                        .HasColumnType("int");
+
+                    b.Property<string>("QuestionNavigationMode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ResultPublishingMode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ExamDefaults");
+                });
+
             modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamPaper", b =>
                 {
                     b.Property<Guid>("Id")
@@ -253,6 +299,48 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.ToTable("ExamReminderLogs");
                 });
 
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.GeneralSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DateFormat")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("OrganizationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SupportEmail")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("GeneralSettings");
+                });
+
             modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ProctoringSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -289,6 +377,12 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.Property<bool>("ScreenMonitoringEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<int>("SessionTimeoutMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.ToTable("ProctoringSettings");
@@ -308,6 +402,9 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("Enable24HourReminder")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 

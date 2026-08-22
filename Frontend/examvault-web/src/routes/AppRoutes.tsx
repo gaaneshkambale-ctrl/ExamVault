@@ -44,6 +44,12 @@ import StudentReports from '../pages/admin/StudentReports';
 import PerformanceReports from '../pages/admin/PerformanceReports';
 import AuditReports from '../pages/admin/AuditReports';
 import AdminSettings from '../pages/admin/AdminSettings';
+import GeneralSettingsPage from '../pages/admin/settings/GeneralSettingsPage';
+import ExamSettingsPage from '../pages/admin/settings/ExamSettingsPage';
+import SecuritySettingsPage from '../pages/admin/settings/SecuritySettingsPage';
+import ProctoringSettingsPage from '../pages/admin/settings/ProctoringSettingsPage';
+import NotificationSettingsPage from '../pages/admin/settings/NotificationSettingsPage';
+import SystemSettingsPage from '../pages/admin/settings/SystemSettingsPage';
 import ExamReportDetails from '../pages/admin/ExamReportDetails';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import MyExams from '../pages/student/MyExams';
@@ -568,6 +574,54 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <AdminSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings/general"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <GeneralSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings/exams"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings/security"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <SecuritySettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings/proctoring"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ProctoringSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings/notifications"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <NotificationSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings/system"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <SystemSettingsPage />
           </ProtectedRoute>
         }
       />

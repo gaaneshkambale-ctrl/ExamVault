@@ -49,7 +49,8 @@ public class ProctoringSettingsController : ControllerBase
                 request.MultipleTabsEnabled,
                 request.CopyPasteBlockingEnabled,
                 request.RightClickBlockingEnabled,
-                request.MultipleMonitorsEnabled),
+                request.MultipleMonitorsEnabled,
+                request.SessionTimeoutMinutes),
             cancellationToken);
         return Ok(ToResponse(settings));
     }
@@ -64,5 +65,7 @@ public class ProctoringSettingsController : ControllerBase
             settings.MultipleTabsEnabled,
             settings.CopyPasteBlockingEnabled,
             settings.RightClickBlockingEnabled,
-            settings.MultipleMonitorsEnabled);
+            settings.MultipleMonitorsEnabled,
+            settings.SessionTimeoutMinutes,
+            settings.UpdatedAtUtc);
 }

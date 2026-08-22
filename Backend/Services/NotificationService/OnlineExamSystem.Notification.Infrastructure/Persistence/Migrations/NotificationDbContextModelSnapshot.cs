@@ -265,6 +265,37 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                             UpdatedAtUtc = new DateTime(2026, 8, 22, 12, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
+
+            modelBuilder.Entity("OnlineExamSystem.Notification.Domain.Entities.SystemSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AuditLogRetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BackupFrequency")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LogLevel")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("MaintenanceModeEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SystemSettings");
+                });
 #pragma warning restore 612, 618
         }
     }

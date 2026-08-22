@@ -17,4 +17,10 @@ public class ProctoringSettings : BaseEntity
     public bool CopyPasteBlockingEnabled { get; set; } = true;
     public bool RightClickBlockingEnabled { get; set; } = true;
     public bool MultipleMonitorsEnabled { get; set; } = true;
+
+    // Security Settings card's one genuinely new field - bundled onto this
+    // existing singleton table alongside the toggles it already shares with
+    // the Proctoring card, rather than a new table for one field.
+    public int SessionTimeoutMinutes { get; set; } = 30;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }
