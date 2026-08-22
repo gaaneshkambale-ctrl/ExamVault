@@ -6,6 +6,11 @@ using OnlineExamSystem.Notification.Application.Notifications.Admin.DeleteNotifi
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationBatchDetails;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationHistory;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationHistoryStats;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.Templates.CreateTemplate;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.Templates.DuplicateTemplate;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.Templates.ListTemplates;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.Templates.UpdateTemplate;
+using OnlineExamSystem.Notification.Domain.Entities;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.ResendNotificationBatch;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.DeleteMyNotification;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.GetMyNotifications;
@@ -40,6 +45,10 @@ public class NotificationsController : ControllerBase
     private readonly GetNotificationBatchDetailsHandler _getNotificationBatchDetailsHandler;
     private readonly ResendNotificationBatchHandler _resendNotificationBatchHandler;
     private readonly DeleteNotificationBatchHandler _deleteNotificationBatchHandler;
+    private readonly ListTemplatesHandler _listTemplatesHandler;
+    private readonly CreateTemplateHandler _createTemplateHandler;
+    private readonly UpdateTemplateHandler _updateTemplateHandler;
+    private readonly DuplicateTemplateHandler _duplicateTemplateHandler;
     private readonly ILogger<NotificationsController> _logger;
 
     public NotificationsController(
@@ -57,6 +66,10 @@ public class NotificationsController : ControllerBase
         GetNotificationBatchDetailsHandler getNotificationBatchDetailsHandler,
         ResendNotificationBatchHandler resendNotificationBatchHandler,
         DeleteNotificationBatchHandler deleteNotificationBatchHandler,
+        ListTemplatesHandler listTemplatesHandler,
+        CreateTemplateHandler createTemplateHandler,
+        UpdateTemplateHandler updateTemplateHandler,
+        DuplicateTemplateHandler duplicateTemplateHandler,
         ILogger<NotificationsController> logger)
     {
         _getMyNotificationsHandler = getMyNotificationsHandler;
@@ -73,6 +86,10 @@ public class NotificationsController : ControllerBase
         _getNotificationBatchDetailsHandler = getNotificationBatchDetailsHandler;
         _resendNotificationBatchHandler = resendNotificationBatchHandler;
         _deleteNotificationBatchHandler = deleteNotificationBatchHandler;
+        _listTemplatesHandler = listTemplatesHandler;
+        _createTemplateHandler = createTemplateHandler;
+        _updateTemplateHandler = updateTemplateHandler;
+        _duplicateTemplateHandler = duplicateTemplateHandler;
         _logger = logger;
     }
 
@@ -358,6 +375,109 @@ public class NotificationsController : ControllerBase
         }
 
         return NoContent();
+    }
+
+    // ---------- Admin: Templates ----------
+
+    [HttpGet("admin/templates")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ListTemplates(
+        [FromQuery] string? search,
+        [FromQuery] string? type,
+        [FromQuery] string? channel,
+        [FromQuery] string? status,
+        CancellationToken cancellationToken = default)
+    {
+        NotificationType? parsedType = type is null ? null : Enum.Parse<NotificationType>(type, ignoreCase: true);
+
+        var items = await _listTemplatesHandler.HandleAsync(
+            new ListTemplatesQuery(search, parsedType, channel, status), cancellationToken);
+
+        return Ok(items.Select(ToTemplateResponse).ToList());
+    }
+
+    [HttpPost("admin/templates")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> CreateTemplate(CreateNotificationTemplateRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _createTemplateHandler.HandleAsync(
+            new CreateTemplateCommand(
+                request.Name, request.Type, request.SendEmail, request.SendInApp, request.Subject, request.Body, request.IsActive),
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        return StatusCode(StatusCodes.Status201Created, ToTemplateResponse(result.Template!));
+    }
+
+    [HttpPut("admin/templates/{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateTemplate(Guid id, UpdateNotificationTemplateRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _updateTemplateHandler.HandleAsync(
+            new UpdateTemplateCommand(
+                id, request.Name, request.Type, request.SendEmail, request.SendInApp, request.Subject, request.Body, request.IsActive),
+            cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound();
+        }
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        return Ok(ToTemplateResponse(result.Template!));
+    }
+
+    [HttpPost("admin/templates/{id:guid}/duplicate")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DuplicateTemplate(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _duplicateTemplateHandler.HandleAsync(new DuplicateTemplateCommand(id), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound();
+        }
+
+        return StatusCode(StatusCodes.Status201Created, ToTemplateResponse(result.Template!));
+    }
+
+    private static NotificationTemplateResponse ToTemplateResponse(NotificationTemplate template)
+    {
+        var channels = (template.SendInApp, template.SendEmail) switch
+        {
+            (true, true) => "In-App + Email",
+            (true, false) => "In-App",
+            (false, true) => "Email",
+            _ => "-",
+        };
+
+        return new NotificationTemplateResponse(
+            template.Id,
+            template.Name,
+            template.Type.ToString(),
+            template.SendEmail,
+            template.SendInApp,
+            channels,
+            template.Subject,
+            template.Body,
+            template.IsActive ? "Active" : "Draft",
+            template.UpdatedAtUtc);
     }
 
     private static NotificationResponse ToResponse(NotificationEntity notification) => new(

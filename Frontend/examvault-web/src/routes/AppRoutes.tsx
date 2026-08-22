@@ -61,6 +61,7 @@ import AdminNotificationDetails from '../pages/admin/AdminNotificationDetails';
 import CreateNotification from '../pages/admin/CreateNotification';
 import NotificationHistory from '../pages/admin/NotificationHistory';
 import NotificationBatchDetails from '../pages/admin/NotificationBatchDetails';
+import NotificationTemplates from '../pages/admin/NotificationTemplates';
 import ProtectedRoute from '../components/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -535,6 +536,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <NotificationHistory />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/notifications/templates"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <NotificationTemplates />
           </ProtectedRoute>
         }
       />

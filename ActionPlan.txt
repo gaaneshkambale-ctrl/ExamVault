@@ -4294,3 +4294,152 @@ verification against real seeded data (70 existing batches):
   back to 0) both updated via query invalidation with no manual
   refresh.
 No gaps found; feature matches the mockup and plan as built.
+
+FEATURE (DONE, 2026-08-22): Notification Templates submenu
+(notification_templates.png)
+=====================================================================
+REQUESTED: user supplied notification_templates.png, asked to add a
+new "Notification Templates" submenu under Notifications (sidebar
+order: Send Notification, Notification History, Notification
+Templates). Asked the user to scope-fork since the mockup shows real
+CRUD affordances (+Create Template, per-row Edit, Duplicate, Active/
+Draft status, Last Updated) which means either (a) a real backend-
+persisted template entity + full CRUD, with Send Notification's
+template dropdown switched over to consume it (single source of
+truth), or (b) a read-only list over the existing 5 hardcoded
+templates with Create/Edit/Duplicate flagged out of scope. User chose
+(a), full real CRUD.
+
+INTERPRETATION NOTE: the mockup's bottom "Recommended Template
+Variables" purple box shows "Preview Template / Duplicate / Edit"
+links, seemingly tied to a selected row, but the static image gives no
+selection-state affordance to build against. Rather than invent a
+row-selection interaction not specified anywhere, Preview/Duplicate/
+Edit become three real per-row action buttons in the table's Action
+column (same convention as every other admin list page's icon-button
+Action column), and the "Recommended Template Variables" box stays a
+static, always-visible reference panel (variable chips + explanatory
+text only, no row-specific links) below the table.
+
+BACKEND (NotificationService), same handler-per-operation CQRS pattern
+as AuditLogs/History:
+- New NotificationTemplate entity (Domain/Entities): Id/CreatedAtUtc
+  from BaseEntity, + Name, Type (existing NotificationType enum -
+  Exam/Reminder/Result/System/Account, already matches the mockup's
+  Type column exactly), SendEmail bool, SendInApp bool (channel
+  defaults - reused when this template is picked in Send Notification,
+  same "In-App + Email"/"In-App"/"Email" derivation History already
+  uses), Subject, Body (merge-field text, same {{studentName}}/
+  {{examTitle}}/etc convention as the existing hardcoded templates),
+  IsActive bool, UpdatedAtUtc (set on create and every update - no
+  UpdatedAtUtc on BaseEntity, added directly on this entity).
+- Migration AddNotificationTemplates: new table + HasData seed of the
+  5 templates that already exist for real today as the hardcoded
+  Frontend/.../utils/notificationTemplates.ts array (same subject/body
+  content, migrated verbatim so switching Send Notification's source
+  doesn't regress default template availability). Seeded IsActive=true
+  for all 5, SendEmail/SendInApp set to match the mockup's Channels
+  column per type (Exam Assigned: both; Exam Reminder: email only;
+  Result Published: both; Account Created [was "Account Notice" in the
+  hardcoded array, renamed here to match the mockup]: email only;
+  System Announcement: in-app only). Timestamps use the migration's
+  own real applied-at time, NOT the mockup's illustrative "22 Aug/21
+  Aug/18 Aug" dates - backdating CreatedAtUtc/UpdatedAtUtc to match a
+  picture would be fabricating an audit trail. The mockup's 6th row
+  ("Exam Submission", Draft) has no existing real content behind it,
+  so it is NOT seeded - flagged here as something an admin can create
+  for real via +Create Template once this ships, rather than inventing
+  placeholder copy for it.
+- INotificationTemplateRepository (Application/Interfaces): ListAsync
+  (search on Name/Subject contains, optional type/channel/status
+  filters, no pagination - unlike notification batches this is a
+  small hand-curated admin list, matches the mockup's unpaginated
+  table), GetByIdAsync (internal use by Update/Duplicate, not its own
+  endpoint - List already returns full rows including Subject/Body so
+  the frontend never needs a second fetch for Edit/Preview), AddAsync,
+  SaveChangesAsync. Returns the entity directly (same convention as
+  GetMineAsync) rather than a separate summary record, since the
+  dataset is small and every field is already list-safe.
+- Vertical slices under Notifications/Admin/Templates/: ListTemplates,
+  CreateTemplate (+ FluentValidation: Name/Subject/Body required),
+  UpdateTemplate (+ same validation, 404 if missing), DuplicateTemplate
+  (copies all fields, appends " (Copy)" to Name, forces IsActive=false
+  so a duplicate always lands as Draft, sets fresh Created/UpdatedAtUtc
+  - real new row, not a fake client-side clone).
+- NotificationsController: GET/POST /api/notifications/admin/templates,
+  PUT /api/notifications/admin/templates/{id}, POST
+  /api/notifications/admin/templates/{id}/duplicate - all [Authorize
+  Roles=Admin], all covered by the existing catch-all Gateway route
+  (/api/notifications/{**catch-all}), no Gateway config change needed.
+- Program.cs: register the new repository + 4 handlers.
+
+FRONTEND:
+- AdminSidebar: new 'Notification Templates' AdminNavItem, added as a
+  Notifications child after History, route /admin/notifications/
+  templates.
+- types/notification.ts + api/notificationApi.ts + hooks/
+  useNotifications.ts: NotificationTemplateResponse (id, name, type,
+  sendEmail, sendInApp, channels [derived display string, same
+  convention as batch Channels], subject, body, status [Active/Draft],
+  updatedAtUtc), list/create/update/duplicate API functions + hooks.
+- New page NotificationTemplates.tsx: header + "+ Create Template"
+  button opening a Create modal; filter row (search, All Types, All
+  Channels - reusing NOTIFICATION_TYPES/NotificationChannelFilter same
+  as History); table (Template Name/Type/Channels/Status/Last Updated/
+  Action) with Preview/Duplicate/Edit buttons per row; a static
+  "Recommended Template Variables" info panel below the table (see
+  INTERPRETATION NOTE). Preview opens a read-only modal rendering the
+  template's real Subject/Body. Edit reuses the same modal component as
+  Create, pre-filled, calling Update instead of Create. Duplicate calls
+  the real duplicate endpoint directly from the row (no confirm, same
+  precedent as History's Retry - creates a new row alongside, nothing
+  destructive).
+- CreateNotification.tsx: template dropdown switched from the static
+  NOTIFICATION_TEMPLATES array to fetching real Active templates from
+  the new backend endpoint (single source of truth per the chosen
+  scope). Selecting a template now also presets the Delivery Channels
+  dropdown from the template's SendEmail/SendInApp defaults (new real
+  behavior the hardcoded array never had - the mockup's subtitle
+  "Reusable templates keep email and in-app communication consistent"
+  motivates this). notificationTemplates.ts keeps EXAM_FIELD_PLACEHOLDERS/
+  containsExamFieldPlaceholder/substituteExamFields (pure utilities,
+  still needed) but drops the now-redundant hardcoded NOTIFICATION_TEMPLATES
+  array once the backend is live.
+
+OUT OF SCOPE (flagged, not building this round): a dedicated Delete-
+template endpoint/action (not shown anywhere in the mockup - Draft
+status plus Duplicate/Edit cover the shown workflow; deleting is a
+destructive action nothing in the mockup calls for); template
+versioning/history; template usage analytics (e.g. "used 12 times").
+
+VERIFICATION (2026-08-22): dotnet build (NotificationService projects
++ full ExamVault.sln) - 0 errors/warnings. dotnet test on
+Notification.Application.Tests - 22/22 passed (FakeNotificationRepository
+unaffected, templates use a separate interface). Frontend: tsc --noEmit
+and oxlint clean, vite build succeeds. EF migration
+20260822032451_AddNotificationTemplates generated and applied for
+real via `docker compose build/up notification-api` - confirmed in
+container logs: table created, all 5 seed rows inserted. Frontend
+rebuilt/redeployed the same single-service way. Live browser
+verification against the real running stack:
+- /admin/notifications/templates loads the 5 real seeded templates via
+  GET .../admin/templates (200), channels/status/dates exactly as
+  seeded (In-App+Email/Email/In-App split matching the mockup).
+- Create Template: filled a real "Exam Submission Test" template
+  (Draft) via the modal - POST .../admin/templates (201), new row
+  appeared in the list immediately via query invalidation.
+- Preview: opened the real subject/body content for that template in
+  a read-only modal.
+- Duplicate: POST .../{id}/duplicate (201) created "Exam Submission
+  Test (Copy)" as a real new Draft row alongside the original.
+- Edit: modal correctly pre-filled from the real row; toggled it to
+  Active and saved - PUT .../{id} (200), table updated to Active.
+- Search filter ("Exam Reminder") correctly server-filtered to just
+  that one real row via ?search=.
+- Send Notification's template dropdown now genuinely sources from
+  GET .../admin/templates?status=Active instead of the old hardcoded
+  array - confirmed the just-created/edited "Exam Submission Test
+  (Copy)" template appeared in that dropdown, and selecting a template
+  correctly presets both Title/Message AND the Delivery Channels
+  dropdown from the template's own SendEmail/SendInApp defaults.
+No gaps found; feature matches the mockup and plan as built.

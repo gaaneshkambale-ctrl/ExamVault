@@ -1,20 +1,16 @@
-import { useMemo, useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, ListGroup, Row } from 'react-bootstrap';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Badge, Button, Card, Col, Form, ListGroup, Row, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { useExams } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
 import { useGroups } from '../../hooks/useGroups';
+import { useNotificationTemplates } from '../../hooks/useNotifications';
 import { getGroup } from '../../api/groupApi';
 import { createNotification } from '../../api/notificationApi';
 import type { CreateNotificationResponse, NotificationSendToType } from '../../types/notification';
-import {
-  NOTIFICATION_TEMPLATES,
-  containsExamFieldPlaceholder,
-  substituteExamFields,
-} from '../../utils/notificationTemplates';
-import type { NotificationTemplate } from '../../utils/notificationTemplates';
+import { containsExamFieldPlaceholder, substituteExamFields } from '../../utils/notificationTemplates';
 import { extractServerError } from '../../utils/apiError';
 
 function toDatetimeLocalValue(date: Date): string {
@@ -35,10 +31,16 @@ export default function CreateNotification() {
   const { data: exams } = useExams();
   const { data: users } = useUsers();
   const { data: groups } = useGroups();
+  const { data: templates, isLoading: isLoadingTemplates } = useNotificationTemplates(
+    undefined,
+    undefined,
+    undefined,
+    'Active',
+  );
 
-  const [templateId, setTemplateId] = useState(NOTIFICATION_TEMPLATES[0].id);
-  const [title, setTitle] = useState(NOTIFICATION_TEMPLATES[0].title);
-  const [message, setMessage] = useState(NOTIFICATION_TEMPLATES[0].message);
+  const [templateId, setTemplateId] = useState('');
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
   const [recipientKind, setRecipientKind] = useState<RecipientKind>('AllStudents');
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
@@ -51,7 +53,7 @@ export default function CreateNotification() {
   const [submitError, setSubmitError] = useState('');
   const [created, setCreated] = useState<CreateNotificationResponse | null>(null);
 
-  const template = NOTIFICATION_TEMPLATES.find((t) => t.id === templateId) as NotificationTemplate;
+  const template = (templates ?? []).find((t) => t.id === templateId) ?? null;
   const selectedChannel = DELIVERY_CHANNELS.find((c) => c.value === channel) ?? DELIVERY_CHANNELS[0];
   const publishedExams = useMemo(() => (exams ?? []).filter((e) => e.status === 'Published'), [exams]);
   const selectedExam = useMemo(() => (exams ?? []).find((e) => e.id === relatedExamId) ?? null, [exams, relatedExamId]);
@@ -62,15 +64,33 @@ export default function CreateNotification() {
   );
 
   const applyTemplate = (id: string) => {
-    const next = NOTIFICATION_TEMPLATES.find((t) => t.id === id);
+    const next = (templates ?? []).find((t) => t.id === id);
     if (!next) return;
     setTemplateId(id);
     // Only overwrite fields the admin hasn't already hand-edited away from
     // the current template's own text, so switching templates doesn't
     // clobber something they just typed.
-    if (title === template.title || title.trim() === '') setTitle(next.title);
-    if (message === template.message || message.trim() === '') setMessage(next.message);
+    if (!template || title === template.subject || title.trim() === '') setTitle(next.subject);
+    if (!template || message === template.body || message.trim() === '') setMessage(next.body);
+    // Templates keep email/in-app consistent by also presetting the
+    // Delivery Channels dropdown from the template's own defaults.
+    if (next.sendEmail && next.sendInApp) setChannel('both');
+    else if (next.sendInApp) setChannel('inapp');
+    else if (next.sendEmail) setChannel('email');
   };
+
+  // Templates load asynchronously (real backend, not a static array) - pick
+  // the first one as the default once they arrive, same as the old
+  // hardcoded array's NOTIFICATION_TEMPLATES[0] default.
+  useEffect(() => {
+    if (!templateId && templates && templates.length > 0) {
+      applyTemplate(templates[0].id);
+    }
+    // Deliberately only re-runs when the template list itself changes -
+    // applyTemplate/templateId are intentionally excluded so picking a
+    // template doesn't retrigger this "pick a default" effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates]);
 
   const toggleStudent = (id: string) => {
     setSelectedUserIds((prev) => {
@@ -112,6 +132,7 @@ export default function CreateNotification() {
   const messageHasExamPlaceholder = containsExamFieldPlaceholder(title) || containsExamFieldPlaceholder(message);
 
   const canSubmit =
+    !!template &&
     title.trim().length > 0 &&
     message.trim().length > 0 &&
     (recipientKind !== 'SelectedStudents' || selectedUserIds.size > 0) &&
@@ -121,6 +142,8 @@ export default function CreateNotification() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      if (!template) throw new Error('Select a notification template first.');
+
       let sendTo: NotificationSendToType;
       let userIds: string[] | null = null;
 
@@ -185,6 +208,16 @@ export default function CreateNotification() {
     );
   }
 
+  if (isLoadingTemplates) {
+    return (
+      <AdminLayout active="Create Notification">
+        <div className="d-flex justify-content-center py-5">
+          <Spinner animation="border" />
+        </div>
+      </AdminLayout>
+    );
+  }
+
   const previewTitle = substituteExamFields(title, selectedExam) || 'Untitled notification';
   const previewMessage = (substituteExamFields(message, selectedExam) || 'No message yet.').replaceAll(
     '{{studentName}}',
@@ -218,9 +251,9 @@ export default function CreateNotification() {
                     <Form.Group className="mb-3">
                       <Form.Label className="fw-bold">Notification Type *</Form.Label>
                       <Form.Select value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
-                        {NOTIFICATION_TEMPLATES.map((t) => (
+                        {(templates ?? []).map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.label}
+                            {t.name}
                           </option>
                         ))}
                       </Form.Select>
@@ -452,7 +485,7 @@ export default function CreateNotification() {
               <div className="fw-bold text-primary mb-3">{selectedChannel.label}</div>
 
               <div className="text-muted small">Template</div>
-              <div className="fw-bold mb-3">{template.label}</div>
+              <div className="fw-bold mb-3">{template?.name ?? '—'}</div>
 
               <div className="text-muted small">Status</div>
               <div className="mb-3">

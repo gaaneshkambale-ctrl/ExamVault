@@ -2,6 +2,7 @@ import apiClient from './axiosClient';
 import type {
   CreateNotificationRequest,
   CreateNotificationResponse,
+  CreateNotificationTemplateRequest,
   NotificationBatchDetailsResponse,
   NotificationChannelFilter,
   NotificationHistoryResponse,
@@ -10,10 +11,13 @@ import type {
   NotificationListResponse,
   NotificationPreferenceResponse,
   NotificationResponse,
+  NotificationTemplateResponse,
+  NotificationTemplateStatus,
   NotificationType,
   ResendNotificationResponse,
   SavePreferencesRequest,
   UnreadCountResponse,
+  UpdateNotificationTemplateRequest,
 } from '../types/notification';
 
 // ---------- Mine ----------
@@ -104,4 +108,43 @@ export async function resendNotificationBatch(batchId: string): Promise<ResendNo
 
 export async function deleteNotificationBatch(batchId: string): Promise<void> {
   await apiClient.delete(`/api/notifications/admin/history/${batchId}`);
+}
+
+// ---------- Admin: Templates ----------
+
+export async function getNotificationTemplates(
+  search?: string,
+  type?: NotificationType,
+  channel?: NotificationChannelFilter,
+  status?: NotificationTemplateStatus,
+): Promise<NotificationTemplateResponse[]> {
+  const { data } = await apiClient.get<NotificationTemplateResponse[]>('/api/notifications/admin/templates', {
+    params: { search: search || undefined, type, channel, status },
+  });
+  return data;
+}
+
+export async function createNotificationTemplate(
+  request: CreateNotificationTemplateRequest,
+): Promise<NotificationTemplateResponse> {
+  const { data } = await apiClient.post<NotificationTemplateResponse>('/api/notifications/admin/templates', request);
+  return data;
+}
+
+export async function updateNotificationTemplate(
+  id: string,
+  request: UpdateNotificationTemplateRequest,
+): Promise<NotificationTemplateResponse> {
+  const { data } = await apiClient.put<NotificationTemplateResponse>(
+    `/api/notifications/admin/templates/${id}`,
+    request,
+  );
+  return data;
+}
+
+export async function duplicateNotificationTemplate(id: string): Promise<NotificationTemplateResponse> {
+  const { data } = await apiClient.post<NotificationTemplateResponse>(
+    `/api/notifications/admin/templates/${id}/duplicate`,
+  );
+  return data;
 }

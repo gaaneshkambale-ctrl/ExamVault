@@ -14,6 +14,7 @@ public class NotificationDbContext : DbContext
     public DbSet<NotificationEntity> Notifications => Set<NotificationEntity>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. Forcing Kind=Utc on
@@ -55,7 +56,103 @@ public class NotificationDbContext : DbContext
             entity.Property(a => a.UserName).HasMaxLength(200);
             entity.Property(a => a.IpAddress).HasMaxLength(64);
         });
+
+        modelBuilder.Entity<NotificationTemplate>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Type).HasConversion<string>();
+            entity.Property(t => t.Name).HasMaxLength(200);
+            entity.Property(t => t.Subject).HasMaxLength(300);
+            entity.HasData(NotificationTemplateSeed.Templates);
+        });
     }
+}
+
+// Migrates the 5 templates that already existed for real as the hardcoded
+// Frontend notificationTemplates.ts array, so switching Send Notification's
+// dropdown over to the backend doesn't lose default-template availability.
+// Timestamps are the fixed real date this migration was authored (NOT the
+// notification_templates.png mockup's illustrative per-row dates - backdating
+// these would be fabricating an audit trail).
+public static class NotificationTemplateSeed
+{
+    private static readonly DateTime SeededAtUtc = new(2026, 8, 22, 12, 0, 0, DateTimeKind.Utc);
+
+    public static readonly NotificationTemplate[] Templates =
+    [
+        new NotificationTemplate
+        {
+            Id = Guid.Parse("11111111-1111-4111-8111-111111111101"),
+            Name = "Exam Assigned",
+            Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.Exam,
+            SendEmail = true,
+            SendInApp = true,
+            Subject = "Your {{examTitle}} Exam is Assigned",
+            Body = "Hello {{studentName}},\n\n" +
+                   "You have been assigned the {{examTitle}}.\n" +
+                   "Please log in to ExamVault to view your exam schedule.\n\n" +
+                   "Exam Date: {{startDate}}   Duration: {{duration}}",
+            IsActive = true,
+            CreatedAtUtc = SeededAtUtc,
+            UpdatedAtUtc = SeededAtUtc,
+        },
+        new NotificationTemplate
+        {
+            Id = Guid.Parse("11111111-1111-4111-8111-111111111102"),
+            Name = "Exam Reminder",
+            Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.Reminder,
+            SendEmail = true,
+            SendInApp = false,
+            Subject = "Reminder: {{examTitle}} starts soon",
+            Body = "Hello {{studentName}},\n\n" +
+                   "This is a reminder that your {{examTitle}} exam starts on {{startDate}}.\n" +
+                   "Duration: {{duration}}.",
+            IsActive = true,
+            CreatedAtUtc = SeededAtUtc,
+            UpdatedAtUtc = SeededAtUtc,
+        },
+        new NotificationTemplate
+        {
+            Id = Guid.Parse("11111111-1111-4111-8111-111111111103"),
+            Name = "Result Published",
+            Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.Result,
+            SendEmail = true,
+            SendInApp = true,
+            Subject = "Your {{examTitle}} results are available",
+            Body = "Hello {{studentName}},\n\n" +
+                   "Your results for {{examTitle}} have been published.\n" +
+                   "Log in to ExamVault to view your score.",
+            IsActive = true,
+            CreatedAtUtc = SeededAtUtc,
+            UpdatedAtUtc = SeededAtUtc,
+        },
+        new NotificationTemplate
+        {
+            Id = Guid.Parse("11111111-1111-4111-8111-111111111104"),
+            Name = "Account Created",
+            Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.Account,
+            SendEmail = true,
+            SendInApp = false,
+            Subject = "Account Update",
+            Body = "Hello {{studentName}},\n\n[Write your account-related message here]",
+            IsActive = true,
+            CreatedAtUtc = SeededAtUtc,
+            UpdatedAtUtc = SeededAtUtc,
+        },
+        new NotificationTemplate
+        {
+            Id = Guid.Parse("11111111-1111-4111-8111-111111111105"),
+            Name = "System Announcement",
+            Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.System,
+            SendEmail = false,
+            SendInApp = true,
+            Subject = "ExamVault Announcement",
+            Body = "Hello {{studentName}},\n\n[Write your announcement here]",
+            IsActive = true,
+            CreatedAtUtc = SeededAtUtc,
+            UpdatedAtUtc = SeededAtUtc,
+        },
+    ];
 }
 
 public class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>

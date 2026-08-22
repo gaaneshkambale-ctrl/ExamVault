@@ -6,9 +6,15 @@ import {
   getNotificationBatchDetails,
   getNotificationHistory,
   getNotificationHistoryStats,
+  getNotificationTemplates,
   getUnreadCount,
 } from '../api/notificationApi';
-import type { NotificationChannelFilter, NotificationHistoryStatus, NotificationType } from '../types/notification';
+import type {
+  NotificationChannelFilter,
+  NotificationHistoryStatus,
+  NotificationTemplateStatus,
+  NotificationType,
+} from '../types/notification';
 
 export function useMyNotifications(unreadOnly = false, page = 1, pageSize = 20, enabled = true) {
   return useQuery({
@@ -67,5 +73,19 @@ export function useNotificationBatchDetails(batchId: string | undefined) {
     queryKey: ['notifications', 'admin', 'history', batchId],
     queryFn: () => getNotificationBatchDetails(batchId!),
     enabled: !!batchId,
+  });
+}
+
+export function useNotificationTemplates(
+  search?: string,
+  type?: NotificationType,
+  channel?: NotificationChannelFilter,
+  status?: NotificationTemplateStatus,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['notifications', 'admin', 'templates', search ?? '', type ?? 'All', channel ?? 'All', status ?? 'All'],
+    queryFn: () => getNotificationTemplates(search, type, channel, status),
+    enabled,
   });
 }

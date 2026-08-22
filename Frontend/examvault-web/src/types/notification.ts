@@ -111,3 +111,30 @@ export interface ResendNotificationResponse {
   newBatchId: string;
   recipientCount: number;
 }
+
+export type NotificationTemplateStatus = 'Active' | 'Draft';
+
+export interface NotificationTemplateResponse {
+  id: string;
+  name: string;
+  type: NotificationType;
+  sendEmail: boolean;
+  sendInApp: boolean;
+  channels: string;
+  subject: string;
+  body: string;
+  status: NotificationTemplateStatus;
+  updatedAtUtc: string;
+}
+
+export interface CreateNotificationTemplateRequest {
+  name: string;
+  type: NotificationType;
+  sendEmail: boolean;
+  sendInApp: boolean;
+  subject: string;
+  body: string;
+  isActive: boolean;
+}
+
+export type UpdateNotificationTemplateRequest = CreateNotificationTemplateRequest;

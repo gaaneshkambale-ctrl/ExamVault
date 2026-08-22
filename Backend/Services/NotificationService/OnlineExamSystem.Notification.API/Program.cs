@@ -11,6 +11,10 @@ using OnlineExamSystem.Notification.Application.Notifications.Admin.DeleteNotifi
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationBatchDetails;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationHistory;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotificationHistoryStats;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.Templates.CreateTemplate;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.Templates.DuplicateTemplate;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.Templates.ListTemplates;
+using OnlineExamSystem.Notification.Application.Notifications.Admin.Templates.UpdateTemplate;
 using OnlineExamSystem.Notification.Application.Notifications.Admin.ResendNotificationBatch;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.DeleteMyNotification;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.GetMyNotifications;
@@ -41,6 +45,7 @@ public class Program
         builder.Services.AddDbContext<NotificationDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationDb")));
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+        builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         builder.Services.AddScoped<RecordAuditLogHandler>();
         builder.Services.AddScoped<ListAuditLogsHandler>();
@@ -79,6 +84,12 @@ public class Program
         builder.Services.AddScoped<GetNotificationBatchDetailsHandler>();
         builder.Services.AddScoped<ResendNotificationBatchHandler>();
         builder.Services.AddScoped<DeleteNotificationBatchHandler>();
+        builder.Services.AddScoped<ListTemplatesHandler>();
+        builder.Services.AddScoped<IValidator<CreateTemplateCommand>, CreateTemplateValidator>();
+        builder.Services.AddScoped<CreateTemplateHandler>();
+        builder.Services.AddScoped<IValidator<UpdateTemplateCommand>, UpdateTemplateValidator>();
+        builder.Services.AddScoped<UpdateTemplateHandler>();
+        builder.Services.AddScoped<DuplicateTemplateHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
