@@ -118,14 +118,6 @@ export default function StudentResults() {
 
       <Row className="g-2 mb-3">
         <Col md={4}>
-          <Form.Control
-            type="search"
-            placeholder="Search by student, roll no, or exam..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-        </Col>
-        <Col md={4}>
           <Form.Select value={examFilter} onChange={(e) => setExamFilter(e.target.value)}>
             <option value="All">All Exams</option>
             {(exams ?? []).map((exam) => (
@@ -144,6 +136,14 @@ export default function StudentResults() {
               </option>
             ))}
           </Form.Select>
+        </Col>
+        <Col md={4}>
+          <Form.Control
+            type="search"
+            placeholder="Search by student, email or roll no..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
         </Col>
       </Row>
 
@@ -173,12 +173,8 @@ export default function StudentResults() {
                   <th>Score</th>
                   <th>Percentage</th>
                   <th>Grade</th>
-                  <th>Status</th>
-                  <th>Submitted On</th>
-                  <th>Fullscreen Exits</th>
-                  <th>Suspicious Activity</th>
-                  <th>Tab/Window Activity</th>
-                  <th>Copy/Paste &amp; Right-Click</th>
+                  <th>Result</th>
+                  <th>Completed On</th>
                   <th className="pe-4">Action</th>
                 </tr>
               </thead>
@@ -188,10 +184,6 @@ export default function StudentResults() {
                     result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
                   const grade = getGrade(result.totalScore, result.totalMarks, result.passed);
                   const student = studentById.get(result.userId);
-                  const suspiciousActivity = result.noFaceDetectedCount + result.multipleFacesDetectedCount;
-                  const tabWindowActivity =
-                    result.tabSwitchCount + result.multipleTabsCount + result.multipleMonitorsCount;
-                  const copyPasteRightClick = result.copyPasteCount + result.rightClickCount;
                   return (
                     <tr key={result.attemptId}>
                       <td className="ps-4 fw-medium">
@@ -213,34 +205,6 @@ export default function StudentResults() {
                         </Badge>
                       </td>
                       <td>{new Date(result.submittedAtUtc).toLocaleString()}</td>
-                      <td>
-                        {result.fullscreenExitCount > 0 ? (
-                          <Badge bg="danger">{result.fullscreenExitCount}</Badge>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
-                      <td>
-                        {suspiciousActivity > 0 ? (
-                          <Badge bg="danger">{suspiciousActivity}</Badge>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
-                      <td>
-                        {tabWindowActivity > 0 ? (
-                          <Badge bg="warning">{tabWindowActivity}</Badge>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
-                      <td>
-                        {copyPasteRightClick > 0 ? (
-                          <Badge bg="warning">{copyPasteRightClick}</Badge>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
                       <td className="pe-4">
                         <div className="d-flex gap-1">
                           <Link
