@@ -224,6 +224,19 @@ public class ExamsController : ControllerBase
             return Conflict(new { message = $"Exam cannot transition to {targetStatus}." });
         }
 
+        if (result.ValidationErrors.Count > 0)
+        {
+            _logger.LogWarning(
+                "Publish blocked for exam {ExamId}: {Errors}",
+                id,
+                string.Join("; ", result.ValidationErrors));
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
         _logger.LogInformation("Exam {ExamId} moved to {Status}.", id, targetStatus);
         if (targetStatus == ExamStatus.Published)
         {

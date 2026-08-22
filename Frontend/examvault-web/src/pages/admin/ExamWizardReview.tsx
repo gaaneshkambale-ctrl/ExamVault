@@ -30,6 +30,16 @@ export default function ExamWizardReview() {
 
   const totalQuestions = questions?.length ?? 0;
 
+  const sectionTotals = (sections ?? []).reduce(
+    (acc, s) => ({ marks: acc.marks + s.marks, durationMinutes: acc.durationMinutes + s.durationMinutes }),
+    { marks: 0, durationMinutes: 0 },
+  );
+  const hasSections = Boolean(exam?.containsSections) && (sections?.length ?? 0) > 0;
+  const marksMismatch = hasSections && exam && sectionTotals.marks !== exam.totalMarks;
+  const durationMismatch = hasSections && exam && sectionTotals.durationMinutes !== exam.durationMinutes;
+  const passingMarksUnreachable = hasSections && exam && exam.passingMarks > sectionTotals.marks;
+  const showMismatchWarning = marksMismatch || durationMismatch || passingMarksUnreachable;
+
   const publishMutation = useMutation({
     mutationFn: () => publishExam(examId!),
     onSuccess: () => {
@@ -73,6 +83,32 @@ export default function ExamWizardReview() {
               </Row>
             </Card.Body>
           </Card>
+
+          {showMismatchWarning && (
+            <Alert variant="warning">
+              <Alert.Heading className="h6 fw-bold">Section totals don't match the exam's settings</Alert.Heading>
+              <ul className="mb-0 small">
+                {marksMismatch && (
+                  <li>
+                    Sections add up to {sectionTotals.marks} marks, but Total Marks above is {exam.totalMarks}.
+                  </li>
+                )}
+                {durationMismatch && (
+                  <li>
+                    Sections add up to {sectionTotals.durationMinutes} minute(s), but Duration above is{' '}
+                    {exam.durationMinutes} minute(s).
+                  </li>
+                )}
+                {passingMarksUnreachable && (
+                  <li>
+                    Passing Marks is {exam.passingMarks}, but sections only add up to {sectionTotals.marks}{' '}
+                    marks - this exam can never be passed.
+                  </li>
+                )}
+              </ul>
+              <div className="small mt-2 mb-0">Publishing will be blocked until these match.</div>
+            </Alert>
+          )}
 
           {exam.containsSections && (
             <Card className="border-0 shadow-sm mb-4">

@@ -5019,3 +5019,146 @@ to `xs={12} sm={6} lg={3}` (1 per row on phones, 2 on tablets, 4 on
 desktop - same responsive-collapse convention used elsewhere in this
 app rather than a fixed always-4 layout that would overflow narrow
 screens).
+
+FIX (DONE, 2026-08-22): Block publish on exam/section total mismatch
+=====================================================================
+REPORTED BUG: admin creates exam with DurationMinutes=60, TotalMarks=100,
+PassingMarks=40, then adds a single section with QuestionCount=10,
+Marks=2 each (=20 total), DurationMinutes=20. Nothing validates the
+section sums against the exam-level declared totals, so:
+  - Real achievable score is capped at 20 (sum of section Marks), but
+    PassingMarks=40 is unreachable -> every student fails regardless
+    of performance.
+  - Displayed score % divides by declared TotalMarks (100) instead of
+    the real achievable total, so it's wrong even when a student could
+    pass.
+  - Section.DurationMinutes (20) is a REAL, server-enforced deadline
+    (EnterSectionHandler) independent of the exam-level timer (60) -
+    on a single/last section it auto-submits the whole exam at 20
+    min, cutting the declared 60-minute exam short.
+No validation exists anywhere today comparing exam-level
+TotalMarks/DurationMinutes/TotalQuestions against the real sums of
+Section.Marks/DurationMinutes/QuestionCount, at create, update, or
+publish time.
+
+USER DECISION (via AskUserQuestion): hard-block publishing when totals
+don't match (not just a warning), with a specific itemized error.
+Also confirmed PassingMarks must be validated against the REAL
+achievable sum of section marks (not just declared TotalMarks), since
+that's the exact mechanism causing the bug.
+
+SCOPE:
+1. Backend (ExamService), ChangeExamStatusHandler.HandleAsync: when
+   command.TargetStatus == ExamStatus.Published (only - unpublish/
+   archive of an already-broken exam must stay unblocked so admins can
+   fix it), load the exam's sections via
+   IExamRepository.GetSectionsByExamIdAsync, sum Marks/
+   DurationMinutes/QuestionCount, and validate:
+     - sum(Section.Marks) == exam.TotalMarks
+     - sum(Section.DurationMinutes) == exam.DurationMinutes
+     - sum(Section.QuestionCount) == exam.TotalQuestions (only if
+       TotalQuestions is actually used/nonzero - it was noted
+       elsewhere as a legacy/stale field defaulting to 0, so this
+       check is conditional to avoid false positives; confirm during
+       implementation)
+     - exam.PassingMarks <= sum(Section.Marks) (the real achievable
+       max, catching the root-cause bug even if TotalMarks itself
+       happens to already match)
+     - at least one section exists (an exam with zero sections cannot
+       be taken - block publish with a clear message rather than
+       silently allowing an empty exam live)
+   On failure, return specific itemized messages via a new
+   ChangeExamStatusResult state (mirroring CreateExamResult's
+   ValidationErrors + Invalid(errors) pattern already used
+   elsewhere), NOT the existing generic InvalidTransition flag (that's
+   reserved for illegal state-machine transitions, a different
+   concern).
+2. ExamsController.ChangeStatus: map the new result state to
+   ValidationProblem(...) using the exact same
+   errors.Select(...).GroupBy(_ => "request") pattern already used in
+   Create/Update, so no new frontend error-shape handling is needed.
+3. Frontend: zero required changes for the block itself -
+   ExamDetails.tsx's publishMutation already calls
+   extractServerError(error) on failure, which already generically
+   flattens ValidationProblemDetails errors dicts (confirmed by
+   reading apiError.ts). Verify live that EditExam.tsx's publish path
+   (if any) uses the same handling.
+4. Frontend (proactive, so admins see the problem before attempting
+   publish, not just as a rejection): add a warning banner comparing
+   section-sum totals against exam-level declared totals in
+   ManageSections.tsx (already computes the sums for its footer row)
+   and in ExamWizardReview.tsx's Review & Publish step (already shows
+   both blocks side by side, just never compares them).
+5. Check ExamService test suite for any IExamRepository fakes /
+   ChangeExamStatusHandler tests that construct ChangeExamStatusResult
+   directly - update for the new state per this session's established
+   discipline around result-type/interface changes.
+6. No new persisted fields -> no EF migration expected; confirm during
+   implementation.
+7. Build ExamService + frontend, redeploy exam-api (and frontend if
+   changed) one service at a time (RAM-constrained Docker discipline -
+   never full-stack --build).
+8. Live browser verification: recreate the reported scenario
+   (Duration=60/TotalMarks=100/PassingMarks=40 exam, single section
+   QuestionCount=10/Marks=2/Duration=20), attempt Publish, confirm it
+   is blocked with a specific itemized message; fix the section to
+   match the exam totals, confirm Publish then succeeds.
+
+SCOPE CORRECTION found during implementation: the check is gated to
+exam.ContainsSections == true only. Non-sectioned exams get an
+implicit single "General" section purely so Question Assignment has
+somewhere to save to (GetOrCreateDefaultSectionHandler) - its
+Marks/QuestionCount are never surfaced to the admin (the "Manage
+Questions" flow jumps straight to SectionForm step 3, skipping the
+Marks/QuestionCount inputs entirely) and stay 0 forever. Applying the
+totals check unconditionally would have permanently blocked every
+non-sectioned exam from ever publishing - a severe regression to the
+simpler/default exam creation path. The reported bug is specific to
+the section-wizard flow, so scoping there is correct and sufficient.
+
+DONE - built, tested, deployed, and verified live:
+- Backend: ChangeExamStatusHandler.HandleAsync validates section
+  totals only when TargetStatus == Published && exam.ContainsSections.
+  Checks sum(Section.Marks) == exam.TotalMarks, sum(DurationMinutes)
+  == exam.DurationMinutes, sum(QuestionCount) == exam.TotalQuestions
+  (skipped when TotalQuestions is 0 - confirmed it's a legacy field
+  never set by any UI), PassingMarks <= sum(Marks), and at least one
+  section exists. Returns itemized messages via a new
+  ChangeExamStatusResult.ValidationFailed(errors) state.
+  ExamsController.ChangeStatus maps it to the same ValidationProblem
+  pattern used by Create/Update, so no new frontend error-shape
+  handling was needed.
+- Frontend: proactive warning banners (same itemized messages) added
+  to ManageSections.tsx's footer-totals view and
+  ExamWizardReview.tsx's Review & Publish step, both gated on
+  exam.containsSections, so admins see the mismatch before attempting
+  Publish, not just as a rejection.
+- Tests: ChangeExamStatusHandlerTests extended - added cases for
+  matching-totals success, mismatched-totals block, zero-sections
+  block, non-sectioned exam with mismatched totals NOT blocked, and
+  unpublishing an already-broken exam still allowed. 74/74 ExamService
+  Application tests pass. Frontend tsc --noEmit and vite build both
+  clean.
+- Deployed: exam-api and frontend rebuilt and redeployed one service
+  at a time (no migration needed - validation-only change, no new
+  persisted fields).
+- Live verification (admin browser session, real data): created
+  "Publish Validation Test Exam" with the exact reported scenario
+  (Duration=60/TotalMarks=100/PassingMarks=40, one section
+  QuestionCount=10/Marks=20/Duration=20). Review & Publish step showed
+  the proactive warning banner with all three itemized mismatches.
+  Clicking Publish was rejected by the server with the same itemized
+  message rendered in the page's error alert (confirmed
+  extractServerError + ValidationProblem wiring works end to end).
+  Edited the section to Marks=100/Duration=60 (matching the exam) -
+  the warning banner disappeared and Publish then succeeded, exam
+  showed status "Published". Test exam deleted afterward for cleanup.
+Real achievable score/PassingMarks validation still uses each
+section's ADMIN-DECLARED Marks total, not a live sum of actual
+per-question marks (AttemptScorer scores from real per-question
+Marks, and Section.Marks is a separate, never-auto-synced target per
+existing Day-19 precedent) - this matches the scope the user
+confirmed (compare section declared totals vs exam declared totals)
+and directly fixes the reported bug pattern; reconciling against
+truly real per-question sums would need a new cross-service call from
+ExamService to QuestionService and was out of scope for this fix.

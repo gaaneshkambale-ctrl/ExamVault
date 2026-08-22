@@ -1,4 +1,4 @@
-import { Badge, Card, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Card, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteSectionButton from '../../components/DeleteSectionButton';
@@ -19,6 +19,12 @@ export default function ManageSections() {
     }),
     { questionCount: 0, marks: 0, durationMinutes: 0 },
   );
+
+  const hasSections = (sections?.length ?? 0) > 0 && Boolean(exam?.containsSections);
+  const marksMismatch = hasSections && exam && totals.marks !== exam.totalMarks;
+  const durationMismatch = hasSections && exam && totals.durationMinutes !== exam.durationMinutes;
+  const passingMarksUnreachable = hasSections && exam && exam.passingMarks > totals.marks;
+  const showMismatchWarning = marksMismatch || durationMismatch || passingMarksUnreachable;
 
   return (
     <AdminLayout active="Exams">
@@ -41,6 +47,34 @@ export default function ManageSections() {
           </div>
         </div>
       </div>
+
+      {showMismatchWarning && exam && (
+        <Alert variant="warning" className="mb-3">
+          <Alert.Heading className="h6 fw-bold">Section totals don't match the exam's settings</Alert.Heading>
+          <ul className="mb-0 small">
+            {marksMismatch && (
+              <li>
+                Sections add up to {totals.marks} marks, but the exam's Total Marks is {exam.totalMarks}.
+              </li>
+            )}
+            {durationMismatch && (
+              <li>
+                Sections add up to {totals.durationMinutes} minute(s), but the exam's Duration is{' '}
+                {exam.durationMinutes} minute(s).
+              </li>
+            )}
+            {passingMarksUnreachable && (
+              <li>
+                Passing Marks is {exam.passingMarks}, but sections only add up to {totals.marks} marks -
+                this exam can never be passed.
+              </li>
+            )}
+          </ul>
+          <div className="small mt-2 mb-0">
+            Publishing will be blocked until the exam's settings and section totals match.
+          </div>
+        </Alert>
+      )}
 
       <Card className="border-0 shadow-sm">
         <Card.Body className={isLoading || isError || (sections?.length ?? 0) === 0 ? '' : 'p-0'}>
