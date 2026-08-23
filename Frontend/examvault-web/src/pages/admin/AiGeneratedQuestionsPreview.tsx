@@ -12,6 +12,7 @@ import { extractServerError } from '../../utils/apiError';
 
 const questionTypeLabel: Record<GenerateQuestionType, string> = {
   MultipleChoice: 'Single Choice',
+  MultiSelect: 'Multiple Choice',
   TrueFalse: 'True/False',
 };
 
@@ -153,6 +154,7 @@ export default function AiGeneratedQuestionsPreview() {
   const counts = {
     total: drafts.length,
     mcq: drafts.filter((d) => d.questionType === 'MultipleChoice').length,
+    multiSelect: drafts.filter((d) => d.questionType === 'MultiSelect').length,
     trueFalse: drafts.filter((d) => d.questionType === 'TrueFalse').length,
   };
 
@@ -166,7 +168,7 @@ export default function AiGeneratedQuestionsPreview() {
       {approveError && <Alert variant="danger">{approveError}</Alert>}
 
       <Row className="g-3 mb-4">
-        <Col xs={12} sm={4}>
+        <Col xs={6} sm={3}>
           <Card className="border-0 shadow-sm">
             <Card.Body>
               <div className="text-muted small">Total Questions</div>
@@ -174,7 +176,7 @@ export default function AiGeneratedQuestionsPreview() {
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={12} sm={4}>
+        <Col xs={6} sm={3}>
           <Card className="border-0 shadow-sm">
             <Card.Body>
               <div className="text-muted small">Single Choice</div>
@@ -182,7 +184,15 @@ export default function AiGeneratedQuestionsPreview() {
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={12} sm={4}>
+        <Col xs={6} sm={3}>
+          <Card className="border-0 shadow-sm">
+            <Card.Body>
+              <div className="text-muted small">Multiple Choice</div>
+              <div className="h4 fw-bold mb-0">{counts.multiSelect}</div>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col xs={6} sm={3}>
           <Card className="border-0 shadow-sm">
             <Card.Body>
               <div className="text-muted small">True / False</div>

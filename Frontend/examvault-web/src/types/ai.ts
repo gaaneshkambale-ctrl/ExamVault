@@ -1,15 +1,13 @@
 export type GenerateSource = 'ExistingExam' | 'TopicText';
-export type GenerateQuestionType = 'MultipleChoice' | 'TrueFalse';
+export type GenerateQuestionType = 'MultipleChoice' | 'MultiSelect' | 'TrueFalse';
 export type GenerateDifficulty = 'Easy' | 'Medium' | 'Hard';
 
-// Reserved in the backend's QuestionType enum but not wired end-to-end yet:
-// true multi-select Multiple Choice needs AttemptAnswer to support more than
-// one selected option per question (it's singular today); the three
-// free-text types need an answer-submission path and a grading UI, neither
-// of which exist. Shown disabled rather than hidden on both AI-generate
-// entry points, matching this app's "From Document" precedent.
+// The three free-text types need an answer-submission path and a grading UI
+// for AI-generated drafts specifically, neither of which exist yet (manual
+// Code/Programming questions do have both, but the AI generator has no
+// test-case-authoring step). Shown disabled rather than hidden on both
+// AI-generate entry points, matching this app's "From Document" precedent.
 export const DISABLED_QUESTION_TYPES = [
-  'Multiple Choice',
   'Short Answer',
   'Long Answer / Descriptive',
   'Code / Programming',

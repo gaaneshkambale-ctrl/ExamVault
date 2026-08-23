@@ -351,12 +351,8 @@ export default function EditExam() {
                   <Col md={3}>
                     <Form.Group className="mb-3" controlId="editExamCode">
                       <Form.Label className="fw-bold">Exam Code</Form.Label>
-                      <Form.Control
-                        type="text"
-                        placeholder="e.g. NET-2026-01"
-                        value={form.examCode ?? ''}
-                        onChange={(e) => updateField('examCode', e.target.value)}
-                      />
+                      <Form.Control type="text" value={form.examCode ?? ''} disabled readOnly />
+                      <Form.Text className="text-muted">System-generated, not editable.</Form.Text>
                     </Form.Group>
                   </Col>
                   <Col md={3}>

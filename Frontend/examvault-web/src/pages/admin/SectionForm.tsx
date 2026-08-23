@@ -148,6 +148,10 @@ export default function SectionForm() {
     }
   };
 
+  // Distinct from goToCreateQuestion: AI-generated exams still get a manual entry
+  // option alongside "Generate with AI" rather than the two being mutually exclusive.
+  const openManualQuestion = () => setShowCreateQuestion(true);
+
   const toggleQuestion = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -473,6 +477,11 @@ export default function SectionForm() {
                             : 'Save & Generate with AI'
                           : '+ Create Question'}
                       </Button>
+                      {useAiGenerate && (
+                        <Button variant="outline-secondary" size="sm" onClick={openManualQuestion}>
+                          + Manual Question
+                        </Button>
+                      )}
                       {filteredQuestions.length > 0 && (
                         <Button variant="outline-secondary" size="sm" onClick={toggleSelectAll}>
                           {allFilteredSelected ? 'Clear All' : 'Select All'}
@@ -489,8 +498,8 @@ export default function SectionForm() {
 
                   {!isLoadingUnassigned && filteredQuestions.length === 0 && (
                     <div className="text-center text-muted py-4">
-                      No unassigned questions match these filters. Click "+ Create Question" above
-                      to add one.
+                      No unassigned questions match these filters. Click "
+                      {useAiGenerate ? '+ Manual Question' : '+ Create Question'}" above to add one.
                     </div>
                   )}
 

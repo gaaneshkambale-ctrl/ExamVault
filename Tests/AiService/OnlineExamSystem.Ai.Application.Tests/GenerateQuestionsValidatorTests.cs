@@ -98,6 +98,16 @@ public class GenerateQuestionsValidatorTests
     }
 
     [Fact]
+    public void MultiSelect_question_type_passes()
+    {
+        var request = ValidRequest() with { QuestionTypes = ["MultiSelect"] };
+
+        var result = _validator.Validate(request);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
     public void Empty_difficulty_levels_fails()
     {
         var request = ValidRequest() with { DifficultyLevels = [] };

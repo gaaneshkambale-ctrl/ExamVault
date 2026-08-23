@@ -45,6 +45,10 @@ export default function DraftEditorModal({ draft, onCancel, onSave }: DraftEdito
     setOptions((prev) => prev.map((o) => ({ ...o, isCorrect: o.key === key })));
   };
 
+  const toggleCorrect = (key: number) => {
+    setOptions((prev) => prev.map((o) => (o.key === key ? { ...o, isCorrect: !o.isCorrect } : o)));
+  };
+
   const addOption = () =>
     setOptions((prev) => [...prev, { key: nextOptionKey++, optionText: '', isCorrect: false }]);
 
@@ -115,35 +119,51 @@ export default function DraftEditorModal({ draft, onCancel, onSave }: DraftEdito
               disabled={draft.questionType === 'TrueFalse'}
               onChange={(e) => updateOptionText(option.key, e.target.value)}
             />
-            {draft.questionType === 'MultipleChoice' && options.length > 2 && (
+            {draft.questionType !== 'TrueFalse' && options.length > 2 && (
               <Button variant="link" className="text-danger" onClick={() => removeOption(option.key)}>
                 Remove
               </Button>
             )}
           </div>
         ))}
-        {draft.questionType === 'MultipleChoice' && (
+        {draft.questionType !== 'TrueFalse' && (
           <Button variant="outline-secondary" size="sm" className="mb-3" onClick={addOption}>
             + Add Option
           </Button>
         )}
 
-        <Form.Group className="mb-2" controlId="draftCorrectAnswer" style={{ maxWidth: 320 }}>
-          <Form.Label className="fw-bold">Correct Answer</Form.Label>
-          <Form.Select
-            value={options.find((o) => o.isCorrect)?.key ?? ''}
-            onChange={(e) => markCorrect(Number(e.target.value))}
-          >
-            <option value="" disabled>
-              Select correct answer
-            </option>
+        {draft.questionType === 'MultiSelect' ? (
+          <Form.Group className="mb-2" controlId="draftCorrectAnswers">
+            <Form.Label className="fw-bold">Correct Answers (select all that apply)</Form.Label>
             {options.map((option, index) => (
-              <option key={option.key} value={option.key}>
-                {optionLetter(index)} - {option.optionText || `Option ${index + 1}`}
-              </option>
+              <Form.Check
+                key={option.key}
+                type="checkbox"
+                id={`draftCorrect-${option.key}`}
+                label={`${optionLetter(index)} - ${option.optionText || `Option ${index + 1}`}`}
+                checked={option.isCorrect}
+                onChange={() => toggleCorrect(option.key)}
+              />
             ))}
-          </Form.Select>
-        </Form.Group>
+          </Form.Group>
+        ) : (
+          <Form.Group className="mb-2" controlId="draftCorrectAnswer" style={{ maxWidth: 320 }}>
+            <Form.Label className="fw-bold">Correct Answer</Form.Label>
+            <Form.Select
+              value={options.find((o) => o.isCorrect)?.key ?? ''}
+              onChange={(e) => markCorrect(Number(e.target.value))}
+            >
+              <option value="" disabled>
+                Select correct answer
+              </option>
+              {options.map((option, index) => (
+                <option key={option.key} value={option.key}>
+                  {optionLetter(index)} - {option.optionText || `Option ${index + 1}`}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+        )}
       </Modal.Body>
       <Modal.Footer>
         <Button variant="outline-secondary" onClick={onCancel}>

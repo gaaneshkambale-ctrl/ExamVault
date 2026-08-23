@@ -5,7 +5,7 @@ namespace OnlineExamSystem.Ai.Application.Generate;
 public class GenerateQuestionsValidator : AbstractValidator<GenerateQuestionsRequest>
 {
     private static readonly string[] SupportedSources = ["ExistingExam", "TopicText"];
-    private static readonly string[] SupportedQuestionTypes = ["MultipleChoice", "TrueFalse"];
+    private static readonly string[] SupportedQuestionTypes = ["MultipleChoice", "MultiSelect", "TrueFalse"];
     private static readonly string[] SupportedDifficulties = ["Easy", "Medium", "Hard"];
 
     public GenerateQuestionsValidator()
@@ -24,7 +24,7 @@ public class GenerateQuestionsValidator : AbstractValidator<GenerateQuestionsReq
 
         RuleFor(x => x.QuestionTypes)
             .Must(types => types.Count > 0 && types.All(SupportedQuestionTypes.Contains))
-            .WithMessage("Select at least one supported question type (Multiple Choice or True/False).");
+            .WithMessage("Select at least one supported question type (Single Choice, Multiple Choice, or True/False).");
 
         RuleFor(x => x.DifficultyLevels)
             .Must(levels => levels.Count > 0 && levels.All(SupportedDifficulties.Contains))

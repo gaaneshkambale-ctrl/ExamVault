@@ -22,10 +22,10 @@ import { extractServerError } from '../../utils/apiError';
 // "MultipleChoice" is the backend's real name for this type, but its actual
 // behavior (one correct answer picked from a dropdown) is what's normally
 // called "Single Choice" - labelled that way here so it doesn't get
-// confused with the true multi-select "Multiple Choice" chip below, which
-// isn't real yet (see DISABLED_QUESTION_TYPES).
+// confused with the true multi-select "Multiple Choice" type.
 const questionTypeLabel: Record<GenerateQuestionType, string> = {
   MultipleChoice: 'Single Choice',
+  MultiSelect: 'Multiple Choice',
   TrueFalse: 'True/False',
 };
 

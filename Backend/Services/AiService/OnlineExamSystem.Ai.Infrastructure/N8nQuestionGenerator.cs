@@ -37,7 +37,7 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
             questionCount = request.QuestionCount,
             complexity = string.Join(", ", request.DifficultyLevels),
             subject = request.Topic,
-            questionTypes = string.Join(", ", request.QuestionTypes.Select(FormatQuestionTypeLabel)),
+            questionTypes = string.Join(", ", request.QuestionTypes.Select(FormatQuestionTypeLabel).Distinct()),
         };
 
         using var response = await _httpClient.PostAsJsonAsync(_webhookUrl, payload, cancellationToken);
@@ -48,13 +48,18 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
 
         var fallbackDifficulty = request.DifficultyLevels.Count > 0 ? request.DifficultyLevels[0] : "Medium";
 
+        // Only produce MultiSelect drafts if the admin actually asked for that type -
+        // if they only requested Single Choice, a model response with several correct
+        // letters still collapses to one (first-listed) correct answer, preserving the
+        // old single-correct behavior for that request.
+        var allowMultiSelect = request.QuestionTypes.Contains("MultiSelect");
+
         return items.Select(item =>
         {
-            // The workflow can return "Multiple" questions with several correct letters
-            // (e.g. CorrectOption: ["A","B","D"]), but this app only supports single-correct
-            // MCQ (Question Service enforces exactly one correct option). Only the first
-            // listed correct letter is kept; the rest are treated as incorrect.
-            var correctLetter = ExtractFirstCorrectLetter(item.CorrectOption);
+            // The workflow can return items with several correct letters
+            // (e.g. CorrectOption: ["A","B","D"]) - these become MultiSelect drafts when
+            // requested; otherwise only the first listed correct letter is kept.
+            var correctLetters = ExtractCorrectLetters(item.CorrectOption);
 
             var rawOptions = OptionSelectors
                 .Select(selector => (selector.Letter, Text: selector.Selector(item)))
@@ -69,9 +74,12 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
                 && rawOptions.Select(o => o.Text.Trim().ToLowerInvariant()).OrderBy(t => t)
                     .SequenceEqual(["false", "true"]);
 
+            var isMultiSelect = !isTrueFalse && allowMultiSelect && correctLetters.Count >= 2;
+            var effectiveCorrectLetters = isMultiSelect ? correctLetters : correctLetters.Take(1).ToList();
+
             return new DraftQuestion
             {
-                QuestionType = isTrueFalse ? "TrueFalse" : "MultipleChoice",
+                QuestionType = isTrueFalse ? "TrueFalse" : isMultiSelect ? "MultiSelect" : "MultipleChoice",
                 QuestionText = item.QuestionText,
                 Marks = 1,
                 Difficulty = fallbackDifficulty,
@@ -81,7 +89,7 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
                         OptionText = isTrueFalse
                             ? (string.Equals(option.Text.Trim(), "true", StringComparison.OrdinalIgnoreCase) ? "True" : "False")
                             : option.Text,
-                        IsCorrect = string.Equals(option.Letter, correctLetter, StringComparison.OrdinalIgnoreCase),
+                        IsCorrect = effectiveCorrectLetters.Contains(option.Letter, StringComparer.OrdinalIgnoreCase),
                     })
                     .ToList(),
             };
@@ -91,11 +99,12 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
     private static string FormatQuestionTypeLabel(string type) => type switch
     {
         "MultipleChoice" => "Multiple Choice",
+        "MultiSelect" => "Multiple Choice",
         "TrueFalse" => "True/False",
         _ => type,
     };
 
-    private static string? ExtractFirstCorrectLetter(JsonElement correctOption)
+    private static List<string> ExtractCorrectLetters(JsonElement correctOption)
     {
         var letters = new List<string>();
 
@@ -122,7 +131,7 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
             }
         }
 
-        return letters.Count > 0 ? letters[0] : null;
+        return letters;
     }
 
     private sealed class N8nGeneratedItem

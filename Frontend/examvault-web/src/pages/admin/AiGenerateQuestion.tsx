@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
-import CreateQuestionModal from '../../components/CreateQuestionModal';
 import { useExam, useExams } from '../../hooks/useExams';
 import { useSection } from '../../hooks/useSections';
 import { generateQuestions } from '../../api/aiApi';
@@ -20,7 +18,6 @@ import { extractServerError } from '../../utils/apiError';
 export default function AiGenerateQuestion() {
   const { examId: urlExamId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const sectionId = searchParams.get('sectionId');
   const fromWizard = searchParams.get('wizard') === 'true';
@@ -57,18 +54,10 @@ export default function AiGenerateQuestion() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
-  const [showManualCreate, setShowManualCreate] = useState(false);
 
   const selectedExam = urlExamId
     ? lockedExam
     : aiExams?.find((e) => e.id === selectedExamId);
-
-  const handleManualQuestionCreated = () => {
-    if (selectedExamId) {
-      queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', selectedExamId] });
-    }
-    setShowManualCreate(false);
-  };
 
   const toggleQuestionType = (type: GenerateQuestionType) => {
     setQuestionTypes((prev) =>
@@ -236,6 +225,14 @@ export default function AiGenerateQuestion() {
               </Button>
               <Button
                 type="button"
+                variant={questionTypes.includes('MultiSelect') ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => toggleQuestionType('MultiSelect')}
+              >
+                Multiple Choice
+              </Button>
+              <Button
+                type="button"
                 variant={questionTypes.includes('TrueFalse') ? 'primary' : 'outline-secondary'}
                 size="sm"
                 onClick={() => toggleQuestionType('TrueFalse')}
@@ -249,8 +246,8 @@ export default function AiGenerateQuestion() {
               ))}
             </div>
             <p className="text-muted small mb-4">
-              Multiple Choice (multi-select), Short/Long Answer, and Code/Programming aren't available yet -
-              exam-taking and scoring only support single-answer and true/false questions today.
+              Short/Long Answer and Code/Programming aren't available yet - the AI generator has no
+              free-text grading or test-case-authoring step for those types today.
             </p>
 
             <Form.Label className="fw-bold">Difficulty Level</Form.Label>
@@ -279,16 +276,6 @@ export default function AiGenerateQuestion() {
             </Form.Group>
 
             <div className="d-flex justify-content-end gap-2">
-              {selectedExamId && (
-                <Button
-                  type="button"
-                  variant="link"
-                  className="me-auto"
-                  onClick={() => setShowManualCreate(true)}
-                >
-                  + Add Question Manually
-                </Button>
-              )}
               <Link
                 to={
                   sectionReturnTo ?? (urlExamId ? `/admin/exams/${urlExamId}/edit` : '/admin/exams')
@@ -321,15 +308,6 @@ export default function AiGenerateQuestion() {
           </Form>
         </Card.Body>
       </Card>
-
-      {selectedExamId && (
-        <CreateQuestionModal
-          examId={selectedExamId}
-          show={showManualCreate}
-          onClose={() => setShowManualCreate(false)}
-          onCreated={handleManualQuestionCreated}
-        />
-      )}
     </AdminLayout>
   );
 }
