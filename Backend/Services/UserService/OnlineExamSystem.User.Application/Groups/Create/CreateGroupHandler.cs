@@ -25,13 +25,13 @@ public class CreateGroupHandler
             return CreateGroupResult.Invalid(validationResult.Errors.Select(e => e.ErrorMessage).ToList());
         }
 
-        var existing = await _groupRepository.GetByNameAsync(command.Name, cancellationToken);
+        var existing = await _groupRepository.GetByNameAsync(command.Name, command.TenantId, cancellationToken);
         if (existing is not null)
         {
             return CreateGroupResult.Conflict();
         }
 
-        var group = new Group { Name = command.Name };
+        var group = new Group { TenantId = command.TenantId, Name = command.Name };
         await _groupRepository.AddAsync(group, cancellationToken);
         await _groupRepository.SaveChangesAsync(cancellationToken);
 

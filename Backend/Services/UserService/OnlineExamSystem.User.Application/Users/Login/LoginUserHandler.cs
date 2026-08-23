@@ -35,7 +35,12 @@ public class LoginUserHandler
             return LoginUserResult.InvalidCredentials();
         }
 
-        var user = await _userRepository.GetByEmailAsync(command.Email, cancellationToken);
+        // No subdomain resolution yet (Phase 3) - tenant isn't known before
+        // login, so this matches by email alone across all tenants. Safe in
+        // practice today (one self-signup tenant, plus manually-provisioned
+        // ones with distinct admin emails) but is a known gap the Phase 3
+        // subdomain-scoped lookup closes for good.
+        var user = await _userRepository.GetByEmailAsync(command.Email, tenantId: null, cancellationToken);
         if (user is null)
         {
             return LoginUserResult.InvalidCredentials();

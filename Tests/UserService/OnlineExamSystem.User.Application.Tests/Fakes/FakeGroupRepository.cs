@@ -15,8 +15,8 @@ public class FakeGroupRepository : IGroupRepository
     public Task<Group?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_groups.FirstOrDefault(g => g.Id == id));
 
-    public Task<Group?> GetByNameAsync(string name, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_groups.FirstOrDefault(g => g.Name == name));
+    public Task<Group?> GetByNameAsync(string name, Guid tenantId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_groups.FirstOrDefault(g => g.Name == name && g.TenantId == tenantId));
 
     public Task<IReadOnlyList<GroupWithMemberCount>> GetAllWithMemberCountsAsync(
         CancellationToken cancellationToken = default)

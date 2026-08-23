@@ -28,12 +28,18 @@ using OnlineExamSystem.User.Application.Users.ResetPassword;
 using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
 using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
+using OnlineExamSystem.User.Application.Tenants.Create;
+using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
+using OnlineExamSystem.User.Application.Tenants.List;
+using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
 using OnlineExamSystem.User.Application.Users.UpdateMyPreferences;
 using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
+using OnlineExamSystem.User.Domain.Constants;
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 using OnlineExamSystem.User.Infrastructure.Authentication;
 using OnlineExamSystem.User.Infrastructure.Clients;
 using OnlineExamSystem.User.Infrastructure.Email;
@@ -60,6 +66,7 @@ public class Program
             options.UseSqlServer(builder.Configuration.GetConnectionString("UserDb")));
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<IGroupRepository, GroupRepository>();
+        builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
@@ -107,6 +114,13 @@ public class Program
         builder.Services.AddScoped<AddGroupMemberHandler>();
         builder.Services.AddScoped<RemoveGroupMemberHandler>();
 
+        builder.Services.AddScoped<IValidator<CreateTenantCommand>, CreateTenantValidator>();
+        builder.Services.AddScoped<CreateTenantHandler>();
+        builder.Services.AddScoped<ListTenantsHandler>();
+        builder.Services.AddScoped<SetTenantActiveStatusHandler>();
+        builder.Services.AddScoped<IValidator<CreateTenantAdminCommand>, CreateTenantAdminValidator>();
+        builder.Services.AddScoped<CreateTenantAdminHandler>();
+
         if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
         {
             builder.Services.Configure<ServiceBusSettings>(builder.Configuration.GetSection("ServiceBus"));
@@ -144,7 +158,31 @@ public class Program
 
         using (var scope = app.Services.CreateScope())
         {
-            scope.ServiceProvider.GetRequiredService<UserDbContext>().Database.Migrate();
+            var dbContext = scope.ServiceProvider.GetRequiredService<UserDbContext>();
+            dbContext.Database.Migrate();
+
+            // One-time bootstrap so the Super-Admin-only Tenants API (Phase 1
+            // manual tenant provisioning) is reachable by someone without
+            // hand-editing the database - there is no other way to become
+            // the first Super Admin. Dev/local-only credential; a real
+            // deployment should rotate this immediately (MustChangePassword
+            // already forces that on first login).
+            if (!dbContext.Users.Any(u => u.Role == UserRole.SuperAdmin))
+            {
+                var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<AppUser>>();
+                var bootstrapAdmin = new AppUser
+                {
+                    TenantId = TenantConstants.PlatformTenantId,
+                    FullName = "Platform Super Admin",
+                    Email = "superadmin@examvault.local",
+                    Role = UserRole.SuperAdmin,
+                    IsActive = true,
+                    MustChangePassword = true,
+                };
+                bootstrapAdmin.PasswordHash = passwordHasher.HashPassword(bootstrapAdmin, "ChangeMe123!");
+                dbContext.Users.Add(bootstrapAdmin);
+                dbContext.SaveChanges();
+            }
         }
 
         // Configure the HTTP request pipeline.

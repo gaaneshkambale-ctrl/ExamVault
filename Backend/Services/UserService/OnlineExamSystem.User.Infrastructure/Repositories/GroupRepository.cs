@@ -18,8 +18,8 @@ public class GroupRepository : IGroupRepository
     public Task<Group?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         _dbContext.Groups.FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
 
-    public Task<Group?> GetByNameAsync(string name, CancellationToken cancellationToken = default) =>
-        _dbContext.Groups.FirstOrDefaultAsync(g => g.Name == name, cancellationToken);
+    public Task<Group?> GetByNameAsync(string name, Guid tenantId, CancellationToken cancellationToken = default) =>
+        _dbContext.Groups.FirstOrDefaultAsync(g => g.Name == name && g.TenantId == tenantId, cancellationToken);
 
     public async Task<IReadOnlyList<GroupWithMemberCount>> GetAllWithMemberCountsAsync(
         CancellationToken cancellationToken = default)

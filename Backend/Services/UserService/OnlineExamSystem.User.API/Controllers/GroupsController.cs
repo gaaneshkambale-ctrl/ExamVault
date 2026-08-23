@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Shared.Common.Security;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
 using OnlineExamSystem.User.Application.Groups;
@@ -46,7 +48,8 @@ public class GroupsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateGroupRequest request, CancellationToken cancellationToken)
     {
-        var result = await _createGroupHandler.HandleAsync(new CreateGroupCommand(request.Name), cancellationToken);
+        var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
+        var result = await _createGroupHandler.HandleAsync(new CreateGroupCommand(tenantId, request.Name), cancellationToken);
 
         if (result.NameAlreadyExists)
         {

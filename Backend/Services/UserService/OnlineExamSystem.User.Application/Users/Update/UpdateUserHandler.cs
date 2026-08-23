@@ -32,7 +32,7 @@ public class UpdateUserHandler
             return UpdateUserResult.NotFound();
         }
 
-        var existingUser = await _userRepository.GetByEmailAsync(command.Email, cancellationToken);
+        var existingUser = await _userRepository.GetByEmailAsync(command.Email, user.TenantId, cancellationToken);
         if (existingUser is not null && existingUser.Id != command.Id)
         {
             return UpdateUserResult.Conflict();

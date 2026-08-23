@@ -6,7 +6,7 @@ namespace OnlineExamSystem.User.Application.Interfaces;
 public interface IGroupRepository
 {
     Task<Group?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<Group?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
+    Task<Group?> GetByNameAsync(string name, Guid tenantId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<GroupWithMemberCount>> GetAllWithMemberCountsAsync(CancellationToken cancellationToken = default);
     Task AddAsync(Group group, CancellationToken cancellationToken = default);
     Task RemoveAsync(Group group, CancellationToken cancellationToken = default);

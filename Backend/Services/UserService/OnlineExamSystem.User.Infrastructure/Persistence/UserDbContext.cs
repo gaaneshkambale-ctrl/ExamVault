@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OnlineExamSystem.User.Domain.Constants;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.Infrastructure.Persistence;
@@ -14,16 +15,49 @@ public class UserDbContext : DbContext
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
+    public DbSet<Tenant> Tenants => Set<Tenant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Tenant>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).IsRequired().HasMaxLength(200);
+            entity.Property(t => t.Slug).IsRequired().HasMaxLength(100);
+            entity.HasIndex(t => t.Slug).IsUnique();
+            entity.Property(t => t.IsActive).HasDefaultValue(true);
+
+            // Seeded so every pre-multi-tenancy row (Default) and every
+            // future Super Admin (Platform) has a real tenant to belong to
+            // from the moment this migration runs.
+            entity.HasData(
+                new Tenant
+                {
+                    Id = TenantConstants.DefaultTenantId,
+                    Name = TenantConstants.DefaultTenantName,
+                    Slug = TenantConstants.DefaultTenantSlug,
+                    IsActive = true,
+                    CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, DateTimeKind.Utc),
+                },
+                new Tenant
+                {
+                    Id = TenantConstants.PlatformTenantId,
+                    Name = TenantConstants.PlatformTenantName,
+                    Slug = TenantConstants.PlatformTenantSlug,
+                    IsActive = true,
+                    CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, DateTimeKind.Utc),
+                });
+        });
+
         modelBuilder.Entity<AppUser>(entity =>
         {
             entity.HasKey(u => u.Id);
             entity.Property(u => u.FullName).IsRequired().HasMaxLength(200);
             entity.Property(u => u.RollNumber).HasMaxLength(40);
             entity.Property(u => u.Email).IsRequired().HasMaxLength(256);
-            entity.HasIndex(u => u.Email).IsUnique();
+            // Uniqueness is per-tenant, not global - two different tenants
+            // can each have their own "admin@gmail.com".
+            entity.HasIndex(u => new { u.TenantId, u.Email }).IsUnique();
             entity.Property(u => u.PasswordHash).IsRequired();
             entity.Property(u => u.IsActive).HasDefaultValue(true);
             entity.Property(u => u.PhoneNumber).HasMaxLength(20);
@@ -34,7 +68,11 @@ public class UserDbContext : DbContext
             entity.Property(u => u.Location).HasMaxLength(200);
             entity.Property(u => u.Department).HasMaxLength(100);
             entity.Property(u => u.UserNumber).UseIdentityColumn();
-            entity.HasIndex(u => u.UserNumber).IsUnique();
+            entity.HasIndex(u => new { u.TenantId, u.UserNumber }).IsUnique();
+            entity.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(u => u.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>
@@ -65,7 +103,11 @@ public class UserDbContext : DbContext
         {
             entity.HasKey(g => g.Id);
             entity.Property(g => g.Name).IsRequired().HasMaxLength(200);
-            entity.HasIndex(g => g.Name).IsUnique();
+            entity.HasIndex(g => new { g.TenantId, g.Name }).IsUnique();
+            entity.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(g => g.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<GroupMember>(entity =>

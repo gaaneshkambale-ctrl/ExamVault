@@ -17,8 +17,16 @@ public class UserRepository : IUserRepository
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
-    public Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) =>
-        _dbContext.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+    public Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.Users.Where(u => u.Email == email);
+        if (tenantId is not null)
+        {
+            query = query.Where(u => u.TenantId == tenantId);
+        }
+
+        return query.FirstOrDefaultAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Users.OrderByDescending(u => u.CreatedAtUtc).ToListAsync(cancellationToken);

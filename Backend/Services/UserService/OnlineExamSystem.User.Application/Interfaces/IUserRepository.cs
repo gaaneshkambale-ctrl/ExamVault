@@ -5,7 +5,12 @@ namespace OnlineExamSystem.User.Application.Interfaces;
 public interface IUserRepository
 {
     Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
+
+    /// <summary>Looks up a user by email. Pass <paramref name="tenantId"/> to scope the
+    /// lookup to one tenant (uniqueness is enforced per-tenant, not globally) - pass
+    /// null only where the caller doesn't yet know the tenant (e.g. Login, before
+    /// Phase 3 subdomain resolution exists), which can match across tenants.</summary>
+    Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AppUser>> GetByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default);
     Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default);

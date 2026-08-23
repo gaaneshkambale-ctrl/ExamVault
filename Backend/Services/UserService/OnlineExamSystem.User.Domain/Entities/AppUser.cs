@@ -5,6 +5,7 @@ namespace OnlineExamSystem.User.Domain.Entities;
 
 public class AppUser : BaseEntity
 {
+    public Guid TenantId { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string? RollNumber { get; set; }
     public string Email { get; set; } = string.Empty;

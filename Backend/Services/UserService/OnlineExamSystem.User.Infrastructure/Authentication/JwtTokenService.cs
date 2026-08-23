@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Shared.Common.Security;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Entities;
 
@@ -26,6 +27,7 @@ public class JwtTokenService : IJwtTokenService
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
+            new Claim(TenantClaimTypes.TenantId, user.TenantId.ToString()),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 

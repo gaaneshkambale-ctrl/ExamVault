@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Shared.Common.Security;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
 using OnlineExamSystem.User.Application.Interfaces;
@@ -221,7 +222,9 @@ public class UsersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateUserRequest request, CancellationToken cancellationToken)
     {
+        var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
         var command = new CreateUserCommand(
+            tenantId,
             request.FullName,
             request.Email,
             request.Role,
@@ -719,7 +722,12 @@ public class UsersController : ControllerBase
     // the GUID.
     private static string FormatUserId(AppUser user)
     {
-        var roleCode = user.Role == UserRole.Admin ? "ADM" : "STU";
+        var roleCode = user.Role switch
+        {
+            UserRole.Admin => "ADM",
+            UserRole.SuperAdmin => "SUP",
+            _ => "STU",
+        };
         return $"EV-{roleCode}-{user.UserNumber:D4}";
     }
 

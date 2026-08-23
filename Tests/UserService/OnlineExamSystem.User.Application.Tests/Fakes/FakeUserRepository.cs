@@ -14,8 +14,8 @@ public class FakeUserRepository : IUserRepository
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Id == id));
 
-    public Task<AppUser?> GetByEmailAsync(string email, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_users.FirstOrDefault(u => u.Email == email));
+    public Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.FirstOrDefault(u => u.Email == email && (tenantId is null || u.TenantId == tenantId)));
 
     public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AppUser>>(_users.ToList());

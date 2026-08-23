@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.Shared.Events.User;
 using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Domain.Constants;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.Application.Users.Register;
@@ -37,7 +38,10 @@ public class RegisterUserHandler
             return RegisterUserResult.Invalid(errors);
         }
 
-        var existingUser = await _userRepository.GetByEmailAsync(command.Email, cancellationToken);
+        // Self-registration has no subdomain to resolve a tenant from yet
+        // (Phase 3) - every self-signed-up Student lands in the seeded
+        // Default tenant until that ships.
+        var existingUser = await _userRepository.GetByEmailAsync(command.Email, TenantConstants.DefaultTenantId, cancellationToken);
         if (existingUser is not null)
         {
             return RegisterUserResult.Conflict();
@@ -45,6 +49,7 @@ public class RegisterUserHandler
 
         var user = new AppUser
         {
+            TenantId = TenantConstants.DefaultTenantId,
             FullName = command.FullName,
             Email = command.Email,
         };

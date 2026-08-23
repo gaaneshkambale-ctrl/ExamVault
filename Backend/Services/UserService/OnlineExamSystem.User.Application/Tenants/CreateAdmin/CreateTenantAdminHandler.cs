@@ -5,25 +5,31 @@ using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Domain.Enums;
 
-namespace OnlineExamSystem.User.Application.Users.Create;
+namespace OnlineExamSystem.User.Application.Tenants.CreateAdmin;
 
-public class CreateUserHandler
+// The "manual provisioning" path for onboarding a new tenant (Phase 1 scope
+// note: no self-service signup yet) - a Super Admin calls this once, right
+// after creating the tenant itself, to give it its first real Admin.
+public class CreateTenantAdminHandler
 {
+    private readonly ITenantRepository _tenantRepository;
     private readonly IUserRepository _userRepository;
-    private readonly IValidator<CreateUserCommand> _validator;
+    private readonly IValidator<CreateTenantAdminCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IPasswordGenerator _passwordGenerator;
     private readonly IEmailDispatcher _emailDispatcher;
-    private readonly ILogger<CreateUserHandler> _logger;
+    private readonly ILogger<CreateTenantAdminHandler> _logger;
 
-    public CreateUserHandler(
+    public CreateTenantAdminHandler(
+        ITenantRepository tenantRepository,
         IUserRepository userRepository,
-        IValidator<CreateUserCommand> validator,
+        IValidator<CreateTenantAdminCommand> validator,
         IPasswordHasher<AppUser> passwordHasher,
         IPasswordGenerator passwordGenerator,
         IEmailDispatcher emailDispatcher,
-        ILogger<CreateUserHandler> logger)
+        ILogger<CreateTenantAdminHandler> logger)
     {
+        _tenantRepository = tenantRepository;
         _userRepository = userRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
@@ -32,21 +38,26 @@ public class CreateUserHandler
         _logger = logger;
     }
 
-    public async Task<CreateUserResult> HandleAsync(
-        CreateUserCommand command,
+    public async Task<CreateTenantAdminResult> HandleAsync(
+        CreateTenantAdminCommand command,
         CancellationToken cancellationToken = default)
     {
         var validationResult = await _validator.ValidateAsync(command, cancellationToken);
         if (!validationResult.IsValid)
         {
-            var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
-            return CreateUserResult.Invalid(errors);
+            return CreateTenantAdminResult.Invalid(validationResult.Errors.Select(e => e.ErrorMessage).ToList());
+        }
+
+        var tenant = await _tenantRepository.GetByIdAsync(command.TenantId, cancellationToken);
+        if (tenant is null)
+        {
+            return CreateTenantAdminResult.NotFound();
         }
 
         var existingUser = await _userRepository.GetByEmailAsync(command.Email, command.TenantId, cancellationToken);
         if (existingUser is not null)
         {
-            return CreateUserResult.Conflict();
+            return CreateTenantAdminResult.Conflict();
         }
 
         var temporaryPassword = _passwordGenerator.Generate();
@@ -56,10 +67,8 @@ public class CreateUserHandler
             TenantId = command.TenantId,
             FullName = command.FullName,
             Email = command.Email,
-            Role = Enum.Parse<UserRole>(command.Role, ignoreCase: true),
-            IsActive = command.IsActive,
-            PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim(),
-            RollNumber = string.IsNullOrWhiteSpace(command.RollNumber) ? null : command.RollNumber.Trim(),
+            Role = UserRole.Admin,
+            IsActive = true,
             MustChangePassword = true,
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, temporaryPassword);
@@ -70,9 +79,9 @@ public class CreateUserHandler
         var emailSent = await _emailDispatcher.SendAsync(
             toEmail: user.Email,
             toName: user.FullName,
-            subject: "Your ExamVault account",
+            subject: $"Your ExamVault admin account for {tenant.Name}",
             body: $"Hello {user.FullName},\n\n" +
-                  "An ExamVault account has been created for you.\n\n" +
+                  $"An ExamVault Admin account has been created for you at {tenant.Name}.\n\n" +
                   $"Email: {user.Email}\n" +
                   $"Temporary password: {temporaryPassword}\n\n" +
                   "Please log in with this temporary password - you will be asked to " +
@@ -81,13 +90,9 @@ public class CreateUserHandler
             cancellationToken: cancellationToken);
         if (!emailSent)
         {
-            // Account creation must not fail just because the invite email
-            // didn't go out - same "email is a best-effort side channel"
-            // principle the Notification service already follows. The
-            // Admin still sees the account in the user list either way.
-            _logger.LogWarning("Invite email failed to send for newly created user {UserId}.", user.Id);
+            _logger.LogWarning("Invite email failed to send for new tenant admin {UserId}.", user.Id);
         }
 
-        return CreateUserResult.Ok(user);
+        return CreateTenantAdminResult.Ok(user);
     }
 }
