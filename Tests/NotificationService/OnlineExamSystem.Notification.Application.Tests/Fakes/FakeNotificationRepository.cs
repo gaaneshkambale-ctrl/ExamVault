@@ -93,7 +93,8 @@ public class FakeNotificationRepository : INotificationRepository
                 g.Count(n => n.EmailStatus == EmailStatus.Skipped),
                 g.Count(n => n.EmailStatus == EmailStatus.Pending),
                 g.Any(n => n.ShowInApp),
-                g.Any(n => n.EmailStatus != EmailStatus.Skipped)))
+                g.Any(n => n.EmailStatus != EmailStatus.Skipped),
+                g.First().TenantId))
             .Where(s =>
             {
                 var isScheduled = s.ScheduledAtUtc.HasValue && s.ScheduledAtUtc.Value > now;
@@ -137,8 +138,10 @@ public class FakeNotificationRepository : INotificationRepository
         var delivered = _notifications.Count(n => n.EmailStatus == EmailStatus.Delivered);
         var failed = _notifications.Count(n => n.EmailStatus == EmailStatus.Failed);
         var scheduled = _notifications.Count(n => n.ScheduledAtUtc.HasValue && n.ScheduledAtUtc.Value > now);
+        var total = _notifications.Count;
+        var pending = _notifications.Count(n => n.EmailStatus == EmailStatus.Pending);
 
-        return Task.FromResult(new NotificationHistoryStats(sentToday, delivered, failed, scheduled));
+        return Task.FromResult(new NotificationHistoryStats(sentToday, delivered, failed, scheduled, total, pending));
     }
 
     public Task<IReadOnlyList<NotificationEntity>> GetByBatchIdAsync(

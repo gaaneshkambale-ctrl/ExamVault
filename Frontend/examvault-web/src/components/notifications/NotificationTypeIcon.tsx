@@ -7,6 +7,8 @@ const typeMeta: Record<NotificationType, { bg: string; fg: string; icon: string 
   Result: { bg: '#fef3c7', fg: '#b45309', icon: 'trophy' },
   System: { bg: '#fee2e2', fg: '#b91c1c', icon: 'megaphone' },
   Account: { bg: '#e5e7eb', fg: '#374151', icon: 'user' },
+  Announcement: { bg: '#e0e7ff', fg: '#4338ca', icon: 'megaphone' },
+  Alert: { bg: '#fee2e2', fg: '#b91c1c', icon: 'bell' },
 };
 
 interface NotificationTypeIconProps {

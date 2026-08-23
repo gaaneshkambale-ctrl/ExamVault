@@ -481,3 +481,85 @@ render as intended rather than fake numbers. Real `npm run build` +
 49/49 tests green before the Docker rebuild. Zero console errors on any
 of the 5 pages.
 Not committed yet.
+
+NOTIFICATIONS PAGES (2026-08-24) - user supplied `notifications.png`
+(Platform Announcement/Notification History/Templates). Unlike Settings,
+this backend already existed almost in full: Notification Service's
+NotificationsController already had a complete tenant-scoped "Admin
+Notifications" feature (Create/History/Stats/Batch Details/Resend/Delete
+Batch, plus full Template CRUD - List/Create/Update/Duplicate), built for
+a regular org Admin, Admin-gated, and already using the same
+IsSuperAdmin-bypass query filter pattern as every other TenantScopedEntity
+in this codebase (confirmed via NotificationDbContext).
+- Widened role gates to Admin,SuperAdmin on every endpoint EXCEPT the
+  actual "Create/send notification" action (POST /api/notifications/admin)
+  - GetHistory, GetHistoryStats, GetBatchDetails, Resend, DeleteBatch,
+  ListTemplates, CreateTemplate, UpdateTemplate, DuplicateTemplate all
+  widened.
+- Create stays Admin-only/disabled in the UI: CreateNotificationCommand
+  always resolves recipients from the caller's own tenant, and a Super
+  Admin's own reserved "Platform" tenant has no real users in it - making
+  it "work" would silently create rows nobody in any actual organization
+  ever sees. Making this genuinely reach "every organization" would need
+  new fan-out logic, not a role-gate widen, so it's out of scope today.
+- Added two NotificationType enum values, Announcement and Alert (Notification
+  Domain.Enums.NotificationType) - purely additive, no cross-service usage
+  of this enum exists. Kept OUT of the existing NOTIFICATION_TYPES
+  frontend constant (which a regular tenant Admin's own Create/Templates
+  pages still use) - added a separate PLATFORM_NOTIFICATION_TYPES constant
+  instead, since Announcement/Alert only make sense for the Super Admin's
+  own template library.
+- Added TenantId + CreatedByAdminUserId to NotificationBatchSummaryResponse
+  (small additive response field, same shape as every other TenantId
+  addition this session) - lets the Super Admin's History/Announcement
+  tables show a real "Organization" column (substituting the mockup's
+  "Audience", which isn't stored per batch) and a real "Sent By" admin
+  name (cross-referenced against listAllUsers, same trick AuditReports.tsx
+  already uses for its Role column).
+- Added Total + Pending to NotificationHistoryStats/Response (previously
+  only SentToday/Delivered/Failed/Scheduled) - Notification History's
+  stat cards (Total Sent/Delivered/Failed/Pending) needed these two.
+- Platform Announcement: real compact table (5/page, client-paginated
+  from one unfiltered fetch, since batch counts are naturally small) +
+  real Total Announcements/Sent/Scheduled stats; Drafts stays "-" (no
+  draft concept exists - a batch is always either sent now or scheduled,
+  never a third state); "+ New Announcement" disabled per above.
+- Notification History: real, full filters (Type/Channel/Status/search),
+  real server-side pagination, real stat cards. Export button disabled
+  (no CSV export capability exists).
+- Templates: real, full CRUD (Create/Edit/Duplicate/Preview), tabs for
+  Announcement/Alert/System/Reminder types (a Super Admin's own template
+  type set) instead of the tenant Admin's dropdown, to match the mockup's
+  visual tabs. "Audience" column from the mockup dropped (no such field
+  on a template) - added a real "Subject" column instead since that data
+  already exists and wasn't shown on the tenant Admin's own equivalent
+  page.
+- Actions columns on both History and Announcement stay a disabled
+  "View" icon only - no batch-details drill-down page was built for the
+  Super Admin console (notifications.png shows no such screen), even
+  though Resend/DeleteBatch/GetBatchDetails were widened on the backend
+  (available for a future pass, just not wired into this UI yet).
+Verified: Notification Service 22/22 tests green, dotnet build clean.
+Real `npm run build` + 49/49 frontend tests green (three existing
+Record<NotificationType, ...> exhaustive maps - NotificationPreferencesPanel,
+NotificationPreferencesPreview, NotificationTypeIcon - needed
+Announcement/Alert entries added once the shared union widened).
+Not committed yet.
+Verified live in the browser: Platform Announcement shows 74 real
+cross-tenant announcements (69 sent, 0 scheduled, drafts "-"), real
+Organization column (system-triggered welcome emails correctly show "-"
+since they run under NullCurrentTenant with no resolvable tenant), "+ New
+Announcement" disabled as intended. Notification History shows real
+stats (89 total, 83 delivered, 5 failed, 0 pending) with working Type/
+Channel/Status filters and search. Templates: confirmed real end-to-end -
+Create Template (new "Verification Test Template", Announcement type,
+appeared immediately), Duplicate (created "(Copy)" as Draft), and Edit
+(renamed to "(Edited)", persisted) all worked correctly against the live
+backend. Note: Templates intentionally shows every organization's
+templates to the Super Admin (same IsSuperAdmin cross-tenant bypass as
+every other page), not just templates the Super Admin created themselves
+- only a newly CREATED template gets stamped with the Platform tenant's
+ID, viewing is cross-tenant like everywhere else in this console. Zero
+real console errors on any of the 3 pages (only an unrelated Grammarly
+browser-extension warning).
+Not committed yet.

@@ -33,11 +33,6 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
   { path: '/platform/monitoring/api-health', active: 'mon-api-health', parent: 'System Monitoring', title: 'API Health' },
   { path: '/platform/monitoring/service-status', active: 'mon-service-status', parent: 'System Monitoring', title: 'Service Status' },
 
-  { path: '/platform/notifications', active: 'notif-announcement', parent: 'Notifications', title: 'Platform Announcement' },
-  { path: '/platform/notifications/announcement', active: 'notif-announcement', parent: 'Notifications', title: 'Platform Announcement' },
-  { path: '/platform/notifications/history', active: 'notif-history', parent: 'Notifications', title: 'Notification History' },
-  { path: '/platform/notifications/templates', active: 'notif-templates', parent: 'Notifications', title: 'Templates' },
-
   { path: '/platform/security', active: 'sec-events', parent: 'Security', title: 'Security Events' },
   { path: '/platform/security/events', active: 'sec-events', parent: 'Security', title: 'Security Events' },
   { path: '/platform/security/failed-logins', active: 'sec-failed-logins', parent: 'Security', title: 'Failed Login Attempts' },

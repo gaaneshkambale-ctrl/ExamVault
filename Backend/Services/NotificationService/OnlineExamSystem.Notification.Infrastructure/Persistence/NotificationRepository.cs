@@ -105,6 +105,7 @@ public class NotificationRepository : INotificationRepository
                 Pending = g.Count(n => n.EmailStatus == EmailStatus.Pending),
                 HasInApp = g.Any(n => n.ShowInApp),
                 HasEmail = g.Any(n => n.EmailStatus != EmailStatus.Skipped),
+                TenantId = g.Min(n => n.TenantId),
             });
 
         // Channel/status are derived from per-batch aggregates rather than
@@ -152,7 +153,7 @@ public class NotificationRepository : INotificationRepository
         var summaries = items
             .Select(i => new NotificationBatchSummary(
                 i.BatchId, i.Title!, i.Type, i.RecipientCount, i.SentAtUtc, i.ScheduledAtUtc, i.CreatedByAdminUserId,
-                i.Delivered, i.Failed, i.Skipped, i.Pending, i.HasInApp, i.HasEmail))
+                i.Delivered, i.Failed, i.Skipped, i.Pending, i.HasInApp, i.HasEmail, i.TenantId))
             .ToList();
 
         return (summaries, totalCount);
@@ -175,8 +176,12 @@ public class NotificationRepository : INotificationRepository
         var scheduled = await _dbContext.Notifications
             .Where(n => n.ScheduledAtUtc != null && n.ScheduledAtUtc > now)
             .CountAsync(cancellationToken);
+        var total = await _dbContext.Notifications.CountAsync(cancellationToken);
+        var pending = await _dbContext.Notifications
+            .Where(n => n.EmailStatus == EmailStatus.Pending)
+            .CountAsync(cancellationToken);
 
-        return new NotificationHistoryStats(sentToday, delivered, failed, scheduled);
+        return new NotificationHistoryStats(sentToday, delivered, failed, scheduled, total, pending);
     }
 
     public Task<IReadOnlyList<NotificationEntity>> GetByBatchIdAsync(

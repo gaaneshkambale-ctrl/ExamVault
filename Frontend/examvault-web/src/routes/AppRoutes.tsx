@@ -91,6 +91,9 @@ import TenantSettings from '../pages/platform/TenantSettings';
 import EmailSettings from '../pages/platform/EmailSettings';
 import PlatformNotificationSettings from '../pages/platform/NotificationSettings';
 import SecuritySettings from '../pages/platform/SecuritySettings';
+import PlatformAnnouncement from '../pages/platform/PlatformAnnouncement';
+import PlatformNotificationHistory from '../pages/platform/PlatformNotificationHistory';
+import PlatformNotificationTemplates from '../pages/platform/PlatformNotificationTemplates';
 import PlatformDashboard from '../pages/platform/PlatformDashboard';
 import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
 import { platformComingSoonRoutes } from './platformComingSoonRoutes';
@@ -887,6 +890,34 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <SecuritySettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/notifications"
+        element={<Navigate to="/platform/notifications/announcement" replace />}
+      />
+      <Route
+        path="/platform/notifications/announcement"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformAnnouncement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/notifications/history"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformNotificationHistory />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/notifications/templates"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformNotificationTemplates />
           </ProtectedRoute>
         }
       />

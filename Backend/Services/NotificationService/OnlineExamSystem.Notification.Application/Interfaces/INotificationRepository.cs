@@ -17,9 +17,10 @@ public record NotificationBatchSummary(
     int Skipped,
     int Pending,
     bool HasInApp,
-    bool HasEmail);
+    bool HasEmail,
+    Guid TenantId);
 
-public record NotificationHistoryStats(int SentToday, int Delivered, int Failed, int Scheduled);
+public record NotificationHistoryStats(int SentToday, int Delivered, int Failed, int Scheduled, int Total, int Pending);
 
 public record NotificationBatchDetails(
     Guid BatchId,

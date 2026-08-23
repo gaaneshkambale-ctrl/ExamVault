@@ -1,4 +1,4 @@
-export type NotificationType = 'Exam' | 'Reminder' | 'Result' | 'System' | 'Account';
+export type NotificationType = 'Exam' | 'Reminder' | 'Result' | 'System' | 'Account' | 'Announcement' | 'Alert';
 
 export type EmailStatus = 'Pending' | 'Delivered' | 'Failed' | 'Skipped';
 
@@ -11,6 +11,12 @@ export type NotificationHistoryStatus = 'Delivered' | 'Failed' | 'Scheduled';
 export type NotificationChannelFilter = 'InAppEmail' | 'InApp' | 'Email';
 
 export const NOTIFICATION_TYPES: NotificationType[] = ['Exam', 'Reminder', 'Result', 'System', 'Account'];
+
+// Separate from NOTIFICATION_TYPES above - Announcement/Alert only make
+// sense for the Super Admin's own platform-wide template library (they'd
+// be confusing options on a tenant Admin's per-exam notification types),
+// so this list is used only by the Platform Notification Templates page.
+export const PLATFORM_NOTIFICATION_TYPES: NotificationType[] = ['Announcement', 'Alert', 'System', 'Reminder'];
 
 export interface NotificationResponse {
   id: string;
@@ -75,6 +81,9 @@ export interface NotificationBatchSummaryResponse {
   skipped: number;
   pending: number;
   channels: string;
+  // Only meaningful for the Super Admin's cross-tenant views.
+  tenantId: string;
+  createdByAdminUserId: string | null;
 }
 
 export interface NotificationHistoryResponse {
@@ -89,6 +98,8 @@ export interface NotificationHistoryStatsResponse {
   delivered: number;
   failed: number;
   scheduled: number;
+  total: number;
+  pending: number;
 }
 
 export interface NotificationBatchDetailsResponse {

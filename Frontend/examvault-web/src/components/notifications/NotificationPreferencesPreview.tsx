@@ -13,6 +13,8 @@ const previewLabel: Record<NotificationType, { title: string; subtitle: string }
   System: { title: 'System Announcements', subtitle: 'Important system updates' },
   Reminder: { title: 'Reminders', subtitle: 'Exam reminders and alerts' },
   Account: { title: 'Account Updates', subtitle: 'Updates about your account' },
+  Announcement: { title: 'Platform Announcements', subtitle: 'Updates from the platform team' },
+  Alert: { title: 'Platform Alerts', subtitle: 'Important platform alerts' },
 };
 
 interface NotificationPreferencesPreviewProps {

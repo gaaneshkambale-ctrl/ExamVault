@@ -7,6 +7,8 @@ const typeVariant: Record<NotificationType, string> = {
   Result: 'info',
   System: 'secondary',
   Account: 'dark',
+  Announcement: 'primary',
+  Alert: 'danger',
 };
 
 export default function NotificationTypeBadge({ type }: { type: NotificationType }) {

@@ -14,7 +14,11 @@ public record NotificationBatchSummaryResponse(
     int Failed,
     int Skipped,
     int Pending,
-    string Channels);
+    string Channels,
+    // Only meaningful for a Super Admin's cross-tenant Notification
+    // History/Platform Announcement views.
+    Guid TenantId,
+    Guid? CreatedByAdminUserId);
 
 public record NotificationHistoryResponse(
     IReadOnlyList<NotificationBatchSummaryResponse> Items,
@@ -22,7 +26,7 @@ public record NotificationHistoryResponse(
     int Page,
     int PageSize);
 
-public record NotificationHistoryStatsResponse(int SentToday, int Delivered, int Failed, int Scheduled);
+public record NotificationHistoryStatsResponse(int SentToday, int Delivered, int Failed, int Scheduled, int Total, int Pending);
 
 public record NotificationBatchDetailsResponse(
     Guid BatchId,

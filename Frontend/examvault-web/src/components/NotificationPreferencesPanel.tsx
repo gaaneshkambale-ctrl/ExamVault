@@ -11,6 +11,8 @@ const typeLabel: Record<NotificationType, string> = {
   Result: 'Result Notifications',
   System: 'System Notifications',
   Account: 'Account Updates',
+  Announcement: 'Platform Announcements',
+  Alert: 'Platform Alerts',
 };
 
 export default function NotificationPreferencesPanel() {
