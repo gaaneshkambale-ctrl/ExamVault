@@ -212,7 +212,12 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
-    [Authorize(Roles = "Admin")]
+    // SuperAdmin added here (not on every other Admin-only action) because
+    // GetAllAsync now honors the IsSuperAdmin bypass itself - this is the
+    // one endpoint the new Super Admin "All Users" page needs, and a
+    // regular Admin still only ever sees their own tenant's users through
+    // it (see UserRepository.GetAllAsync's own comment).
+    [Authorize(Roles = "Admin,SuperAdmin")]
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
@@ -434,7 +439,7 @@ public class UsersController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var user = await _getUserProfileHandler.HandleAsync(new GetUserProfileQuery(id), cancellationToken);
+        var user = await _getUserProfileHandler.HandleAsync(new GetUserProfileQuery(id, TenantScoped: true), cancellationToken);
         if (user is null)
         {
             return NotFound(new { message = "User not found." });
@@ -450,7 +455,7 @@ public class UsersController : ControllerBase
     [HttpGet("{id:guid}/photo")]
     public async Task<IActionResult> GetPhoto(Guid id, CancellationToken cancellationToken)
     {
-        var user = await _getUserProfileHandler.HandleAsync(new GetUserProfileQuery(id), cancellationToken);
+        var user = await _getUserProfileHandler.HandleAsync(new GetUserProfileQuery(id, TenantScoped: true), cancellationToken);
         if (user?.PhotoData is null)
         {
             return NotFound();
@@ -701,7 +706,9 @@ public class UsersController : ControllerBase
             user.IsActive,
             user.PhoneNumber,
             user.PhotoData is not null,
-            user.RollNumber);
+            user.RollNumber,
+            user.TenantId,
+            user.LastLoginAtUtc);
 
     private static UserSessionResponse ToResponse(RefreshToken token)
     {

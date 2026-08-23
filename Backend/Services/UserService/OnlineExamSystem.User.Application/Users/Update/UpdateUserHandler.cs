@@ -26,7 +26,7 @@ public class UpdateUserHandler
             return UpdateUserResult.Invalid(errors);
         }
 
-        var user = await _userRepository.GetByIdAsync(command.Id, cancellationToken);
+        var user = await _userRepository.GetByIdForTenantAsync(command.Id, cancellationToken);
         if (user is null)
         {
             return UpdateUserResult.NotFound();

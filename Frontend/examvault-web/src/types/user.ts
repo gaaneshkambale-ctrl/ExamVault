@@ -86,6 +86,21 @@ export interface UserListItem {
   phoneNumber: string | null;
   hasPhoto: boolean;
   rollNumber: string | null;
+  // Only meaningful for a Super Admin's cross-tenant "All Users" view -
+  // always present at runtime, but a regular Admin's own "Manage Users"
+  // page has no use for them.
+  tenantId: string;
+  lastLoginAtUtc: string | null;
+}
+
+// GET /api/users returns every role (including SuperAdmin) when called by
+// a Super Admin - kept as its own type rather than widening UserListItem's
+// `role` in place, since several existing tenant-scoped Admin pages
+// (ManageUsers.tsx etc.) index Record<UserRole, ...> lookups and assign
+// `role` to a UserRole-typed variable, which a wider union would break for
+// data they never actually receive anyway.
+export interface PlatformUserListItem extends Omit<UserListItem, 'role'> {
+  role: UserRole | 'SuperAdmin';
 }
 
 export interface CreateUserRequest {

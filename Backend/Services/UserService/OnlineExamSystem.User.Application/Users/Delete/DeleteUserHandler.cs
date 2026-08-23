@@ -15,7 +15,7 @@ public class DeleteUserHandler
         DeleteUserCommand command,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByIdAsync(command.UserId, cancellationToken);
+        var user = await _userRepository.GetByIdForTenantAsync(command.UserId, cancellationToken);
         if (user is null)
         {
             return DeleteUserResult.NotFound();

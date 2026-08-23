@@ -9,4 +9,10 @@ public record UserListItemResponse(
     bool IsActive,
     string? PhoneNumber,
     bool HasPhoto = false,
-    string? RollNumber = null);
+    string? RollNumber = null,
+    // Only meaningful to a Super Admin caller (GetAllAsync only ever
+    // returns other tenants' users to them) - a regular Admin's own
+    // "Manage Users" list is always their own tenant already, so the
+    // frontend there has no reason to render it.
+    Guid TenantId = default,
+    DateTime? LastLoginAtUtc = null);

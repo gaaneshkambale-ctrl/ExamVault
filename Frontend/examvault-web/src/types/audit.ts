@@ -10,4 +10,6 @@ export interface AuditLogResponse {
   userId: string | null;
   userName: string | null;
   ipAddress: string | null;
+  // Only meaningful for a Super Admin's cross-tenant Security views.
+  tenantId: string;
 }

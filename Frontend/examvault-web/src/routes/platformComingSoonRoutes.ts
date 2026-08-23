@@ -13,10 +13,6 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
   { path: '/platform/organizations/trial', active: 'org-trial', parent: 'Organizations', title: 'Trial Organizations' },
   { path: '/platform/organizations/details', active: 'org-details', parent: 'Organizations', title: 'Organization Details' },
 
-  { path: '/platform/users', active: 'users-all', parent: 'Users', title: 'All Users' },
-  { path: '/platform/users/organization-admins', active: 'users-org-admins', parent: 'Users', title: 'Organization Admins' },
-  { path: '/platform/users/students', active: 'users-students', parent: 'Users', title: 'Students' },
-  { path: '/platform/users/platform-admins', active: 'users-platform-admins', parent: 'Users', title: 'Platform Admins' },
   { path: '/platform/users/roles', active: 'users-roles', parent: 'Users', title: 'Roles & Permissions' },
 
   { path: '/platform/exams', active: 'exams-all', parent: 'Exams', title: 'All Exams' },
@@ -28,10 +24,6 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
   { path: '/platform/questions', active: 'questions', parent: 'Platform Admin', title: 'Questions' },
   { path: '/platform/submissions', active: 'submissions', parent: 'Platform Admin', title: 'Submissions' },
 
-  { path: '/platform/subscriptions', active: 'subs-plans', parent: 'Subscriptions', title: 'Plans' },
-  { path: '/platform/subscriptions/plans', active: 'subs-plans', parent: 'Subscriptions', title: 'Plans' },
-  { path: '/platform/subscriptions/organizations', active: 'subs-orgs', parent: 'Subscriptions', title: 'Organizations & Plans' },
-  { path: '/platform/subscriptions/usage', active: 'subs-usage', parent: 'Subscriptions', title: 'Usage' },
   { path: '/platform/subscriptions/history', active: 'subs-history', parent: 'Subscriptions', title: 'Subscription History' },
 
   { path: '/platform/monitoring', active: 'mon-active-orgs', parent: 'System Monitoring', title: 'Active Organizations' },
@@ -46,25 +38,9 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
   { path: '/platform/notifications/history', active: 'notif-history', parent: 'Notifications', title: 'Notification History' },
   { path: '/platform/notifications/templates', active: 'notif-templates', parent: 'Notifications', title: 'Templates' },
 
-  { path: '/platform/reports', active: 'reports-org', parent: 'Reports', title: 'Organization Report' },
-  { path: '/platform/reports/organizations', active: 'reports-org', parent: 'Reports', title: 'Organization Report' },
-  { path: '/platform/reports/users', active: 'reports-users', parent: 'Reports', title: 'User Report' },
-  { path: '/platform/reports/exam-usage', active: 'reports-exam-usage', parent: 'Reports', title: 'Exam Usage' },
-  { path: '/platform/reports/platform-usage', active: 'reports-platform-usage', parent: 'Reports', title: 'Platform Usage' },
-  { path: '/platform/reports/audit', active: 'reports-audit', parent: 'Reports', title: 'Audit Reports' },
-
   { path: '/platform/security', active: 'sec-events', parent: 'Security', title: 'Security Events' },
   { path: '/platform/security/events', active: 'sec-events', parent: 'Security', title: 'Security Events' },
-  { path: '/platform/security/login-activity', active: 'sec-login-activity', parent: 'Security', title: 'Login Activity' },
   { path: '/platform/security/failed-logins', active: 'sec-failed-logins', parent: 'Security', title: 'Failed Login Attempts' },
-  { path: '/platform/security/audit-logs', active: 'sec-audit-logs', parent: 'Security', title: 'Audit Logs' },
-
-  { path: '/platform/settings', active: 'settings-platform', parent: 'Settings', title: 'Platform Settings' },
-  { path: '/platform/settings/platform', active: 'settings-platform', parent: 'Settings', title: 'Platform Settings' },
-  { path: '/platform/settings/tenant', active: 'settings-tenant', parent: 'Settings', title: 'Tenant Settings' },
-  { path: '/platform/settings/email', active: 'settings-email', parent: 'Settings', title: 'Email Settings' },
-  { path: '/platform/settings/notifications', active: 'settings-notifications', parent: 'Settings', title: 'Notification Settings' },
-  { path: '/platform/settings/security', active: 'settings-security', parent: 'Settings', title: 'Security Settings' },
 
   { path: '/platform/system-logs', active: 'system-logs', parent: 'Platform Admin', title: 'System Logs' },
 ];

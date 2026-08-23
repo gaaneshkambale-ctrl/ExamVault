@@ -1,81 +1,42 @@
 import { useState } from 'react';
-import { Alert, Badge, Button, Card, Form, Modal, Offcanvas, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
-import { createTenant, createTenantAdmin } from '../../api/tenantsApi';
+import { createTenantAdmin } from '../../api/tenantsApi';
 import { extractServerError } from '../../utils/apiError';
 import type { Tenant } from '../../types/tenant';
 
 interface ManageTenantsProps {
   // Undefined = "All Organizations". PlatformSidebar's nav key for
-  // highlighting and the create-modal auto-open both derive from this
-  // page being mounted at one of four routes (org-all/create/active/
-  // suspended) - see AppRoutes.tsx.
+  // highlighting derives from this page being mounted at one of three
+  // routes (org-all/active/suspended) - see AppRoutes.tsx. Create and
+  // per-org Details are their own dedicated pages (CreateOrganization.tsx,
+  // OrganizationDetails.tsx), not modals/panels on this list anymore.
   statusFilter?: 'active' | 'suspended';
-  autoOpenCreate?: boolean;
 }
 
-// Organization Details tabs from Organizations.png - only Overview has
-// real data behind it today (Name/Subdomain/Status/Created On, all
-// already on Tenant). Usage/Admins/Activity/Settings would each need new
-// backend (per-tenant usage stats, a queryable admins-by-tenant
-// endpoint, an activity/audit trail, editable tenant settings) - shown
-// honestly rather than faked, same principle as every other "not
-// connected yet" surface in this console.
-const DETAIL_TABS = ['Overview', 'Usage', 'Admins', 'Activity', 'Settings'] as const;
-type DetailTab = (typeof DETAIL_TABS)[number];
-
-export default function ManageTenants({ statusFilter, autoOpenCreate = false }: ManageTenantsProps) {
+export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
   const { data: tenants, isLoading, isError } = useTenants();
-  const queryClient = useQueryClient();
 
   const [searchText, setSearchText] = useState('');
-  const [showCreate, setShowCreate] = useState(autoOpenCreate);
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
 
   const [adminTarget, setAdminTarget] = useState<Tenant | null>(null);
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
 
-  const [detailTarget, setDetailTarget] = useState<Tenant | null>(null);
-  const [detailTab, setDetailTab] = useState<DetailTab>('Overview');
-
-  const createMutation = useMutation({
-    mutationFn: () => createTenant({ name, slug }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tenants'] });
-      setShowCreate(false);
-      setName('');
-      setSlug('');
-    },
-  });
-
   const createAdminMutation = useMutation({
     mutationFn: () => createTenantAdmin(adminTarget!.id, { fullName: adminFullName, email: adminEmail }),
   });
-
-  const openCreate = () => {
-    createMutation.reset();
-    setName('');
-    setSlug('');
-    setShowCreate(true);
-  };
 
   const openAddAdmin = (tenant: Tenant) => {
     createAdminMutation.reset();
     setAdminFullName('');
     setAdminEmail('');
     setAdminTarget(tenant);
-  };
-
-  const openDetails = (tenant: Tenant) => {
-    setDetailTab('Overview');
-    setDetailTarget(tenant);
   };
 
   const statusFiltered = tenants?.filter((tenant) => {
@@ -93,13 +54,7 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
   const activeCount = tenants?.filter((t) => t.isActive).length ?? 0;
   const suspendedCount = totalCount - activeCount;
 
-  const activeNavKey = autoOpenCreate
-    ? 'org-create'
-    : statusFilter === 'active'
-      ? 'org-active'
-      : statusFilter === 'suspended'
-        ? 'org-suspended'
-        : 'org-all';
+  const activeNavKey = statusFilter === 'active' ? 'org-active' : statusFilter === 'suspended' ? 'org-suspended' : 'org-all';
   const pageTitle =
     statusFilter === 'active' ? 'Active Organizations' : statusFilter === 'suspended' ? 'Suspended Organizations' : 'Organizations';
 
@@ -127,9 +82,9 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
             onChange={(e) => setSearchText(e.target.value)}
             style={{ width: 240 }}
           />
-          <Button variant="primary" onClick={openCreate} className="text-nowrap">
+          <Link to="/platform/organizations/create" className="btn btn-primary text-nowrap">
             + Create Organization
-          </Button>
+          </Link>
         </div>
       </div>
 
@@ -143,36 +98,6 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
           );
         })}
       </div>
-
-      <Modal show={showCreate} onHide={() => setShowCreate(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Create Organization</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {createMutation.isError && <Alert variant="danger">{extractServerError(createMutation.error)}</Alert>}
-          <Form.Group className="mb-3" controlId="tenantName">
-            <Form.Label>Name</Form.Label>
-            <Form.Control value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Stanford University" />
-          </Form.Group>
-          <Form.Group controlId="tenantSlug">
-            <Form.Label>Slug (subdomain)</Form.Label>
-            <Form.Control value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="e.g. stanford" />
-            <Form.Text className="text-muted">Reached at {slug || '<slug>'}.examvault.com</Form.Text>
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="outline-secondary" onClick={() => setShowCreate(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            disabled={!name.trim() || !slug.trim() || createMutation.isPending}
-            onClick={() => createMutation.mutate()}
-          >
-            {createMutation.isPending ? 'Creating...' : 'Create'}
-          </Button>
-        </Modal.Footer>
-      </Modal>
 
       <Modal show={adminTarget !== null} onHide={() => setAdminTarget(null)} centered>
         <Modal.Header closeButton>
@@ -214,71 +139,6 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
           )}
         </Modal.Footer>
       </Modal>
-
-      <Offcanvas show={detailTarget !== null} onHide={() => setDetailTarget(null)} placement="end">
-        <Offcanvas.Header closeButton>
-          <Offcanvas.Title>Organization Details</Offcanvas.Title>
-        </Offcanvas.Header>
-        <Offcanvas.Body>
-          {detailTarget && (
-            <>
-              <div className="d-flex align-items-center gap-3 mb-3">
-                <OrgAvatar name={detailTarget.name} size={48} />
-                <div>
-                  <div className="fw-bold">{detailTarget.name}</div>
-                  <Badge bg={detailTarget.isActive ? 'success' : 'secondary'}>
-                    {detailTarget.isActive ? 'Active' : 'Inactive'}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="d-flex gap-3 border-bottom mb-3 small">
-                {DETAIL_TABS.map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setDetailTab(tab)}
-                    className="btn btn-link p-0 pb-2 text-decoration-none"
-                    style={
-                      tab === detailTab
-                        ? { color: '#4f46e5', fontWeight: 600, borderBottom: '2px solid #4f46e5' }
-                        : { color: '#6b7280' }
-                    }
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-
-              {detailTab === 'Overview' ? (
-                <dl className="row small mb-4">
-                  <dt className="col-5 text-muted fw-normal">Organization Name</dt>
-                  <dd className="col-7">{detailTarget.name}</dd>
-                  <dt className="col-5 text-muted fw-normal">Subdomain</dt>
-                  <dd className="col-7">{detailTarget.slug}.examvault.com</dd>
-                  <dt className="col-5 text-muted fw-normal">Status</dt>
-                  <dd className="col-7">{detailTarget.isActive ? 'Active' : 'Inactive'}</dd>
-                  <dt className="col-5 text-muted fw-normal">Created On</dt>
-                  <dd className="col-7">{new Date(detailTarget.createdAtUtc).toLocaleString()}</dd>
-                </dl>
-              ) : (
-                <div className="text-center text-muted small py-5 border rounded-3 mb-4">
-                  "{detailTab}" isn't connected yet - this section of Organization Details is still being built.
-                </div>
-              )}
-
-              <div className="d-flex gap-2">
-                <Button variant="outline-primary" size="sm" onClick={() => openAddAdmin(detailTarget)}>
-                  Add Admin
-                </Button>
-                {detailTarget.isActive && (
-                  <DeactivateTenantButton tenantId={detailTarget.id} tenantName={detailTarget.name} />
-                )}
-              </div>
-            </>
-          )}
-        </Offcanvas.Body>
-      </Offcanvas>
 
       <Card className="border-0 shadow-sm mb-3">
         <Card.Body className={isLoading || isError || filteredTenants?.length === 0 ? '' : 'p-0'}>
@@ -340,12 +200,16 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
                     <td>{new Date(tenant.createdAtUtc).toLocaleDateString()}</td>
                     <td className="pe-4">
                       <div className="d-flex gap-2">
-                        <Button variant="outline-secondary" size="sm" onClick={() => openDetails(tenant)} title="View details">
+                        <Link
+                          to={`/platform/organizations/${tenant.id}`}
+                          className="btn btn-outline-secondary btn-sm"
+                          title="View details"
+                        >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                             <circle cx="12" cy="12" r="3" />
                           </svg>
-                        </Button>
+                        </Link>
                         <Button variant="outline-primary" size="sm" onClick={() => openAddAdmin(tenant)}>
                           Add Admin
                         </Button>

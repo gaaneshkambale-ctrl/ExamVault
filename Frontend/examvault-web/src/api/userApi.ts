@@ -8,6 +8,7 @@ import type {
   RegisterRequest,
   RegisterResponse,
   ResetPasswordRequest,
+  PlatformUserListItem,
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UserListItem,
@@ -100,6 +101,14 @@ export async function revokeOtherSessions(): Promise<void> {
 
 export async function listUsers(): Promise<UserListItem[]> {
   const { data } = await apiClient.get<UserListItem[]>('/api/users');
+  return data;
+}
+
+// Same endpoint as listUsers - a Super Admin caller gets every user
+// across every tenant (see UserRepository.GetAllAsync), including
+// SuperAdmin-role rows a tenant Admin's own call never returns.
+export async function listAllUsers(): Promise<PlatformUserListItem[]> {
+  const { data } = await apiClient.get<PlatformUserListItem[]>('/api/users');
   return data;
 }
 

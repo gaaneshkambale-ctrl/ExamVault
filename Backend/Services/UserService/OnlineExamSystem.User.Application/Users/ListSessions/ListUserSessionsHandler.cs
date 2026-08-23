@@ -12,8 +12,21 @@ public class ListUserSessionsHandler
         _userRepository = userRepository;
     }
 
-    public Task<IReadOnlyList<RefreshToken>> HandleAsync(
+    // GetRefreshTokensByUserIdAsync itself has no tenant check (it's a plain
+    // userId lookup on RefreshTokens) - confirming the target user belongs to
+    // the caller's own tenant (or the caller is Super Admin) first is what
+    // stops an Admin listing another tenant's user's sessions (device
+    // labels, IP addresses) just by knowing their id.
+    public async Task<IReadOnlyList<RefreshToken>> HandleAsync(
         ListUserSessionsQuery query,
-        CancellationToken cancellationToken = default) =>
-        _userRepository.GetRefreshTokensByUserIdAsync(query.UserId, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdForTenantAsync(query.UserId, cancellationToken);
+        if (user is null)
+        {
+            return [];
+        }
+
+        return await _userRepository.GetRefreshTokensByUserIdAsync(query.UserId, cancellationToken);
+    }
 }

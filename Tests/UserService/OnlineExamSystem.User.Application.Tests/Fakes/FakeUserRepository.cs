@@ -14,6 +14,14 @@ public class FakeUserRepository : IUserRepository
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Id == id));
 
+    // No ambient-tenant concept in these fakes - existing tests exercise
+    // handler logic, not cross-tenant enforcement (that's covered live via
+    // real adversarial requests, same as every other service). Delegates
+    // to the same lookup as GetByIdAsync so handler tests using this fake
+    // keep working unchanged.
+    public Task<AppUser?> GetByIdForTenantAsync(Guid id, CancellationToken cancellationToken = default) =>
+        GetByIdAsync(id, cancellationToken);
+
     public Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Email == email && (tenantId is null || u.TenantId == tenantId)));
 

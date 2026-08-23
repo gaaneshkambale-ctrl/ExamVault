@@ -4,7 +4,17 @@ namespace OnlineExamSystem.User.Application.Interfaces;
 
 public interface IUserRepository
 {
+    /// <summary>Unscoped by tenant - safe only for self-service callers (the id is
+    /// always the caller's own, from their own validated JWT) and RefreshTokenHandler
+    /// (runs with no ambient tenant at all, on the anonymous refresh-token endpoint).
+    /// Admin-facing handlers that take a target user id from a route parameter must
+    /// use <see cref="GetByIdForTenantAsync"/> instead.</summary>
     Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Tenant-scoped counterpart to <see cref="GetByIdAsync"/> (Super Admin
+    /// bypasses the scope) - use this for any Admin-facing handler whose target user
+    /// id comes from a route parameter rather than the caller's own JWT.</summary>
+    Task<AppUser?> GetByIdForTenantAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Looks up a user by email. Pass <paramref name="tenantId"/> to scope the
     /// lookup to one tenant (uniqueness is enforced per-tenant, not globally) - pass

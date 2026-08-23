@@ -13,5 +13,7 @@ public class GetUserProfileHandler
     }
 
     public Task<AppUser?> HandleAsync(GetUserProfileQuery query, CancellationToken cancellationToken = default) =>
-        _userRepository.GetByIdAsync(query.UserId, cancellationToken);
+        query.TenantScoped
+            ? _userRepository.GetByIdForTenantAsync(query.UserId, cancellationToken)
+            : _userRepository.GetByIdAsync(query.UserId, cancellationToken);
 }

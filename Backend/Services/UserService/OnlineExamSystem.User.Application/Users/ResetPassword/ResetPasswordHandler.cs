@@ -32,7 +32,7 @@ public class ResetPasswordHandler
             return ResetPasswordResult.Invalid(errors);
         }
 
-        var user = await _userRepository.GetByIdAsync(command.UserId, cancellationToken);
+        var user = await _userRepository.GetByIdForTenantAsync(command.UserId, cancellationToken);
         if (user is null)
         {
             return ResetPasswordResult.NotFound();

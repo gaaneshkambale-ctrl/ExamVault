@@ -48,8 +48,15 @@ public class AuditLogsController : ControllerBase
         return NoContent();
     }
 
+    // SuperAdmin added here (previously Admin-only, flagged as a known
+    // follow-up when the Super Admin console was first scoped out -
+    // ListAuditLogsHandler's query filter already had the IsSuperAdmin
+    // bypass from Phase 2, it was only ever blocked by this role gate).
+    // A regular Admin still only ever sees their own tenant's logs
+    // through it - the bypass only activates for an actual SuperAdmin
+    // claim.
     [HttpGet]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,SuperAdmin")]
     public async Task<IActionResult> List(
         [FromQuery] DateTime fromUtc,
         [FromQuery] DateTime toUtc,
@@ -101,5 +108,6 @@ public class AuditLogsController : ControllerBase
         log.EntityId,
         log.UserId,
         log.UserName,
-        log.IpAddress);
+        log.IpAddress,
+        log.TenantId);
 }

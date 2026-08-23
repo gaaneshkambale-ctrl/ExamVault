@@ -205,4 +205,279 @@ up in the mockup; none of that data exists in this codebase):
 - `OrgAvatar` (colored initials tile) and `timeAgo` extracted to shared
   components/utils since the Dashboard redesign and this page both need
   them now.
+Committed (e6d7b7c) and pushed.
+
+CREATE ORGANIZATION + ORGANIZATION DETAILS AS DEDICATED PAGES (2026-08-23,
+later same day) - user supplied `org_submenu.png` (Create Organization
+full-page layout with Address/Admin/Settings sections and live Active/
+Trial/Suspended side panels, plus a full Organization Details page with
+8 tabs, Quick Stats, Subscription Information, a Modules & Features
+checklist, and an Actions panel including Edit/Change Plan/Suspend/Reset
+Password/Delete). Confirmed scope with the user before building (same
+honesty principle as every prior mockup pass):
+1. Create Organization becomes its own page (`/platform/organizations/
+   create`, replacing the old modal-on-list). Real: Name + Subdomain
+   (existing `createTenant`), AND a genuine one-step admin creation -
+   if Admin Full Name + Admin Email are both filled, the page also calls
+   the existing `createTenantAdmin` right after tenant creation succeeds
+   (two real sequential API calls, no new backend needed) - a real UX
+   improvement over the old two-step Create-Organization-then-separately-
+   Add-Admin flow. Everything else in the mockup's form (Organization
+   Code, Organization Type, Phone/Designation, the whole Address
+   Information section, the 3 toggles) is shown but disabled/marked
+   "not saved yet" rather than silently accepted and discarded. The
+   right-side Active/Suspended panels are real (from the existing tenant
+   list); the mockup's Trial panel is a "not connected yet" placeholder
+   (no plan/trial field on Tenant, user chose not to add one now).
+2. Organization Details becomes its own page (`/platform/organizations/
+   :id`, replacing the 5-tab Offcanvas from the previous pass) with all
+   8 mockup tabs. Overview is real (Name/Subdomain/Status/Created On)
+   plus honest placeholders for everything else the mockup's Overview
+   shows (Organization Code/Type/Plan/Billing Cycle/Description, Admin
+   Information, Address Information, Subscription Information, Quick
+   Stats, Modules & Features). Suspend Organization in the Actions panel
+   is real (existing Deactivate). Add Admin stays real, moved onto the
+   Admins tab. Edit Organization/Change Plan/Reset Admin Password/View
+   Activity Log/Delete Organization are all "not connected yet" - Delete
+   in particular deliberately NOT built this pass (irreversible,
+   cascading-data question, no backend endpoint - a separate decision
+   the user didn't ask to make yet). Usage/Users/Exams/Subscriptions/
+   Activity Log/Settings tabs are all "not connected yet" placeholders.
+   User explicitly chose NOT to add real Organization Type/Description
+   fields to the Tenant backend for this pass - stays UI-only/disabled
+   everywhere they appear.
+
+Verified live in a real browser end to end, not just tsc/lint/vitest
+(49/49 green, zero regressions): created a real throwaway org ("Test Org
+Submenu") through the new Create Organization page with BOTH the org and
+its admin filled in, confirmed the one-step flow actually made both real
+API calls (admin row confirmed via direct SQL), confirmed it navigated to
+the new Organization Details page for that org afterward, exercised the
+Admins tab's real "+ Add Admin" button, and used the real Deactivate
+action from the Actions panel (status flipped to Inactive, Actions panel
+correctly swapped to "Already Suspended"). Zero console errors. Cleaned
+up by leaving the throwaway org deactivated (same discipline as every
+other throwaway test tenant this session).
+
+CRITICAL SECURITY FIX, found while scoping ALL USERS (2026-08-23, later
+same day) - user supplied `Alluser.png` asking to build the cross-tenant
+"All Users" list. Investigating what backend it would need surfaced a
+REAL, LIVE cross-tenant data leak that predates this entire multi-tenant
+initiative and is unrelated to any mockup: `UserRepository.GetAllAsync`
+and `GetByIdAsync` had ZERO tenant scoping - unlike every other entity in
+this codebase (which all got proper TenantScopedEntity/EF-filter or
+manual-filter treatment in Phase 2), AppUser's own Admin-facing endpoints
+were never given the compensating manual scope its "no EF global filter"
+design explicitly called for (see AppUser's own comment on why it opts
+out of the filter). Concretely, before this fix: ANY tenant Admin's
+"Manage Users" page (`GET /api/users`) returned EVERY user across EVERY
+tenant, not just their own; and `GET/PUT/DELETE /api/users/{id}`,
+`.../reset-password`, `.../sessions`, and `.../photo` let an Admin target
+another tenant's user purely by knowing/guessing their Guid - full
+cross-tenant view AND mutation (delete, deactivate, password reset).
+Fixed: added `GetByIdForTenantAsync` (the same IsSuperAdmin-bypass shape
+every other tenant-scoped entity already uses) and switched
+Delete/Update/SetActiveStatus/ResetPassword plus the GetById/GetPhoto/
+ListSessions controller paths to it; scoped `GetAllAsync` the same way.
+Left self-service lookups (own profile/photo, ChangePassword,
+RefreshTokenHandler) on the original unscoped `GetByIdAsync` deliberately
+- their id is always the caller's own from a validated JWT, or (for
+refresh) there's no ambient tenant at all since that endpoint is
+anonymous, so scoping there would have broken login itself. `GetById`'s
+handler (`GetUserProfileHandler`) needed a `TenantScoped` query flag to
+serve both cases correctly rather than forking the handler. Widened
+`GET /api/users`'s role gate to `Admin,SuperAdmin` so the new All Users
+page could use the now-safe endpoint directly - no new endpoint needed.
+Verified live via a real adversarial request (not just code review,
+matching this project's own established discipline): a real Tenant B
+admin's `GET /api/users` now returns exactly their own 3 users (was:
+every user in the system); the Super Admin's own call still correctly
+returns all 13 users across all 5 tenants. Backend test suite 335/335,
+zero regressions. Also hit and fixed a real frontend type regression
+this same fix exposed: widening `UserListItem.role` to admit
+`'SuperAdmin'` broke several existing tenant-scoped Admin pages
+(ManageUsers.tsx, EditUser.tsx, ResetPassword.tsx, UserDetails.tsx) that
+index `Record<UserRole, ...>` or assign to a `UserRole`-typed variable -
+`npx tsc --noEmit` alone didn't catch this (different from the project's
+actual `tsc -b && vite build` used by `npm run build`/the Docker image),
+only the real production build did. Fixed by introducing a separate
+`PlatformUserListItem` type (+ `listAllUsers()`) instead of widening the
+shared one. Lesson: verify with the actual `npm run build`, not just
+`tsc --noEmit`, before rebuilding the Docker image - noted here since
+this cost one avoidable rebuild-and-retest cycle.
+
+The "All Users" page itself needed no placeholders at all once the fix
+landed - Users Overview/Users by Role (donut, reusing the existing
+`SegmentDonutChart`)/Users by Status/Recent Registrations/role
+tabs/search are all real, matching `Alluser.png` almost exactly (dropped
+only "Suspended"/"Pending" statuses from Users by Status, since no such
+user state exists - just IsActive).
+
+SUBSCRIPTIONS MODULE (2026-08-23, later same day) - user supplied
+`subscription.png` (Plans/Organizations & Plans/Usage/Subscription
+History) and asked to build it, directly reopening the "keep deferred"
+decision made earlier this same day. Re-confirmed scope before building:
+visual shell only (no real Plan/billing backend), and Subscription
+History shows a genuine empty/not-connected state rather than fabricated
+transactions - user chose not to build real billing tracking, and
+explicitly did not want fake "Success"/"Payment Failed" records since
+there's no real payment system behind this.
+- Plans: static reference pricing cards only (Free Trial/Basic/Standard/
+  Premium, hardcoded to match the mockup) - Create/Edit Plan buttons
+  disabled with a note that plan management isn't connected; deliberately
+  NOT built as a fake-persisted CRUD table (a table of "plan rows" with
+  working-looking Edit/Delete would misrepresent this as real data more
+  than a static pricing-card reference does).
+- Organizations & Plans: reuses the real Organizations list (name/
+  subdomain/status - the same Active/Inactive this app already has, not
+  the mockup's invented Trial/Suspended/Expired) with Plan/Students/Exams/
+  Billing/Amount columns as honest "-", same pattern as the existing All
+  Organizations page's own placeholder columns.
+- Usage: Total Students is real (only possible because of the same-day
+  User Service tenant-scoping fix - GetAllAsync now safely returns
+  everyone for a Super Admin caller); Exams Conducted/Active Exams/
+  Storage Used/API Calls have no cross-tenant aggregation anywhere in
+  this codebase - honest placeholders.
+- Subscription History: left exactly as the existing generic
+  PlatformComingSoon placeholder - no new page needed, since "empty/
+  not-connected" was already precisely what that route already showed.
+Verified live in the browser: Plans' pricing cards render correctly with
+disabled Create/Edit and the disclosure note; Organizations & Plans
+shows real tenant data with honest placeholder columns; Usage's Total
+Students stat is real (6, matching the All Users count) while the rest
+show "Not connected yet"; Subscription History shows the honest empty
+state. Real `npm run build` (not just tsc --noEmit) passed before the
+Docker rebuild this time. Zero console errors, 49/49 tests green.
+Not committed yet.
+
+SECURITY PAGES (2026-08-23, later same day) - user supplied `security.png`
+(Security Events/Login Activity/Failed Login Attempts/Audit Logs). Two of
+these were the exact "small, well-scoped, still-open follow-up" flagged
+back when the Super Admin console was first scoped: Notification
+Service's `AuditLogsController.List` already had the right tenant-scoping
+(Phase 2's IsSuperAdmin bypass in its query filter) but was gated
+`[Authorize(Roles = "Admin")]`, blocking a SuperAdmin claim from ever
+reaching it. Widened to `Admin,SuperAdmin` - a regular Admin still only
+ever sees their own tenant's logs, verified live via adversarial request
+(Tenant B admin's `GET /api/audit-logs` returns only their own tenant's
+entries). Also added `TenantId` to `AuditLogResponse` (previously
+missing, needed for the Super Admin's Organization column) - caught a
+stale-Docker-image gap while browser-verifying (added the field to the
+response after already rebuilding notification-api once for the role-gate
+fix alone; a second rebuild was needed before it showed up live - a
+reminder that every backend field addition needs its own image rebuild,
+not just the change that prompted the first one).
+- Audit Logs: real, cross-tenant, matches the mockup almost exactly
+  (search, Time/User/Organization/Action/Module/Details/IP Address).
+- Login Activity: real - filters the same Audit Logs data down to
+  Module=Auth/Activity="User login" entries (every successful login
+  already writes one). Stat cards (Total Logins/Unique Users/
+  Organizations/Avg Logins per Day) are all real, computed from that
+  filtered set. Dropped Location/Device-Browser from the mockup - neither
+  is actually captured when a login is recorded (no geo-IP, no
+  user-agent parsing at that call site).
+- Security Events / Failed Login Attempts: honest "not connected yet" -
+  no distinct event-detection concept exists, and login FAILURES aren't
+  audited at all today (only successes call the audit client), so there's
+  no real data behind either. User asked about this directly after seeing
+  the placeholders live - confirmed this is expected/by design, not a
+  bug, and offered to add real failed-login audit logging as a small
+  follow-up if wanted (not done yet, no answer received as of this note).
+Verified live: 335/335 backend tests, real `npm run build` + 49/49
+frontend tests, zero console errors, and the adversarial cross-tenant
+check above.
+Not committed yet.
+REPORTS PAGES (2026-08-23, later same day) - user supplied `reports.png`
+(Organization Report/User Report/Exam Usage/Platform Usage/Audit Reports).
+Plan before code, per usual:
+- Organization Report: real - Total/Active Organizations, Organization
+  Status donut (Active/Inactive, same as elsewhere - no Trial concept),
+  and Top Organizations by Users (new: groups the existing cross-tenant
+  AllUsers list by tenantId, counts, joins tenant names - the same real
+  data AllUsers.tsx already fetches, just re-aggregated).
+- User Report: real - same stat cards/Users-by-Role donut as AllUsers.tsx,
+  plus a new New Users Trend (buckets real createdAtUtc timestamps by day
+  - first genuinely new derived-real widget in Reports, no backend change
+  needed).
+- Exam Usage: partially real. ExamsController.List's `isAdmin` check
+  widened to `User.IsInRole("Admin") || User.IsInRole("SuperAdmin")` (same
+  shape as the two prior role-gate fixes) so a SuperAdmin's GET /api/exams
+  flows into ExamRepository.GetAllAsync, whose EF query filter already
+  bypasses tenant scoping for IsSuperAdmin - makes Total Exams/Exams by
+  Status real. Exam Attempts/Avg Pass %/Attempts Trend/Top Exams by
+  Attempts stay honest placeholders - checked SubmissionsController and
+  confirmed there is no cross-tenant attempts endpoint at all (only
+  by-exam/{examId} and by-user/{userId}, both Admin-only and requiring an
+  ID the caller already has); building one would be a genuinely new
+  backend capability, not a small gate fix, so out of scope today.
+- Platform Usage: real - Total Logins/Unique Users and a Logins Over Time
+  trend, reusing the same Audit Logs "User login" filtering as the
+  Security > Login Activity page, just re-shaped as a day-bucketed trend
+  instead of a table. Anything session/API-call/storage related stays
+  placeholder (no such data exists).
+- Audit Reports: real - a re-skin of Security > Audit Logs' existing real
+  data (same getAuditLogs call), with a Role column added by
+  cross-referencing the AllUsers list by userId.
+Verified live in the browser (existing Super Admin session, no fresh login
+needed): Organization Report shows 6 orgs/3 active/3 inactive with a real
+Top Organizations by Users list; User Report shows 13 users with a real
+14-day New Users Trend and Users-by-Role donut; Exam Usage shows 6 total
+exams cross-tenant (confirms the ExamsController.List isAdmin widening
+works) with 2 Published/4 Draft/0 Archived, Attempts/Pass%/Trend/Top
+Exams honestly placeholder; Platform Usage shows 55 total logins/8 unique
+users with a real Logins Over Time trend, Active Sessions/API
+Calls/Storage honest placeholders; Audit Reports shows the real
+cross-tenant log with a working Role column (Organization Admin/Platform
+Admin resolved correctly per row). Backend: Exam Service 75/75 tests
+green, dotnet build clean. Frontend: real `npm run build` (not just tsc
+--noEmit) and 49/49 tests green before the Docker rebuild. Zero console
+errors on any of the 5 pages.
+Not committed yet.
+
+SETTINGS PAGES (2026-08-23, later same day) - user supplied `setting.png`
+(Platform Settings/Tenant Settings/Email Settings/Notification Settings/
+Security Settings). Asked the user directly given the scale of this one -
+unlike every prior screen, almost none of these ~40+ fields have any
+backing concept in this codebase at all (Users/Orgs/Exams were always
+real domain data that just needed a role-gate or query-filter fix;
+Platform/Tenant/Email/Notification/Security *configuration* doesn't
+exist as a concept anywhere). The one loosely related piece - Notification
+Service's tenant-scoped SystemSettings entity (Maintenance Mode/Backup
+Frequency/Audit Log Retention/Log Level) - is Admin-only gated and scoped
+to a single org's own tenant row, not a true platform-wide setting, so
+wiring it in as "real" would have been misleading. User chose "Visual
+shell only" for all 5 pages.
+- All 5 pages match the mockup's left in-page tab list, but only the tab
+  shown active in the mockup screenshot has real designed content behind
+  it (that's the only tab we have any visual reference for) - the other
+  tabs are clickable and land on a shared "Not connected yet" panel
+  rather than inventing fields for tabs we never saw.
+- Every input/toggle in the built tabs is disabled and pre-filled with
+  the mockup's illustrative example values (Platform Name "ExamVault",
+  Session Timeout 30, etc.) - same treatment as Subscription Plans'
+  static pricing cards.
+- Fields that specifically looked like live metrics rather than
+  illustrative config were dropped to "-" instead of the mockup's fake
+  numbers: Platform Settings' About Platform stats (Total Organizations/
+  Total Users/Storage Used), Email Settings' Connection Status + Email
+  Summary (Emails Sent/Delivered/Delivery Rate/Failed), Security
+  Settings' Security Score/Last Security Review and Active Security
+  Features' per-item "Enabled" badges.
+- New shared components: SettingsTabNav (in-page tab list), ToggleRow
+  (disabled labeled switch row), SettingsDisclosure (the reused
+  reference-only banner) - introduced because this is the first time 5
+  near-identical pages needed the same chrome, unlike earlier one-off
+  pages.
+Verified live in the browser: all 5 pages render matching setting.png's
+layout (Platform Settings' General tab, Tenant Settings' General tab,
+Email Settings' SMTP Server tab, Notification Settings' General tab,
+Security Settings' Password Policy tab), disclosure banner visible on
+each, in-page tab nav switches correctly (clicked Platform Settings'
+Branding tab - showed the shared "Not connected yet" panel), all
+toggles/inputs disabled with the mockup's illustrative values, and the
+fields dropped to "-" (About Platform stats, Email Connection
+Status/Summary, Security Score/Last Review/Active Security Features)
+render as intended rather than fake numbers. Real `npm run build` +
+49/49 tests green before the Docker rebuild. Zero console errors on any
+of the 5 pages.
 Not committed yet.

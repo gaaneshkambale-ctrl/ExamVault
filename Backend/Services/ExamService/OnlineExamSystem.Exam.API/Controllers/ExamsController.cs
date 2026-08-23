@@ -102,7 +102,11 @@ public class ExamsController : ControllerBase
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var isAdmin = User.IsInRole("Admin");
+        // SuperAdmin counts as "admin" here so the Reports console can list
+        // exams across every tenant - GetAllAsync's own EF query filter
+        // (IsSuperAdmin bypass) is what actually scopes the result, this
+        // flag only decides which repository method gets called.
+        var isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
 
         var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(callerId, isAdmin), cancellationToken);
         return Ok(exams.Select(ToResponse));

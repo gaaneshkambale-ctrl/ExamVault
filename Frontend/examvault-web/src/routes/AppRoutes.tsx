@@ -73,6 +73,24 @@ import NotificationBatchDetails from '../pages/admin/NotificationBatchDetails';
 import NotificationTemplates from '../pages/admin/NotificationTemplates';
 import ProtectedRoute from '../components/ProtectedRoute';
 import ManageTenants from '../pages/platform/ManageTenants';
+import CreateOrganization from '../pages/platform/CreateOrganization';
+import OrganizationDetails from '../pages/platform/OrganizationDetails';
+import AllUsers from '../pages/platform/AllUsers';
+import SubscriptionPlans from '../pages/platform/SubscriptionPlans';
+import OrganizationsAndPlans from '../pages/platform/OrganizationsAndPlans';
+import PlatformUsage from '../pages/platform/PlatformUsage';
+import SecurityAuditLogs from '../pages/platform/SecurityAuditLogs';
+import LoginActivity from '../pages/platform/LoginActivity';
+import OrganizationReport from '../pages/platform/OrganizationReport';
+import UserReport from '../pages/platform/UserReport';
+import ExamUsageReport from '../pages/platform/ExamUsageReport';
+import PlatformUsageReport from '../pages/platform/PlatformUsageReport';
+import PlatformAuditReports from '../pages/platform/AuditReports';
+import PlatformSettings from '../pages/platform/PlatformSettings';
+import TenantSettings from '../pages/platform/TenantSettings';
+import EmailSettings from '../pages/platform/EmailSettings';
+import PlatformNotificationSettings from '../pages/platform/NotificationSettings';
+import SecuritySettings from '../pages/platform/SecuritySettings';
 import PlatformDashboard from '../pages/platform/PlatformDashboard';
 import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
 import { platformComingSoonRoutes } from './platformComingSoonRoutes';
@@ -676,7 +694,15 @@ export default function AppRoutes() {
         path="/platform/organizations/create"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <ManageTenants autoOpenCreate />
+            <CreateOrganization />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/organizations/:id"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <OrganizationDetails />
           </ProtectedRoute>
         }
       />
@@ -693,6 +719,174 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <ManageTenants statusFilter="suspended" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/users"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <AllUsers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/users/organization-admins"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <AllUsers roleFilter="Admin" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/users/students"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <AllUsers roleFilter="Student" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/users/platform-admins"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <AllUsers roleFilter="SuperAdmin" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/subscriptions"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SubscriptionPlans />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/subscriptions/plans"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SubscriptionPlans />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/subscriptions/organizations"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <OrganizationsAndPlans />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/subscriptions/usage"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformUsage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/security/audit-logs"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SecurityAuditLogs />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/security/login-activity"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <LoginActivity />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/reports"
+        element={<Navigate to="/platform/reports/organizations" replace />}
+      />
+      <Route
+        path="/platform/reports/organizations"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <OrganizationReport />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/reports/users"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <UserReport />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/reports/exam-usage"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <ExamUsageReport />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/reports/platform-usage"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformUsageReport />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/reports/audit"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformAuditReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/settings"
+        element={<Navigate to="/platform/settings/platform" replace />}
+      />
+      <Route
+        path="/platform/settings/platform"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/settings/tenant"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <TenantSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/settings/email"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <EmailSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/settings/notifications"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformNotificationSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/settings/security"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SecuritySettings />
           </ProtectedRoute>
         }
       />
