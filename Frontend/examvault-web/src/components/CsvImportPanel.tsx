@@ -3,7 +3,14 @@ import { Alert, Badge, Button, Form, Table } from 'react-bootstrap';
 import { createQuestion } from '../api/questionApi';
 import { buildCsvTemplate, parseQuestionImportCsv } from '../utils/csvQuestionImport';
 import { extractServerError } from '../utils/apiError';
-import type { QuestionResponse } from '../types/question';
+import type { QuestionResponse, QuestionType } from '../types/question';
+
+const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  MultipleChoice: 'Single Choice',
+  MultiSelect: 'Multiple Choice',
+  TrueFalse: 'True/False',
+  CodeProgram: 'Code / Programming',
+};
 
 interface CsvImportPanelProps {
   examId: string;
@@ -160,7 +167,7 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
                       {row.questionText || <span className="text-muted">(no text)</span>}
                       {row.error && <div className="text-danger small">{row.error}</div>}
                     </td>
-                    <td>{row.questionType === 'MultipleChoice' ? 'MCQ' : 'True/False'}</td>
+                    <td>{QUESTION_TYPE_LABELS[row.questionType]}</td>
                     <td>{row.marks}</td>
                   </tr>
                 ))}

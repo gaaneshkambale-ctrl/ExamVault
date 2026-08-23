@@ -3,7 +3,7 @@ namespace OnlineExamSystem.Shared.Contracts.Requests.Exam;
 public record UpdateExamRequest(
     string Title,
     string Description,
-    string ExamType,
+    string CreationMethod,
     int DurationMinutes,
     int TotalMarks,
     int PassingMarks,
@@ -23,4 +23,5 @@ public record UpdateExamRequest(
     bool AllowNotes,
     bool AutoSubmitOnTimeEnd,
     bool ConfirmBeforeSubmit,
-    string? ExamCode = null);
+    string? ExamCode = null,
+    Guid? ExamTypeId = null);

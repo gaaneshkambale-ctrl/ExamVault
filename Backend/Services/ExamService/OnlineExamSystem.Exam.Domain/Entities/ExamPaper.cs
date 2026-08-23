@@ -10,7 +10,9 @@ public class ExamPaper : BaseEntity
     public string Description { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public bool ContainsSections { get; set; }
-    public ExamType ExamType { get; set; } = ExamType.Manual;
+    public CreationMethod CreationMethod { get; set; } = CreationMethod.Manual;
+    public Guid? ExamTypeId { get; set; }
+    public ExamType? ExamType { get; set; }
     public int DurationMinutes { get; set; }
     public int TotalMarks { get; set; }
     public int PassingMarks { get; set; }

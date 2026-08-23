@@ -74,7 +74,8 @@ export default function ExamWizardReview() {
               <Row>
                 <Field label="Exam Name" value={exam.title} />
                 <Field label="Category" value={exam.category || 'Uncategorized'} />
-                <Field label="Type" value={exam.examType} />
+                <Field label="Exam Type" value={exam.examTypeName || 'Not set'} />
+                <Field label="Creation Method" value={exam.creationMethod} />
                 <Field label="Total Questions" value={String(totalQuestions)} />
                 <Field label="Total Marks" value={String(exam.totalMarks)} />
                 <Field label="Passing Marks" value={String(exam.passingMarks)} />

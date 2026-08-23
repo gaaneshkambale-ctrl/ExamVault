@@ -7,7 +7,7 @@ public record ExamResponse(
     string Description,
     string Category,
     bool ContainsSections,
-    string ExamType,
+    string CreationMethod,
     int DurationMinutes,
     int TotalMarks,
     int PassingMarks,
@@ -29,4 +29,6 @@ public record ExamResponse(
     bool AllowCalculator,
     bool AllowNotes,
     bool AutoSubmitOnTimeEnd,
-    bool ConfirmBeforeSubmit);
+    bool ConfirmBeforeSubmit,
+    Guid? ExamTypeId = null,
+    string? ExamTypeName = null);

@@ -18,4 +18,5 @@ public record AdminAttemptResultResponse(
     int MultipleTabsCount,
     int CopyPasteCount,
     int RightClickCount,
-    int MultipleMonitorsCount);
+    int MultipleMonitorsCount,
+    bool HasPendingGrading = false);

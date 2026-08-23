@@ -1,0 +1,494 @@
+ExamVault — Run Code + Auto-Graded Test Cases: Implementation Plan
+================================================================
+Goal: real code execution during the exam (student clicks Run Code, sees
+Pass/Fail per test case, matching coder.png) AND that same execution
+becomes the authoritative score for the question - full marks if every
+test case passes, partial credit for a partial pass. This is a genuine
+pivot from [[code_programming_questions.txt]]'s original "100% manual
+grading, no execution engine" decision, made explicitly by the user after
+seeing coder.png and choosing auto-grade over the self-check-only option.
+
+DECISION LOCKED IN (confirmed with the user before writing this plan)
+------------------------------------------------------------------------
+Auto-grade from test results, not self-check-only. Once a question has
+test cases, its score is computed by running the student's submitted code
+server-side - not something an admin decides by reading the code, and not
+something the student's own "Run Code" clicks can influence (the client
+never gets to report its own pass/fail as authoritative - that would be
+trivially fakeable via devtools).
+
+HYBRID WITH THE EXISTING MANUAL-GRADING WORK - NOTHING BUILT SO FAR IS
+DISCARDED
+------------------------------------------------------------------------
+A CodeProgram question now has two modes, selected purely by whether the
+admin gave it test cases:
+- Has test cases -> auto-graded (this plan). Marks = round(Marks *
+  passedCount / totalCount) computed server-side after submission.
+- No test cases -> unchanged. Exactly today's flow: Pending Grading,
+  admin reviews in the Grade Code Answers screen, assigns marks by hand.
+This means every already-shipped piece (GradeAnswerHandler, the
+ungraded-queue endpoint, the Grade Code Answers page, the
+HasPendingGrading/IsPendingGrading flags, the Pending Grading badge on
+Results) stays exactly as built - auto-grading reuses the "Pending
+Grading until MarksAwarded is set" state machine that already exists,
+rather than inventing a parallel one. An admin authoring a question
+simply chooses whether to add test cases; if they don't, they get the
+manual flow they already have.
+
+EXECUTION ENGINE — Piston (self-hosted), confirmed via research
+------------------------------------------------------------------------
+- Actively maintained (github.com/engineer-man/piston), MIT-ish license,
+  single self-hostable API container - the only realistic fit given this
+  project's Docker Desktop already hit memory-pressure crashes running 8
+  .NET services + SQL Server + RabbitMQ in parallel earlier in this
+  project. Judge0 (isolate + PostgreSQL + Redis + workers, ~2GB+ RAM
+  recommended) is the documented fallback only if Piston doesn't pan out.
+- The public hosted API (piston-api/emkc.org) now requires an auth key
+  and is educational-non-commercial only as of Feb 2026 - not usable for
+  this app regardless; self-hosting is the only option, not a choice.
+- Self-host: clone the repo, `docker-compose up -d api` starts the API
+  container with ZERO language runtimes installed. Each language must be
+  installed separately via the Piston CLI (`cli/index.js ppman install
+  <name>=<version>`) - this has to run once at deploy time. Needs
+  scripting into this project's own docker-compose setup (an init
+  container/script that runs `ppman install` for the 5 languages below
+  before the API is considered ready), not automatic out of the box.
+- HOST PREREQUISITE - VERIFIED: `docker info` on this machine reports
+  Cgroup Version: 2 - Piston's sandboxing requirement is satisfied, no
+  Judge0 fallback needed.
+- REST API: `POST /api/v2/execute`. Request: `language`, `version`
+  (SemVer selector, required), `files[]` (each: `content` required,
+  optional `name`), `stdin`, `args[]`, `run_timeout`/`compile_timeout`
+  (ms), `compile_memory_limit`/`run_memory_limit` (bytes). Response:
+  `run: {stdout, stderr, output, code, signal}` and, for compiled
+  languages, a `compile: {...}` block of the same shape. `GET
+  /api/v2/runtimes` lists what's actually installed.
+- Language mapping - VERIFIED against a real deployed instance (the
+  install-time `ppman`/POST /api/v2/packages name differs from the
+  execute-time `language` field for two of these - install by the
+  underlying toolchain name, execute by the language name):
+    CSharp     -> install "dotnet" 5.0.201  -> execute "csharp.net"
+    Java       -> install "java" 15.0.2     -> execute "java"
+    Python     -> install "python" 3.10.0   -> execute "python"
+    Cpp        -> install "gcc" 10.2.0      -> execute "c++"
+    JavaScript -> install "node" 18.15.0    -> execute "javascript"
+  These map 1:1 onto the ProgrammingLanguage enum already built in Phase 1
+  of the original plan - no changes needed there.
+- Security/resource controls - VERIFIED: Piston's server-side defaults
+  (`PISTON_RUN_TIMEOUT`/`PISTON_RUN_CPU_TIME` = 3000ms,
+  `PISTON_COMPILE_TIMEOUT`/`PISTON_COMPILE_CPU_TIME` = 10000ms) are too
+  tight for a cold C#/.NET build+run (measured ~6-8s compile alone) -
+  raised via docker-compose environment on the `piston` service itself
+  (`PISTON_RUN_TIMEOUT=8000`, `PISTON_COMPILE_TIMEOUT=15000`,
+  `PISTON_RUN_CPU_TIME=8000`, `PISTON_COMPILE_CPU_TIME=15000`), with the
+  Execution Service's own PistonClient requesting slightly under those
+  server caps (6000/12000ms) so its own values are never the binding
+  constraint. A caller (student Run Code click) never gets to specify
+  these at all - they're hardcoded in PistonClient, not on the request
+  DTO. Per-call concurrency/rate-limiting on the Run Code endpoint itself
+  is still an open item, deferred to Phase 4 (frontend) - a click cooldown
+  and single in-flight run per attempt.
+- MULTI-FILE SUBMISSION BEHAVIOR - VERIFIED per language (this was the
+  single riskiest unknown flagged at the top of this plan; resolved by
+  direct trial-and-error against the real Piston API before writing any
+  Execution Service code):
+    - C# (dotnet): TRUE multi-file support. Piston's compile script
+      renames every submitted file with `.cs` and runs `dotnet build`,
+      which auto-discovers and compiles ALL `.cs` files via MSBuild's
+      default globbing. GOTCHA: the driver file must NOT be named
+      "Program" - `dotnet new console` scaffolds its own Program.cs
+      first and refuses to overwrite an existing one, failing the whole
+      build with "no project or solution file" before either file
+      compiles. Used "Solution" + "Driver" as the two filenames.
+    - C++ (gcc): TRUE multi-file support. Piston's compile script renames
+      every submitted file with `.cpp` and compiles the whole set
+      together via `g++ -std=c++17 *.cpp -o a.out`. The driver file still
+      needs `#include "Solution.cpp"` to see the class definition (each
+      .cpp is its own translation unit) - safe against ODR violations
+      here since the student's methods are implicitly inline within the
+      class body. Used "Solution" + "Main".
+    - Java: NO multi-file support. Piston's Java package runs the JDK 11+
+      single-file source launcher (`java Main.java`, compiled in-memory,
+      never invokes `javac` separately) - a second file sitting in the
+      sandbox directory is never compiled or seen at all, regardless of
+      naming. Worked around by putting BOTH classes in ONE file: the
+      launcher requires the FIRST top-level type declared to be the one
+      with `main(String[])`, so the generated `public class Main` goes
+      first, followed by the student's class - always named `Solution`
+      by fixed convention (matching coder.png) - with its `public`
+      modifier stripped via a plain string replace before insertion
+      (only one public type is allowed per file).
+    - Python / JavaScript: single file, no compilation step, student code
+      with the driver appended in the same file - no surprises, worked
+      as expected on the first real trial for both.
+  All 5 languages confirmed producing byte-correct canonical output for
+  the coder.png "second largest" example (Int return, IntArray param)
+  via a real end-to-end call through Gateway -> Execution Service ->
+  Piston, not just direct-to-Piston calls - the full RunCodeHandler
+  orchestration and every DriverGenerator is proven working code, not a
+  design on paper.
+
+DECISION LOCKED IN — function-signature/harness style (not stdin/stdout)
+------------------------------------------------------------------------
+The user chose to match coder.png exactly: the student implements just a
+function body (`public int SecondLargest(int[] arr) { ... }`), and each
+test case is a typed input/output pair, not a stdin/stdout string pair.
+This was flagged as the harder path and picked anyway - the design below
+takes on that complexity deliberately rather than working around it.
+
+What this actually requires, precisely, because "harness" is doing a lot
+of work in that sentence:
+- A question gains structured, admin-authored metadata ON TOP OF (not
+  replacing) the existing free-text StarterCode: a FunctionName, an
+  ordered list of Parameters (each a Name + a Type from a fixed
+  supported set), and a ReturnType. When all three are present, this is
+  an auto-gradable-capable question and StarterCode is GENERATED per
+  language from that metadata (e.g. Python gets `def
+  secondLargest(arr):\n    pass`, Java gets the full `public class
+  Solution { public int secondLargest(int[] arr) { } }` wrapper),
+  overriding whatever free text is in StarterCode for display purposes -
+  generating it guarantees the stub the student sees always matches what
+  the driver expects to call. When the signature fields are absent
+  (null), the question behaves EXACTLY as the original Phase 1 built it:
+  free-text StarterCode, manual grading only. This keeps the plan
+  additive and backward-compatible with the one real question already
+  authored this session under the original free-text model - nothing
+  about it breaks or needs migrating.
+- Supported type set (deliberately bounded, not "any type" - this has to
+  stay something 5 language-specific templates can render without a
+  general-purpose type system): Int, Long, Double, Boolean, String,
+  IntArray, DoubleArray, StringArray. Covers the coder.png example and
+  the large majority of realistic short coding-exam problems; anything
+  needing 2D arrays, custom structs/objects, or generics is out of scope
+  for this plan and would need its own follow-up design.
+- Test cases store one typed literal value per parameter (not a single
+  opaque Input string) plus one typed ExpectedOutput value - e.g. for
+  SecondLargest: parameters=[arr: IntArray], a test case is
+  arr=[12,35,1,10,34,1], expectedOutput=34 (Int). Stored as JSON per
+  value server-side; never parsed at student-code-run time - the values
+  are known before the run, so the Execution Service renders them as
+  source-code LITERALS directly into a generated driver, avoiding any
+  need for JSON-parsing libraries inside the sandboxed run itself.
+- Per-test-case execution is still one Piston call each (same
+  RunAgainstTestCases shape as before) - what changes is what gets
+  submitted: the student's code plus a generated driver file with that
+  test case's arguments baked in as literals and the entry point calling
+  the student's function, printing the result in one canonical string
+  format shared across all 5 languages (see Phase 2) so ExpectedOutput
+  can be authored once and compared fairly regardless of which language
+  the student used.
+- Known limitation, not fixed: Double return values that happen to be
+  whole numbers don't round-trip identically across all 5 languages'
+  canonical output - JavaScript numbers have no int/float distinction, so
+  `JSON.stringify(34.0)` prints `34`, while Python/Java/C#/C++ all print
+  `34.0`. Only matters for Double-typed return values at whole-number
+  results; Int/IntArray (the coder.png example, and the common case)
+  round-trips identically everywhere. Worth a real fix only if a Double
+  question actually gets authored and this bites in practice.
+
+PHASE 1 — New data: function signature + typed test cases (Question
+Service) - DONE, BACKEND + ADMIN UI, VERIFIED LIVE
+------------------------------------------------------------------------
+- New entity `QuestionTestCase`: QuestionId (FK), an ordered list of
+  typed ArgumentValues (one per question Parameter, JSON-encoded),
+  ExpectedOutput (JSON-encoded, typed per ReturnType), DisplayOrder.
+  Migration `AddQuestionTestCases`.
+- `ExamQuestion` gains: FunctionName (string?), ReturnType (enum?,
+  CodeProgram-only), and a new child collection `QuestionParameter`
+  (QuestionId FK, Name, Type, DisplayOrder). Migration
+  `AddFunctionSignatureFields`.
+- All test cases and the function signature are visible to the student
+  (matches coder.png showing everything plainly) - unlike SampleAnswer,
+  neither needs admin-only masking in QuestionResponse.
+- CreateQuestionRequest/UpdateQuestionRequest/QuestionResponse gain
+  `functionName`, `returnType`, `parameters: { name, type }[]`, and
+  `testCases: { arguments: <value>[], expectedOutput: <value> }[]`,
+  CodeProgram-only (same optional-and-ignored-for-other-types pattern as
+  StarterCode today).
+- Admin authoring UI: DONE. New shared `FunctionSignatureEditor`
+  component (Function Name field, Return Type dropdown, repeatable
+  Parameters list, repeatable Test Cases list with typed text inputs
+  parsed/formatted per parameter type via `utils/typedValue.ts`), wired
+  into both CreateQuestionModal and EditQuestion. Verified live: edited
+  the pre-existing "reverseString" question through the admin UI, added a
+  String parameter + two test cases, saved successfully.
+
+PHASE 2 — New Execution Service (thin, DB-less - same shape as AI/Result
+Service) - DONE, VERIFIED END TO END FOR ALL 5 LANGUAGES
+------------------------------------------------------------------------
+- New microservice `OnlineExamSystem.Execution.*`, Gateway-routed, no own
+  database. Wraps Piston: builds the `/api/v2/execute` request (maps our
+  ProgrammingLanguage to Piston's language+version, sets the fixed
+  timeout/memory guards), calls it, normalizes the response.
+- New DriverGenerator component, one implementation per language
+  (5 total), each responsible for: rendering the question's function
+  signature into that language's stub/class wrapper (used both for the
+  generated StarterCode preview in Phase 1 and for wrapping the
+  student's actual submission at run time), rendering one test case's
+  typed argument values as source-code literals into a driver/entry
+  point that calls the student's function, and formatting the returned
+  value into the shared canonical output string (e.g. arrays as
+  `[1,2,3]`, no spaces, booleans lowercase, decimals to a fixed
+  precision) - this canonical format is defined ONCE, in one place, and
+  every language template must match it exactly, since ExpectedOutput is
+  authored against it.
+- One core internal operation - RunAgainstTestCases(code, language,
+  functionName, parameters, returnType, testCases[]) -> per-test-case
+  {passed, actualOutput}, executed sequentially or with bounded
+  concurrency per call (not one Piston call per test case fired all at
+  once uncapped - protects the shared container).
+- Two callers of that same core operation (Phase 3 and Phase 4 below) -
+  one HTTP endpoint for the interactive Run Code path, reused internally
+  by the async grading consumer, so there is exactly one place that talks
+  to Piston, generates drivers, and applies the safety limits.
+
+PHASE 3 — Submission-time auto-grading (async, event-driven - reuses the
+existing RabbitMQ pub/sub already in this codebase) - DONE, VERIFIED LIVE
+END TO END
+------------------------------------------------------------------------
+New `OnlineExamSystem.Execution.Worker` project (BackgroundService
+RabbitMQ consumer, own system JWT via `SystemTokenProvider` with a fixed
+sentinel GUID `...005747`, HTTP clients to Question/Execution/Submission
+Services). Verified against the real deployed stack: submitted a code
+answer as a student, watched the worker's logs show
+Question fetch -> Execution run -> Submission grade PUT, all 200s, and
+confirmed via a direct SubmissionDb query that MarksAwarded=10 and
+GradedByUserId is the system sentinel (not a human admin's id) for that
+attempt, while an older pre-existing submission for a question that had
+no test cases at the time stayed ungraded (NULL) - confirms the "no test
+cases -> untouched manual pipeline" invariant holds.
+- On SubmitAttempt, for each CodeProgram answer whose question has
+  TestCases (a new Question Service lookup Submission Service doesn't
+  currently make), publish one integration event per such answer via the
+  existing `IEventPublisher`/RabbitMQ pattern (same shape as
+  `ServiceBusExamAssignedConsumer` etc. in NotificationService.Worker).
+- A new consumer picks up the event, calls Execution Service's
+  RunAgainstTestCases with the student's final AnswerText (their function
+  body/class, wrapped per-test-case by the DriverGenerator - never the
+  raw text alone), computes
+  `marksAwarded = round(question.Marks * passedCount / totalCount)`, and
+  writes it through the exact same path GradeAnswerHandler already uses
+  (MarksAwarded/GradedByUserId/GradedAtUtc) - GradedByUserId probably a
+  well-known "system" sentinel rather than null, so the grading screen
+  and audit trail can tell an auto-grade apart from a human one if that
+  distinction ever matters later.
+- Until the consumer finishes, the answer sits as Pending Grading -
+  exactly today's state, no new frontend state needed. This is the same
+  reasoning as the earlier Phase 2/3 "no code changes needed on the
+  pending-grading UI" - it was already generic over "why is this
+  ungraded," not specifically "why is a human slow."
+- Authoritative and tamper-proof by construction: this run never reads
+  anything the student's browser reported from its own Run Code clicks.
+
+PHASE 4 — Frontend: Run Code (student-facing, informational) - DONE,
+VERIFIED LIVE
+------------------------------------------------------------------------
+- New "Run Code" button in TakeExam.tsx's CodeProgram branch, below the
+  editor, only rendered when the question has a function signature +
+  test cases (`executionApi.ts` calls Execution Service's
+  `/api/execution/run` directly with the editor's current in-progress
+  code) - explicitly informational, does not save/submit/score anything
+  by itself.
+- "Test Cases" panel below the editor, dark-themed to match coder.png -
+  each test case shows its input args and expected output (formatted via
+  `formatTypedValue`) before any run, and after a run adds a Pass/Failed
+  badge plus the actual output per case, with an "N / M passed" summary
+  in the header.
+- Button disabled with a 5s cooldown after each click (`RUN_CODE_COOLDOWN_MS`),
+  showing a live countdown ("Run Code (4s)").
+- Verified live: retook the exam as the test student, ran the panel
+  against a correct `reverse_string` solution - both test cases showed
+  Passed with the correct actual output, cooldown counted down
+  correctly, then submitted and the score still landed as 10/10 via the
+  independent Phase 3 grading run (not from what Run Code reported).
+
+PHASE 5 — Admin visibility for auto-graded answers
+------------------------------------------------------------------------
+- Grade Code Answers screen's ungraded queue is unaffected (auto-graded
+  answers simply won't appear once the consumer scores them - same
+  MarksAwarded == null filter already built).
+- Known gap, not blocking this plan: there's currently no UI for an
+  admin to review/override an already-graded answer (manual or auto) -
+  worth having if an auto-grade result gets disputed (whitespace
+  differences, an edge case Piston mishandles), but out of this plan's
+  scope unless the user asks for it explicitly once auto-grading is live
+  and a real dispute shows what's actually needed.
+
+PHASE 6 — Verification
+------------------------------------------------------------------------
+- Confirm the cgroup v2 prerequisite holds on the actual dev host before
+  Phase 1 starts (see EXECUTION ENGINE section) - if not, stop and
+  revisit with Judge0 rather than shipping a broken sandbox.
+- Before Phase 2's DriverGenerator design is finalized: a hands-on spike
+  against a real deployed Piston instance confirming its actual
+  multi-file compile/link behavior for Java, C#, and C++ (does `files[]`
+  really compile+link separate source files together, or only run
+  whichever one it treats as entry point) - the single riskiest unknown
+  in this plan, called out above, verified with real trial calls before
+  committing the per-language driver templates to code.
+- Real click-through: author a test-cased question, take it as a
+  student, Run Code against a correct solution (see all pass), submit,
+  confirm the score lands correctly and matches passedCount/totalCount x
+  Marks - DONE for the correct-solution path. NOT YET DONE: Run Code
+  against a deliberately wrong solution to see failing cases render
+  correctly in the panel (the Failed/red-badge styling is written but
+  unexercised).
+- Confirm a question with zero test cases still flows through the
+  original manual grading pipeline untouched - DONE (verified via direct
+  DB query, see Phase 3).
+- Load/abuse check: rapid repeated Run Code clicks don't starve or crash
+  the shared Piston container for other students mid-exam - NOT YET
+  DONE. The 5s client-side cooldown is the only throttle so far; no
+  server-side rate limit exists on the Execution Service endpoint.
+
+PHASE 7 — SQL as a 6th language (added 2026-08-23, user asked "sql
+language available?" then confirmed "yes")
+------------------------------------------------------------------------
+SQL doesn't fit the function-signature-harness model at all - there's no
+function to call, just a query to run against seeded data, and "the
+right answer" is a set of rows, not one typed value. Two design
+questions confirmed with the user before writing this: (1) test cases -
+multiple, each with its OWN setup SQL (schema+seed), not one shared
+schema for the whole question, so a query can't get lucky on a single
+dataset; (2) row order - compared as an unordered set by default, since
+SQL doesn't guarantee order without an explicit ORDER BY and grading
+ordered would incorrectly fail a correct-but-differently-ordered query.
+
+KEY DESIGN CALL (own judgment, not asked as a third question since it
+doesn't conflict with anything already decided): instead of admins
+hand-typing expected result rows (tedious, typo-prone, and there's no
+single "ReturnType" to parse against like the other 5 languages have),
+each SQL question's existing SampleAnswer field becomes the REFERENCE
+QUERY - the source of truth for what a test case's expected rows are.
+At grading/run time the expected rows are derived by actually running
+the reference query against that test case's seeded database, same as
+the student's query is - never hand-authored, so they can never drift
+out of sync with the schema. This makes SampleAnswer load-bearing for
+Sql questions specifically (used for grading, not just an optional
+admin-reference note like it is for the other 5 languages) - it stays
+masked from students exactly as today (GetById's `revealAnswers`
+gate), so the reference query is never leaked. Each test case's SetupSql
+IS visible to students (it's just schema+seed data, not an answer) -
+same visibility rule the other languages' TestCases already follow.
+
+PISTON SPIKE - VERIFIED (2026-08-23): `sqlite3` 3.36.0 installed via the
+same `POST /api/v2/packages` call used for the original 5 (not yet
+scripted into any init step, matches the existing gap noted in the
+EXECUTION ENGINE section above). Execute-time language name is
+`sqlite3` (piston aliases: `sqlite`, `sql`). Piston's run script pipes
+the whole submitted file into `sqlite3` with NO filename arg, which
+opens a transient in-memory DB per call - exactly the "fresh DB per
+test case" behavior needed, free. `.mode json` (supported since the
+CLI's 3.33.0, well before 3.36.0) as the first line of the submitted
+script makes every subsequent SELECT print as a JSON array of
+`{"column": value}` objects - verified live: correct types (INTEGER/
+REAL/TEXT/NULL -> JSON number/string/null), correct multi-row/ORDER BY
+output, and a bad query (unknown column) comes back as exit code 1 with
+a clean `Error: near line N: <message>` on stderr - good enough to
+surface directly as the outcome's Error field.
+
+ARCHITECTURE: two Piston calls per test case, not one script -
+`SetupSql + ReferenceQuery` (expected) and `SetupSql + StudentQuery`
+(actual), run as two separate submissions rather than concatenating
+both into one script and trying to split stdout on an output boundary.
+Each row-set serializes to a canonical JSON string (keys sorted) for
+comparison as an unordered multiset - and that same string is exactly
+what's put in `TestCaseOutcomeResponse.ActualOutput`/`ExpectedOutput`,
+so the EXISTING `RunCodeResponse`/`TestCaseOutcomeResponse` contracts
+are reused as-is for SQL - no new response shape needed, only a new
+narrower request shape (`RunSqlRequest(QuestionId, StudentQuery)` -
+no FunctionName/Parameters/ReturnType/TestCases-with-arguments, since
+none of that concept applies).
+
+Keeping the plan's existing "exactly one place talks to Piston"
+invariant: Execution Service gains ONE new endpoint,
+`POST /api/execution/run-sql`, which forwards the CALLER'S OWN bearer
+token to Question Service's existing internal `GET internal/questions/
+{id}` endpoint to fetch SampleAnswer (reference query, never sent to
+the browser) + SqlTestCases (setup SQL list) itself - the browser/
+frontend never sees or transmits the reference query. `[Authorize]`
+with no role restriction on that internal endpoint means this works
+whether the forwarded token belongs to a student (interactive Run Code)
+or the Worker's own system-minted token (auto-grading) - no new
+service-identity plumbing needed beyond what already exists.
+Consequently the Worker's SQL auto-grading path is just ONE more HTTP
+call (`IExecutionServiceClient.RunSqlAsync(questionId, studentAnswer,
+systemToken)`) alongside its existing function-harness path, not a
+second Piston-calling implementation - `CodeAnswerSubmittedConsumer`
+branches on `question.ProgrammingLanguage == "Sql"` to pick which
+Execution Service endpoint to call, then grades exactly the same way
+(marksAwarded = round(Marks * passed/total)) regardless of which path
+produced the outcomes.
+
+Question Service changes: new `QuestionSqlTestCase(Id, QuestionId,
+SetupSql, DisplayOrder)` entity/table (migration
+`AddQuestionSqlTestCases`) - no new columns needed on `ExamQuestion`
+itself (reuses `SampleAnswer` + the existing `ProgrammingLanguage`
+field, just adding `Sql` as a new enum value). Validator: if a Sql
+question has any SqlTestCases, SampleAnswer becomes required (it's the
+reference query test cases are graded against) - mirrors the existing
+"FunctionName needs matching Parameters" pattern. `QuestionResponse`
+gains `sqlTestCases: { setupSql, displayOrder }[] | null`, always
+unmasked (setup SQL isn't a secret).
+
+Frontend: `ProgrammingLanguage` gains `'Sql'`; new
+`SqlTestCaseEditor.tsx` (admin authoring, parallel to
+`FunctionSignatureEditor.tsx` but just a repeatable list of Setup SQL
+textareas - no parameters/return-type concept) swapped in for Sql
+questions in CreateQuestionModal/EditQuestion, with the existing Sample
+Answer field relabeled "Reference Query" and required once test cases
+exist; `TakeExam.tsx`'s Run Code panel branches to call a new
+`runSql({ questionId, studentQuery })` instead of `runCode(...)` when
+`programmingLanguage === 'Sql'`, reusing the same Test Cases panel UI
+(outcomes have the identical Passed/ActualOutput/ExpectedOutput/Error
+shape either way) with each test case additionally showing its Setup
+SQL; `CodeEditor.tsx`'s Monaco language map gains `Sql -> 'sql'`.
+
+STATUS: DONE, verified live end to end (2026-08-23). All layers built
+and deployed: Question Service (QuestionSqlTestCase entity + migration,
+validator rules, controller wiring), Execution Service (`POST
+/api/execution/run-sql`, `RunSqlHandler` reusing the existing
+`RunCodeResponse` contract), Worker (branches on `ProgrammingLanguage
+== "Sql"` to call run-sql instead of run), and frontend (`SqlTestCaseEditor`
+swapped in for FunctionSignatureEditor on Sql questions, Sample Answer
+relabeled "Reference Query", TakeExam's Test Cases panel branches to
+call `runSql` and render Setup SQL instead of typed arguments). All
+backend/frontend builds, typechecks, lint, and existing test suites
+stayed green throughout (zero regressions).
+
+Verified live via the real admin/student UI: authored a Sql question
+("names/scores of students who scored above 85") with Reference Query
+`SELECT name, score FROM students WHERE score > 85;` and one test case
+seeding 3 students (Alice 92.5, Bob 81.0, Cara 88.0) - clicked Run Code
+as the student with a correct query and saw "1 / 1 passed" with the
+exact expected/actual JSON rows displayed (`{"name":"Alice","score":92.5}`
+etc., floating-point noise on 88.0 identical on both sides since both
+run through the same SQLite REAL formatting). Submitted the exam and
+confirmed via the Worker's logs (GET question -> POST run-sql -> PUT
+grade, all 200s) and a direct SubmissionDb query that both the Sql
+question and the pre-existing Python question auto-graded correctly
+(10/10 each, GradedByUserId = the system sentinel `...005747`).
+
+Operational notes from this deploy, not specific to the feature itself:
+(1) `sqlite3` 3.36.0 had to be installed into the running Piston
+container the same live/manual way as the original 5 languages - still
+not scripted into any init step, a pre-existing gap this plan
+inherited rather than fixed. (2) Rebuilding all 4 changed images
+(question-api/execution-api/execution-worker/frontend) via one
+`docker compose build` with 4 services in parallel crashed BuildKit on
+this machine (`rpc error: code = Unavailable ... EOF`) and hung the
+Docker API entirely - required a full Docker Desktop process kill +
+relaunch to recover, then rebuilding the same 4 images ONE AT A TIME
+(not in parallel) succeeded cleanly. Reinforces the existing "never
+rebuild the whole stack at once on this machine" note - the ceiling
+turned out to be lower than previously assumed (4 concurrent builds,
+not just "the whole stack"). (3) `execution-worker` crashed on its
+first boot after `docker compose up -d` (RabbitMQ not accepting AMQP
+connections yet despite passing its healthcheck) - same documented
+`notification-worker` gotcha, fixed the same way: `docker compose up -d
+execution-worker` again once RabbitMQ is confirmed healthy. (4) The
+browser tab's already-loaded JS bundle didn't pick up the new "SQL"
+Programming Language option after redeploying the frontend image until
+a hard reload (Ctrl+Shift+R) - a stale in-tab bundle, not a stale
+Docker image, distinct from the earlier "container never rebuilt"
+gotcha from Phase 4's verification.

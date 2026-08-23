@@ -8,9 +8,9 @@ import { ViewIcon } from '../../components/icons/ActionIcons';
 import { useExams } from '../../hooks/useExams';
 import { getMyResult } from '../../api/resultApi';
 import { getMyAttempt } from '../../api/submissionApi';
-import type { ExamType } from '../../types/exam';
+import type { CreationMethod } from '../../types/exam';
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -26,7 +26,7 @@ const statusBadge: Record<RowStatus, { label: string; bg: string }> = {
 interface ResultRow {
   examId: string;
   examTitle: string;
-  examType: ExamType;
+  creationMethod: CreationMethod;
   rowStatus: RowStatus;
   totalScore: number | null;
   totalMarks: number;
@@ -93,7 +93,7 @@ export default function MyResults() {
         return {
           examId: exam.id,
           examTitle: exam.title,
-          examType: exam.examType,
+          creationMethod: exam.creationMethod,
           rowStatus: result.passed ? 'Pass' : 'Fail',
           totalScore: result.totalScore,
           totalMarks: result.totalMarks,
@@ -106,7 +106,7 @@ export default function MyResults() {
         return {
           examId: exam.id,
           examTitle: exam.title,
-          examType: exam.examType,
+          creationMethod: exam.creationMethod,
           rowStatus: 'InProgress',
           totalScore: null,
           totalMarks: exam.totalMarks,
@@ -247,7 +247,7 @@ export default function MyResults() {
                               <ExamRowIcon />
                               <div>
                                 <div className="fw-medium">{row.examTitle}</div>
-                                <div className="text-muted small">{examTypeLabel[row.examType]} Exam</div>
+                                <div className="text-muted small">{creationMethodLabel[row.creationMethod]} Exam</div>
                               </div>
                             </div>
                           </td>

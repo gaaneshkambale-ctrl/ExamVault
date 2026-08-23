@@ -22,15 +22,24 @@ public class AttemptScorerTests
                 new AnswerKeyOption(WrongOptionId, "Wrong", false),
             ]);
 
+    private static AnswerKeyQuestion CodeQuestion(int marks = 5) =>
+        new(QuestionId, "Write a function", marks, null, [], "CodeProgram");
+
     private static readonly IReadOnlyDictionary<Guid, SectionLookupResult> NoSections =
         new Dictionary<Guid, SectionLookupResult>();
+
+    private static IReadOnlyDictionary<Guid, SubmissionAnswer> Answers(params SubmissionAnswer[] answers) =>
+        answers.ToDictionary(a => a.QuestionId);
+
+    private static readonly IReadOnlyDictionary<Guid, SubmissionAnswer> NoAnswers =
+        new Dictionary<Guid, SubmissionAnswer>();
 
     [Fact]
     public void Correct_answer_awards_full_marks()
     {
-        var (totalScore, questions) = AttemptScorer.Score(
+        var (totalScore, questions, hasPendingGrading) = AttemptScorer.Score(
             [Question(sectionId: null, marks: 2)],
-            new Dictionary<Guid, Guid?> { [QuestionId] = CorrectOptionId },
+            Answers(new SubmissionAnswer(QuestionId, CorrectOptionId)),
             NoSections,
             examNegativeMarkingEnabled: false,
             examNegativeMarks: 0);
@@ -38,14 +47,15 @@ public class AttemptScorerTests
         Assert.Equal(2, totalScore);
         Assert.Equal(2, questions[0].MarksAwarded);
         Assert.True(questions[0].IsCorrect);
+        Assert.False(hasPendingGrading);
     }
 
     [Fact]
     public void Unanswered_question_scores_zero_even_with_negative_marking_enabled()
     {
-        var (totalScore, questions) = AttemptScorer.Score(
+        var (totalScore, questions, _) = AttemptScorer.Score(
             [Question(sectionId: null)],
-            new Dictionary<Guid, Guid?>(),
+            NoAnswers,
             NoSections,
             examNegativeMarkingEnabled: true,
             examNegativeMarks: 0.5m);
@@ -57,9 +67,9 @@ public class AttemptScorerTests
     [Fact]
     public void Wrong_answer_with_negative_marking_disabled_scores_zero()
     {
-        var (totalScore, questions) = AttemptScorer.Score(
+        var (totalScore, questions, _) = AttemptScorer.Score(
             [Question(sectionId: null)],
-            new Dictionary<Guid, Guid?> { [QuestionId] = WrongOptionId },
+            Answers(new SubmissionAnswer(QuestionId, WrongOptionId)),
             NoSections,
             examNegativeMarkingEnabled: false,
             examNegativeMarks: 0.5m);
@@ -76,9 +86,9 @@ public class AttemptScorerTests
             [SectionId] = new SectionLookupResult(SectionId, NegativeMarkingEnabled: true, NegativeMarks: 0.25m),
         };
 
-        var (totalScore, questions) = AttemptScorer.Score(
+        var (totalScore, questions, _) = AttemptScorer.Score(
             [Question(sectionId: SectionId)],
-            new Dictionary<Guid, Guid?> { [QuestionId] = WrongOptionId },
+            Answers(new SubmissionAnswer(QuestionId, WrongOptionId)),
             sections,
             examNegativeMarkingEnabled: false,
             examNegativeMarks: 5m);
@@ -91,9 +101,9 @@ public class AttemptScorerTests
     [Fact]
     public void Wrong_answer_with_no_section_falls_back_to_exam_level_negative_marking()
     {
-        var (totalScore, questions) = AttemptScorer.Score(
+        var (totalScore, questions, _) = AttemptScorer.Score(
             [Question(sectionId: null)],
-            new Dictionary<Guid, Guid?> { [QuestionId] = WrongOptionId },
+            Answers(new SubmissionAnswer(QuestionId, WrongOptionId)),
             NoSections,
             examNegativeMarkingEnabled: true,
             examNegativeMarks: 0.5m);
@@ -115,9 +125,11 @@ public class AttemptScorerTests
             Question(sectionId: null, marks: 1),
             new(q2, "Q2", 1, null, [new AnswerKeyOption(correct2, "Correct", true), new AnswerKeyOption(wrong2, "Wrong", false)]),
         };
-        var selected = new Dictionary<Guid, Guid?> { [q1] = WrongOptionId, [q2] = wrong2 };
+        var selected = Answers(
+            new SubmissionAnswer(q1, WrongOptionId),
+            new SubmissionAnswer(q2, wrong2));
 
-        var (totalScore, _) = AttemptScorer.Score(
+        var (totalScore, _, _) = AttemptScorer.Score(
             answerKey,
             selected,
             NoSections,
@@ -125,5 +137,53 @@ public class AttemptScorerTests
             examNegativeMarks: 5m);
 
         Assert.Equal(0, totalScore);
+    }
+
+    [Fact]
+    public void Graded_code_answer_awards_admin_assigned_marks()
+    {
+        var (totalScore, questions, hasPendingGrading) = AttemptScorer.Score(
+            [CodeQuestion(marks: 10)],
+            Answers(new SubmissionAnswer(QuestionId, null, "print('hi')", MarksAwarded: 7)),
+            NoSections,
+            examNegativeMarkingEnabled: false,
+            examNegativeMarks: 0);
+
+        Assert.Equal(7, totalScore);
+        Assert.Equal(7, questions[0].MarksAwarded);
+        Assert.Equal("print('hi')", questions[0].AnswerText);
+        Assert.False(hasPendingGrading);
+    }
+
+    [Fact]
+    public void Ungraded_code_answer_contributes_zero_and_flags_pending_grading()
+    {
+        var (totalScore, questions, hasPendingGrading) = AttemptScorer.Score(
+            [CodeQuestion(marks: 10)],
+            Answers(new SubmissionAnswer(QuestionId, null, "print('hi')")),
+            NoSections,
+            examNegativeMarkingEnabled: false,
+            examNegativeMarks: 0);
+
+        Assert.Equal(0, totalScore);
+        Assert.Equal(0, questions[0].MarksAwarded);
+        Assert.True(hasPendingGrading);
+        Assert.True(questions[0].IsPendingGrading);
+    }
+
+    [Fact]
+    public void Unanswered_code_question_scores_zero_without_flagging_pending_grading()
+    {
+        var (totalScore, questions, hasPendingGrading) = AttemptScorer.Score(
+            [CodeQuestion(marks: 10)],
+            NoAnswers,
+            NoSections,
+            examNegativeMarkingEnabled: false,
+            examNegativeMarks: 0);
+
+        Assert.Equal(0, totalScore);
+        Assert.Equal(0, questions[0].MarksAwarded);
+        Assert.False(hasPendingGrading);
+        Assert.False(questions[0].IsPendingGrading);
     }
 }

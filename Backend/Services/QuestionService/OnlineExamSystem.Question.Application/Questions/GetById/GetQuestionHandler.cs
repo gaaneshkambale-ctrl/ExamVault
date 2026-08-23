@@ -22,6 +22,9 @@ public class GetQuestionHandler
         }
 
         var options = await _questionRepository.GetOptionsByQuestionIdAsync(question.Id, cancellationToken);
-        return new QuestionWithOptions(question, options);
+        var parameters = await _questionRepository.GetParametersByQuestionIdAsync(question.Id, cancellationToken);
+        var testCases = await _questionRepository.GetTestCasesByQuestionIdAsync(question.Id, cancellationToken);
+        var sqlTestCases = await _questionRepository.GetSqlTestCasesByQuestionIdAsync(question.Id, cancellationToken);
+        return new QuestionWithOptions(question, options, parameters, testCases, sqlTestCases);
     }
 }

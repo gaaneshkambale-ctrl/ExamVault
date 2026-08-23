@@ -8,6 +8,8 @@ export interface SaveAnswerRequest {
   questionId: string;
   selectedOptionId: string | null;
   isMarkedForReview: boolean;
+  answerText?: string | null;
+  selectedOptionIds?: string[] | null;
 }
 
 export interface ExamAttemptResponse {
@@ -45,6 +47,11 @@ export interface AttemptAnswerResponse {
   selectedOptionId: string | null;
   isMarkedForReview: boolean;
   answeredAtUtc: string;
+  answerText?: string | null;
+  marksAwarded?: number | null;
+  gradedByUserId?: string | null;
+  gradedAtUtc?: string | null;
+  selectedOptionIds?: string[] | null;
 }
 
 export interface SubmitAttemptRequest {
@@ -65,6 +72,14 @@ export interface AttemptWithAnswersResponse {
   attempt: ExamAttemptResponse;
   answers: AttemptAnswerResponse[];
   sectionStates: AttemptSectionStateResponse[];
+}
+
+export interface UngradedAnswerResponse {
+  attemptId: string;
+  questionId: string;
+  userId: string;
+  answerText: string;
+  answeredAtUtc: string;
 }
 
 export type ViolationSeverity = 'Low' | 'Medium' | 'Critical';

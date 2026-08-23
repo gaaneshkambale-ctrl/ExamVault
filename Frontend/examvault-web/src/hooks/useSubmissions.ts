@@ -4,6 +4,7 @@ import {
   getExamAttemptsWithAnswers,
   getExamViolations,
   getMyAttempt,
+  getUngradedAnswers,
   getUserAttempts,
 } from '../api/submissionApi';
 import type { AttemptWithAnswersResponse, ExamAttemptResponse, ViolationEventResponse } from '../types/submission';
@@ -21,6 +22,14 @@ export function useUserAttempts(userId: string | undefined, enabled = true) {
     queryKey: ['submissions', 'byUser', userId],
     queryFn: () => getUserAttempts(userId!),
     enabled: !!userId && enabled,
+  });
+}
+
+export function useUngradedAnswers(examId: string | undefined) {
+  return useQuery({
+    queryKey: ['submissions', 'ungraded', examId],
+    queryFn: () => getUngradedAnswers(examId!),
+    enabled: !!examId,
   });
 }
 

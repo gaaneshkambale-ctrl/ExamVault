@@ -32,9 +32,19 @@ export default function AnswerReviewPanel({ questions }: AnswerReviewPanelProps)
   }, [questions]);
 
   const question = questions[Math.min(index, questions.length - 1)];
+  const isCodeQuestion = question.questionType === 'CodeProgram';
+  const isMultiSelect = question.questionType === 'MultiSelect';
   const selectedOption = question.options.find((option) => option.optionId === question.selectedOptionId) ?? null;
   const correctOption = question.options.find((option) => option.isCorrect) ?? null;
-  const wasAnswered = question.selectedOptionId !== null;
+  const selectedOptions = isMultiSelect
+    ? question.options.filter((option) => question.selectedOptionIds?.includes(option.optionId))
+    : [];
+  const correctOptions = isMultiSelect ? question.options.filter((option) => option.isCorrect) : [];
+  const wasAnswered = isCodeQuestion
+    ? question.answerText !== null
+    : isMultiSelect
+      ? (question.selectedOptionIds?.length ?? 0) > 0
+      : question.selectedOptionId !== null;
 
   return (
     <Card className="border-0 shadow-sm">
@@ -49,7 +59,40 @@ export default function AnswerReviewPanel({ questions }: AnswerReviewPanelProps)
         <p className="fw-medium mb-4">{question.questionText}</p>
 
         <div className="text-muted small fw-medium mb-2">Your Answer</div>
-        {wasAnswered ? (
+        {isCodeQuestion ? (
+          wasAnswered ? (
+            <>
+              <pre className="bg-light border rounded-3 p-3 mb-2 small">{question.answerText}</pre>
+              <div className="small mb-4">
+                {question.isPendingGrading ? (
+                  <span className="text-warning fw-medium">Pending grading</span>
+                ) : (
+                  <span className="text-muted">
+                    Marks awarded: {question.marksAwarded} / {question.marks}
+                  </span>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="rounded-3 p-3 mb-4 bg-light text-muted fst-italic">Not answered</div>
+          )
+        ) : wasAnswered && isMultiSelect ? (
+          <div className="d-flex flex-column gap-2 mb-4">
+            {selectedOptions.map((option) => (
+              <div
+                key={option.optionId}
+                className={`d-flex justify-content-between align-items-center rounded-3 p-3 ${
+                  question.isCorrect
+                    ? 'bg-success-subtle text-success-emphasis'
+                    : 'bg-danger-subtle text-danger-emphasis'
+                }`}
+              >
+                <span>{option.optionText}</span>
+                {question.isCorrect ? <CheckIcon /> : <CrossIcon />}
+              </div>
+            ))}
+          </div>
+        ) : wasAnswered ? (
           <div
             className={`d-flex justify-content-between align-items-center rounded-3 p-3 mb-4 ${
               question.isCorrect ? 'bg-success-subtle text-success-emphasis' : 'bg-danger-subtle text-danger-emphasis'
@@ -62,7 +105,24 @@ export default function AnswerReviewPanel({ questions }: AnswerReviewPanelProps)
           <div className="rounded-3 p-3 mb-4 bg-light text-muted fst-italic">Not answered</div>
         )}
 
-        {!question.isCorrect && correctOption && (
+        {!isCodeQuestion && !question.isCorrect && isMultiSelect && correctOptions.length > 0 && (
+          <>
+            <div className="text-muted small fw-medium mb-2">Correct Answer</div>
+            <div className="d-flex flex-column gap-2 mb-4">
+              {correctOptions.map((option) => (
+                <div
+                  key={option.optionId}
+                  className="d-flex justify-content-between align-items-center rounded-3 p-3 bg-success-subtle text-success-emphasis"
+                >
+                  <span>{option.optionText}</span>
+                  <CheckIcon />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!isCodeQuestion && !isMultiSelect && !question.isCorrect && correctOption && (
           <>
             <div className="text-muted small fw-medium mb-2">Correct Answer</div>
             <div className="d-flex justify-content-between align-items-center rounded-3 p-3 mb-4 bg-success-subtle text-success-emphasis">

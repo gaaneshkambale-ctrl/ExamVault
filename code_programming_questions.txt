@@ -1,0 +1,302 @@
+ExamVault — Code/Programming Question Type: Implementation Plan
+================================================================
+Goal: real, free-text code-writing questions - a student gets a code
+editor during the exam, writes actual code, it's saved as text, and an
+admin manually grades it (no auto-scoring - there's no code-execution
+engine in this codebase or planned).
+
+DECISION LOCKED IN (confirmed with the user before writing this plan)
+------------------------------------------------------------------------
+Full code-writing questions, NOT the lighter "code-themed multiple choice"
+alternative that was offered and declined. This is a genuine multi-service
+feature, not a quick enable - closer in size to an entire original build
+phase (e.g. Phase 6 Question Service, 4 days) than a UI change.
+
+IMPORTANT SCOPE SPLIT DISCOVERED DURING RESEARCH — READ THIS FIRST
+------------------------------------------------------------------------
+"Enable Code/Programming" means something different on the two pages it
+currently appears on, and I can only really deliver one of them:
+
+- ADMIN MANUAL QUESTION CREATION (CreateQuestionModal / EditQuestion):
+  fully achievable. This is all code inside this repo.
+- AI GENERATE QUESTIONS page: NOT achievable as part of this plan.
+  N8nQuestionGenerator.cs calls an external n8n webhook that is hard-coded,
+  on both ends, to a 4-option MCQ shape (OptionA-D + CorrectOption) - and
+  the n8n workflow itself is an external system outside this codebase, not
+  something I can change from here. Making AI generation produce code
+  problems would require redesigning that external workflow first, which
+  is out of reach for this plan.
+  RECOMMENDATION: leave "Code / Programming" DISABLED on both AI Generate
+  entry points (it already is, from the earlier chip work), and only
+  enable it on the manual creation forms. Flagging this now rather than
+  discovering it mid-implementation or silently doing less than asked.
+
+CURRENT STATE (verified by reading the actual code, not assumed)
+------------------------------------------------------------------------
+- `QuestionType.CodeProgram = 5` already exists in the backend enum but is
+  rejected everywhere: `CreateQuestionValidator.SupportedQuestionTypes`
+  only allows MultipleChoice/TrueFalse - a code question is hard-rejected
+  at validation, before it would even hit the "needs options" problem.
+- `ExamQuestion` entity has no field for starter code, programming
+  language, or a sample/expected-output hint for the grader - just
+  QuestionText, Marks, Difficulty, ShuffleOptions.
+- `AttemptAnswer` (Submission Service) has only `SelectedOptionId: Guid?` -
+  no free-text field anywhere. `SaveAnswerHandler` just copies that one
+  field through.
+- `AttemptScorer` (Result Service) is 100% option-based:
+  `isCorrect = selectedOptionId == correctOptionId`, run unconditionally
+  over every question. A CodeProgram question with no options would
+  silently score 0 forever today, with no "pending grading" concept
+  anywhere in the codebase.
+- Result Service is genuinely DB-less (confirmed: Result.Infrastructure
+  has 3 HTTP clients, no DbContext) - it computes everything on demand
+  from Submission + Exam + Question Service calls. Any grading data that
+  needs to persist (marks an admin assigns) has to live in Submission
+  Service, not Result Service, to keep that design intact.
+- `TakeExam.tsx` renders `currentQuestion.options.map(...)` unconditionally
+  as radio buttons - no `questionType` branch exists. A CodeProgram
+  question would currently render a completely empty answer area.
+  `AnswerState` only has `selectedOptionId` + `isMarkedForReview`.
+  Answered/Unanswered detection is purely `selectedOptionId`-based.
+- THREE separate places hard-code "exactly 2 question types" and would
+  all need updating together, not one central switch:
+  `EditQuestion.tsx`, `CreateQuestionModal.tsx` (the real "add question"
+  UI - there's no separate CreateQuestion.tsx page), and
+  `CsvImportPanel.tsx`'s bulk-import preview ternary.
+- No code editor library (Monaco/CodeMirror/ace) is installed - a plain
+  `<textarea>` is the zero-dependency option for this pass; the user has
+  confirmed a real syntax-highlighting editor (Monaco or CodeMirror) is
+  wanted for a professional product, but explicitly scoped it as Phase 2
+  polish, not a blocker for the first implementation (matches this
+  project's pattern of shipping a working v1 before a polished one - e.g.
+  AI provider chosen after the interface existed). See PHASE 5 and PHASE
+  5B below.
+- `ResultDetails.tsx` and `AnswerReviewPanel.tsx` are entirely
+  options/selectedOptionId-driven - a code answer would always show as
+  "Unattempted" even when real code was submitted, and there's no
+  "Pending Grading" state anywhere to display.
+
+SCOPE NOTE
+------------------------------------------------------------------------
+Not included in the first pass: AI generation of code questions (see
+split above), automatic code execution/scoring (no sandbox exists or is
+planned - 100% manual grading), partial-credit rubrics (a code answer
+gets one mark value from the grader, not a rubric breakdown). A real
+code editor (Monaco - locked in, see Phase 5B) IS wanted and IS
+included, just staged as Phase 5B rather than blocking Phase 5's
+initial ship.
+
+PHASE 1 — Question Service: real question shape for code questions
+------------------------------------------------------------------------
+- `ExamQuestion` gains: `StarterCode` (string?, boilerplate shown to the
+  student), `ProgrammingLanguage` (string?, one of a fixed list -
+  C#/Java/Python/C++/JavaScript, LOCKED IN as a dropdown, not free text -
+  see language-lock decision below), `AllowLanguageChange` (bool,
+  default false), `SampleAnswer` (string?, a reference solution shown
+  ONLY to the grading admin, never the student - helps them grade
+  faster).
+- LANGUAGE LOCK DECISION (resolves an inconsistency the user caught
+  between this plan's "TBD free text vs dropdown" note and its own later
+  "editable if the question doesn't pin one" line - dropdown, and locked
+  by default, is correct for an exam system where grading consistency
+  matters): the question's own `ProgrammingLanguage` is the language a
+  student sees UNLESS the admin explicitly checks "Allow student to
+  select language" (`AllowLanguageChange = true`) when authoring the
+  question. Locked (the default) means the student sees a plain
+  "Language: C#" label, no dropdown, can't change it. Unlocked means the
+  student gets the same `[ C# ▼ ]` dropdown the admin used, scoped to
+  the same fixed 5-language list. Default-locked, not default-open,
+  because an admin has to actively opt into the harder-to-grade case.
+- `CreateQuestionValidator`/`UpdateQuestionValidator`: add `CodeProgram`
+  to `SupportedQuestionTypes`, and give `HaveValidOptionsForType` a real
+  CodeProgram branch - zero options required/allowed (today's `_ => true`
+  fallback for unlisted types would otherwise silently allow anything).
+- `CreateQuestionRequest`/`UpdateQuestionRequest`/`QuestionResponse`
+  (Shared.Contracts) gain the four new fields, all optional/defaulted so
+  existing MCQ/TrueFalse call sites don't break.
+- Migration: `AddCodeQuestionFields` on QuestionDb (3 nullable columns +
+  `AllowLanguageChange` defaulting to false, no backfill needed -
+  existing questions just get nulls/false).
+
+PHASE 2 — Submission Service: capture a free-text answer
+------------------------------------------------------------------------
+- `AttemptAnswer` gains `AnswerText` (string?, nullable) alongside the
+  existing `SelectedOptionId` - a question is answered via exactly one of
+  the two, never both.
+- `SaveAnswerRequest`/`SaveAnswerCommand` gain an optional `answerText`
+  field; `SaveAnswerHandler` copies it through the same way it already
+  does `SelectedOptionId` - no new branching logic needed there, just a
+  second field.
+- Migration: `AddAnswerTextToAttemptAnswer` on SubmissionDb.
+- Grading data also lives here (keeps Result Service DB-less): new
+  columns on `AttemptAnswer` - `MarksAwarded` (int?, null = not graded
+  yet), `GradedByUserId` (Guid?), `GradedAtUtc` (DateTime?). New
+  Admin-only endpoints: `GET /api/submissions/ungraded?examId=` (list
+  code answers awaiting grading) and `PUT /api/submissions/{attemptId}/
+  answers/{questionId}/grade` (assign marks). Migration:
+  `AddGradingFieldsToAttemptAnswer`.
+
+PHASE 3 — Result Service: score around a manual-grading gap
+------------------------------------------------------------------------
+- `AttemptScorer` gains a branch: for a CodeProgram question, use
+  `MarksAwarded` if set (real, admin-assigned score for that question);
+  if `MarksAwarded` is null, that question contributes 0 to the running
+  total AND the whole result gets a `hasPendingGrading: true` flag - so a
+  score is still shown (matches how every other result already works
+  today, no new "can't compute" state), but visibly marked provisional
+  until every code answer is graded.
+- `ResultSummaryResponse`/`AdminAttemptResultResponse` gain
+  `hasPendingGrading: bool`. No new cross-service call needed - Result
+  Service already fetches full `AttemptAnswer` rows from Submission
+  Service, just needs to read the two new fields it wasn't reading before.
+
+PHASE 4 — Frontend: admin question creation/editing
+------------------------------------------------------------------------
+- `CreateQuestionModal.tsx` and `EditQuestion.tsx`: add "Code / Programming"
+  as a real third option in both hard-coded type dropdowns (today exactly
+  2 options each). When selected: hide the options/correct-answer UI
+  entirely, show Starter Code (textarea), Programming Language (dropdown -
+  C#/Java/Python/C++/JavaScript, per the language-lock decision in Phase 1),
+  a "Allow student to select language" checkbox right under it (unchecked
+  by default), and Sample Answer (textarea, labelled clearly as
+  "reference solution for grading - students never see this").
+- `CsvImportPanel.tsx`: its bulk-import type ternary
+  (`row.questionType === 'MultipleChoice' ? 'MCQ' : 'True/False'`) becomes
+  a proper label map so a third type doesn't render wrong - bulk-CSV
+  creation of code questions itself is out of scope (no starter-code
+  columns in the CSV template), just fixing the label bug this change
+  would otherwise expose.
+- `DraftEditorModal.tsx`: no change needed given the AI-generation scope
+  split above - it only ever edits MultipleChoice/TrueFalse drafts.
+- MANUAL-CREATION ESCAPE HATCH (user-identified gap): once Code/Programming
+  only exists via manual creation, an admin already on the AI Generate
+  Questions page/form who realizes they need a code question has no way
+  to switch without leaving that flow entirely today - `AiGenerateQuestions.tsx`
+  and `AiGenerateQuestion.tsx` are single-purpose (AI form + preview only,
+  no link out). Add a small "+ Add Question Manually" link on both AI
+  Generate entry points (next to the existing Cancel/Back actions) that
+  opens `CreateQuestionModal` for the same exam - a plain UI addition,
+  not gated on anything else in this plan, safe to build and ship on its
+  own before the rest of Phase 1-3's backend work exists.
+
+PHASE 5 — Frontend: Take Exam (plain-textarea baseline, ships first)
+------------------------------------------------------------------------
+- New `questionType === 'CodeProgram'` branch in `TakeExam.tsx`, replacing
+  the unconditional `options.map(...)`: shows the question text, starter
+  code (read-only reference block) if set, and a plain monospace
+  `<textarea>` the student types their answer into.
+- `AnswerState` gains `textAnswer?: string`. `saveAnswerMutation`'s
+  payload branches on question type (`selectedOptionId` vs `answerText`).
+  `navState()`'s Answered/Unanswered check gains an
+  `|| answer?.textAnswer` branch so a filled-in code answer correctly
+  shows as Answered in the navigator.
+- Debounce the save (don't fire a save request on every keystroke) -
+  matches how a real code answer differs from a single-click option
+  select; implementation detail, not a design decision that changes this
+  plan's shape.
+- This textarea is deliberately the FIRST thing built, not the final
+  student experience - it proves the whole pipeline (save → grade →
+  score → result) works end to end before investing in editor polish.
+  Every piece downstream of it (AnswerState.textAnswer, the grading
+  screen, AnswerReviewPanel) is written against "a string of code text"
+  and does not care whether a plain textarea or Monaco produced that
+  string - so Phase 5B is a drop-in swap of the input component only.
+
+PHASE 5B — Frontend: real code editor (Monaco - locked in) - DONE
+------------------------------------------------------------------------
+Implemented against a concrete visual target the user supplied (coder.png):
+self-hosted Monaco (`@monaco-editor/react` + `monaco-editor`, workers wired
+via `new URL(..., import.meta.url)` - the `?worker` suffix import didn't
+resolve under this project's Rolldown-based Vite build), dark `vs-dark`
+theme, StarterCode pre-loaded directly into the editable buffer (not a
+separate read-only block), a live character count, and the locked/dropdown
+language selector exactly as designed below. `CodeEditor` is lazy-loaded
+(`React.lazy` + `Suspense`) in `TakeExam.tsx` - Monaco is several MB and a
+first eager import had ballooned the app's single main bundle from ~2.2MB
+to ~6.2MB for every page, not just the exam-taking one; lazy-loading put it
+back to baseline with Monaco isolated in its own chunk. Explicitly NOT
+built (confirmed with the user): Run Code, Test Cases, or any auto-graded
+Pass/Fail - grading stays 100% manual, matching this plan's locked-in scope.
+AnswerReviewPanel/GradeAnswers were deliberately left on their existing
+plain `<pre>` display rather than also pulled onto Monaco, to avoid loading
+the same multi-MB editor for two more read-only static-text screens.
+- User's explicit target experience: a language selector
+  (`Language: [ C# ▼ ]`), a real editor panel with line numbers and the
+  question's `StarterCode` pre-loaded, syntax highlighting for the
+  selected language, a live character count, and a "Last saved
+  HH:MM:SS AM" timestamp tied to the existing debounced save.
+- Library: Monaco Editor (VS Code's own editor), via `@monaco-editor/react`
+  - explicitly chosen by the user over CodeMirror. Heavier than
+  CodeMirror and this app already flags one large-bundle warning at
+  build time today, but that tradeoff is accepted for VS-Code-identical
+  editing behavior (multi-cursor, bracket matching, familiar keybindings
+  students already know). `@monaco-editor/react` loads the editor core
+  from a CDN by default (not bundled into the app's own JS) - worth
+  confirming at implementation time that fits this app's deployment
+  (Docker/offline-capable local dev), or pinning it to a bundled worker
+  setup instead if not.
+- Swap point is narrow and isolated: only the `<textarea>` inside
+  Phase 5's CodeProgram branch is replaced with the editor component;
+  `AnswerState.textAnswer`, the save payload, and the debounce logic
+  underneath are unchanged.
+- Character count and "Last saved" timestamp are small additions to the
+  same component - not new state elsewhere in TakeExam.tsx.
+- Language selector: pre-filled from the question's own
+  `ProgrammingLanguage` field (Phase 1). If `AllowLanguageChange` is
+  false (the default) the student sees a plain "Language: C#" label,
+  not a dropdown - can't change it, keeping grading consistent across
+  the whole class. Only if the admin checked "Allow student to select
+  language" does the student get the same `[ C# ▼ ]` dropdown, scoped
+  to the same fixed 5-language list. Either way it drives the editor's
+  syntax-highlighting mode.
+- Same editor (read-only mode) is the natural upgrade for
+  `AnswerReviewPanel`'s Phase 7 code-answer display and the Phase 6
+  grading screen's "their submitted answer" panel, once it exists -
+  three call sites end up sharing one editor component.
+
+PHASE 6 — Frontend: new admin grading screen
+------------------------------------------------------------------------
+- New page (e.g. `/admin/exams/:examId/grading`): lists every
+  CodeProgram answer awaiting grading for that exam (via the new
+  `GET /api/submissions/ungraded?examId=` endpoint) - student name,
+  question text, starter code, their submitted answer, a marks input
+  (bounded by the question's own `Marks` value), optional feedback text,
+  Save. Reuses this app's established admin-list-page patterns (stat
+  cards, table, pagination) rather than a new design.
+- Entry point: a link from Exam Details / Manage Exams for any exam that
+  has ungraded code answers (a small badge/count, matching the "Pending
+  Actions" pattern already on the Admin Dashboard).
+
+PHASE 7 — Frontend: results
+------------------------------------------------------------------------
+- `ResultDetails.tsx`: an answer with `textAnswer` set counts as
+  "Answered", not "Unattempted", in the existing counts. A
+  "Pending Grading" badge shows when `hasPendingGrading` is true on the
+  result, next to the score - matching this page's existing real-vs-
+  provisional-state conventions.
+- `AnswerReviewPanel.tsx`: new branch for a CodeProgram question - shows
+  the submitted code (read-only, monospace) instead of the option list,
+  plus the marks awarded once graded or a "Pending grading" note if not.
+
+PHASE 8 — Verification
+------------------------------------------------------------------------
+- Same cross-role adversarial-shaped verification this project already
+  uses elsewhere (e.g. Result Service's Day 36 cross-student isolation
+  check): confirm a student can never see another student's submitted
+  code or another exam's grading queue; confirm `SampleAnswer` never
+  reaches a student-facing endpoint/response, only admin ones.
+- Confirm the DB-less design of Result Service still holds - it should
+  never gain its own database as part of this work, only read the new
+  fields Submission Service already exposes.
+- Real click-through: create a code question as Admin, take it as a
+  Student (submit real code), grade it as Admin, confirm the student's
+  Result Details updates from "Pending Grading" to a real score.
+
+OPEN QUESTIONS FOR IMPLEMENTATION TIME (not blocking this plan)
+------------------------------------------------------------------------
+- Whether ungraded code answers should block the "Publish Results" /
+  ShowResultsAfterSubmit flow for the whole exam, or just show that one
+  question as pending while everything else releases normally - leaning
+  the latter (matches Phase 3's per-result `hasPendingGrading` flag
+  design, doesn't gate the rest of the class's results on one grader
+  being slow).

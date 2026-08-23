@@ -4,7 +4,7 @@ public record UpdateExamCommand(
     Guid ExamId,
     string Title,
     string Description,
-    string ExamType,
+    string CreationMethod,
     int DurationMinutes,
     int TotalMarks,
     int PassingMarks,
@@ -24,4 +24,5 @@ public record UpdateExamCommand(
     bool AllowNotes,
     bool AutoSubmitOnTimeEnd,
     bool ConfirmBeforeSubmit,
-    string? ExamCode = null);
+    string? ExamCode = null,
+    Guid? ExamTypeId = null);

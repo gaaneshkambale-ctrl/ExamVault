@@ -1,4 +1,4 @@
-export type ExamType = 'Manual' | 'AiGenerated';
+export type CreationMethod = 'Manual' | 'AiGenerated';
 export type ExamStatus = 'Draft' | 'Published' | 'Archived';
 
 export const EXAM_CATEGORIES = [
@@ -16,11 +16,12 @@ export interface CreateExamRequest {
   description: string;
   category: string;
   containsSections: boolean;
-  examType: ExamType;
+  creationMethod: CreationMethod;
   durationMinutes: number;
   totalMarks: number;
   passingMarks: number;
   instructions: string;
+  examTypeId?: string | null;
 }
 
 export interface ExamSettings {
@@ -48,6 +49,22 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
   status: ExamStatus;
   totalQuestions: number;
   createdOn: string;
+  examTypeName?: string | null;
+}
+
+// Dynamic, admin-manageable exam-purpose classification (Practice/Mock/
+// Certification/etc.) - distinct from CreationMethod (Manual/AiGenerated) and
+// from Category (free-text subject tag).
+export interface ExamTypeOption {
+  id: string;
+  name: string;
+  purpose: string | null;
+  createdAtUtc: string;
+}
+
+export interface CreateExamTypeRequest {
+  name: string;
+  purpose?: string | null;
 }
 
 export interface ReminderSettingsResponse {

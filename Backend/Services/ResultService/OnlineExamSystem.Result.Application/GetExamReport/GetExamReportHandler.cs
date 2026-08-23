@@ -54,10 +54,10 @@ public class GetExamReportHandler
 
             var attemptResults = attempts.Select(attempt =>
             {
-                var selectedOptionByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId, a => a.SelectedOptionId);
-                var (totalScore, questionResults) = AttemptScorer.Score(
+                var answersByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId);
+                var (totalScore, questionResults, hasPendingGrading) = AttemptScorer.Score(
                     answerKey,
-                    selectedOptionByQuestionId,
+                    answersByQuestionId,
                     sectionsById,
                     exam.NegativeMarkingEnabled,
                     exam.NegativeMarks);
@@ -70,6 +70,7 @@ public class GetExamReportHandler
                     Passed = totalScore >= exam.PassingMarks,
                     SubmittedAtUtc = attempt.SubmittedAtUtc ?? DateTime.UtcNow,
                     Questions = questionResults,
+                    HasPendingGrading = hasPendingGrading,
                     FullscreenExitCount = attempt.FullscreenExitCount,
                     NoFaceDetectedCount = attempt.NoFaceDetectedCount,
                     MultipleFacesDetectedCount = attempt.MultipleFacesDetectedCount,

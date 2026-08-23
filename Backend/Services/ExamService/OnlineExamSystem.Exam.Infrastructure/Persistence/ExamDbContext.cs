@@ -11,6 +11,7 @@ public class ExamDbContext : DbContext
     }
 
     public DbSet<ExamPaper> Exams => Set<ExamPaper>();
+    public DbSet<ExamType> ExamTypes => Set<ExamType>();
     public DbSet<Section> Sections => Set<Section>();
     public DbSet<ExamAssignment> ExamAssignments => Set<ExamAssignment>();
     public DbSet<ExamAssignmentTarget> ExamAssignmentTargets => Set<ExamAssignmentTarget>();
@@ -44,6 +45,17 @@ public class ExamDbContext : DbContext
             entity.Property(e => e.Category).HasMaxLength(100);
             entity.Property(e => e.Instructions).HasMaxLength(2000);
             entity.Property(e => e.NegativeMarks).HasColumnType("decimal(5,2)");
+            entity.HasOne(e => e.ExamType)
+                .WithMany()
+                .HasForeignKey(e => e.ExamTypeId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ExamType>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Purpose).HasMaxLength(500);
         });
 
         modelBuilder.Entity<Section>(entity =>

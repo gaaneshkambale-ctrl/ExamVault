@@ -123,7 +123,8 @@ public class ResultsController : ControllerBase
             attempt.MultipleTabsCount,
             attempt.CopyPasteCount,
             attempt.RightClickCount,
-            attempt.MultipleMonitorsCount);
+            attempt.MultipleMonitorsCount,
+            attempt.HasPendingGrading);
 
     private static ResultSummaryResponse ToResponse(ExamResultSummary summary) =>
         new(
@@ -135,7 +136,8 @@ public class ResultsController : ControllerBase
             summary.PassingMarks,
             summary.Passed,
             summary.SubmittedAtUtc,
-            summary.Questions?.Select(ToResponse).ToList());
+            summary.Questions?.Select(ToResponse).ToList(),
+            summary.HasPendingGrading);
 
     private static QuestionResultResponse ToResponse(QuestionResult question) =>
         new(
@@ -147,5 +149,9 @@ public class ResultsController : ControllerBase
             question.IsCorrect,
             question.Options
                 .Select(o => new QuestionResultOptionResponse(o.OptionId, o.OptionText, o.IsCorrect))
-                .ToList());
+                .ToList(),
+            question.QuestionType,
+            question.AnswerText,
+            question.IsPendingGrading,
+            question.SelectedOptionIds);
 }

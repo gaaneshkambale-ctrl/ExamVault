@@ -6,4 +6,9 @@ public record AttemptAnswerResponse(
     Guid QuestionId,
     Guid? SelectedOptionId,
     bool IsMarkedForReview,
-    DateTime AnsweredAtUtc);
+    DateTime AnsweredAtUtc,
+    string? AnswerText = null,
+    int? MarksAwarded = null,
+    Guid? GradedByUserId = null,
+    DateTime? GradedAtUtc = null,
+    IReadOnlyList<Guid>? SelectedOptionIds = null);

@@ -25,13 +25,23 @@ public class ListQuestionsHandler
             return [];
         }
 
-        var options = await _questionRepository.GetOptionsByQuestionIdsAsync(
-            questions.Select(q => q.Id).ToList(),
-            cancellationToken);
+        var questionIds = questions.Select(q => q.Id).ToList();
+        var options = await _questionRepository.GetOptionsByQuestionIdsAsync(questionIds, cancellationToken);
         var optionsByQuestionId = options.ToLookup(o => o.QuestionId);
+        var parameters = await _questionRepository.GetParametersByQuestionIdsAsync(questionIds, cancellationToken);
+        var parametersByQuestionId = parameters.ToLookup(p => p.QuestionId);
+        var testCases = await _questionRepository.GetTestCasesByQuestionIdsAsync(questionIds, cancellationToken);
+        var testCasesByQuestionId = testCases.ToLookup(t => t.QuestionId);
+        var sqlTestCases = await _questionRepository.GetSqlTestCasesByQuestionIdsAsync(questionIds, cancellationToken);
+        var sqlTestCasesByQuestionId = sqlTestCases.ToLookup(t => t.QuestionId);
 
         return questions
-            .Select(q => new QuestionWithOptions(q, optionsByQuestionId[q.Id].ToList()))
+            .Select(q => new QuestionWithOptions(
+                q,
+                optionsByQuestionId[q.Id].ToList(),
+                parametersByQuestionId[q.Id].ToList(),
+                testCasesByQuestionId[q.Id].ToList(),
+                sqlTestCasesByQuestionId[q.Id].ToList()))
             .ToList();
     }
 }

@@ -41,7 +41,8 @@ public class QuestionServiceClient : IQuestionAnswerKeyClient
                 q.SectionId,
                 q.Options
                     .Select(o => new AnswerKeyOption(o.Id, o.OptionText, o.IsCorrect))
-                    .ToList()))
+                    .ToList(),
+                q.QuestionType))
             .ToList();
     }
 
@@ -52,6 +53,7 @@ public class QuestionServiceClient : IQuestionAnswerKeyClient
         public int Marks { get; init; }
         public Guid? SectionId { get; init; }
         public List<QuestionOptionApiResponse> Options { get; init; } = [];
+        public string QuestionType { get; init; } = "MultipleChoice";
     }
 
     private sealed class QuestionOptionApiResponse

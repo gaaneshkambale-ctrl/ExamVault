@@ -11,7 +11,7 @@ import { useExams } from '../../hooks/useExams';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { EXAM_CATEGORIES } from '../../types/exam';
-import type { ExamType } from '../../types/exam';
+import type { CreationMethod } from '../../types/exam';
 import { bucketByDay, computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 
@@ -29,16 +29,18 @@ export default function AdminReports() {
 
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [category, setCategory] = useState('All');
-  const [examType, setExamType] = useState<'All' | ExamType>('All');
+  const [creationMethod, setCreationMethod] = useState<'All' | CreationMethod>('All');
 
   const loading = isLoadingExams || isLoadingResults || isLoadingAttempts;
 
   const filteredExams = useMemo(
     () =>
       (exams ?? []).filter(
-        (e) => (category === 'All' || e.category === category) && (examType === 'All' || e.examType === examType),
+        (e) =>
+          (category === 'All' || e.category === category) &&
+          (creationMethod === 'All' || e.creationMethod === creationMethod),
       ),
-    [exams, category, examType],
+    [exams, category, creationMethod],
   );
   const filteredExamIds = useMemo(() => new Set(filteredExams.map((e) => e.id)), [filteredExams]);
 
@@ -114,7 +116,7 @@ export default function AdminReports() {
         onReset={() => {
           setRange(getDefaultRange());
           setCategory('All');
-          setExamType('All');
+          setCreationMethod('All');
         }}
         exportFilename="exam-reports"
         exportHeaders={['Exam', 'Category', 'Total Attempts', 'Average Score %', 'Pass %', 'Completion Rate %']}
@@ -130,7 +132,11 @@ export default function AdminReports() {
         }
       >
         <Col xs="auto">
-          <Form.Select size="sm" value={examType} onChange={(e) => setExamType(e.target.value as 'All' | ExamType)}>
+          <Form.Select
+            size="sm"
+            value={creationMethod}
+            onChange={(e) => setCreationMethod(e.target.value as 'All' | CreationMethod)}
+          >
             <option value="All">All Exams</option>
             <option value="Manual">Manual</option>
             <option value="AiGenerated">AI Generated</option>

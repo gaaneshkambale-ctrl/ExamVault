@@ -1,8 +1,10 @@
 import apiClient from './axiosClient';
 import type {
   CreateExamRequest,
+  CreateExamTypeRequest,
   ExamDefaultsResponse,
   ExamResponse,
+  ExamTypeOption,
   GeneralSettingsResponse,
   ProctoringSettingsResponse,
   ReminderSettingsResponse,
@@ -46,6 +48,20 @@ export async function archiveExam(id: string): Promise<ExamResponse> {
 
 export async function deleteExam(id: string): Promise<void> {
   await apiClient.delete(`/api/exams/${id}`);
+}
+
+export async function listExamTypes(): Promise<ExamTypeOption[]> {
+  const { data } = await apiClient.get<ExamTypeOption[]>('/api/exam-types');
+  return data;
+}
+
+export async function createExamType(request: CreateExamTypeRequest): Promise<ExamTypeOption> {
+  const { data } = await apiClient.post<ExamTypeOption>('/api/exam-types', request);
+  return data;
+}
+
+export async function deleteExamType(id: string): Promise<void> {
+  await apiClient.delete(`/api/exam-types/${id}`);
 }
 
 export async function getReminderSettings(): Promise<ReminderSettingsResponse> {

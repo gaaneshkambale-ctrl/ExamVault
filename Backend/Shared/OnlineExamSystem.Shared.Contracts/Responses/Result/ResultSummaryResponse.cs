@@ -9,7 +9,11 @@ public record QuestionResultResponse(
     decimal MarksAwarded,
     Guid? SelectedOptionId,
     bool IsCorrect,
-    IReadOnlyList<QuestionResultOptionResponse> Options);
+    IReadOnlyList<QuestionResultOptionResponse> Options,
+    string QuestionType = "MultipleChoice",
+    string? AnswerText = null,
+    bool IsPendingGrading = false,
+    IReadOnlyList<Guid>? SelectedOptionIds = null);
 
 public record ResultSummaryResponse(
     Guid AttemptId,
@@ -20,4 +24,5 @@ public record ResultSummaryResponse(
     int PassingMarks,
     bool Passed,
     DateTime SubmittedAtUtc,
-    IReadOnlyList<QuestionResultResponse>? Questions);
+    IReadOnlyList<QuestionResultResponse>? Questions,
+    bool HasPendingGrading = false);

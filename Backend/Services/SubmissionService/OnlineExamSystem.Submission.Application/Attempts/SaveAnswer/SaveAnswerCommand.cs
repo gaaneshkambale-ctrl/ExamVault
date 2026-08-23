@@ -5,4 +5,6 @@ public record SaveAnswerCommand(
     Guid QuestionId,
     Guid? SelectedOptionId,
     bool IsMarkedForReview,
-    Guid UserId);
+    Guid UserId,
+    string? AnswerText = null,
+    IReadOnlyList<Guid>? SelectedOptionIds = null);

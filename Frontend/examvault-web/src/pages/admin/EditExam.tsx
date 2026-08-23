@@ -5,9 +5,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/examApi';
-import { useExam } from '../../hooks/useExams';
+import { useExam, useExamTypes } from '../../hooks/useExams';
 import { validateCreateExam } from '../../utils/createExamValidation';
-import type { ExamResponse, ExamStatus, ExamType, UpdateExamRequest } from '../../types/exam';
+import type { CreationMethod, ExamResponse, ExamStatus, UpdateExamRequest } from '../../types/exam';
 import { extractServerError } from '../../utils/apiError';
 
 const statusVariant: Record<ExamStatus, string> = {
@@ -173,6 +173,7 @@ export default function EditExam() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: exam, isLoading, isError } = useExam(id);
+  const { data: examTypes } = useExamTypes();
 
   const [form, setForm] = useState<UpdateExamRequest | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof UpdateExamRequest, string>>>(
@@ -359,15 +360,37 @@ export default function EditExam() {
                     </Form.Group>
                   </Col>
                   <Col md={3}>
-                    <Form.Group className="mb-3" controlId="editExamType">
-                      <Form.Label className="fw-bold">Exam Type</Form.Label>
+                    <Form.Group className="mb-3" controlId="editCreationMethod">
+                      <Form.Label className="fw-bold">Creation Method</Form.Label>
                       <Form.Select
-                        value={form.examType}
-                        onChange={(e) => updateField('examType', e.target.value as ExamType)}
+                        value={form.creationMethod}
+                        onChange={(e) => updateField('creationMethod', e.target.value as CreationMethod)}
                       >
                         <option value="Manual">Manual</option>
                         <option value="AiGenerated">AI Generated</option>
                       </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col md={4}>
+                    <Form.Group className="mb-3" controlId="editExamTypeId">
+                      <Form.Label className="fw-bold">Exam Type</Form.Label>
+                      <Form.Select
+                        value={form.examTypeId ?? ''}
+                        onChange={(e) => updateField('examTypeId', e.target.value || null)}
+                      >
+                        <option value="">Not set</option>
+                        {examTypes?.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </Form.Select>
+                      <Form.Text>
+                        <Link to="/admin/exam-types">+ Manage Exam Types</Link>
+                      </Form.Text>
                     </Form.Group>
                   </Col>
                 </Row>

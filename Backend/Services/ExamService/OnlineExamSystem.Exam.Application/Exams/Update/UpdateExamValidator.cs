@@ -17,8 +17,8 @@ public class UpdateExamValidator : AbstractValidator<UpdateExamCommand>
         RuleFor(x => x.Description)
             .MaximumLength(2000);
 
-        RuleFor(x => x.ExamType)
-            .IsEnumName(typeof(ExamType), caseSensitive: false);
+        RuleFor(x => x.CreationMethod)
+            .IsEnumName(typeof(CreationMethod), caseSensitive: false);
 
         RuleFor(x => x.DurationMinutes)
             .GreaterThan(0);

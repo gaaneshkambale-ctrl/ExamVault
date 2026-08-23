@@ -59,13 +59,14 @@ public class ExamsController : ControllerBase
             request.Description,
             request.Category,
             request.ContainsSections,
-            request.ExamType,
+            request.CreationMethod,
             request.DurationMinutes,
             request.TotalMarks,
             request.PassingMarks,
             request.Instructions,
             createdByUserId,
-            request.ExamCode);
+            request.ExamCode,
+            request.ExamTypeId);
 
         var result = await _createExamHandler.HandleAsync(command, cancellationToken);
 
@@ -129,7 +130,7 @@ public class ExamsController : ControllerBase
             id,
             request.Title,
             request.Description,
-            request.ExamType,
+            request.CreationMethod,
             request.DurationMinutes,
             request.TotalMarks,
             request.PassingMarks,
@@ -149,7 +150,8 @@ public class ExamsController : ControllerBase
             request.AllowNotes,
             request.AutoSubmitOnTimeEnd,
             request.ConfirmBeforeSubmit,
-            request.ExamCode);
+            request.ExamCode,
+            request.ExamTypeId);
 
         var result = await _updateExamHandler.HandleAsync(command, cancellationToken);
 
@@ -261,7 +263,7 @@ public class ExamsController : ControllerBase
             exam.Description,
             exam.Category,
             exam.ContainsSections,
-            exam.ExamType.ToString(),
+            exam.CreationMethod.ToString(),
             exam.DurationMinutes,
             exam.TotalMarks,
             exam.PassingMarks,
@@ -283,5 +285,7 @@ public class ExamsController : ControllerBase
             exam.AllowCalculator,
             exam.AllowNotes,
             exam.AutoSubmitOnTimeEnd,
-            exam.ConfirmBeforeSubmit);
+            exam.ConfirmBeforeSubmit,
+            exam.ExamTypeId,
+            exam.ExamType?.Name);
 }

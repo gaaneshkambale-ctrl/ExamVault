@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Badge, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteExamButton from '../../components/DeleteExamButton';
 import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
+import { archiveExam, deleteExam } from '../../api/examApi';
+import { extractServerError } from '../../utils/apiError';
 import { EXAM_CATEGORIES } from '../../types/exam';
-import type { ExamResponse, ExamStatus, ExamType } from '../../types/exam';
+import type { CreationMethod, ExamResponse, ExamStatus } from '../../types/exam';
 
 const statusVariant: Record<ExamStatus, string> = {
   Draft: 'secondary',
@@ -16,7 +19,7 @@ const statusVariant: Record<ExamStatus, string> = {
   Archived: 'dark',
 };
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -94,15 +97,18 @@ const VALID_STATUSES: ExamStatus[] = ['Draft', 'Published', 'Archived'];
 export default function ManageExams() {
   const { data: exams, isLoading, isError } = useExams();
   const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [searchText, setSearchText] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'All' | ExamType>('All');
+  const [typeFilter, setTypeFilter] = useState<'All' | CreationMethod>('All');
   const [categoryFilter, setCategoryFilter] = useState<'All' | string>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | ExamStatus>(() => {
     const fromUrl = searchParams.get('status');
     return VALID_STATUSES.includes(fromUrl as ExamStatus) ? (fromUrl as ExamStatus) : 'All';
   });
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const counts = {
     total: exams?.length ?? 0,
@@ -112,7 +118,7 @@ export default function ManageExams() {
   };
 
   const filteredExams: ExamResponse[] = (exams ?? []).filter((exam) => {
-    if (typeFilter !== 'All' && exam.examType !== typeFilter) {
+    if (typeFilter !== 'All' && exam.creationMethod !== typeFilter) {
       return false;
     }
     if (categoryFilter !== 'All' && exam.category !== categoryFilter) {
@@ -129,6 +135,7 @@ export default function ManageExams() {
 
   useEffect(() => {
     setPage(1);
+    setSelected(new Set());
   }, [searchText, typeFilter, categoryFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredExams.length / PAGE_SIZE));
@@ -139,6 +146,50 @@ export default function ManageExams() {
   );
   const rangeStart = filteredExams.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredExams.length);
+
+  const allPageSelected = pagedExams.length > 0 && pagedExams.every((e) => selected.has(e.id));
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pagedExams.forEach((e) => next.delete(e.id));
+      } else {
+        pagedExams.forEach((e) => next.add(e.id));
+      }
+      return next;
+    });
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const invalidateExams = () => queryClient.invalidateQueries({ queryKey: ['exams'] });
+
+  const bulkArchiveMutation = useMutation({
+    mutationFn: (ids: string[]) => Promise.allSettled(ids.map((id) => archiveExam(id))),
+    onSuccess: () => {
+      invalidateExams();
+      setSelected(new Set());
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => Promise.allSettled(ids.map((id) => deleteExam(id))),
+    onSuccess: () => {
+      invalidateExams();
+      setSelected(new Set());
+      setShowBulkDeleteConfirm(false);
+    },
+  });
+
+  const bulkError = bulkDeleteMutation.isError ? extractServerError(bulkDeleteMutation.error) : '';
 
   return (
     <AdminLayout active="Exams">
@@ -184,9 +235,9 @@ export default function ManageExams() {
         <Col md={3}>
           <Form.Select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as 'All' | ExamType)}
+            onChange={(e) => setTypeFilter(e.target.value as 'All' | CreationMethod)}
           >
-            <option value="All">All Types</option>
+            <option value="All">All Creation Methods</option>
             <option value="Manual">Manual</option>
             <option value="AiGenerated">AI Generated</option>
           </Form.Select>
@@ -231,60 +282,96 @@ export default function ManageExams() {
           )}
 
           {!isLoading && !isError && filteredExams.length > 0 && (
-            <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase table-light">
-                <tr>
-                  <th className="ps-4">Title</th>
-                  <th>Category</th>
-                  <th>Type</th>
-                  <th>Total Questions</th>
-                  <th>Duration</th>
-                  <th>Total Marks</th>
-                  <th>Status</th>
-                  <th>Created On</th>
-                  <th className="pe-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagedExams.map((exam) => (
-                  <tr key={exam.id}>
-                    <td className="ps-4 fw-medium">{exam.title}</td>
-                    <td>{exam.category || '—'}</td>
-                    <td>{examTypeLabel[exam.examType]}</td>
-                    <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
-                    <td>{exam.durationMinutes} min</td>
-                    <td>{exam.totalMarks}</td>
-                    <td>
-                      <Badge bg={statusVariant[exam.status]}>{exam.status}</Badge>
-                    </td>
-                    <td>{new Date(exam.createdOn).toLocaleDateString()}</td>
-                    <td className="pe-4">
-                      <div className="d-flex gap-2">
-                        <Link
-                          to={`/admin/exams/${exam.id}`}
-                          className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
-                          style={{ width: 32, height: 32 }}
-                          title="View"
-                          aria-label={`View ${exam.title}`}
-                        >
-                          <ViewIcon />
-                        </Link>
-                        <Link
-                          to={`/admin/exams/${exam.id}/edit`}
-                          className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
-                          style={{ width: 32, height: 32 }}
-                          title="Edit"
-                          aria-label={`Edit ${exam.title}`}
-                        >
-                          <EditIcon />
-                        </Link>
-                        <DeleteExamButton examId={exam.id} />
-                      </div>
-                    </td>
+            <>
+              <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                <Form.Check
+                  type="checkbox"
+                  label="Select All"
+                  checked={allPageSelected}
+                  onChange={toggleSelectAll}
+                />
+                {selected.size > 0 && (
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="text-muted small">{selected.size} selected</span>
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      disabled={bulkArchiveMutation.isPending}
+                      onClick={() => bulkArchiveMutation.mutate(Array.from(selected))}
+                    >
+                      {bulkArchiveMutation.isPending ? 'Archiving...' : 'Archive Selected'}
+                    </Button>
+                    <Button variant="outline-danger" size="sm" onClick={() => setShowBulkDeleteConfirm(true)}>
+                      Delete Selected
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <Table responsive hover className="mb-0 align-middle">
+                <thead className="text-muted small text-uppercase table-light">
+                  <tr>
+                    <th className="ps-4" style={{ width: 40 }}></th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Exam Type</th>
+                    <th>Creation Method</th>
+                    <th>Total Questions</th>
+                    <th>Duration</th>
+                    <th>Total Marks</th>
+                    <th>Status</th>
+                    <th>Created On</th>
+                    <th className="pe-4">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
+                </thead>
+                <tbody>
+                  {pagedExams.map((exam) => (
+                    <tr key={exam.id}>
+                      <td className="ps-4">
+                        <Form.Check
+                          type="checkbox"
+                          checked={selected.has(exam.id)}
+                          onChange={() => toggleOne(exam.id)}
+                        />
+                      </td>
+                      <td className="fw-medium">{exam.title}</td>
+                      <td>{exam.category || '—'}</td>
+                      <td>{exam.examTypeName || '—'}</td>
+                      <td>{creationMethodLabel[exam.creationMethod]}</td>
+                      <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
+                      <td>{exam.durationMinutes} min</td>
+                      <td>{exam.totalMarks}</td>
+                      <td>
+                        <Badge bg={statusVariant[exam.status]}>{exam.status}</Badge>
+                      </td>
+                      <td>{new Date(exam.createdOn).toLocaleDateString()}</td>
+                      <td className="pe-4">
+                        <div className="d-flex gap-2">
+                          <Link
+                            to={`/admin/exams/${exam.id}`}
+                            className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                            style={{ width: 32, height: 32 }}
+                            title="View"
+                            aria-label={`View ${exam.title}`}
+                          >
+                            <ViewIcon />
+                          </Link>
+                          <Link
+                            to={`/admin/exams/${exam.id}/edit`}
+                            className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                            style={{ width: 32, height: 32 }}
+                            title="Edit"
+                            aria-label={`Edit ${exam.title}`}
+                          >
+                            <EditIcon />
+                          </Link>
+                          <DeleteExamButton examId={exam.id} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </>
           )}
         </Card.Body>
       </Card>
@@ -311,6 +398,29 @@ export default function ManageExams() {
           </Pagination>
         </div>
       )}
+
+      <Modal show={showBulkDeleteConfirm} onHide={() => setShowBulkDeleteConfirm(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete {selected.size} Exam{selected.size === 1 ? '' : 's'}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {bulkError && <Alert variant="danger">{bulkError}</Alert>}
+          Are you sure you want to delete the selected exam{selected.size === 1 ? '' : 's'}? This cannot be
+          undone.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowBulkDeleteConfirm(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            disabled={bulkDeleteMutation.isPending}
+            onClick={() => bulkDeleteMutation.mutate(Array.from(selected))}
+          >
+            {bulkDeleteMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </AdminLayout>
   );
 }

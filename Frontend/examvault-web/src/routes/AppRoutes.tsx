@@ -14,6 +14,7 @@ import UserDetails from '../pages/admin/UserDetails';
 import ResetPassword from '../pages/admin/ResetPassword';
 import RolesPermissions from '../pages/admin/RolesPermissions';
 import ManageExams from '../pages/admin/ManageExams';
+import ManageExamTypes from '../pages/admin/ManageExamTypes';
 import CreateExam from '../pages/admin/CreateExam';
 import ExamDetails from '../pages/admin/ExamDetails';
 import EditExam from '../pages/admin/EditExam';
@@ -28,6 +29,7 @@ import QuestionDetails from '../pages/admin/QuestionDetails';
 import EditQuestion from '../pages/admin/EditQuestion';
 import AiGenerateQuestion from '../pages/admin/AiGenerateQuestion';
 import AiGeneratedQuestionsPreview from '../pages/admin/AiGeneratedQuestionsPreview';
+import GradeAnswers from '../pages/admin/GradeAnswers';
 import ManageGroups from '../pages/admin/ManageGroups';
 import GroupDetails from '../pages/admin/GroupDetails';
 import AssignExam from '../pages/admin/AssignExam';
@@ -197,6 +199,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ManageExams />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exam-types"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ManageExamTypes />
           </ProtectedRoute>
         }
       />
@@ -415,6 +425,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <AiGeneratedQuestionsPreview />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:examId/grading"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <GradeAnswers />
           </ProtectedRoute>
         }
       />

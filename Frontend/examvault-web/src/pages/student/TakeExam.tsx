@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -19,9 +19,23 @@ import {
   startAttempt,
   submitAttempt,
 } from '../../api/submissionApi';
-import type { QuestionResponse } from '../../types/question';
+import type { ProgrammingLanguage, QuestionResponse } from '../../types/question';
+import { PROGRAMMING_LANGUAGES } from '../../types/question';
+import { runCode, runSql } from '../../api/executionApi';
+import type { RunCodeResponse } from '../../types/execution';
+import { formatTypedValue } from '../../utils/typedValue';
+
+// Lazy-loaded - Monaco is several MB and must not bloat the app's main
+// bundle for every page that isn't a code question.
+const CodeEditor = lazy(() => import('../../components/CodeEditor'));
 import type { SectionResponse } from '../../types/section';
 import type { AttemptSectionStateResponse, ExamAttemptResponse } from '../../types/submission';
+
+// Informational only - the authoritative grading run happens server-side at
+// submission time regardless of what a student clicked here. This just
+// throttles how often the (real, costly) Piston container gets hit from one
+// browser tab clicking the button.
+const RUN_CODE_COOLDOWN_MS = 5000;
 
 type NavState = 'answered' | 'not-answered' | 'marked' | 'not-visited';
 type Mode = 'loading' | 'take' | 'review' | 'submitted';
@@ -152,7 +166,17 @@ const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 interface AnswerState {
   selectedOptionId: string | null;
   isMarkedForReview: boolean;
+  textAnswer: string | null;
+  // MultiSelect only - Single Choice/True-False keep using selectedOptionId.
+  selectedOptionIds: string[] | null;
 }
+
+const EMPTY_ANSWER: AnswerState = {
+  selectedOptionId: null,
+  isMarkedForReview: false,
+  textAnswer: null,
+  selectedOptionIds: null,
+};
 
 // Small always-visible preview of the proctoring camera feed, so the student
 // can see exactly what's being watched instead of a camera silently running
@@ -230,6 +254,14 @@ export default function TakeExam() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [visited, setVisited] = useState<Set<string>>(new Set());
   const [answers, setAnswers] = useState<Record<string, AnswerState>>({});
+  // Cosmetic only (syntax-highlighting mode) - the graded reference language is
+  // always the question's own ProgrammingLanguage; this never reaches the server.
+  const [codeLanguageOverrides, setCodeLanguageOverrides] = useState<Record<string, ProgrammingLanguage>>({});
+  const [runResults, setRunResults] = useState<Record<string, RunCodeResponse>>({});
+  const [runErrors, setRunErrors] = useState<Record<string, string>>({});
+  const [runningQuestionId, setRunningQuestionId] = useState<string | null>(null);
+  const [runCooldownUntil, setRunCooldownUntil] = useState<Record<string, number>>({});
+  const [nowTick, setNowTick] = useState(Date.now());
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [sectionRemainingSeconds, setSectionRemainingSeconds] = useState<number | null>(null);
   const [navFilter, setNavFilter] = useState<NavFilter>('all');
@@ -346,6 +378,8 @@ export default function TakeExam() {
             restored[answer.questionId] = {
               selectedOptionId: answer.selectedOptionId,
               isMarkedForReview: answer.isMarkedForReview,
+              textAnswer: answer.answerText ?? null,
+              selectedOptionIds: answer.selectedOptionIds ?? null,
             };
             visitedIds.add(answer.questionId);
           }
@@ -432,7 +466,7 @@ export default function TakeExam() {
 
     const current = displayQuestions[currentIndex];
     if (current) {
-      persistAnswer(current.id, answers[current.id] ?? { selectedOptionId: null, isMarkedForReview: false });
+      persistAnswer(current.id, answers[current.id] ?? EMPTY_ANSWER);
     }
 
     if (!targetGroup.section || !attemptId) {
@@ -486,7 +520,7 @@ export default function TakeExam() {
     } else {
       const current = displayQuestions[currentIndex];
       if (current) {
-        persistAnswer(current.id, answers[current.id] ?? { selectedOptionId: null, isMarkedForReview: false });
+        persistAnswer(current.id, answers[current.id] ?? EMPTY_ANSWER);
       }
       setMode('review');
     }
@@ -622,6 +656,8 @@ export default function TakeExam() {
         questionId: payload.questionId,
         selectedOptionId: payload.answer.selectedOptionId,
         isMarkedForReview: payload.answer.isMarkedForReview,
+        answerText: payload.answer.textAnswer,
+        selectedOptionIds: payload.answer.selectedOptionIds,
       }),
     onSuccess: () => setLastSavedAt(new Date()),
   });
@@ -631,11 +667,93 @@ export default function TakeExam() {
       const merged: AnswerState = {
         selectedOptionId: prev[questionId]?.selectedOptionId ?? null,
         isMarkedForReview: prev[questionId]?.isMarkedForReview ?? false,
+        textAnswer: prev[questionId]?.textAnswer ?? null,
+        selectedOptionIds: prev[questionId]?.selectedOptionIds ?? null,
         ...updates,
       };
       persistAnswer(questionId, merged);
       return { ...prev, [questionId]: merged };
     });
+  };
+
+  // Code answers change on every keystroke, unlike a single-click option
+  // select - saving immediately would fire a network request per character.
+  // Local state (and therefore the nav grid's Answered/Unanswered state)
+  // still updates instantly; only the actual save to the server is debounced.
+  const textAnswerSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const updateTextAnswer = (questionId: string, text: string) => {
+    setAnswers((prev) => {
+      const merged: AnswerState = {
+        selectedOptionId: prev[questionId]?.selectedOptionId ?? null,
+        isMarkedForReview: prev[questionId]?.isMarkedForReview ?? false,
+        textAnswer: text,
+        selectedOptionIds: prev[questionId]?.selectedOptionIds ?? null,
+      };
+
+      if (textAnswerSaveTimers.current[questionId]) {
+        clearTimeout(textAnswerSaveTimers.current[questionId]);
+      }
+      textAnswerSaveTimers.current[questionId] = setTimeout(() => {
+        persistAnswer(questionId, merged);
+      }, 800);
+
+      return { ...prev, [questionId]: merged };
+    });
+  };
+
+  // Only ticks while there's an actual cooldown to count down, rather than
+  // running an interval for the whole exam-taking session.
+  useEffect(() => {
+    if (mode !== 'take' || Object.keys(runCooldownUntil).length === 0) {
+      return;
+    }
+    const intervalId = setInterval(() => setNowTick(Date.now()), 500);
+    return () => clearInterval(intervalId);
+  }, [mode, runCooldownUntil]);
+
+  const handleRunCode = async (question: QuestionResponse, language: ProgrammingLanguage | null | undefined, code: string) => {
+    if (!question.functionName || !question.returnType || !question.parameters?.length || !question.testCases?.length || !language) {
+      return;
+    }
+    setRunningQuestionId(question.id);
+    setRunErrors((prev) => ({ ...prev, [question.id]: '' }));
+    try {
+      const response = await runCode({
+        language,
+        studentCode: code,
+        functionName: question.functionName,
+        parameters: question.parameters.map((p) => ({ name: p.name, type: p.type })),
+        returnType: question.returnType,
+        testCases: question.testCases.map((tc) => ({ arguments: tc.arguments, expectedOutput: tc.expectedOutput })),
+      });
+      setRunResults((prev) => ({ ...prev, [question.id]: response }));
+      setRunCooldownUntil((prev) => ({ ...prev, [question.id]: Date.now() + RUN_CODE_COOLDOWN_MS }));
+    } catch (error) {
+      setRunErrors((prev) => ({ ...prev, [question.id]: extractError(error) }));
+    } finally {
+      setRunningQuestionId(null);
+    }
+  };
+
+  // Sql questions only - no function signature/arguments concept applies,
+  // so this calls a separate endpoint that fetches the Reference Query and
+  // Setup SQL server-side; the browser only ever sends the student's query.
+  const handleRunSql = async (question: QuestionResponse, code: string) => {
+    if (!question.sqlTestCases?.length) {
+      return;
+    }
+    setRunningQuestionId(question.id);
+    setRunErrors((prev) => ({ ...prev, [question.id]: '' }));
+    try {
+      const response = await runSql({ questionId: question.id, studentQuery: code });
+      setRunResults((prev) => ({ ...prev, [question.id]: response }));
+      setRunCooldownUntil((prev) => ({ ...prev, [question.id]: Date.now() + RUN_CODE_COOLDOWN_MS }));
+    } catch (error) {
+      setRunErrors((prev) => ({ ...prev, [question.id]: extractError(error) }));
+    } finally {
+      setRunningQuestionId(null);
+    }
   };
 
   const goToIndex = (index: number) => {
@@ -646,7 +764,7 @@ export default function TakeExam() {
     }
     const current = displayQuestions[currentIndex];
     if (current) {
-      persistAnswer(current.id, answers[current.id] ?? { selectedOptionId: null, isMarkedForReview: false });
+      persistAnswer(current.id, answers[current.id] ?? EMPTY_ANSWER);
     }
     setMode('take');
     setCurrentIndex(index);
@@ -657,7 +775,7 @@ export default function TakeExam() {
     if (answer?.isMarkedForReview) {
       return 'marked';
     }
-    if (answer?.selectedOptionId) {
+    if (answer?.selectedOptionId || answer?.textAnswer || answer?.selectedOptionIds?.length) {
       return 'answered';
     }
     if (visited.has(question.id)) {
@@ -671,9 +789,7 @@ export default function TakeExam() {
 
   const isLoading = mode === 'loading' || isLoadingExam || isLoadingQuestions || (mode === 'take' && !sectionInitialized);
   const currentQuestion = displayQuestions[currentIndex];
-  const currentAnswer = currentQuestion
-    ? (answers[currentQuestion.id] ?? { selectedOptionId: null, isMarkedForReview: false })
-    : null;
+  const currentAnswer = currentQuestion ? (answers[currentQuestion.id] ?? EMPTY_ANSWER) : null;
 
   // Bucketed off navState (not raw answer flags) so the grid colors, the
   // filter tabs, and the stats row can never disagree with each other - a
@@ -1099,35 +1215,266 @@ export default function TakeExam() {
 
                   <p className="fw-medium mb-4">{currentQuestion.questionText}</p>
 
-                  <Form>
-                    {currentQuestion.options.map((option, index) => {
-                      const selected = currentAnswer.selectedOptionId === option.id;
+                  {currentQuestion.questionType === 'CodeProgram' ? (
+                    (() => {
+                      const codeValue = currentAnswer.textAnswer ?? currentQuestion.starterCode ?? '';
+                      const effectiveLanguage = currentQuestion.allowLanguageChange
+                        ? (codeLanguageOverrides[currentQuestion.id] ?? currentQuestion.programmingLanguage)
+                        : currentQuestion.programmingLanguage;
+                      const isSql = currentQuestion.programmingLanguage === 'Sql';
+                      const hasTestCases = isSql
+                        ? Boolean(currentQuestion.sqlTestCases?.length)
+                        : Boolean(
+                            currentQuestion.functionName &&
+                              currentQuestion.returnType &&
+                              currentQuestion.parameters?.length &&
+                              currentQuestion.testCases?.length,
+                          );
+                      const isRunning = runningQuestionId === currentQuestion.id;
+                      const cooldownEndsAt = runCooldownUntil[currentQuestion.id] ?? 0;
+                      const cooldownRemaining = Math.max(0, Math.ceil((cooldownEndsAt - nowTick) / 1000));
+                      const runResult = runResults[currentQuestion.id];
+                      const runError = runErrors[currentQuestion.id];
                       return (
-                        <label
-                          key={option.id}
-                          htmlFor={`option-${option.id}`}
-                          className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2"
-                          style={{
-                            cursor: 'pointer',
-                            borderColor: selected ? '#16a34a' : undefined,
-                            background: selected ? '#f0fdf4' : undefined,
-                          }}
-                        >
-                          <Form.Check
-                            type="radio"
-                            name={`question-${currentQuestion.id}`}
-                            id={`option-${option.id}`}
-                            checked={selected}
-                            onChange={() => updateAnswer(currentQuestion.id, { selectedOptionId: option.id })}
-                            className="mb-0"
-                          />
-                          <span>
-                            {OPTION_LETTERS[index] ?? index + 1}. {option.optionText}
-                          </span>
-                        </label>
+                        <>
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            {currentQuestion.allowLanguageChange ? (
+                              <Form.Select
+                                size="sm"
+                                style={{ maxWidth: 200 }}
+                                value={effectiveLanguage ?? ''}
+                                onChange={(e) =>
+                                  setCodeLanguageOverrides((prev) => ({
+                                    ...prev,
+                                    [currentQuestion.id]: e.target.value as ProgrammingLanguage,
+                                  }))
+                                }
+                              >
+                                {PROGRAMMING_LANGUAGES.map((lang) => (
+                                  <option key={lang.value} value={lang.value}>
+                                    {lang.label}
+                                  </option>
+                                ))}
+                              </Form.Select>
+                            ) : (
+                              <span className="badge bg-light text-dark border">
+                                Language: {PROGRAMMING_LANGUAGES.find((l) => l.value === effectiveLanguage)?.label ?? effectiveLanguage}
+                              </span>
+                            )}
+                            <span className="text-muted small">{codeValue.length} characters</span>
+                          </div>
+                          <div className="border rounded overflow-hidden mb-1">
+                            <Suspense
+                              fallback={
+                                <div
+                                  className="d-flex align-items-center justify-content-center bg-dark text-light"
+                                  style={{ height: 360 }}
+                                >
+                                  <Spinner animation="border" size="sm" className="me-2" />
+                                  Loading editor...
+                                </div>
+                              }
+                            >
+                              <CodeEditor
+                                language={effectiveLanguage}
+                                value={codeValue}
+                                onChange={(next) => updateTextAnswer(currentQuestion.id, next)}
+                                height={360}
+                              />
+                            </Suspense>
+                          </div>
+
+                          {hasTestCases && (
+                            <div
+                              className="rounded-3 overflow-hidden mt-3"
+                              style={{ background: '#1e1e1e', border: '1px solid #333' }}
+                            >
+                              <div
+                                className="d-flex justify-content-between align-items-center px-3 py-2"
+                                style={{ borderBottom: '1px solid #333' }}
+                              >
+                                <span className="text-light fw-semibold small">
+                                  Test Cases
+                                  {runResult && (
+                                    <span className="text-secondary fw-normal ms-2">
+                                      {runResult.outcomes.filter((o) => o.passed).length} / {runResult.outcomes.length} passed
+                                    </span>
+                                  )}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  disabled={isRunning || cooldownRemaining > 0}
+                                  onClick={() =>
+                                    void (isSql
+                                      ? handleRunSql(currentQuestion, codeValue)
+                                      : handleRunCode(currentQuestion, effectiveLanguage, codeValue))
+                                  }
+                                >
+                                  {isRunning ? (
+                                    <>
+                                      <Spinner as="span" animation="border" size="sm" className="me-1" />
+                                      Running...
+                                    </>
+                                  ) : cooldownRemaining > 0 ? (
+                                    `Run Code (${cooldownRemaining}s)`
+                                  ) : (
+                                    '▶ Run Code'
+                                  )}
+                                </Button>
+                              </div>
+                              {runError && <div className="px-3 py-2 text-danger small">{runError}</div>}
+                              <div className="p-3 d-flex flex-column gap-2">
+                                {isSql
+                                  ? currentQuestion.sqlTestCases!.map((testCase, index) => {
+                                      const outcome = runResult?.outcomes[index];
+                                      return (
+                                        <div
+                                          key={index}
+                                          className="rounded-2 px-3 py-2"
+                                          style={{ background: '#252526', border: '1px solid #333' }}
+                                        >
+                                          <div className="d-flex justify-content-between align-items-center">
+                                            <span className="text-light small fw-medium">Test Case {index + 1}</span>
+                                            {outcome && (
+                                              <Badge bg={outcome.passed ? 'success' : 'danger'}>
+                                                {outcome.passed ? 'Passed' : 'Failed'}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          <pre
+                                            className="text-light small mt-1 mb-0"
+                                            style={{ fontFamily: 'monospace', opacity: 0.85, whiteSpace: 'pre-wrap' }}
+                                          >
+                                            {testCase.setupSql}
+                                          </pre>
+                                          {outcome && (
+                                            <>
+                                              <div
+                                                className="text-light small mt-1"
+                                                style={{ fontFamily: 'monospace', opacity: 0.85 }}
+                                              >
+                                                Expected:
+                                              </div>
+                                              <pre
+                                                className="text-light small mb-1"
+                                                style={{ fontFamily: 'monospace', opacity: 0.85, whiteSpace: 'pre-wrap' }}
+                                              >
+                                                {outcome.expectedOutput || '(no rows)'}
+                                              </pre>
+                                              <div
+                                                className={outcome.passed ? 'text-success' : 'text-danger'}
+                                                style={{ fontFamily: 'monospace', fontSize: 13.5 }}
+                                              >
+                                                Got:
+                                              </div>
+                                              <pre
+                                                className={outcome.passed ? 'text-success' : 'text-danger'}
+                                                style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
+                                              >
+                                                {outcome.error ?? (outcome.actualOutput || '(no rows)')}
+                                              </pre>
+                                            </>
+                                          )}
+                                        </div>
+                                      );
+                                    })
+                                  : currentQuestion.testCases!.map((testCase, index) => {
+                                      const outcome = runResult?.outcomes[index];
+                                      const argsText = currentQuestion.parameters!
+                                        .map((p, i) => `${p.name} = ${formatTypedValue(testCase.arguments[i], p.type)}`)
+                                        .join(', ');
+                                      const expectedText = formatTypedValue(
+                                        testCase.expectedOutput,
+                                        currentQuestion.returnType!,
+                                      );
+                                      return (
+                                        <div
+                                          key={index}
+                                          className="rounded-2 px-3 py-2"
+                                          style={{ background: '#252526', border: '1px solid #333' }}
+                                        >
+                                          <div className="d-flex justify-content-between align-items-center">
+                                            <span className="text-light small fw-medium">Test Case {index + 1}</span>
+                                            {outcome && (
+                                              <Badge bg={outcome.passed ? 'success' : 'danger'}>
+                                                {outcome.passed ? 'Passed' : 'Failed'}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          <div
+                                            className="text-light small mt-1"
+                                            style={{ fontFamily: 'monospace', opacity: 0.85 }}
+                                          >
+                                            Input: {argsText}
+                                          </div>
+                                          <div
+                                            className="text-light small"
+                                            style={{ fontFamily: 'monospace', opacity: 0.85 }}
+                                          >
+                                            Expected: {expectedText}
+                                          </div>
+                                          {outcome && (
+                                            <div
+                                              className={outcome.passed ? 'text-success' : 'text-danger'}
+                                              style={{ fontFamily: 'monospace', fontSize: 13.5, marginTop: 2 }}
+                                            >
+                                              Got: {outcome.error ?? outcome.actualOutput}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       );
-                    })}
-                  </Form>
+                    })()
+                  ) : (
+                    <Form>
+                      {currentQuestion.options.map((option, index) => {
+                        const isMultiSelect = currentQuestion.questionType === 'MultiSelect';
+                        const selected = isMultiSelect
+                          ? (currentAnswer.selectedOptionIds ?? []).includes(option.id)
+                          : currentAnswer.selectedOptionId === option.id;
+                        return (
+                          <label
+                            key={option.id}
+                            htmlFor={`option-${option.id}`}
+                            className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2"
+                            style={{
+                              cursor: 'pointer',
+                              borderColor: selected ? '#16a34a' : undefined,
+                              background: selected ? '#f0fdf4' : undefined,
+                            }}
+                          >
+                            <Form.Check
+                              type={isMultiSelect ? 'checkbox' : 'radio'}
+                              name={isMultiSelect ? undefined : `question-${currentQuestion.id}`}
+                              id={`option-${option.id}`}
+                              checked={selected}
+                              onChange={() => {
+                                if (isMultiSelect) {
+                                  const current = currentAnswer.selectedOptionIds ?? [];
+                                  const next = current.includes(option.id)
+                                    ? current.filter((id) => id !== option.id)
+                                    : [...current, option.id];
+                                  updateAnswer(currentQuestion.id, { selectedOptionIds: next });
+                                } else {
+                                  updateAnswer(currentQuestion.id, { selectedOptionId: option.id });
+                                }
+                              }}
+                              className="mb-0"
+                            />
+                            <span>
+                              {OPTION_LETTERS[index] ?? index + 1}. {option.optionText}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </Form>
+                  )}
 
                   <div className="small mt-2" style={{ minHeight: 20 }}>
                     {saveAnswerMutation.isPending && <span className="text-muted">Saving...</span>}

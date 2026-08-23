@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Badge, Button, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import UserAvatar from '../../components/UserAvatar';
 import DeleteUserButton from '../../components/DeleteUserButton';
 import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useUsers } from '../../hooks/useUsers';
+import { deactivateUser, deleteUser } from '../../api/userApi';
+import { extractServerError } from '../../utils/apiError';
 import type { UserListItem, UserRole } from '../../types/user';
 
 const roleVariant: Record<UserRole, string> = {
@@ -129,12 +132,15 @@ const PAGE_SIZE = 8;
 
 export default function ManageUsers() {
   const { data: users, isLoading, isError } = useUsers();
+  const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState('');
   const [roleFilter, setRoleFilter] = useState<'All' | UserRole>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [joinedAfter, setJoinedAfter] = useState('');
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const counts = {
     total: users?.length ?? 0,
@@ -170,6 +176,7 @@ export default function ManageUsers() {
 
   useEffect(() => {
     setPage(1);
+    setSelected(new Set());
   }, [searchText, roleFilter, statusFilter, joinedAfter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
@@ -184,6 +191,50 @@ export default function ManageUsers() {
     setStatusFilter('All');
     setJoinedAfter('');
   };
+
+  const allPageSelected = pagedUsers.length > 0 && pagedUsers.every((u) => selected.has(u.id));
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pagedUsers.forEach((u) => next.delete(u.id));
+      } else {
+        pagedUsers.forEach((u) => next.add(u.id));
+      }
+      return next;
+    });
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ['users'] });
+
+  const bulkDeactivateMutation = useMutation({
+    mutationFn: (ids: string[]) => Promise.allSettled(ids.map((id) => deactivateUser(id))),
+    onSuccess: () => {
+      invalidateUsers();
+      setSelected(new Set());
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => Promise.allSettled(ids.map((id) => deleteUser(id))),
+    onSuccess: () => {
+      invalidateUsers();
+      setSelected(new Set());
+      setShowBulkDeleteConfirm(false);
+    },
+  });
+
+  const bulkError = bulkDeleteMutation.isError ? extractServerError(bulkDeleteMutation.error) : '';
 
   return (
     <AdminLayout active="All Users">
@@ -284,64 +335,98 @@ export default function ManageUsers() {
           )}
 
           {!isLoading && !isError && filteredUsers.length > 0 && (
-            <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
-                <tr>
-                  <th className="ps-4">User</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Joined On</th>
-                  <th className="pe-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagedUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td className="ps-4">
-                      <div className="d-flex align-items-center gap-2">
-                        <UserAvatar fullName={user.fullName} hasPhoto={user.hasPhoto} userId={user.id} size={32} />
-                        <div>
-                          <div className="fw-medium">{user.fullName}</div>
-                          <div className="text-muted small">{user.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <Badge bg={roleVariant[user.role]}>{user.role}</Badge>
-                    </td>
-                    <td>
-                      <Badge bg={user.isActive ? 'success' : 'secondary'}>
-                        {user.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </td>
-                    <td>{new Date(user.createdAtUtc).toLocaleDateString()}</td>
-                    <td className="pe-4">
-                      <div className="d-flex gap-2">
-                        <Link
-                          to={`/admin/users/${user.id}`}
-                          className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
-                          style={{ width: 32, height: 32 }}
-                          title="View"
-                          aria-label={`View ${user.fullName}`}
-                        >
-                          <ViewIcon />
-                        </Link>
-                        <Link
-                          to={`/admin/users/${user.id}/edit`}
-                          className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
-                          style={{ width: 32, height: 32 }}
-                          title="Edit"
-                          aria-label={`Edit ${user.fullName}`}
-                        >
-                          <EditIcon />
-                        </Link>
-                        <DeleteUserButton userId={user.id} userName={user.fullName} iconOnly />
-                      </div>
-                    </td>
+            <>
+              <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                <Form.Check
+                  type="checkbox"
+                  label="Select All"
+                  checked={allPageSelected}
+                  onChange={toggleSelectAll}
+                />
+                {selected.size > 0 && (
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="text-muted small">{selected.size} selected</span>
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      disabled={bulkDeactivateMutation.isPending}
+                      onClick={() => bulkDeactivateMutation.mutate(Array.from(selected))}
+                    >
+                      {bulkDeactivateMutation.isPending ? 'Deactivating...' : 'Deactivate Selected'}
+                    </Button>
+                    <Button variant="outline-danger" size="sm" onClick={() => setShowBulkDeleteConfirm(true)}>
+                      Delete Selected
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <Table responsive hover className="mb-0 align-middle">
+                <thead className="text-muted small text-uppercase bg-light">
+                  <tr>
+                    <th className="ps-4" style={{ width: 40 }}></th>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Joined On</th>
+                    <th className="pe-4">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
+                </thead>
+                <tbody>
+                  {pagedUsers.map((user) => (
+                    <tr key={user.id}>
+                      <td className="ps-4">
+                        <Form.Check
+                          type="checkbox"
+                          checked={selected.has(user.id)}
+                          onChange={() => toggleOne(user.id)}
+                        />
+                      </td>
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          <UserAvatar fullName={user.fullName} hasPhoto={user.hasPhoto} userId={user.id} size={32} />
+                          <div>
+                            <div className="fw-medium">{user.fullName}</div>
+                            <div className="text-muted small">{user.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <Badge bg={roleVariant[user.role]}>{user.role}</Badge>
+                      </td>
+                      <td>
+                        <Badge bg={user.isActive ? 'success' : 'secondary'}>
+                          {user.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td>{new Date(user.createdAtUtc).toLocaleDateString()}</td>
+                      <td className="pe-4">
+                        <div className="d-flex gap-2">
+                          <Link
+                            to={`/admin/users/${user.id}`}
+                            className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                            style={{ width: 32, height: 32 }}
+                            title="View"
+                            aria-label={`View ${user.fullName}`}
+                          >
+                            <ViewIcon />
+                          </Link>
+                          <Link
+                            to={`/admin/users/${user.id}/edit`}
+                            className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                            style={{ width: 32, height: 32 }}
+                            title="Edit"
+                            aria-label={`Edit ${user.fullName}`}
+                          >
+                            <EditIcon />
+                          </Link>
+                          <DeleteUserButton userId={user.id} userName={user.fullName} iconOnly />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </>
           )}
         </Card.Body>
       </Card>
@@ -368,6 +453,29 @@ export default function ManageUsers() {
           </Pagination>
         </div>
       )}
+
+      <Modal show={showBulkDeleteConfirm} onHide={() => setShowBulkDeleteConfirm(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete {selected.size} User{selected.size === 1 ? '' : 's'}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {bulkError && <Alert variant="danger">{bulkError}</Alert>}
+          Are you sure you want to delete the selected user{selected.size === 1 ? '' : 's'}? This cannot be
+          undone.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowBulkDeleteConfirm(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            disabled={bulkDeleteMutation.isPending}
+            onClick={() => bulkDeleteMutation.mutate(Array.from(selected))}
+          >
+            {bulkDeleteMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </AdminLayout>
   );
 }

@@ -1,13 +1,16 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
 using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
+using OnlineExamSystem.Submission.Application.Attempts.Grade;
 using OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
+using OnlineExamSystem.Submission.Application.Attempts.ListUngradedByExam;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
@@ -47,6 +50,8 @@ public class SubmissionsController : ControllerBase
     private readonly UpdateViolationStatusHandler _updateViolationStatusHandler;
     private readonly EnterSectionHandler _enterSectionHandler;
     private readonly CompleteSectionHandler _completeSectionHandler;
+    private readonly GradeAnswerHandler _gradeAnswerHandler;
+    private readonly ListUngradedAnswersByExamHandler _listUngradedAnswersByExamHandler;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -67,6 +72,8 @@ public class SubmissionsController : ControllerBase
         UpdateViolationStatusHandler updateViolationStatusHandler,
         EnterSectionHandler enterSectionHandler,
         CompleteSectionHandler completeSectionHandler,
+        GradeAnswerHandler gradeAnswerHandler,
+        ListUngradedAnswersByExamHandler listUngradedAnswersByExamHandler,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
@@ -86,6 +93,8 @@ public class SubmissionsController : ControllerBase
         _updateViolationStatusHandler = updateViolationStatusHandler;
         _enterSectionHandler = enterSectionHandler;
         _completeSectionHandler = completeSectionHandler;
+        _gradeAnswerHandler = gradeAnswerHandler;
+        _listUngradedAnswersByExamHandler = listUngradedAnswersByExamHandler;
         _logger = logger;
     }
 
@@ -149,7 +158,9 @@ public class SubmissionsController : ControllerBase
             request.QuestionId,
             request.SelectedOptionId,
             request.IsMarkedForReview,
-            userId);
+            userId,
+            request.AnswerText,
+            request.SelectedOptionIds);
         var result = await _saveAnswerHandler.HandleAsync(command, cancellationToken);
 
         if (result.ValidationErrors.Any())
@@ -613,6 +624,69 @@ public class SubmissionsController : ControllerBase
         });
     }
 
+    // Manual grading queue for Code/Programming answers - every submitted answer
+    // that has free-text content but hasn't been assigned marks yet, across all
+    // completed attempts for this exam.
+    [HttpGet("ungraded")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Ungraded([FromQuery] Guid examId, CancellationToken cancellationToken)
+    {
+        var answers = await _listUngradedAnswersByExamHandler.HandleAsync(
+            new ListUngradedAnswersByExamQuery(examId),
+            cancellationToken);
+
+        return Ok(answers
+            .Select(a => new UngradedAnswerResponse(
+                a.AttemptId,
+                a.QuestionId,
+                a.UserId,
+                a.AnswerText,
+                a.AnsweredAtUtc))
+            .ToList());
+    }
+
+    [HttpPut("{attemptId:guid}/answers/{questionId:guid}/grade")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GradeAnswer(
+        Guid attemptId,
+        Guid questionId,
+        GradeAnswerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await _gradeAnswerHandler.HandleAsync(
+            new GradeAnswerCommand(attemptId, questionId, request.MarksAwarded, adminUserId),
+            cancellationToken);
+
+        if (result.ValidationErrors.Any())
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Answer not found." });
+        }
+
+        if (result.IsNotAnswered)
+        {
+            return Conflict(new { message = "This question has not been answered yet." });
+        }
+
+        _logger.LogInformation(
+            "Answer for question {QuestionId} on attempt {AttemptId} graded by admin {AdminUserId}.",
+            questionId,
+            attemptId,
+            adminUserId);
+
+        return Ok(ToResponse(result.Answer!));
+    }
+
     private static ExamAttemptResponse ToResponse(ExamAttempt attempt) =>
         new(
             attempt.Id,
@@ -651,7 +725,14 @@ public class SubmissionsController : ControllerBase
             answer.QuestionId,
             answer.SelectedOptionId,
             answer.IsMarkedForReview,
-            answer.AnsweredAtUtc);
+            answer.AnsweredAtUtc,
+            answer.AnswerText,
+            answer.MarksAwarded,
+            answer.GradedByUserId,
+            answer.GradedAtUtc,
+            answer.SelectedOptionIdsJson is null
+                ? null
+                : JsonSerializer.Deserialize<List<Guid>>(answer.SelectedOptionIdsJson));
 
     private static AttemptSectionStateResponse ToResponse(AttemptSectionState state) =>
         new(

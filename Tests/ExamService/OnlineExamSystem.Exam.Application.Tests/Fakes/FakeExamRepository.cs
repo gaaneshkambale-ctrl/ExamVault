@@ -13,6 +13,7 @@ public class FakeExamRepository : IExamRepository
     private readonly List<ExamAssignment> _assignments = [];
     private readonly List<ExamAssignmentTarget> _targets = [];
     private readonly List<ExamReminderLog> _reminderLogs = [];
+    private readonly List<ExamType> _examTypes = [];
     private ReminderSettings? _reminderSettings;
     private ProctoringSettings? _proctoringSettings;
     private GeneralSettings? _generalSettings;
@@ -259,6 +260,24 @@ public class FakeExamRepository : IExamRepository
     {
         _examDefaults ??= new ExamDefaults();
         return Task.FromResult(_examDefaults);
+    }
+
+    public Task AddExamTypeAsync(ExamType examType, CancellationToken cancellationToken = default)
+    {
+        _examTypes.Add(examType);
+        return Task.CompletedTask;
+    }
+
+    public Task<ExamType?> GetExamTypeByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_examTypes.FirstOrDefault(t => t.Id == id));
+
+    public Task<IReadOnlyList<ExamType>> GetAllExamTypesAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamType>>(_examTypes.OrderBy(t => t.Name).ToList());
+
+    public Task<bool> RemoveExamTypeAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var removed = _examTypes.RemoveAll(t => t.Id == id) > 0;
+        return Task.FromResult(removed);
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

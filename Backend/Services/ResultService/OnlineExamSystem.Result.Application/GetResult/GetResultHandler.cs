@@ -60,14 +60,14 @@ public class GetResultHandler
                 query.ExamId,
                 query.BearerToken,
                 cancellationToken);
-            var selectedOptionByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId, a => a.SelectedOptionId);
+            var answersByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId);
 
             var sections = await _examLookupClient.GetSectionsAsync(query.ExamId, query.BearerToken, cancellationToken);
             var sectionsById = sections.ToDictionary(s => s.Id);
 
-            var (totalScore, questionResults) = AttemptScorer.Score(
+            var (totalScore, questionResults, hasPendingGrading) = AttemptScorer.Score(
                 answerKey,
-                selectedOptionByQuestionId,
+                answersByQuestionId,
                 sectionsById,
                 exam.NegativeMarkingEnabled,
                 exam.NegativeMarks);
@@ -88,6 +88,7 @@ public class GetResultHandler
                 Passed = totalScore >= exam.PassingMarks,
                 SubmittedAtUtc = attempt.SubmittedAtUtc ?? DateTime.UtcNow,
                 Questions = showCorrectAnswers ? questionResults : null,
+                HasPendingGrading = hasPendingGrading,
             };
 
             return GetResultResult.Ok(summary);

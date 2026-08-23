@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Domain.Entities;
@@ -17,13 +19,16 @@ namespace OnlineExamSystem.Question.API.Controllers;
 public class InternalController : ControllerBase
 {
     private readonly ListQuestionsHandler _listQuestionsHandler;
+    private readonly GetQuestionHandler _getQuestionHandler;
     private readonly UnassignSectionHandler _unassignSectionHandler;
 
     public InternalController(
         ListQuestionsHandler listQuestionsHandler,
+        GetQuestionHandler getQuestionHandler,
         UnassignSectionHandler unassignSectionHandler)
     {
         _listQuestionsHandler = listQuestionsHandler;
+        _getQuestionHandler = getQuestionHandler;
         _unassignSectionHandler = unassignSectionHandler;
     }
 
@@ -32,6 +37,24 @@ public class InternalController : ControllerBase
     {
         var questions = await _listQuestionsHandler.HandleAsync(new ListQuestionsQuery(examId), cancellationToken);
         return Ok(questions.Select(q => ToResponse(q.Question, q.Options)));
+    }
+
+    // Called by the Execution Worker (Phase 3 auto-grading) to fetch a
+    // CodeProgram question's function signature and test cases by id -
+    // always fully revealed (FunctionName/ReturnType/Parameters/TestCases,
+    // and SampleAnswer too) since this is service-to-service, not a student
+    // or admin browser call.
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _getQuestionHandler.HandleAsync(new GetQuestionQuery(id), cancellationToken);
+        if (result is null)
+        {
+            return NotFound(new { message = "Question not found." });
+        }
+
+        return Ok(ToFullResponse(
+            result.Question, result.Options, result.Parameters, result.TestCases, result.SqlTestCases));
     }
 
     // Called by Exam Service when a Section is deleted, so its questions become
@@ -58,4 +81,32 @@ public class InternalController : ControllerBase
                 .Select(o => new QuestionOptionResponse(o.Id, o.OptionText, o.IsCorrect, o.DisplayOrder))
                 .ToList(),
             question.CreatedAtUtc);
+
+    private static QuestionResponse ToFullResponse(
+        ExamQuestion question,
+        IReadOnlyList<QuestionOption> options,
+        IReadOnlyList<QuestionParameter>? parameters,
+        IReadOnlyList<QuestionTestCase>? testCases,
+        IReadOnlyList<QuestionSqlTestCase>? sqlTestCases) =>
+        ToResponse(question, options) with
+        {
+            StarterCode = question.StarterCode,
+            ProgrammingLanguage = question.ProgrammingLanguage,
+            AllowLanguageChange = question.AllowLanguageChange,
+            SampleAnswer = question.SampleAnswer,
+            FunctionName = question.FunctionName,
+            ReturnType = question.ReturnType?.ToString(),
+            Parameters = parameters?.OrderBy(p => p.DisplayOrder)
+                .Select(p => new QuestionParameterResponse(p.Name, p.Type.ToString(), p.DisplayOrder))
+                .ToList(),
+            TestCases = testCases?.OrderBy(t => t.DisplayOrder)
+                .Select(t => new QuestionTestCaseResponse(
+                    JsonSerializer.Deserialize<List<JsonElement>>(t.ArgumentsJson)!,
+                    JsonSerializer.Deserialize<JsonElement>(t.ExpectedOutputJson),
+                    t.DisplayOrder))
+                .ToList(),
+            SqlTestCases = sqlTestCases?.OrderBy(t => t.DisplayOrder)
+                .Select(t => new QuestionSqlTestCaseResponse(t.SetupSql, t.DisplayOrder))
+                .ToList(),
+        };
 }

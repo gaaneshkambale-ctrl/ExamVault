@@ -5,6 +5,14 @@ import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useSection } from '../../hooks/useSections';
 import { useQuestionsBySection } from '../../hooks/useQuestions';
+import type { QuestionType } from '../../types/question';
+
+const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  MultipleChoice: 'Single Choice',
+  MultiSelect: 'Multiple Choice',
+  TrueFalse: 'True/False',
+  CodeProgram: 'Code / Programming',
+};
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -93,7 +101,7 @@ export default function SectionDetails() {
                     {questions.map((q) => (
                       <tr key={q.id}>
                         <td>{q.questionText}</td>
-                        <td>{q.questionType === 'MultipleChoice' ? 'MCQ' : 'True/False'}</td>
+                        <td>{QUESTION_TYPE_LABELS[q.questionType]}</td>
                         <td>
                           <Badge bg="secondary">{q.difficulty}</Badge>
                         </td>

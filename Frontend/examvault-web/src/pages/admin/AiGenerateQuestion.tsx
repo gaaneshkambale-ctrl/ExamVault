@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import CreateQuestionModal from '../../components/CreateQuestionModal';
 import { useExam, useExams } from '../../hooks/useExams';
 import { useSection } from '../../hooks/useSections';
 import { generateQuestions } from '../../api/aiApi';
+import { DISABLED_QUESTION_TYPES } from '../../types/ai';
 import type {
   GenerateDifficulty,
   GenerateQuestionsRequest,
@@ -17,6 +20,7 @@ import { extractServerError } from '../../utils/apiError';
 export default function AiGenerateQuestion() {
   const { examId: urlExamId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const sectionId = searchParams.get('sectionId');
   const fromWizard = searchParams.get('wizard') === 'true';
@@ -32,7 +36,7 @@ export default function AiGenerateQuestion() {
   // This flow generates questions with AI - only exams tagged AI Generated
   // are eligible sources, so Manual exams (added to by hand) don't clutter
   // the picker.
-  const aiExams = allExams?.filter((exam) => exam.examType === 'AiGenerated');
+  const aiExams = allExams?.filter((exam) => exam.creationMethod === 'AiGenerated');
 
   const [selectedExamId, setSelectedExamId] = useState(urlExamId ?? '');
   const [source, setSource] = useState<GenerateSource>('ExistingExam');
@@ -53,10 +57,18 @@ export default function AiGenerateQuestion() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
+  const [showManualCreate, setShowManualCreate] = useState(false);
 
   const selectedExam = urlExamId
     ? lockedExam
     : aiExams?.find((e) => e.id === selectedExamId);
+
+  const handleManualQuestionCreated = () => {
+    if (selectedExamId) {
+      queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', selectedExamId] });
+    }
+    setShowManualCreate(false);
+  };
 
   const toggleQuestionType = (type: GenerateQuestionType) => {
     setQuestionTypes((prev) =>
@@ -181,7 +193,7 @@ export default function AiGenerateQuestion() {
                   )}
                   <Form.Text className="text-muted">
                     {!isLoadingExams && aiExams?.length === 0
-                      ? 'No AI Generated exams yet. Create one with Exam Type set to "AI Generated" first.'
+                      ? 'No AI Generated exams yet. Create one with Creation Method set to "AI Generated" first.'
                       : 'Approved questions are added to this exam.'}
                   </Form.Text>
                 </Form.Group>
@@ -213,14 +225,14 @@ export default function AiGenerateQuestion() {
             )}
 
             <Form.Label className="fw-bold">Question Types</Form.Label>
-            <div className="d-flex flex-wrap gap-2 mb-4">
+            <div className="d-flex flex-wrap gap-2 mb-1">
               <Button
                 type="button"
                 variant={questionTypes.includes('MultipleChoice') ? 'primary' : 'outline-secondary'}
                 size="sm"
                 onClick={() => toggleQuestionType('MultipleChoice')}
               >
-                Multiple Choice
+                Single Choice
               </Button>
               <Button
                 type="button"
@@ -230,10 +242,16 @@ export default function AiGenerateQuestion() {
               >
                 True / False
               </Button>
-              <Button type="button" variant="outline-secondary" size="sm" disabled>
-                Short Answer
-              </Button>
+              {DISABLED_QUESTION_TYPES.map((label) => (
+                <Button key={label} type="button" variant="outline-secondary" size="sm" disabled>
+                  {label}
+                </Button>
+              ))}
             </div>
+            <p className="text-muted small mb-4">
+              Multiple Choice (multi-select), Short/Long Answer, and Code/Programming aren't available yet -
+              exam-taking and scoring only support single-answer and true/false questions today.
+            </p>
 
             <Form.Label className="fw-bold">Difficulty Level</Form.Label>
             <div className="d-flex gap-4 mb-4">
@@ -261,6 +279,16 @@ export default function AiGenerateQuestion() {
             </Form.Group>
 
             <div className="d-flex justify-content-end gap-2">
+              {selectedExamId && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="me-auto"
+                  onClick={() => setShowManualCreate(true)}
+                >
+                  + Add Question Manually
+                </Button>
+              )}
               <Link
                 to={
                   sectionReturnTo ?? (urlExamId ? `/admin/exams/${urlExamId}/edit` : '/admin/exams')
@@ -293,6 +321,15 @@ export default function AiGenerateQuestion() {
           </Form>
         </Card.Body>
       </Card>
+
+      {selectedExamId && (
+        <CreateQuestionModal
+          examId={selectedExamId}
+          show={showManualCreate}
+          onClose={() => setShowManualCreate(false)}
+          onCreated={handleManualQuestionCreated}
+        />
+      )}
     </AdminLayout>
   );
 }

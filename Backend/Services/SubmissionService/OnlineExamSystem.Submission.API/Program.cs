@@ -6,10 +6,12 @@ using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
 using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
+using OnlineExamSystem.Submission.Application.Attempts.Grade;
 using OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
+using OnlineExamSystem.Submission.Application.Attempts.ListUngradedByExam;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
@@ -20,8 +22,10 @@ using OnlineExamSystem.Submission.Application.Attempts.Start;
 using OnlineExamSystem.Submission.Application.Attempts.Submit;
 using OnlineExamSystem.Submission.Application.Attempts.UpdateViolationStatus;
 using OnlineExamSystem.Submission.Application.Attempts.WatchRecording;
+using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.Submission.Application.Interfaces;
 using OnlineExamSystem.Submission.Infrastructure;
+using OnlineExamSystem.Submission.Infrastructure.Messaging;
 using OnlineExamSystem.Submission.Infrastructure.Persistence;
 using OnlineExamSystem.Submission.Infrastructure.Repositories;
 
@@ -43,6 +47,9 @@ public class Program
         builder.Services.AddDbContext<SubmissionDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("SubmissionDb")));
         builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
+
+        builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+        builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
 
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
@@ -95,6 +102,9 @@ public class Program
         builder.Services.AddScoped<UpdateViolationStatusHandler>();
         builder.Services.AddScoped<EnterSectionHandler>();
         builder.Services.AddScoped<CompleteSectionHandler>();
+        builder.Services.AddScoped<IValidator<GradeAnswerCommand>, GradeAnswerValidator>();
+        builder.Services.AddScoped<GradeAnswerHandler>();
+        builder.Services.AddScoped<ListUngradedAnswersByExamHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

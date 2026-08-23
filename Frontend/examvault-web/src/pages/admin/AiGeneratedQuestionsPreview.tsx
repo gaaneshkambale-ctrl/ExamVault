@@ -11,7 +11,7 @@ import type { DraftQuestion, GenerateDifficulty, GenerateQuestionsRequest, Gener
 import { extractServerError } from '../../utils/apiError';
 
 const questionTypeLabel: Record<GenerateQuestionType, string> = {
-  MultipleChoice: 'Multiple Choice',
+  MultipleChoice: 'Single Choice',
   TrueFalse: 'True/False',
 };
 
@@ -177,7 +177,7 @@ export default function AiGeneratedQuestionsPreview() {
         <Col xs={12} sm={4}>
           <Card className="border-0 shadow-sm">
             <Card.Body>
-              <div className="text-muted small">Multiple Choice</div>
+              <div className="text-muted small">Single Choice</div>
               <div className="h4 fw-bold mb-0">{counts.mcq}</div>
             </Card.Body>
           </Card>

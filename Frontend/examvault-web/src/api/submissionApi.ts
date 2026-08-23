@@ -7,6 +7,7 @@ import type {
   ExamAttemptResponse,
   ProctoringViolationType,
   SaveAnswerRequest,
+  UngradedAnswerResponse,
   ViolationEventResponse,
   ViolationStatus,
 } from '../types/submission';
@@ -146,6 +147,28 @@ export async function enterSection(
 ): Promise<AttemptSectionStateResponse> {
   const { data } = await apiClient.post<AttemptSectionStateResponse>(
     `/api/submissions/${attemptId}/sections/${sectionId}/enter`,
+  );
+  return data;
+}
+
+// Manual grading queue - every submitted Code/Programming answer that has
+// content but hasn't been assigned marks yet, across every completed
+// attempt for this exam.
+export async function getUngradedAnswers(examId: string): Promise<UngradedAnswerResponse[]> {
+  const { data } = await apiClient.get<UngradedAnswerResponse[]>('/api/submissions/ungraded', {
+    params: { examId },
+  });
+  return data;
+}
+
+export async function gradeAnswer(
+  attemptId: string,
+  questionId: string,
+  marksAwarded: number,
+): Promise<AttemptAnswerResponse> {
+  const { data } = await apiClient.put<AttemptAnswerResponse>(
+    `/api/submissions/${attemptId}/answers/${questionId}/grade`,
+    { marksAwarded },
   );
   return data;
 }

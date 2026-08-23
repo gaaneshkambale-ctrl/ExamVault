@@ -21,10 +21,11 @@ public class ExamRepository : IExamRepository
         _dbContext.Exams.AddAsync(exam, cancellationToken).AsTask();
 
     public Task<ExamPaper?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-        _dbContext.Exams.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        _dbContext.Exams.Include(e => e.ExamType).FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
     public async Task<IReadOnlyList<ExamPaper>> GetAllAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Exams
+            .Include(e => e.ExamType)
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
@@ -86,6 +87,7 @@ public class ExamRepository : IExamRepository
             .Distinct();
 
         return await _dbContext.Exams
+            .Include(e => e.ExamType)
             .Where(e => e.Status == ExamStatus.Published && assignedExamIds.Contains(e.Id))
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync(cancellationToken);
@@ -319,6 +321,31 @@ public class ExamRepository : IExamRepository
         }
 
         return settings;
+    }
+
+    public Task AddExamTypeAsync(ExamType examType, CancellationToken cancellationToken = default) =>
+        _dbContext.ExamTypes.AddAsync(examType, cancellationToken).AsTask();
+
+    public Task<ExamType?> GetExamTypeByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        _dbContext.ExamTypes.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<ExamType>> GetAllExamTypesAsync(CancellationToken cancellationToken = default) =>
+        await _dbContext.ExamTypes
+            .OrderBy(t => t.Name)
+            .ToListAsync(cancellationToken);
+
+    /// <summary>Returns true if the exam type was found and removed. Any exams referencing it
+    /// have their ExamTypeId set to null by the FK's DeleteBehavior.SetNull, not blocked/cascaded.</summary>
+    public async Task<bool> RemoveExamTypeAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var examType = await _dbContext.ExamTypes.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (examType is null)
+        {
+            return false;
+        }
+
+        _dbContext.ExamTypes.Remove(examType);
+        return true;
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>

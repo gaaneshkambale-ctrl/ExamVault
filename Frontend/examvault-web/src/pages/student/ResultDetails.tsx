@@ -4,11 +4,11 @@ import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useMyResult } from '../../hooks/useResults';
 import { getGrade } from '../../types/result';
-import type { ExamType } from '../../types/exam';
+import type { CreationMethod } from '../../types/exam';
 import { generateResultPdf } from '../../utils/generateResultPdf';
 import AnswerReviewPanel from '../../components/result/AnswerReviewPanel';
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -44,9 +44,12 @@ export default function ResultDetails() {
 
   const questions = result?.questions ?? null;
   const totalQuestions = questions?.length ?? 0;
+  const isAttempted = (q: NonNullable<typeof questions>[number]) =>
+    q.selectedOptionId !== null || q.answerText !== null || (q.selectedOptionIds?.length ?? 0) > 0;
   const correctCount = questions?.filter((q) => q.isCorrect).length ?? 0;
-  const incorrectCount = questions?.filter((q) => q.selectedOptionId !== null && !q.isCorrect).length ?? 0;
-  const unattemptedCount = questions?.filter((q) => q.selectedOptionId === null).length ?? 0;
+  const incorrectCount =
+    questions?.filter((q) => q.questionType !== 'CodeProgram' && isAttempted(q) && !q.isCorrect).length ?? 0;
+  const unattemptedCount = questions?.filter((q) => !isAttempted(q)).length ?? 0;
 
   return (
     <StudentLayout active="My Results">
@@ -77,7 +80,7 @@ export default function ResultDetails() {
             <Card.Body className="p-4">
               <h1 className="h5 fw-bold mb-1">{result.examTitle}</h1>
               <p className="text-muted small mb-0">
-                {exam ? `${examTypeLabel[exam.examType]} · ` : ''}
+                {exam ? `${creationMethodLabel[exam.creationMethod]} · ` : ''}
                 Completed on {new Date(result.submittedAtUtc).toLocaleString()}
               </p>
             </Card.Body>
@@ -101,7 +104,18 @@ export default function ResultDetails() {
                     <Badge bg={result.passed ? 'success' : 'danger'}>
                       {result.passed ? 'Passed' : 'Failed'}
                     </Badge>
+                    {result.hasPendingGrading && (
+                      <Badge bg="warning" text="dark">
+                        Pending Grading
+                      </Badge>
+                    )}
                   </div>
+                  {result.hasPendingGrading && (
+                    <div className="text-muted small mt-2">
+                      One or more code answers haven't been graded yet - your score above is provisional
+                      and will update once grading is complete.
+                    </div>
+                  )}
                 </Card.Body>
               </Card>
             </Col>

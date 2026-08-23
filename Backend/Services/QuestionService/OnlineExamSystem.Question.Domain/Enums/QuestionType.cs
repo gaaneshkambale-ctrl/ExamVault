@@ -9,4 +9,9 @@ public enum QuestionType
     MatchTheFollowing = 4,
     CodeProgram = 5,
     Essay = 6,
+
+    // True "select all that apply" - 2+ correct options, distinct from
+    // MultipleChoice (which despite its name only ever allows exactly one
+    // correct answer - see the "Single Choice" relabeling).
+    MultiSelect = 7,
 }

@@ -15,6 +15,18 @@ const validMultipleChoice: CreateQuestionRequest = {
   ],
 };
 
+const validCodeProgram: CreateQuestionRequest = {
+  examId: 'exam-1',
+  questionType: 'CodeProgram',
+  questionText: 'Write a function that reverses a string.',
+  marks: 5,
+  difficulty: 'Medium',
+  shuffleOptions: false,
+  options: [],
+  programmingLanguage: 'Python',
+  allowLanguageChange: false,
+};
+
 const validTrueFalse: CreateQuestionRequest = {
   examId: 'exam-1',
   questionType: 'TrueFalse',
@@ -76,5 +88,19 @@ describe('validateCreateQuestion', () => {
       ],
     });
     expect(errors.options).toBe('True/False questions need exactly two options.');
+  });
+
+  it('returns no errors for a valid Code/Programming question', () => {
+    expect(validateCreateQuestion(validCodeProgram)).toEqual({});
+  });
+
+  it('requires a programming language for Code/Programming', () => {
+    const errors = validateCreateQuestion({ ...validCodeProgram, programmingLanguage: undefined });
+    expect(errors.programmingLanguage).toBe('Select a programming language.');
+  });
+
+  it('ignores empty options for Code/Programming', () => {
+    const errors = validateCreateQuestion({ ...validCodeProgram, options: [] });
+    expect(errors.options).toBeUndefined();
   });
 });

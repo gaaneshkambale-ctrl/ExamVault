@@ -5,10 +5,11 @@ public record CreateExamCommand(
     string Description,
     string Category,
     bool ContainsSections,
-    string ExamType,
+    string CreationMethod,
     int DurationMinutes,
     int TotalMarks,
     int PassingMarks,
     string Instructions,
     Guid CreatedByUserId,
-    string? ExamCode = null);
+    string? ExamCode = null,
+    Guid? ExamTypeId = null);

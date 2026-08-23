@@ -6,4 +6,13 @@ public record UpdateQuestionRequest(
     int Marks,
     string Difficulty,
     IReadOnlyList<CreateQuestionOptionRequest> Options,
-    bool ShuffleOptions = false);
+    bool ShuffleOptions = false,
+    string? StarterCode = null,
+    string? ProgrammingLanguage = null,
+    bool AllowLanguageChange = false,
+    string? SampleAnswer = null,
+    string? FunctionName = null,
+    string? ReturnType = null,
+    IReadOnlyList<QuestionParameterRequest>? Parameters = null,
+    IReadOnlyList<QuestionTestCaseRequest>? TestCases = null,
+    IReadOnlyList<QuestionSqlTestCaseRequest>? SqlTestCases = null);

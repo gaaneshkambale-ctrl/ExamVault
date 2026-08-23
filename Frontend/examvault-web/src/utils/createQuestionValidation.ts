@@ -4,6 +4,7 @@ export interface CreateQuestionFormErrors {
   questionText?: string;
   marks?: string;
   options?: string;
+  programmingLanguage?: string;
 }
 
 export function validateCreateQuestion(form: QuestionFormFields): CreateQuestionFormErrors {
@@ -19,8 +20,23 @@ export function validateCreateQuestion(form: QuestionFormFields): CreateQuestion
     errors.marks = 'Marks must be greater than 0.';
   }
 
+  if (form.questionType === 'CodeProgram') {
+    if (!form.programmingLanguage) {
+      errors.programmingLanguage = 'Select a programming language.';
+    }
+    return errors;
+  }
+
   const correctCount = form.options.filter((o) => o.isCorrect).length;
-  if (correctCount !== 1) {
+  if (form.questionType === 'MultiSelect') {
+    if (correctCount < 2) {
+      errors.options = 'Select at least two correct answers.';
+    } else if (form.options.length < 2) {
+      errors.options = 'Add at least two options.';
+    } else if (form.options.some((o) => !o.optionText.trim())) {
+      errors.options = 'Options cannot be empty.';
+    }
+  } else if (correctCount !== 1) {
     errors.options = 'Exactly one option must be marked correct.';
   } else if (form.questionType === 'MultipleChoice' && form.options.length < 2) {
     errors.options = 'Add at least two options.';

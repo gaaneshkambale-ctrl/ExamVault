@@ -385,7 +385,7 @@ export default function AssignExam() {
                     <tr>
                       <th></th>
                       <th>Exam Title</th>
-                      <th>Type</th>
+                      <th>Creation Method</th>
                       <th>Total Questions</th>
                       <th>Duration</th>
                       <th>Total Marks</th>
@@ -407,7 +407,7 @@ export default function AssignExam() {
                           />
                         </td>
                         <td>{exam.title}</td>
-                        <td>{exam.examType === 'AiGenerated' ? 'AI Generated' : 'Manual'}</td>
+                        <td>{exam.creationMethod === 'AiGenerated' ? 'AI Generated' : 'Manual'}</td>
                         <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                         <td>{exam.durationMinutes} min</td>
                         <td>{exam.totalMarks}</td>
@@ -714,9 +714,9 @@ export default function AssignExam() {
                       </Row>
                       <Row className="mb-2">
                         <Col xs={6} className="text-muted small">
-                          Type
+                          Creation Method
                         </Col>
-                        <Col xs={6}>{selectedExam.examType === 'AiGenerated' ? 'AI Generated' : 'Manual'}</Col>
+                        <Col xs={6}>{selectedExam.creationMethod === 'AiGenerated' ? 'AI Generated' : 'Manual'}</Col>
                       </Row>
                       <Row className="mb-2">
                         <Col xs={6} className="text-muted small">

@@ -38,8 +38,19 @@ public class UpdateQuestionHandler
         question.Marks = command.Marks;
         question.Difficulty = Enum.Parse<QuestionDifficulty>(command.Difficulty, ignoreCase: true);
         question.ShuffleOptions = command.ShuffleOptions;
+        question.StarterCode = command.StarterCode;
+        question.ProgrammingLanguage = command.ProgrammingLanguage;
+        question.AllowLanguageChange = command.AllowLanguageChange;
+        question.SampleAnswer = command.SampleAnswer;
+        question.FunctionName = command.FunctionName;
+        question.ReturnType = command.ReturnType is null
+            ? null
+            : Enum.Parse<ParameterType>(command.ReturnType, ignoreCase: true);
 
         await _questionRepository.RemoveOptionsByQuestionIdAsync(question.Id, cancellationToken);
+        await _questionRepository.RemoveParametersByQuestionIdAsync(question.Id, cancellationToken);
+        await _questionRepository.RemoveTestCasesByQuestionIdAsync(question.Id, cancellationToken);
+        await _questionRepository.RemoveSqlTestCasesByQuestionIdAsync(question.Id, cancellationToken);
 
         var options = command.Options
             .Select((option, index) => new QuestionOption
@@ -52,8 +63,40 @@ public class UpdateQuestionHandler
             .ToList();
         await _questionRepository.AddOptionsAsync(options, cancellationToken);
 
+        var parameters = (command.Parameters ?? [])
+            .Select((parameter, index) => new QuestionParameter
+            {
+                QuestionId = question.Id,
+                Name = parameter.Name,
+                Type = Enum.Parse<ParameterType>(parameter.Type, ignoreCase: true),
+                DisplayOrder = index,
+            })
+            .ToList();
+        await _questionRepository.AddParametersAsync(parameters, cancellationToken);
+
+        var testCases = (command.TestCases ?? [])
+            .Select((testCase, index) => new QuestionTestCase
+            {
+                QuestionId = question.Id,
+                ArgumentsJson = "[" + string.Join(",", testCase.Arguments) + "]",
+                ExpectedOutputJson = testCase.ExpectedOutput,
+                DisplayOrder = index,
+            })
+            .ToList();
+        await _questionRepository.AddTestCasesAsync(testCases, cancellationToken);
+
+        var sqlTestCases = (command.SqlTestCases ?? [])
+            .Select((testCase, index) => new QuestionSqlTestCase
+            {
+                QuestionId = question.Id,
+                SetupSql = testCase.SetupSql,
+                DisplayOrder = index,
+            })
+            .ToList();
+        await _questionRepository.AddSqlTestCasesAsync(sqlTestCases, cancellationToken);
+
         await _questionRepository.SaveChangesAsync(cancellationToken);
 
-        return UpdateQuestionResult.Ok(question, options);
+        return UpdateQuestionResult.Ok(question, options, parameters, testCases, sqlTestCases);
     }
 }

@@ -4,6 +4,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { useQuestion } from '../../hooks/useQuestions';
 import type { QuestionDifficulty, QuestionType } from '../../types/question';
+import { PROGRAMMING_LANGUAGES } from '../../types/question';
 
 const difficultyVariant: Record<QuestionDifficulty, string> = {
   Easy: 'success',
@@ -12,9 +13,18 @@ const difficultyVariant: Record<QuestionDifficulty, string> = {
 };
 
 const questionTypeLabel: Record<QuestionType, string> = {
-  MultipleChoice: 'Multiple Choice',
+  // "MultipleChoice" is the backend's real name for this type, but its
+  // actual behavior (one correct answer) is what's normally called "Single
+  // Choice" - labelled that way here, matching the AI Generate pages.
+  MultipleChoice: 'Single Choice',
+  MultiSelect: 'Multiple Choice',
   TrueFalse: 'True/False',
+  CodeProgram: 'Code / Programming',
 };
+
+function languageLabel(language: string | null | undefined): string {
+  return PROGRAMMING_LANGUAGES.find((l) => l.value === language)?.label ?? language ?? '-';
+}
 
 export default function QuestionDetails() {
   const { id } = useParams<{ id: string }>();
@@ -78,19 +88,42 @@ export default function QuestionDetails() {
                 <div>Created: {new Date(question.createdOn).toLocaleString()}</div>
               </div>
 
-              <div className="text-muted small mb-2">Options</div>
-              <ListGroup>
-                {question.options.map((option) => (
-                  <ListGroup.Item
-                    key={option.id}
-                    className="d-flex justify-content-between align-items-center"
-                    variant={option.isCorrect ? 'success' : undefined}
-                  >
-                    {option.optionText}
-                    {option.isCorrect && <Badge bg="success">Correct</Badge>}
-                  </ListGroup.Item>
-                ))}
-              </ListGroup>
+              {question.questionType === 'CodeProgram' ? (
+                <>
+                  <div className="d-flex gap-4 text-muted small mb-3">
+                    <div>Language: {languageLabel(question.programmingLanguage)}</div>
+                    <div>Student can change language: {question.allowLanguageChange ? 'Yes' : 'No'}</div>
+                  </div>
+                  {question.starterCode && (
+                    <>
+                      <div className="text-muted small mb-2">Starter Code</div>
+                      <pre className="bg-light border rounded p-3 mb-3">{question.starterCode}</pre>
+                    </>
+                  )}
+                  {question.sampleAnswer && (
+                    <>
+                      <div className="text-muted small mb-2">Sample Answer (grading reference)</div>
+                      <pre className="bg-light border rounded p-3 mb-0">{question.sampleAnswer}</pre>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="text-muted small mb-2">Options</div>
+                  <ListGroup>
+                    {question.options.map((option) => (
+                      <ListGroup.Item
+                        key={option.id}
+                        className="d-flex justify-content-between align-items-center"
+                        variant={option.isCorrect ? 'success' : undefined}
+                      >
+                        {option.optionText}
+                        {option.isCorrect && <Badge bg="success">Correct</Badge>}
+                      </ListGroup.Item>
+                    ))}
+                  </ListGroup>
+                </>
+              )}
             </>
           )}
         </Card.Body>

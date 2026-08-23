@@ -5,9 +5,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import DraftEditorModal from '../../components/DraftEditorModal';
+import CreateQuestionModal from '../../components/CreateQuestionModal';
 import { useExam } from '../../hooks/useExams';
 import { generateQuestions } from '../../api/aiApi';
 import { createQuestion } from '../../api/questionApi';
+import { DISABLED_QUESTION_TYPES } from '../../types/ai';
 import type {
   DraftQuestion,
   GenerateDifficulty,
@@ -17,10 +19,16 @@ import type {
 } from '../../types/ai';
 import { extractServerError } from '../../utils/apiError';
 
+// "MultipleChoice" is the backend's real name for this type, but its actual
+// behavior (one correct answer picked from a dropdown) is what's normally
+// called "Single Choice" - labelled that way here so it doesn't get
+// confused with the true multi-select "Multiple Choice" chip below, which
+// isn't real yet (see DISABLED_QUESTION_TYPES).
 const questionTypeLabel: Record<GenerateQuestionType, string> = {
-  MultipleChoice: 'Multiple Choice',
+  MultipleChoice: 'Single Choice',
   TrueFalse: 'True/False',
 };
+
 
 const difficultyVariant: Record<GenerateDifficulty, string> = {
   Easy: 'success',
@@ -50,6 +58,7 @@ export default function AiGenerateQuestions() {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [approveError, setApproveError] = useState('');
+  const [showManualCreate, setShowManualCreate] = useState(false);
 
   const toggleQuestionType = (type: GenerateQuestionType) => {
     setQuestionTypes((prev) =>
@@ -128,6 +137,13 @@ export default function AiGenerateQuestions() {
   };
 
   const editingDraft = drafts.find((d) => d.id === editingDraftId) ?? null;
+
+  const handleManualQuestionCreated = () => {
+    if (examId) {
+      queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', examId] });
+    }
+    setShowManualCreate(false);
+  };
 
   const handleApprove = async () => {
     const selectedDrafts = drafts.filter((d) => selectedIds.has(d.id));
@@ -250,14 +266,14 @@ export default function AiGenerateQuestions() {
               </Row>
 
               <Form.Label className="fw-bold">Question Types</Form.Label>
-              <div className="d-flex flex-wrap gap-2 mb-4">
+              <div className="d-flex flex-wrap gap-2 mb-1">
                 <Button
                   type="button"
                   variant={questionTypes.includes('MultipleChoice') ? 'primary' : 'outline-secondary'}
                   size="sm"
                   onClick={() => toggleQuestionType('MultipleChoice')}
                 >
-                  Multiple Choice
+                  Single Choice
                 </Button>
                 <Button
                   type="button"
@@ -267,10 +283,16 @@ export default function AiGenerateQuestions() {
                 >
                   True / False
                 </Button>
-                <Button type="button" variant="outline-secondary" size="sm" disabled>
-                  Short Answer
-                </Button>
+                {DISABLED_QUESTION_TYPES.map((label) => (
+                  <Button key={label} type="button" variant="outline-secondary" size="sm" disabled>
+                    {label}
+                  </Button>
+                ))}
               </div>
+              <p className="text-muted small mb-4">
+                Multiple Choice (multi-select), Short/Long Answer, and Code/Programming aren't available yet -
+                exam-taking and scoring only support single-answer and true/false questions today.
+              </p>
 
               <Form.Label className="fw-bold">Difficulty Level</Form.Label>
               <div className="d-flex gap-4 mb-4">
@@ -298,6 +320,16 @@ export default function AiGenerateQuestions() {
               </Form.Group>
 
               <div className="d-flex justify-content-end gap-2">
+                {examId && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="me-auto"
+                    onClick={() => setShowManualCreate(true)}
+                  >
+                    + Add Question Manually
+                  </Button>
+                )}
                 <Link to={`/admin/exams/${examId}/edit`} className="btn btn-outline-secondary">
                   Cancel
                 </Link>
@@ -343,7 +375,7 @@ export default function AiGenerateQuestions() {
             <Col xs={12} sm={4}>
               <Card className="border-0 shadow-sm">
                 <Card.Body>
-                  <div className="text-muted small">Multiple Choice</div>
+                  <div className="text-muted small">Single Choice</div>
                   <div className="h4 fw-bold mb-0">{counts.mcq}</div>
                 </Card.Body>
               </Card>
@@ -470,6 +502,15 @@ export default function AiGenerateQuestions() {
             onSave={handleSaveDraft}
           />
         </>
+      )}
+
+      {examId && (
+        <CreateQuestionModal
+          examId={examId}
+          show={showManualCreate}
+          onClose={() => setShowManualCreate(false)}
+          onCreated={handleManualQuestionCreated}
+        />
       )}
     </AdminLayout>
   );

@@ -67,6 +67,28 @@ public class SaveAnswerHandlerTests
     }
 
     [Fact]
+    public async Task Valid_request_saves_answer_text_for_code_question()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = InProgressAttempt();
+        repository.SeedAttempt(attempt);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(
+            new SaveAnswerCommand(
+                attempt.Id,
+                QuestionId,
+                SelectedOptionId: null,
+                IsMarkedForReview: false,
+                UserId,
+                AnswerText: "print('hello')"));
+
+        Assert.True(result.Success);
+        Assert.Equal("print('hello')", result.Answer!.AnswerText);
+        Assert.Single(repository.Answers);
+    }
+
+    [Fact]
     public async Task Attempt_not_in_progress_returns_failure()
     {
         var repository = new FakeSubmissionRepository();

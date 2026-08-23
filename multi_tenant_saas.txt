@@ -1,0 +1,256 @@
+ExamVault — Multi-Tenant SaaS Conversion Plan
+================================================
+Goal: make ExamVault sellable to multiple colleges/companies/training
+institutes/organizations ("tenants"), each with its own users, exams,
+questions, results, and notifications, with zero data crossover between
+tenants — while one deployment of the app serves all of them.
+
+DECISIONS LOCKED IN (confirmed with the user before writing this plan)
+------------------------------------------------------------------------
+1. Isolation model: SHARED DATABASE, TenantId COLUMN on every table, every
+   query filtered by it. Not database-per-tenant. Cheapest to run, fits the
+   current "one SQL Server, one DB per microservice" Azure setup without
+   a database-provisioning pipeline. Trade-off accepted: isolation is
+   enforced by application code (every repository must filter by tenant),
+   not by the database engine itself - Phase 2 below exists specifically
+   to make it hard to forget that filter.
+2. Tenant identification: SUBDOMAIN PER ORG, e.g. stanford.examvault.com,
+   acmecorp.examvault.com. Resolved from the request's Host header before
+   auth even runs.
+3. Scope: FOUNDATION ONLY. Billing, subscription tiers, and payment
+   collection are explicitly OUT of scope for this plan - a later plan,
+   once tenant isolation itself is solid. This plan still creates the
+   `Tenant` record shape with room for a future plan/status field, so
+   billing can be bolted on later without another migration.
+
+CURRENT ARCHITECTURE (as of 2026-08-23, verified by reading the actual code
+before writing this plan, not assumed)
+------------------------------------------------------------------------
+- 8 backend microservices, all ASP.NET Core / EF Core, .NET 8:
+  User, Exam, Question, AI, Submission, Result, Notification, + a YARP
+  Gateway (Backend/Gateway/OnlineExamSystem.ApiGateway) that fans out
+  fixed routes (/api/users, /api/exams, /api/questions, /api/ai,
+  /api/submissions, /api/assignments, /api/results, /api/notifications,
+  /api/audit-logs, /api/system-settings) to 8 internal-only services on
+  ports 5010-5070. Only the Gateway and the frontend get external
+  ingress today (Infra/env.bicep lines 587, 632) - every backend API is
+  `ingress: { external: false }`.
+- 5 SQL Server databases, one per data-owning service (docker-compose.yml
+  lines 54/72/93/119/155-176): ExamVault.UserDb, ExamVault.ExamDb,
+  ExamVault.QuestionDb, ExamVault.SubmissionDb, ExamVault.NotificationDb.
+  AI Service and Result Service are deliberately DB-less (Result computes
+  on demand from Submission+Exam+Question; AI never persists a draft
+  until a human approves it) - this pattern already exists and should
+  stay: neither needs a TenantId column, they just need to forward the
+  caller's JWT (which will carry TenantId) to the services they call.
+- Every entity descends from `BaseEntity` (Backend/Shared/
+  OnlineExamSystem.Shared.Common/Entities/BaseEntity.cs) - just `Id` and
+  `CreatedAtUtc`. No tenant concept anywhere in the codebase today - a
+  case-insensitive search for "Tenant"/"Organization" across the whole
+  repo turns up nothing except one unrelated free-text "OrganizationName"
+  field in Exam Service's GeneralSettings.
+- Auth: User.Infrastructure/Authentication/JwtTokenService.cs issues a JWT
+  with exactly 4 claims - Sub (userId), NameIdentifier, Email, Role. Every
+  other service validates that same JWT independently using a shared
+  `Jwt:SigningKey` app setting (confirmed in Exam.API/Program.cs lines
+  132-153, same pattern in every other service) - there is no central
+  auth gateway, each service does its own `AddJwtBearer`. This is exactly
+  where a TenantId claim needs to be added once and it's available
+  everywhere for free.
+- Only two real roles: `Admin` and `Student` (User.Domain/Enums/
+  UserRole.cs). Every backend authorization check is `[Authorize(Roles=
+  "Admin")]` or just `[Authorize]` - no finer granularity exists. (A
+  cosmetic-only preview of a 5-role/86-permission system was recently
+  added to the admin UI - Frontend/.../RolesPermissions.tsx and
+  constants/cosmeticRolePermissions.ts - explicitly flagged there as
+  static/non-enforcing. Multi-tenancy is a good moment to introduce one
+  new REAL role: a platform-level "Super Admin"/"Platform Owner" who
+  manages tenants themselves, distinct from a tenant's own "Admin" who
+  only manages their own org. See Phase 1.)
+- Uniqueness constraints that are currently GLOBAL and must become
+  PER-TENANT: `AppUser.Email` (UserDbContext.cs:26, `HasIndex(u =>
+  u.Email).IsUnique()`), `Group.Name` (:68), `AppUser.UserNumber` (:37,
+  the auto-incrementing "EV-ADM-0001"-style formatted ID). Right now two
+  different colleges could not both have a user "admin@gmail.com" or a
+  group named "Batch 2026" - after this plan, they can, because the
+  unique index becomes composite (TenantId, Email) etc.
+- 13 direct service-to-service HTTP clients exist (e.g. Submission ->
+  Exam, Result -> Exam/Question/Submission, Notification -> Exam/User,
+  Exam -> User/Question, every service -> Notification's AuditClient).
+  Every one of these forwards the caller's own JWT already (an established
+  pattern from Day 32) - so once the JWT carries TenantId, propagation is
+  free EXCEPT the request must also be validated as staying within one
+  tenant on the receiving end (see Phase 2).
+- Frontend: `Frontend/examvault-web/src/api/axiosClient.ts` uses one
+  build-time constant `VITE_API_BASE_URL` for every request - it does NOT
+  read `window.location.hostname` today. This matters a lot for
+  subdomain-per-org: the SPA is one static build deployed once; it cannot
+  have a different baked-in API URL per tenant subdomain. It must resolve
+  the Gateway URL at runtime, or all tenant subdomains must point at the
+  same Gateway hostname regardless of tenant (see Phase 4).
+- Auth state: `ProtectedRoute.tsx` only ever checks `user.role` against
+  `Admin`/`Student` - no tenant awareness needed there yet, but the
+  eventual Super Admin role will need a third branch.
+- Registration (`RegisterUserHandler`) and every other email lookup use
+  `IUserRepository.GetByEmailAsync(email)` with no tenant parameter -
+  every one of these call sites needs a TenantId parameter added.
+- Azure is already live: `rg-examvault-dev` has every Container App
+  provisioned and healthy (confirmed via `az containerapp list`,
+  AzureStep.txt), with a real Gateway URL and, per ActionPlan.txt, real
+  registered test users. This is not a greenfield project - Phase 1 below
+  has to include a real data migration, not just a fresh-DB assumption.
+
+SCOPE NOTE
+------------------------------------------------------------------------
+This plan does NOT cover: billing/payment, self-service tenant signup
+polish (a bare-minimum provisioning path is in scope, a polished signup
+flow is not), per-tenant custom branding/theming, per-tenant feature
+flags/plan limits, or data export/tenant offboarding. Each of those is
+a reasonable follow-up plan once this foundation ships.
+
+PHASE 1 — Tenant model + real Platform Admin role (backend, User Service)
+------------------------------------------------------------------------
+- New `Tenant` entity in User.Domain (owns User Service's DB, since that's
+  already the identity source of truth): Id, Name, Slug (the subdomain,
+  e.g. "stanford"), IsActive, CreatedAtUtc. Deliberately no plan/billing
+  fields yet - out of scope per the decision above, but the table exists
+  so a later billing plan adds columns, not a new table.
+- New `SuperAdmin` value added to `UserRole` (or a separate `IsPlatformAdmin`
+  bool on AppUser, TBD during implementation - a role enum value is
+  simpler given every existing check is already role-based) - the one
+  real role that spans tenants. A Super Admin's own AppUser row still
+  needs a TenantId for consistency (assign it to a reserved "platform"
+  tenant row) but their JWT gets a claim that lets them bypass the
+  per-tenant filter specifically on tenant-management endpoints.
+- New endpoints (Super Admin only): create tenant, list tenants,
+  deactivate tenant, create the first Admin user for a new tenant.
+  This is the "manual provisioning" path - good enough for a handful of
+  early customers; self-service signup is explicitly deferred.
+- Migration: add `TenantId` (Guid, FK to Tenant) to `AppUser`, `Group`,
+  `RefreshToken` (via AppUser), `UserPreferences` (via AppUser). Create
+  one "default" Tenant row and backfill every existing row's TenantId to
+  it - this is how the live Azure dev data survives the change with zero
+  manual cleanup.
+- `JwtTokenService.GenerateAccessToken` gains a `TenantId` claim (and
+  `IsSuperAdmin`/role-based equivalent). This is the single change that
+  makes TenantId available to every other service for free, since they
+  already just read claims off the same shared-signing-key JWT.
+- Uniqueness indexes become composite: `(TenantId, Email)`,
+  `(TenantId, Name)` for Group, `(TenantId, UserNumber)`.
+
+PHASE 2 — Propagate TenantId through every other service
+------------------------------------------------------------------------
+- Add `TenantId` to `BaseEntity` in Shared.Common (or a new
+  `TenantScopedEntity : BaseEntity` if some entities genuinely have no
+  tenant, e.g. none identified so far - everything persisted today
+  belongs to some exam/user which belongs to a tenant). This is the
+  single shared-code change every service's entities inherit.
+- Migrations adding `TenantId` + backfilling to the same "default" tenant
+  in: ExamDb (ExamPaper, Section, ExamAssignment, ExamAssignmentTarget,
+  ProctoringSettings, ReminderSettings, GeneralSettings, ExamDefaults,
+  ExamReminderLog), QuestionDb (ExamQuestion, QuestionOption),
+  SubmissionDb (ExamAttempt, AttemptAnswer, AttemptSectionState,
+  ViolationEvent), NotificationDb (Notification, NotificationTemplate,
+  NotificationPreference, AuditLog, SystemSettings).
+- A shared EF Core convention/interceptor (one per service, matching the
+  existing per-service-copy convention already used for RabbitMQ
+  publishers) so a repository CANNOT accidentally query across tenants -
+  something like a global query filter (`HasQueryFilter(e => e.TenantId
+  == _currentTenant.TenantId)`) driven by a scoped `ICurrentTenant`
+  service reading the TenantId claim off the current request. This is
+  the guardrail that makes the "shared DB" trade-off survive someone
+  forgetting a `.Where(x => x.TenantId == ...)` six months from now -
+  worth the setup cost precisely because the isolation model relies on
+  application code getting it right every time otherwise.
+- Every one of the 13 cross-service HTTP clients: no code change needed
+  for the JWT forwarding itself (already forwards the caller's token),
+  but the RECEIVING controller must resolve TenantId from that forwarded
+  token the same way, so a Submission Service call into Exam Service for
+  "get exam X" only ever returns exam X if it belongs to the caller's
+  tenant - covered automatically once the query filter above exists on
+  the Exam Service side too.
+- Internal-only endpoints (e.g. Question Service's `/internal/questions/
+  answer-key`, not Gateway-routed) still need the tenant filter - they're
+  unreachable from a browser but not from a same-tenant assumption bug.
+
+PHASE 3 — Gateway + subdomain resolution
+------------------------------------------------------------------------
+- Gateway gains tenant resolution middleware: read the request's Host
+  header (already preserved via each route's existing
+  `RequestHeaderOriginalHost: true` transform - appsettings.json lines
+  17/26/35/44/53/62/71/80/90/100), extract the subdomain, look up the
+  Tenant by slug (a small cached call to User Service, or a Gateway-local
+  cache refreshed periodically), and inject a resolved header (e.g.
+  `X-Tenant-Id`) OR reject with 404 if the subdomain doesn't match a
+  known tenant. This is a NEW piece of infrastructure - nothing like it
+  exists in the Gateway today (it's currently a pure YARP proxy with no
+  custom middleware).
+- Decide (during implementation, not blocking this plan): does the
+  Gateway inject `X-Tenant-Id` for services to trust, or do services
+  independently re-derive tenant purely from the JWT claim (set at
+  login, which already encodes the tenant the user logged into)? Given
+  the JWT already carries TenantId once Phase 1 ships, the simplest
+  correct design is: Gateway's subdomain check is only for ROUTING
+  legitimacy (is this subdomain real, redirect to login if not) and
+  UX (pre-filling which tenant you're logging into) - actual data
+  isolation is enforced by the JWT claim + query filters, not by trusting
+  a header that a service-to-service call could forge. Login itself must
+  take the subdomain into account so `GetByEmailAsync` is scoped to the
+  right tenant BEFORE a token is even issued.
+- Azure Container Apps: the Gateway's ingress needs one or more custom
+  domains with wildcard DNS (`*.examvault.com` -> Gateway) plus a managed
+  certificate - not configured today (Infra/env.bicep only outputs the
+  default `*.azurecontainerapps.io` FQDN). This is an infra change, not
+  just app code - flagged here so it's not discovered mid-implementation.
+
+PHASE 4 — Frontend
+------------------------------------------------------------------------
+- `axiosClient.ts` must stop relying purely on the build-time
+  `VITE_API_BASE_URL` constant. Since the Gateway will sit behind ONE
+  wildcard domain (`*.examvault.com`) rather than a different backend
+  per subdomain, the simplest fix is: keep `VITE_API_BASE_URL` pointing
+  at the shared Gateway domain (not per-tenant), and let the Gateway's
+  Host-header resolution (Phase 3) do the tenant split - meaning the
+  frontend itself may need NO change here if the Gateway is reachable at
+  the same wildcard domain the frontend is served from. This needs
+  confirming during implementation once the exact DNS/ingress shape is
+  decided - called out as the one piece of this plan with a real
+  "decide when you get there" branch.
+- Login page: if arriving via `stanford.examvault.com`, the login form
+  is implicitly scoped to that tenant (no visible change needed - the
+  Gateway/User Service resolves tenant from the Host header server-side).
+  A super-admin login (platform.examvault.com or similar reserved
+  subdomain) is a second, separate flow into the new tenant-management
+  screens from Phase 1.
+- New Super Admin screens (small, not a full redesign): list tenants,
+  create tenant + first admin, deactivate tenant. Reuses the same
+  AdminLayout-style patterns already established rather than a new
+  design system.
+- `ProtectedRoute.tsx`'s `roles` prop needs a third value for
+  Super-Admin-only routes.
+
+PHASE 5 — Verification
+------------------------------------------------------------------------
+- The project's own established pattern for exactly this kind of risk
+  (Result Service's Day 36 cross-user-isolation check) applies here at
+  the tenant level: create two real tenants, one exam/user/result each,
+  and prove tenant B can never see tenant A's data through any endpoint -
+  not just by code review, by an actual adversarial-shaped request.
+- Re-verify every one of the 13 cross-service calls under two tenants
+  specifically (this is where a forgotten filter is most likely to hide,
+  since single-tenant testing can't catch it).
+- Confirm the existing local dev flow (docker-compose, one shared
+  sqlserver container) still works with a single default tenant with
+  zero extra setup - don't make local development require juggling
+  subdomains just to run the app.
+
+OPEN QUESTIONS TO RESOLVE DURING IMPLEMENTATION (not blocking this plan)
+------------------------------------------------------------------------
+- Exact new-tenant provisioning UX: fully manual (you run a script/call
+  an endpoint per new customer) vs. a minimal Super Admin form. Leaning
+  form, since Phase 1 needs the endpoints either way.
+- Whether Super Admin is a UserRole enum value or a separate flag -
+  implementation detail, doesn't change the plan's shape.
+- Local dev subdomain testing (e.g. `stanford.localhost`) vs. a
+  query-param/header override for local-only tenant switching - whichever
+  is less friction when this is actually built.

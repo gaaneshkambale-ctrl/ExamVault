@@ -1,6 +1,11 @@
 namespace OnlineExamSystem.Result.Application.Interfaces;
 
-public record SubmissionAnswer(Guid QuestionId, Guid? SelectedOptionId);
+public record SubmissionAnswer(
+    Guid QuestionId,
+    Guid? SelectedOptionId,
+    string? AnswerText = null,
+    int? MarksAwarded = null,
+    IReadOnlyList<Guid>? SelectedOptionIds = null);
 
 public record SubmissionLookupResult(
     Guid AttemptId,

@@ -28,6 +28,9 @@ namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("AllowLanguageChange")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -40,8 +43,16 @@ namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ExamId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("FunctionName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<int>("Marks")
                         .HasColumnType("int");
+
+                    b.Property<string>("ProgrammingLanguage")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("QuestionText")
                         .IsRequired()
@@ -51,11 +62,22 @@ namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
                     b.Property<int>("QuestionType")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ReturnType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SampleAnswer")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<Guid?>("SectionId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("ShuffleOptions")
                         .HasColumnType("bit");
+
+                    b.Property<string>("StarterCode")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.HasKey("Id");
 
@@ -92,7 +114,122 @@ namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
                     b.ToTable("QuestionOptions");
                 });
 
+            modelBuilder.Entity("OnlineExamSystem.Question.Domain.Entities.QuestionParameter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId");
+
+                    b.ToTable("QuestionParameters");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Question.Domain.Entities.QuestionSqlTestCase", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SetupSql")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId");
+
+                    b.ToTable("QuestionSqlTestCases");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Question.Domain.Entities.QuestionTestCase", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ArgumentsJson")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExpectedOutputJson")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId");
+
+                    b.ToTable("QuestionTestCases");
+                });
+
             modelBuilder.Entity("OnlineExamSystem.Question.Domain.Entities.QuestionOption", b =>
+                {
+                    b.HasOne("OnlineExamSystem.Question.Domain.Entities.ExamQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Question.Domain.Entities.QuestionParameter", b =>
+                {
+                    b.HasOne("OnlineExamSystem.Question.Domain.Entities.ExamQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Question.Domain.Entities.QuestionSqlTestCase", b =>
+                {
+                    b.HasOne("OnlineExamSystem.Question.Domain.Entities.ExamQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Question.Domain.Entities.QuestionTestCase", b =>
                 {
                     b.HasOne("OnlineExamSystem.Question.Domain.Entities.ExamQuestion", null)
                         .WithMany()

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using OnlineExamSystem.Submission.Application.Interfaces;
 using OnlineExamSystem.Submission.Domain.Entities;
@@ -47,6 +48,9 @@ public class SaveAnswerHandler
             command.QuestionId,
             cancellationToken);
         var now = DateTime.UtcNow;
+        var selectedOptionIdsJson = command.SelectedOptionIds is { Count: > 0 }
+            ? JsonSerializer.Serialize(command.SelectedOptionIds)
+            : null;
 
         if (existingAnswer is null)
         {
@@ -55,8 +59,10 @@ public class SaveAnswerHandler
                 AttemptId = command.AttemptId,
                 QuestionId = command.QuestionId,
                 SelectedOptionId = command.SelectedOptionId,
+                SelectedOptionIdsJson = selectedOptionIdsJson,
                 IsMarkedForReview = command.IsMarkedForReview,
                 AnsweredAtUtc = now,
+                AnswerText = command.AnswerText,
             };
             await _repository.AddAnswerAsync(answer, cancellationToken);
             await _repository.SaveChangesAsync(cancellationToken);
@@ -64,8 +70,10 @@ public class SaveAnswerHandler
         }
 
         existingAnswer.SelectedOptionId = command.SelectedOptionId;
+        existingAnswer.SelectedOptionIdsJson = selectedOptionIdsJson;
         existingAnswer.IsMarkedForReview = command.IsMarkedForReview;
         existingAnswer.AnsweredAtUtc = now;
+        existingAnswer.AnswerText = command.AnswerText;
         await _repository.SaveChangesAsync(cancellationToken);
 
         return SaveAnswerResult.Ok(existingAnswer);

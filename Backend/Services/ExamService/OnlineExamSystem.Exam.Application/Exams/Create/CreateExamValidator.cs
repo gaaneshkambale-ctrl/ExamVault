@@ -18,8 +18,8 @@ public class CreateExamValidator : AbstractValidator<CreateExamCommand>
             .NotEmpty()
             .MaximumLength(100);
 
-        RuleFor(x => x.ExamType)
-            .IsEnumName(typeof(ExamType), caseSensitive: false);
+        RuleFor(x => x.CreationMethod)
+            .IsEnumName(typeof(CreationMethod), caseSensitive: false);
 
         RuleFor(x => x.DurationMinutes)
             .GreaterThan(0);

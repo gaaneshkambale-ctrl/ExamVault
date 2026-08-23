@@ -18,7 +18,7 @@ import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { useNotificationHistory } from '../../hooks/useNotifications';
 import { getAssignmentStatus } from '../../types/assignment';
-import type { ExamStatus, ExamType } from '../../types/exam';
+import type { CreationMethod, ExamStatus } from '../../types/exam';
 
 const statusVariant: Record<ExamStatus, string> = {
   Draft: 'secondary',
@@ -26,7 +26,7 @@ const statusVariant: Record<ExamStatus, string> = {
   Archived: 'dark',
 };
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -300,8 +300,8 @@ export default function AdminDashboard() {
     [allResults],
   );
 
-  const manualCount = exams?.filter((e) => e.examType === 'Manual').length ?? 0;
-  const aiCount = exams?.filter((e) => e.examType === 'AiGenerated').length ?? 0;
+  const manualCount = exams?.filter((e) => e.creationMethod === 'Manual').length ?? 0;
+  const aiCount = exams?.filter((e) => e.creationMethod === 'AiGenerated').length ?? 0;
 
   // Sorted newest-first, with real pagination (not just a fixed top-5 slice)
   // now that the wireframe wants "Showing X to Y of Z" controls on the
@@ -473,7 +473,7 @@ export default function AdminDashboard() {
             <Col xs={12} lg={4}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Exam Type Distribution</h2>
+                  <h2 className="h6 fw-bold mb-3">Creation Method Distribution</h2>
                   {isLoadingExams ? (
                     <div className="d-flex justify-content-center py-5">
                       <Spinner animation="border" size="sm" />
@@ -574,7 +574,7 @@ export default function AdminDashboard() {
                                   {exam.title}
                                 </Link>
                               </td>
-                              <td>{examTypeLabel[exam.examType]}</td>
+                              <td>{creationMethodLabel[exam.creationMethod]}</td>
                               <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                               <td>{participantsByExam.get(exam.id) ?? 0}</td>
                               <td>

@@ -1,0 +1,51 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+
+namespace OnlineExamSystem.Execution.Worker;
+
+// Mints a short-lived JWT for this worker's own service-to-service calls,
+// using the same shared HMAC signing key every API already validates
+// against - not derived from any live user session or refresh token. The
+// worker acts as an admin-equivalent "system" identity so it can call
+// Submission Service's Admin-only grading endpoint on a student's behalf,
+// same as a human grader would, just automated.
+public class SystemTokenProvider
+{
+    // Fixed, recognizable sentinel - never a real User Service id - so
+    // GradedByUserId on an auto-graded answer is visibly distinct from a
+    // human admin's id if that distinction ever matters later.
+    public static readonly Guid SystemUserId = new("00000000-0000-0000-0000-000000005747");
+
+    private readonly JwtSettings _settings;
+
+    public SystemTokenProvider(IOptions<JwtSettings> settings)
+    {
+        _settings = settings.Value;
+    }
+
+    public string CreateToken()
+    {
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, SystemUserId.ToString()),
+            new Claim(ClaimTypes.NameIdentifier, SystemUserId.ToString()),
+            new Claim(ClaimTypes.Role, "Admin"),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SigningKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: _settings.Issuer,
+            audience: _settings.Audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(5),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}

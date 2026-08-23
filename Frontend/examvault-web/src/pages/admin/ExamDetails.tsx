@@ -11,7 +11,8 @@ import { useExam } from '../../hooks/useExams';
 import { useQuestions } from '../../hooks/useQuestions';
 import { useAssignmentsForExam } from '../../hooks/useAssignments';
 import { useGroups } from '../../hooks/useGroups';
-import type { ExamStatus, ExamType } from '../../types/exam';
+import { useUngradedAnswers } from '../../hooks/useSubmissions';
+import type { CreationMethod, ExamStatus } from '../../types/exam';
 import { getAssignmentStatus, type AssignmentStatus } from '../../types/assignment';
 import { extractServerError } from '../../utils/apiError';
 
@@ -27,7 +28,7 @@ const statusVariant: Record<ExamStatus, string> = {
   Archived: 'dark',
 };
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -49,6 +50,7 @@ export default function ExamDetails() {
   const { data: questions } = useQuestions(id);
   const { data: assignments, isLoading: isLoadingAssignments } = useAssignmentsForExam(id);
   const { data: groups } = useGroups();
+  const { data: ungradedAnswers } = useUngradedAnswers(id);
   const [statusError, setStatusError] = useState('');
 
   const groupNameById = useMemo(() => {
@@ -136,9 +138,14 @@ export default function ExamDetails() {
               {manageQuestionsMutation.isPending ? 'Loading...' : 'Manage Questions'}
             </Button>
           )}
-          {id && exam?.examType === 'AiGenerated' && (
+          {id && exam?.creationMethod === 'AiGenerated' && (
             <Link to={`/admin/exams/${id}/questions/ai-generate`} className="btn btn-outline-primary">
               Generate Questions with AI
+            </Link>
+          )}
+          {id && !!ungradedAnswers?.length && (
+            <Link to={`/admin/exams/${id}/grading`} className="btn btn-outline-warning">
+              Grade Code Answers <Badge bg="warning" text="dark">{ungradedAnswers.length}</Badge>
             </Link>
           )}
           {id && (
@@ -214,7 +221,8 @@ export default function ExamDetails() {
 
               <Row>
                 <Field label="Category" value={exam.category || 'Uncategorized'} />
-                <Field label="Exam Type" value={examTypeLabel[exam.examType]} />
+                <Field label="Exam Type" value={exam.examTypeName || 'Not set'} />
+                <Field label="Creation Method" value={creationMethodLabel[exam.creationMethod]} />
                 <Field label="Duration" value={`${exam.durationMinutes} minutes`} />
                 <Field label="Total Marks" value={String(exam.totalMarks)} />
                 <Field label="Passing Marks" value={String(exam.passingMarks)} />

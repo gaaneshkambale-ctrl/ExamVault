@@ -6,6 +6,7 @@ import {
   getProctoringSettings,
   getReminderSettings,
   listExams,
+  listExamTypes,
 } from '../api/examApi';
 
 export function useExams(enabled = true) {
@@ -49,5 +50,13 @@ export function useExamDefaults() {
   return useQuery({
     queryKey: ['settings', 'exam-defaults'],
     queryFn: getExamDefaults,
+  });
+}
+
+export function useExamTypes(enabled = true) {
+  return useQuery({
+    queryKey: ['exam-types'],
+    queryFn: listExamTypes,
+    enabled,
   });
 }

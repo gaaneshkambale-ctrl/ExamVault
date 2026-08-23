@@ -12,6 +12,10 @@ export interface QuestionResultResponse {
   selectedOptionId: string | null;
   isCorrect: boolean;
   options: QuestionResultOptionResponse[];
+  questionType: string;
+  answerText: string | null;
+  isPendingGrading: boolean;
+  selectedOptionIds: string[] | null;
 }
 
 export interface ResultSummaryResponse {
@@ -24,6 +28,7 @@ export interface ResultSummaryResponse {
   passed: boolean;
   submittedAtUtc: string;
   questions: QuestionResultResponse[] | null;
+  hasPendingGrading: boolean;
 }
 
 // Admin-only: one row per student attempt on an exam, always carries the
@@ -40,6 +45,7 @@ export interface AdminAttemptResultResponse {
   passed: boolean;
   submittedAtUtc: string;
   questions: QuestionResultResponse[];
+  hasPendingGrading: boolean;
   fullscreenExitCount: number;
   noFaceDetectedCount: number;
   multipleFacesDetectedCount: number;

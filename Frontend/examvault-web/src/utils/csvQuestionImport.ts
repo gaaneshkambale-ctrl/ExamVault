@@ -15,7 +15,7 @@ const CSV_TEMPLATE_HEADER =
   'Question Text,Type,Difficulty,Marks,Option A,Option B,Option C,Option D,Correct Answer,Shuffle Options';
 
 const CSV_TEMPLATE_EXAMPLE_ROWS = [
-  'What is the capital of France?,Multiple Choice,Easy,1,Paris,London,Berlin,Madrid,A,No',
+  'What is the capital of France?,Single Choice,Easy,1,Paris,London,Berlin,Madrid,A,No',
   'The sun rises in the east.,True/False,Easy,1,True,False,,,A,No',
 ];
 
@@ -68,7 +68,12 @@ function parseCsvText(text: string): string[][] {
 
 function normalizeType(raw: string): QuestionType | null {
   const v = raw.trim().toLowerCase();
-  if (['multiple choice', 'multiplechoice', 'mcq'].includes(v)) return 'MultipleChoice';
+  // "Single Choice" is the current label (see QUESTION_TYPE_LABELS) - the
+  // older "Multiple Choice"/"MCQ" aliases still parse so existing CSV
+  // templates/files out in the wild keep working.
+  if (['single choice', 'singlechoice', 'sc', 'multiple choice', 'multiplechoice', 'mcq'].includes(v)) {
+    return 'MultipleChoice';
+  }
   if (['true/false', 'truefalse', 'true false', 'tf'].includes(v)) return 'TrueFalse';
   return null;
 }
@@ -129,7 +134,7 @@ export function parseQuestionImportCsv(text: string): CsvImportRow[] {
 
     const errors: string[] = [];
     if (!questionText) errors.push('question text is required');
-    if (!questionType) errors.push('type must be "Multiple Choice" or "True/False"');
+    if (!questionType) errors.push('type must be "Single Choice" or "True/False"');
     if (!difficulty) errors.push('difficulty must be Easy, Medium, or Hard');
     if (!marksRaw || !Number.isFinite(marks) || marks <= 0) {
       errors.push('marks must be a number greater than 0');

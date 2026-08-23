@@ -7,7 +7,8 @@ public record AnswerKeyQuestion(
     string QuestionText,
     int Marks,
     Guid? SectionId,
-    IReadOnlyList<AnswerKeyOption> Options);
+    IReadOnlyList<AnswerKeyOption> Options,
+    string QuestionType = "MultipleChoice");
 
 public interface IQuestionAnswerKeyClient
 {

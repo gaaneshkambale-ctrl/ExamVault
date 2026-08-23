@@ -28,6 +28,10 @@ namespace OnlineExamSystem.Submission.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AnswerText")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<DateTime>("AnsweredAtUtc")
                         .HasColumnType("datetime2");
 
@@ -37,14 +41,27 @@ namespace OnlineExamSystem.Submission.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("GradedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("GradedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsMarkedForReview")
                         .HasColumnType("bit");
+
+                    b.Property<int?>("MarksAwarded")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("QuestionId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("SelectedOptionId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SelectedOptionIdsJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.HasKey("Id");
 

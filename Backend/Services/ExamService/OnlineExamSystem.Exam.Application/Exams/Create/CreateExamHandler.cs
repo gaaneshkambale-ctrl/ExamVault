@@ -27,13 +27,20 @@ public class CreateExamHandler
             return CreateExamResult.Invalid(errors);
         }
 
+        if (command.ExamTypeId is { } examTypeId &&
+            await _examRepository.GetExamTypeByIdAsync(examTypeId, cancellationToken) is null)
+        {
+            return CreateExamResult.Invalid(["Exam type not found."]);
+        }
+
         var exam = new ExamPaper
         {
             Title = command.Title,
             Description = command.Description,
             Category = command.Category,
             ContainsSections = command.ContainsSections,
-            ExamType = Enum.Parse<ExamType>(command.ExamType, ignoreCase: true),
+            CreationMethod = Enum.Parse<CreationMethod>(command.CreationMethod, ignoreCase: true),
+            ExamTypeId = command.ExamTypeId,
             DurationMinutes = command.DurationMinutes,
             TotalMarks = command.TotalMarks,
             PassingMarks = command.PassingMarks,

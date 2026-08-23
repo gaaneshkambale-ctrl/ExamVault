@@ -12,9 +12,9 @@ import { useMyNotifications, useUnreadCount } from '../../hooks/useNotifications
 import { getMyResult } from '../../api/resultApi';
 import { getMyAttempt } from '../../api/submissionApi';
 import type { ResultSummaryResponse } from '../../types/result';
-import type { ExamType } from '../../types/exam';
+import type { CreationMethod } from '../../types/exam';
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -346,7 +346,7 @@ export default function StudentDashboard() {
                     >
                       <div>
                         <div className="fw-medium">{exam.title}</div>
-                        <div className="text-muted small mb-1">{examTypeLabel[exam.examType]} Exam</div>
+                        <div className="text-muted small mb-1">{creationMethodLabel[exam.creationMethod]} Exam</div>
                         <div className="d-flex gap-2">
                           <Badge bg="light" text="dark" className="border fw-normal">
                             {exam.durationMinutes} Min

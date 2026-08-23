@@ -12,12 +12,19 @@ import { useExam } from '../../hooks/useExams';
 import { useSection, useSections } from '../../hooks/useSections';
 import { useQuestionsBySection, useUnassignedQuestions } from '../../hooks/useQuestions';
 import type { NavigationType, SectionRequest } from '../../types/section';
-import type { QuestionResponse } from '../../types/question';
+import type { QuestionResponse, QuestionType } from '../../types/question';
 import { extractServerError } from '../../utils/apiError';
 
 function stepFromParam(value: string | null): 1 | 2 | 3 {
   return value === '2' ? 2 : value === '3' ? 3 : 1;
 }
+
+const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  MultipleChoice: 'Single Choice',
+  MultiSelect: 'Multiple Choice',
+  TrueFalse: 'True/False',
+  CodeProgram: 'Code / Programming',
+};
 
 const NAVIGATION_TYPES: { value: NavigationType; label: string; description: string }[] = [
   { value: 'Free', label: 'Free Navigation', description: 'Students can go to any question in this section.' },
@@ -62,7 +69,7 @@ export default function SectionForm() {
   const [form, setForm] = useState<SectionRequest>(initialForm);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
-  const [typeFilter, setTypeFilter] = useState<'All' | 'MultipleChoice' | 'TrueFalse'>('All');
+  const [typeFilter, setTypeFilter] = useState<'All' | QuestionType>('All');
   const [difficultyFilter, setDifficultyFilter] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [searchText, setSearchText] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -106,7 +113,7 @@ export default function SectionForm() {
     filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id));
 
   // AI-generated exams get the multi-step AI generator instead of the manual form.
-  const useAiGenerate = exam?.examType === 'AiGenerated';
+  const useAiGenerate = exam?.creationMethod === 'AiGenerated';
 
   // Average marks per question, from the section's own planned Marks / Question Count -
   // used to default the manual Create Question modal's Marks field instead of always 1.
@@ -421,8 +428,10 @@ export default function SectionForm() {
                       onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
                     >
                       <option value="All">All</option>
-                      <option value="MultipleChoice">Multiple Choice</option>
+                      <option value="MultipleChoice">Single Choice</option>
+                      <option value="MultiSelect">Multiple Choice</option>
                       <option value="TrueFalse">True/False</option>
+                      <option value="CodeProgram">Code / Programming</option>
                     </Form.Select>
                   </Form.Group>
                   <Form.Group className="mb-3" controlId="sectionDifficultyFilter">
@@ -513,7 +522,7 @@ export default function SectionForm() {
                               />
                             </td>
                             <td>{q.questionText}</td>
-                            <td>{q.questionType === 'MultipleChoice' ? 'MCQ' : 'True/False'}</td>
+                            <td>{QUESTION_TYPE_LABELS[q.questionType]}</td>
                             <td>
                               <Badge bg="secondary">{q.difficulty}</Badge>
                             </td>

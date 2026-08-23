@@ -8,11 +8,11 @@ import { useAuth } from '../../hooks/useAuth';
 import { getMyResult } from '../../api/resultApi';
 import { getGrade } from '../../types/result';
 import type { ResultSummaryResponse } from '../../types/result';
-import type { ExamType } from '../../types/exam';
+import type { CreationMethod } from '../../types/exam';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
 import { CERTIFICATE_MIN_PERCENTAGE, isCertificateEligible } from '../../utils/certificateId';
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -32,10 +32,10 @@ export default function MyCertificates() {
 
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
 
-  const examTypeById = useMemo(() => {
-    const map = new Map<string, ExamType>();
+  const creationMethodById = useMemo(() => {
+    const map = new Map<string, CreationMethod>();
     for (const exam of exams ?? []) {
-      map.set(exam.id, exam.examType);
+      map.set(exam.id, exam.creationMethod);
     }
     return map;
   }, [exams]);
@@ -102,7 +102,7 @@ export default function MyCertificates() {
               <thead className="text-muted small text-uppercase bg-light">
                 <tr>
                   <th className="ps-4">Exam Title</th>
-                  <th>Type</th>
+                  <th>Creation Method</th>
                   <th>Score</th>
                   <th>Grade</th>
                   <th>Completed On</th>
@@ -113,12 +113,12 @@ export default function MyCertificates() {
                 {filteredRows.map((result) => {
                   const percentage =
                     result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
-                  const examType = examTypeById.get(result.examId);
+                  const creationMethod = creationMethodById.get(result.examId);
                   const grade = getGrade(result.totalScore, result.totalMarks, result.passed);
                   return (
                     <tr key={result.attemptId}>
                       <td className="ps-4 fw-medium">{result.examTitle}</td>
-                      <td>{examType ? examTypeLabel[examType] : '—'}</td>
+                      <td>{creationMethod ? creationMethodLabel[creationMethod] : '—'}</td>
                       <td>
                         {result.totalScore} / {result.totalMarks} ({percentage}%)
                       </td>

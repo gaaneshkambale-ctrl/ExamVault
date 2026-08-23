@@ -33,7 +33,7 @@ public class CreateExamHandlerTests
         Assert.True(result.Success);
         Assert.NotNull(result.Exam);
         Assert.Equal("C# Fundamentals", result.Exam!.Title);
-        Assert.Equal(ExamType.Manual, result.Exam!.ExamType);
+        Assert.Equal(CreationMethod.Manual, result.Exam!.CreationMethod);
         Assert.Equal(ExamStatus.Draft, result.Exam!.Status);
         Assert.Equal(createdByUserId, result.Exam!.CreatedByUserId);
         Assert.Single(repository.Exams);

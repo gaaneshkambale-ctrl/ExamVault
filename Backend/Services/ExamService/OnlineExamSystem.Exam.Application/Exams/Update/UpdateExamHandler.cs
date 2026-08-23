@@ -26,6 +26,12 @@ public class UpdateExamHandler
             return UpdateExamResult.Invalid(errors);
         }
 
+        if (command.ExamTypeId is { } examTypeId &&
+            await _examRepository.GetExamTypeByIdAsync(examTypeId, cancellationToken) is null)
+        {
+            return UpdateExamResult.Invalid(["Exam type not found."]);
+        }
+
         var exam = await _examRepository.GetByIdAsync(command.ExamId, cancellationToken);
         if (exam is null)
         {
@@ -35,7 +41,8 @@ public class UpdateExamHandler
         exam.Title = command.Title;
         exam.ExamCode = string.IsNullOrWhiteSpace(command.ExamCode) ? null : command.ExamCode.Trim();
         exam.Description = command.Description;
-        exam.ExamType = Enum.Parse<ExamType>(command.ExamType, ignoreCase: true);
+        exam.CreationMethod = Enum.Parse<CreationMethod>(command.CreationMethod, ignoreCase: true);
+        exam.ExamTypeId = command.ExamTypeId;
         exam.DurationMinutes = command.DurationMinutes;
         exam.TotalMarks = command.TotalMarks;
         exam.PassingMarks = command.PassingMarks;

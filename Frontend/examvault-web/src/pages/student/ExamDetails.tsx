@@ -10,7 +10,7 @@ import { useSections } from '../../hooks/useSections';
 import { useMyAssignmentForExam } from '../../hooks/useAssignments';
 import { useMyAttempt } from '../../hooks/useSubmissions';
 import { startAttempt } from '../../api/submissionApi';
-import type { ExamType } from '../../types/exam';
+import type { CreationMethod } from '../../types/exam';
 
 function extractStartError(error: unknown): string {
   if (isAxiosError(error) && typeof error.response?.data?.message === 'string') {
@@ -19,7 +19,7 @@ function extractStartError(error: unknown): string {
   return 'Something went wrong starting the exam. Please try again.';
 }
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -260,7 +260,8 @@ export default function ExamDetails() {
                       (exam.passingMarks / Math.max(exam.totalMarks, 1)) * 100,
                     )}%)`}
                   />
-                  <Field label="Exam Type" value={examTypeLabel[exam.examType]} />
+                  <Field label="Exam Type" value={exam.examTypeName || 'Not set'} />
+                  <Field label="Creation Method" value={creationMethodLabel[exam.creationMethod]} />
                   <Field
                     label="Start Date"
                     value={assignment ? new Date(assignment.startAtUtc).toLocaleString() : 'Not scheduled'}

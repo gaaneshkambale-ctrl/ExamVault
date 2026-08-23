@@ -17,10 +17,16 @@ public class QuestionRepository : IQuestionRepository
     public async Task AddAsync(
         ExamQuestion question,
         IReadOnlyList<QuestionOption> options,
+        IReadOnlyList<QuestionParameter>? parameters = null,
+        IReadOnlyList<QuestionTestCase>? testCases = null,
+        IReadOnlyList<QuestionSqlTestCase>? sqlTestCases = null,
         CancellationToken cancellationToken = default)
     {
         await _dbContext.Questions.AddAsync(question, cancellationToken);
         await _dbContext.QuestionOptions.AddRangeAsync(options, cancellationToken);
+        await _dbContext.QuestionParameters.AddRangeAsync(parameters ?? [], cancellationToken);
+        await _dbContext.QuestionTestCases.AddRangeAsync(testCases ?? [], cancellationToken);
+        await _dbContext.QuestionSqlTestCases.AddRangeAsync(sqlTestCases ?? [], cancellationToken);
     }
 
     public Task<ExamQuestion?> GetQuestionByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
@@ -87,6 +93,84 @@ public class QuestionRepository : IQuestionRepository
     public Task RemoveOptionsByQuestionIdAsync(Guid questionId, CancellationToken cancellationToken = default) =>
         _dbContext.QuestionOptions
             .Where(o => o.QuestionId == questionId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<QuestionParameter>> GetParametersByQuestionIdAsync(
+        Guid questionId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.QuestionParameters
+            .Where(p => p.QuestionId == questionId)
+            .OrderBy(p => p.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<QuestionParameter>> GetParametersByQuestionIdsAsync(
+        IReadOnlyList<Guid> questionIds,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.QuestionParameters
+            .Where(p => questionIds.Contains(p.QuestionId))
+            .OrderBy(p => p.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+    public Task AddParametersAsync(
+        IReadOnlyList<QuestionParameter> parameters,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.QuestionParameters.AddRangeAsync(parameters, cancellationToken);
+
+    public Task RemoveParametersByQuestionIdAsync(Guid questionId, CancellationToken cancellationToken = default) =>
+        _dbContext.QuestionParameters
+            .Where(p => p.QuestionId == questionId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<QuestionTestCase>> GetTestCasesByQuestionIdAsync(
+        Guid questionId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.QuestionTestCases
+            .Where(t => t.QuestionId == questionId)
+            .OrderBy(t => t.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<QuestionTestCase>> GetTestCasesByQuestionIdsAsync(
+        IReadOnlyList<Guid> questionIds,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.QuestionTestCases
+            .Where(t => questionIds.Contains(t.QuestionId))
+            .OrderBy(t => t.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+    public Task AddTestCasesAsync(
+        IReadOnlyList<QuestionTestCase> testCases,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.QuestionTestCases.AddRangeAsync(testCases, cancellationToken);
+
+    public Task RemoveTestCasesByQuestionIdAsync(Guid questionId, CancellationToken cancellationToken = default) =>
+        _dbContext.QuestionTestCases
+            .Where(t => t.QuestionId == questionId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<QuestionSqlTestCase>> GetSqlTestCasesByQuestionIdAsync(
+        Guid questionId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.QuestionSqlTestCases
+            .Where(t => t.QuestionId == questionId)
+            .OrderBy(t => t.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<QuestionSqlTestCase>> GetSqlTestCasesByQuestionIdsAsync(
+        IReadOnlyList<Guid> questionIds,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.QuestionSqlTestCases
+            .Where(t => questionIds.Contains(t.QuestionId))
+            .OrderBy(t => t.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+    public Task AddSqlTestCasesAsync(
+        IReadOnlyList<QuestionSqlTestCase> sqlTestCases,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.QuestionSqlTestCases.AddRangeAsync(sqlTestCases, cancellationToken);
+
+    public Task RemoveSqlTestCasesByQuestionIdAsync(Guid questionId, CancellationToken cancellationToken = default) =>
+        _dbContext.QuestionSqlTestCases
+            .Where(t => t.QuestionId == questionId)
             .ExecuteDeleteAsync(cancellationToken);
 
     public Task RemoveQuestionAsync(ExamQuestion question, CancellationToken cancellationToken = default)

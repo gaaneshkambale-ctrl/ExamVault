@@ -102,5 +102,12 @@ public interface IExamRepository
     /// entity's own defaults if it doesn't exist yet.</summary>
     Task<ExamDefaults> GetOrCreateExamDefaultsAsync(CancellationToken cancellationToken = default);
 
+    Task AddExamTypeAsync(ExamType examType, CancellationToken cancellationToken = default);
+    Task<ExamType?> GetExamTypeByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ExamType>> GetAllExamTypesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Returns true if the exam type was found and removed.</summary>
+    Task<bool> RemoveExamTypeAsync(Guid id, CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

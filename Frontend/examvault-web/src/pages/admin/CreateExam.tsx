@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createExam } from '../../api/examApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import { EXAM_CATEGORIES } from '../../types/exam';
-import type { CreateExamRequest, ExamType } from '../../types/exam';
+import type { CreateExamRequest, CreationMethod } from '../../types/exam';
+import { useExamTypes } from '../../hooks/useExams';
 import { extractServerError } from '../../utils/apiError';
 import ExamWizardStepper from '../../components/ExamWizardStepper';
 
@@ -15,15 +16,17 @@ const initialFormState: CreateExamRequest = {
   description: '',
   category: '',
   containsSections: false,
-  examType: 'Manual',
+  creationMethod: 'Manual',
   durationMinutes: 60,
   totalMarks: 100,
   passingMarks: 40,
   instructions: '',
+  examTypeId: null,
 };
 
 export default function CreateExam() {
   const navigate = useNavigate();
+  const { data: examTypes } = useExamTypes();
   const [form, setForm] = useState<CreateExamRequest>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateExamRequest, string>>>(
     {},
@@ -88,11 +91,11 @@ export default function CreateExam() {
                 </Form.Group>
               </Col>
               <Col md={4}>
-                <Form.Group className="mb-3" controlId="examType">
-                  <Form.Label className="fw-bold">Exam Type</Form.Label>
+                <Form.Group className="mb-3" controlId="creationMethod">
+                  <Form.Label className="fw-bold">Creation Method</Form.Label>
                   <Form.Select
-                    value={form.examType}
-                    onChange={(e) => updateField('examType', e.target.value as ExamType)}
+                    value={form.creationMethod}
+                    onChange={(e) => updateField('creationMethod', e.target.value as CreationMethod)}
                   >
                     <option value="Manual">Manual</option>
                     <option value="AiGenerated">AI Generated</option>
@@ -120,11 +123,30 @@ export default function CreateExam() {
                   <Form.Control.Feedback type="invalid">{fieldErrors.category}</Form.Control.Feedback>
                 </Form.Group>
               </Col>
-              <Col md={8} className="d-flex align-items-end">
+              <Col md={4}>
+                <Form.Group className="mb-3" controlId="examTypeId">
+                  <Form.Label className="fw-bold">Exam Type</Form.Label>
+                  <Form.Select
+                    value={form.examTypeId ?? ''}
+                    onChange={(e) => updateField('examTypeId', e.target.value || null)}
+                  >
+                    <option value="">Not set</option>
+                    {examTypes?.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <Form.Text>
+                    <Link to="/admin/exam-types">+ Manage Exam Types</Link>
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+              <Col md={4} className="d-flex align-items-start pt-4">
                 <Form.Check
                   type="switch"
                   id="examContainsSections"
-                  className="mb-3"
+                  className="mb-3 mt-2"
                   label="This exam contains sections"
                   checked={form.containsSections}
                   onChange={(e) => updateField('containsSections', e.target.checked)}

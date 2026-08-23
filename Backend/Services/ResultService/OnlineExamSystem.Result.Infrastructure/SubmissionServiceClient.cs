@@ -65,7 +65,10 @@ public class SubmissionServiceClient : ISubmissionLookupClient
             body.Attempt.ExamId,
             body.Attempt.Status,
             body.Attempt.SubmittedAtUtc,
-            body.Answers.Select(a => new SubmissionAnswer(a.QuestionId, a.SelectedOptionId)).ToList(),
+            body.Answers
+                .Select(a => new SubmissionAnswer(
+                    a.QuestionId, a.SelectedOptionId, a.AnswerText, a.MarksAwarded, a.SelectedOptionIds))
+                .ToList(),
             body.Attempt.FullscreenExitCount,
             body.Attempt.NoFaceDetectedCount,
             body.Attempt.MultipleFacesDetectedCount,
@@ -102,5 +105,8 @@ public class SubmissionServiceClient : ISubmissionLookupClient
     {
         public Guid QuestionId { get; init; }
         public Guid? SelectedOptionId { get; init; }
+        public string? AnswerText { get; init; }
+        public int? MarksAwarded { get; init; }
+        public IReadOnlyList<Guid>? SelectedOptionIds { get; init; }
     }
 }

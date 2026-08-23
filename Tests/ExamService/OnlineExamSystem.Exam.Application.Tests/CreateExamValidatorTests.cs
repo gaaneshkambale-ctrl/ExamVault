@@ -39,9 +39,9 @@ public class CreateExamValidatorTests
     }
 
     [Fact]
-    public void Unknown_exam_type_fails()
+    public void Unknown_creation_method_fails()
     {
-        var command = ValidCommand() with { ExamType = "NotARealType" };
+        var command = ValidCommand() with { CreationMethod = "NotARealType" };
 
         var result = _validator.Validate(command);
 

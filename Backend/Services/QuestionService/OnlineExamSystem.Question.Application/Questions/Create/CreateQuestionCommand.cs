@@ -8,4 +8,13 @@ public record CreateQuestionCommand(
     string Difficulty,
     IReadOnlyList<QuestionOptionInput> Options,
     Guid CreatedByUserId,
-    bool ShuffleOptions = false);
+    bool ShuffleOptions = false,
+    string? StarterCode = null,
+    string? ProgrammingLanguage = null,
+    bool AllowLanguageChange = false,
+    string? SampleAnswer = null,
+    string? FunctionName = null,
+    string? ReturnType = null,
+    IReadOnlyList<QuestionParameterInput>? Parameters = null,
+    IReadOnlyList<QuestionTestCaseInput>? TestCases = null,
+    IReadOnlyList<QuestionSqlTestCaseInput>? SqlTestCases = null);

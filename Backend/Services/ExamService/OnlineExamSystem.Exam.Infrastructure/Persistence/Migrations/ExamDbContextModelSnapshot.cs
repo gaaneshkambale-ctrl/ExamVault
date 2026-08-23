@@ -201,6 +201,9 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("CreationMethod")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(2000)
@@ -216,8 +219,8 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
-                    b.Property<int>("ExamType")
-                        .HasColumnType("int");
+                    b.Property<Guid?>("ExamTypeId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Instructions")
                         .IsRequired()
@@ -270,6 +273,8 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ExamTypeId");
+
                     b.ToTable("Exams");
                 });
 
@@ -297,6 +302,29 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("ExamReminderLogs");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ExamTypes");
                 });
 
             modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.GeneralSettings", b =>
@@ -491,6 +519,16 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ExamAssignmentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamPaper", b =>
+                {
+                    b.HasOne("OnlineExamSystem.Exam.Domain.Entities.ExamType", "ExamType")
+                        .WithMany()
+                        .HasForeignKey("ExamTypeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ExamType");
                 });
 
             modelBuilder.Entity("OnlineExamSystem.Exam.Domain.Entities.ExamReminderLog", b =>

@@ -11,6 +11,7 @@ export type AdminNavItem =
   | 'Roles & Permissions'
   | 'User Groups'
   | 'Exams'
+  | 'Exam Types'
   | 'Live Monitoring'
   | 'Active Exams'
   | 'Student Attempts'
@@ -57,6 +58,7 @@ const navItems: NavItem[] = [
     ],
   },
   { label: 'Exams', path: '/admin/exams' },
+  { label: 'Exam Types', path: '/admin/exam-types' },
   {
     label: 'Live Monitoring',
     path: '/admin/live-monitoring/active-exams',
@@ -122,6 +124,12 @@ const iconPaths: Partial<Record<AdminNavItem, ReactNode>> = {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
+    </>
+  ),
+  'Exam Types': (
+    <>
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
     </>
   ),
   'Live Monitoring': (

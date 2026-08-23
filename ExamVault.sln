@@ -121,6 +121,22 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "NotificationService", "Noti
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Notification.Application.Tests", "Tests\NotificationService\OnlineExamSystem.Notification.Application.Tests\OnlineExamSystem.Notification.Application.Tests.csproj", "{8C211377-FCA2-4C0F-9D68-48452769ACE5}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ExecutionService", "ExecutionService", "{D19B3B3E-CFD2-44DB-901A-CD188678383F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Execution.Domain", "Backend\Services\ExecutionService\OnlineExamSystem.Execution.Domain\OnlineExamSystem.Execution.Domain.csproj", "{0E044D23-D2EB-47F6-ADA5-EDA63BB72433}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Execution.Application", "Backend\Services\ExecutionService\OnlineExamSystem.Execution.Application\OnlineExamSystem.Execution.Application.csproj", "{366E71B7-0780-4006-8D2B-84ACDFC505A2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Execution.Infrastructure", "Backend\Services\ExecutionService\OnlineExamSystem.Execution.Infrastructure\OnlineExamSystem.Execution.Infrastructure.csproj", "{ABCFBF70-C6DF-47BC-B115-2D4E3F3A71B4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Execution.API", "Backend\Services\ExecutionService\OnlineExamSystem.Execution.API\OnlineExamSystem.Execution.API.csproj", "{5E0452BE-1A00-4D86-85E2-013DA974DA12}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ExecutionService", "ExecutionService", "{3ED8714A-00B5-44FD-A331-38C2F59ECA06}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Execution.Application.Tests", "Tests\ExecutionService\OnlineExamSystem.Execution.Application.Tests\OnlineExamSystem.Execution.Application.Tests.csproj", "{EFBD0FF3-E915-44A0-95CE-B3E4F7C73B3B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineExamSystem.Execution.Worker", "Backend\Services\ExecutionService\OnlineExamSystem.Execution.Worker\OnlineExamSystem.Execution.Worker.csproj", "{5561D80A-A023-41DF-BB13-E774B4A44D99}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -286,6 +302,30 @@ Global
 		{8C211377-FCA2-4C0F-9D68-48452769ACE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8C211377-FCA2-4C0F-9D68-48452769ACE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8C211377-FCA2-4C0F-9D68-48452769ACE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0E044D23-D2EB-47F6-ADA5-EDA63BB72433}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0E044D23-D2EB-47F6-ADA5-EDA63BB72433}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E044D23-D2EB-47F6-ADA5-EDA63BB72433}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0E044D23-D2EB-47F6-ADA5-EDA63BB72433}.Release|Any CPU.Build.0 = Release|Any CPU
+		{366E71B7-0780-4006-8D2B-84ACDFC505A2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{366E71B7-0780-4006-8D2B-84ACDFC505A2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{366E71B7-0780-4006-8D2B-84ACDFC505A2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{366E71B7-0780-4006-8D2B-84ACDFC505A2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ABCFBF70-C6DF-47BC-B115-2D4E3F3A71B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABCFBF70-C6DF-47BC-B115-2D4E3F3A71B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABCFBF70-C6DF-47BC-B115-2D4E3F3A71B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABCFBF70-C6DF-47BC-B115-2D4E3F3A71B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E0452BE-1A00-4D86-85E2-013DA974DA12}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E0452BE-1A00-4D86-85E2-013DA974DA12}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E0452BE-1A00-4D86-85E2-013DA974DA12}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E0452BE-1A00-4D86-85E2-013DA974DA12}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFBD0FF3-E915-44A0-95CE-B3E4F7C73B3B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFBD0FF3-E915-44A0-95CE-B3E4F7C73B3B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFBD0FF3-E915-44A0-95CE-B3E4F7C73B3B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFBD0FF3-E915-44A0-95CE-B3E4F7C73B3B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5561D80A-A023-41DF-BB13-E774B4A44D99}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5561D80A-A023-41DF-BB13-E774B4A44D99}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5561D80A-A023-41DF-BB13-E774B4A44D99}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5561D80A-A023-41DF-BB13-E774B4A44D99}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{EA94BD2C-1BF8-4F4E-B5A2-F52671C58F91} = {0D688ED2-200F-4388-9FAA-BF16136BEDCC}
@@ -342,5 +382,13 @@ Global
 		{ACCDFB12-C9E4-4EE5-BC47-605CAA0F7CCB} = {0D688ED2-200F-4388-9FAA-BF16136BEDCC}
 		{1941A008-7237-4B9D-9311-89C3AC2CA521} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
 		{8C211377-FCA2-4C0F-9D68-48452769ACE5} = {1941A008-7237-4B9D-9311-89C3AC2CA521}
+		{D19B3B3E-CFD2-44DB-901A-CD188678383F} = {15602C65-C8E6-4555-B25F-9E1B60B58078}
+		{0E044D23-D2EB-47F6-ADA5-EDA63BB72433} = {D19B3B3E-CFD2-44DB-901A-CD188678383F}
+		{366E71B7-0780-4006-8D2B-84ACDFC505A2} = {D19B3B3E-CFD2-44DB-901A-CD188678383F}
+		{ABCFBF70-C6DF-47BC-B115-2D4E3F3A71B4} = {D19B3B3E-CFD2-44DB-901A-CD188678383F}
+		{5E0452BE-1A00-4D86-85E2-013DA974DA12} = {D19B3B3E-CFD2-44DB-901A-CD188678383F}
+		{3ED8714A-00B5-44FD-A331-38C2F59ECA06} = {BC8DDF52-C8CC-41B3-B07A-3E9D6B602975}
+		{EFBD0FF3-E915-44A0-95CE-B3E4F7C73B3B} = {3ED8714A-00B5-44FD-A331-38C2F59ECA06}
+		{5561D80A-A023-41DF-BB13-E774B4A44D99} = {D19B3B3E-CFD2-44DB-901A-CD188678383F}
 	EndGlobalSection
 EndGlobal

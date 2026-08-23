@@ -39,6 +39,8 @@ public class SubmissionDbContext : DbContext
         {
             entity.HasKey(a => a.Id);
             entity.HasIndex(a => new { a.AttemptId, a.QuestionId }).IsUnique();
+            entity.Property(a => a.AnswerText).HasMaxLength(4000);
+            entity.Property(a => a.SelectedOptionIdsJson).HasMaxLength(4000);
             entity.HasOne<ExamAttempt>()
                 .WithMany()
                 .HasForeignKey(a => a.AttemptId)

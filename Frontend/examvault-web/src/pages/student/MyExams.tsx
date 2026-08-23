@@ -7,9 +7,9 @@ import { useExams } from '../../hooks/useExams';
 import { getMyAttempt } from '../../api/submissionApi';
 import { getMyAssignmentForExam } from '../../api/assignmentApi';
 import { getAssignmentStatus } from '../../types/assignment';
-import type { ExamResponse, ExamType } from '../../types/exam';
+import type { CreationMethod, ExamResponse } from '../../types/exam';
 
-const examTypeLabel: Record<ExamType, string> = {
+const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
   AiGenerated: 'AI Generated',
 };
@@ -94,7 +94,7 @@ export default function MyExams() {
   const initialTab = searchParams.get('tab');
   const [tab, setTab] = useState<Tab>(isTab(initialTab) ? initialTab : 'All');
   const [searchText, setSearchText] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'All' | ExamType>('All');
+  const [typeFilter, setTypeFilter] = useState<'All' | CreationMethod>('All');
   const [page, setPage] = useState(1);
 
   // Only Published exams are relevant to a student.
@@ -165,7 +165,7 @@ export default function MyExams() {
   const tabRows = tab === 'All' ? rows : rows.filter((row) => row.rowStatus === tab);
 
   const filteredExams = tabRows.filter((exam) => {
-    if (typeFilter !== 'All' && exam.examType !== typeFilter) {
+    if (typeFilter !== 'All' && exam.creationMethod !== typeFilter) {
       return false;
     }
     const search = searchText.trim().toLowerCase();
@@ -263,9 +263,9 @@ export default function MyExams() {
             <Col md={3}>
               <Form.Select
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value as 'All' | ExamType)}
+                onChange={(e) => setTypeFilter(e.target.value as 'All' | CreationMethod)}
               >
-                <option value="All">All Types</option>
+                <option value="All">All Creation Methods</option>
                 <option value="Manual">Manual</option>
                 <option value="AiGenerated">AI Generated</option>
               </Form.Select>
@@ -326,7 +326,7 @@ export default function MyExams() {
                             <div className="fw-medium">{exam.title}</div>
                             <div className="text-muted small">{exam.category}</div>
                             <Badge bg="light" text="dark" className="border">
-                              {examTypeLabel[exam.examType]}
+                              {creationMethodLabel[exam.creationMethod]}
                             </Badge>
                           </div>
                         </div>

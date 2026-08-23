@@ -7,7 +7,7 @@ const validForm: CreateExamRequest = {
   description: 'Covers the basics of C#.',
   category: 'Technical',
   containsSections: false,
-  examType: 'Manual',
+  creationMethod: 'Manual',
   durationMinutes: 60,
   totalMarks: 50,
   passingMarks: 25,
