@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import PlatformSidebar from '../components/PlatformSidebar';
 import BrandMark from '../components/BrandMark';
+import NotificationBell from '../components/NotificationBell';
 import UserProfileMenu from '../components/UserProfileMenu';
 
 interface PlatformLayoutProps {
@@ -43,6 +44,7 @@ export default function PlatformLayout({ active, children }: PlatformLayoutProps
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
+            <NotificationBell />
             <UserProfileMenu />
           </div>
         </div>

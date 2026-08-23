@@ -25,6 +25,9 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
   { path: '/platform/exams/question-bank', active: 'exams-question-bank', parent: 'Exams', title: 'Question Bank' },
   { path: '/platform/exams/tags', active: 'exams-tags', parent: 'Exams', title: 'Tags' },
 
+  { path: '/platform/questions', active: 'questions', parent: 'Platform Admin', title: 'Questions' },
+  { path: '/platform/submissions', active: 'submissions', parent: 'Platform Admin', title: 'Submissions' },
+
   { path: '/platform/subscriptions', active: 'subs-plans', parent: 'Subscriptions', title: 'Plans' },
   { path: '/platform/subscriptions/plans', active: 'subs-plans', parent: 'Subscriptions', title: 'Plans' },
   { path: '/platform/subscriptions/organizations', active: 'subs-orgs', parent: 'Subscriptions', title: 'Organizations & Plans' },

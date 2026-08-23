@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Alert, Badge, Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Form, Modal, Offcanvas, Spinner, Table } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
+import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
 import { createTenant, createTenantAdmin } from '../../api/tenantsApi';
 import { extractServerError } from '../../utils/apiError';
@@ -17,10 +19,21 @@ interface ManageTenantsProps {
   autoOpenCreate?: boolean;
 }
 
+// Organization Details tabs from Organizations.png - only Overview has
+// real data behind it today (Name/Subdomain/Status/Created On, all
+// already on Tenant). Usage/Admins/Activity/Settings would each need new
+// backend (per-tenant usage stats, a queryable admins-by-tenant
+// endpoint, an activity/audit trail, editable tenant settings) - shown
+// honestly rather than faked, same principle as every other "not
+// connected yet" surface in this console.
+const DETAIL_TABS = ['Overview', 'Usage', 'Admins', 'Activity', 'Settings'] as const;
+type DetailTab = (typeof DETAIL_TABS)[number];
+
 export default function ManageTenants({ statusFilter, autoOpenCreate = false }: ManageTenantsProps) {
   const { data: tenants, isLoading, isError } = useTenants();
   const queryClient = useQueryClient();
 
+  const [searchText, setSearchText] = useState('');
   const [showCreate, setShowCreate] = useState(autoOpenCreate);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -28,6 +41,9 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
   const [adminTarget, setAdminTarget] = useState<Tenant | null>(null);
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
+
+  const [detailTarget, setDetailTarget] = useState<Tenant | null>(null);
+  const [detailTab, setDetailTab] = useState<DetailTab>('Overview');
 
   const createMutation = useMutation({
     mutationFn: () => createTenant({ name, slug }),
@@ -57,11 +73,25 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
     setAdminTarget(tenant);
   };
 
-  const filteredTenants = tenants?.filter((tenant) => {
+  const openDetails = (tenant: Tenant) => {
+    setDetailTab('Overview');
+    setDetailTarget(tenant);
+  };
+
+  const statusFiltered = tenants?.filter((tenant) => {
     if (statusFilter === 'active') return tenant.isActive;
     if (statusFilter === 'suspended') return !tenant.isActive;
     return true;
   });
+
+  const searchQuery = searchText.trim().toLowerCase();
+  const filteredTenants = statusFiltered?.filter(
+    (tenant) => !searchQuery || tenant.name.toLowerCase().includes(searchQuery) || tenant.slug.toLowerCase().includes(searchQuery),
+  );
+
+  const totalCount = tenants?.length ?? 0;
+  const activeCount = tenants?.filter((t) => t.isActive).length ?? 0;
+  const suspendedCount = totalCount - activeCount;
 
   const activeNavKey = autoOpenCreate
     ? 'org-create'
@@ -73,9 +103,15 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
   const pageTitle =
     statusFilter === 'active' ? 'Active Organizations' : statusFilter === 'suspended' ? 'Suspended Organizations' : 'Organizations';
 
+  const tabs: Array<{ label: string; count: number; path: string; filter?: 'active' | 'suspended' }> = [
+    { label: 'All', count: totalCount, path: '/platform/organizations' },
+    { label: 'Active', count: activeCount, path: '/platform/organizations/active', filter: 'active' },
+    { label: 'Suspended', count: suspendedCount, path: '/platform/organizations/suspended', filter: 'suspended' },
+  ];
+
   return (
     <PlatformLayout active={activeNavKey}>
-      <div className="d-flex justify-content-between align-items-center mb-1">
+      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
         <div>
           <p className="text-muted small mb-1">Platform Admin / Organizations</p>
           <h1 className="h4 fw-bold mb-1 text-primary">{pageTitle}</h1>
@@ -83,9 +119,29 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
             Organizations using ExamVault - manual provisioning path (Super Admin only).
           </p>
         </div>
-        <Button variant="primary" onClick={openCreate}>
-          + Create Organization
-        </Button>
+        <div className="d-flex gap-2 align-items-start">
+          <Form.Control
+            type="search"
+            placeholder="Search organizations..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 240 }}
+          />
+          <Button variant="primary" onClick={openCreate} className="text-nowrap">
+            + Create Organization
+          </Button>
+        </div>
+      </div>
+
+      <div className="d-flex gap-2 mb-3">
+        {tabs.map((tab) => {
+          const isActiveTab = (tab.filter ?? undefined) === statusFilter;
+          return (
+            <Link key={tab.label} to={tab.path} className={`btn btn-sm ${isActiveTab ? 'btn-primary' : 'btn-outline-secondary'}`}>
+              {tab.label} ({tab.count})
+            </Link>
+          );
+        })}
       </div>
 
       <Modal show={showCreate} onHide={() => setShowCreate(false)} centered>
@@ -159,7 +215,72 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
         </Modal.Footer>
       </Modal>
 
-      <Card className="border-0 shadow-sm mt-3">
+      <Offcanvas show={detailTarget !== null} onHide={() => setDetailTarget(null)} placement="end">
+        <Offcanvas.Header closeButton>
+          <Offcanvas.Title>Organization Details</Offcanvas.Title>
+        </Offcanvas.Header>
+        <Offcanvas.Body>
+          {detailTarget && (
+            <>
+              <div className="d-flex align-items-center gap-3 mb-3">
+                <OrgAvatar name={detailTarget.name} size={48} />
+                <div>
+                  <div className="fw-bold">{detailTarget.name}</div>
+                  <Badge bg={detailTarget.isActive ? 'success' : 'secondary'}>
+                    {detailTarget.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="d-flex gap-3 border-bottom mb-3 small">
+                {DETAIL_TABS.map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setDetailTab(tab)}
+                    className="btn btn-link p-0 pb-2 text-decoration-none"
+                    style={
+                      tab === detailTab
+                        ? { color: '#4f46e5', fontWeight: 600, borderBottom: '2px solid #4f46e5' }
+                        : { color: '#6b7280' }
+                    }
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              {detailTab === 'Overview' ? (
+                <dl className="row small mb-4">
+                  <dt className="col-5 text-muted fw-normal">Organization Name</dt>
+                  <dd className="col-7">{detailTarget.name}</dd>
+                  <dt className="col-5 text-muted fw-normal">Subdomain</dt>
+                  <dd className="col-7">{detailTarget.slug}.examvault.com</dd>
+                  <dt className="col-5 text-muted fw-normal">Status</dt>
+                  <dd className="col-7">{detailTarget.isActive ? 'Active' : 'Inactive'}</dd>
+                  <dt className="col-5 text-muted fw-normal">Created On</dt>
+                  <dd className="col-7">{new Date(detailTarget.createdAtUtc).toLocaleString()}</dd>
+                </dl>
+              ) : (
+                <div className="text-center text-muted small py-5 border rounded-3 mb-4">
+                  "{detailTab}" isn't connected yet - this section of Organization Details is still being built.
+                </div>
+              )}
+
+              <div className="d-flex gap-2">
+                <Button variant="outline-primary" size="sm" onClick={() => openAddAdmin(detailTarget)}>
+                  Add Admin
+                </Button>
+                {detailTarget.isActive && (
+                  <DeactivateTenantButton tenantId={detailTarget.id} tenantName={detailTarget.name} />
+                )}
+              </div>
+            </>
+          )}
+        </Offcanvas.Body>
+      </Offcanvas>
+
+      <Card className="border-0 shadow-sm mb-3">
         <Card.Body className={isLoading || isError || filteredTenants?.length === 0 ? '' : 'p-0'}>
           {isLoading && (
             <div className="d-flex justify-content-center py-5">
@@ -171,7 +292,11 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
 
           {!isLoading && !isError && filteredTenants?.length === 0 && (
             <div className="text-center text-muted py-5">
-              {statusFilter ? `No ${statusFilter} organizations.` : 'No organizations yet. Click "+ Create Organization" to add one.'}
+              {searchQuery
+                ? 'No organizations match your search.'
+                : statusFilter
+                  ? `No ${statusFilter} organizations.`
+                  : 'No organizations yet. Click "+ Create Organization" to add one.'}
             </div>
           )}
 
@@ -179,9 +304,12 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
             <Table responsive hover className="mb-0 align-middle">
               <thead className="text-muted small text-uppercase bg-light">
                 <tr>
-                  <th className="ps-4">Name</th>
-                  <th>Subdomain</th>
+                  <th className="ps-4">Organization</th>
+                  <th>Admin Contact</th>
+                  <th>Plan</th>
                   <th>Status</th>
+                  <th>Users</th>
+                  <th>Exams</th>
                   <th>Created On</th>
                   <th className="pe-4">Actions</th>
                 </tr>
@@ -189,19 +317,40 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
               <tbody>
                 {filteredTenants.map((tenant) => (
                   <tr key={tenant.id}>
-                    <td className="ps-4 fw-medium">{tenant.name}</td>
-                    <td className="text-muted">{tenant.slug}.examvault.com</td>
+                    <td className="ps-4">
+                      <div className="d-flex align-items-center gap-2">
+                        <OrgAvatar name={tenant.name} size={32} />
+                        <div>
+                          <div className="fw-medium">{tenant.name}</div>
+                          <div className="text-muted" style={{ fontSize: 12 }}>
+                            {tenant.slug}.examvault.com
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-muted">&mdash;</td>
+                    <td className="text-muted">&mdash;</td>
                     <td>
                       <Badge bg={tenant.isActive ? 'success' : 'secondary'}>
                         {tenant.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </td>
+                    <td className="text-muted">&mdash;</td>
+                    <td className="text-muted">&mdash;</td>
                     <td>{new Date(tenant.createdAtUtc).toLocaleDateString()}</td>
-                    <td className="pe-4 d-flex gap-2">
-                      <Button variant="outline-primary" size="sm" onClick={() => openAddAdmin(tenant)}>
-                        Add Admin
-                      </Button>
-                      {tenant.isActive && <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />}
+                    <td className="pe-4">
+                      <div className="d-flex gap-2">
+                        <Button variant="outline-secondary" size="sm" onClick={() => openDetails(tenant)} title="View details">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        </Button>
+                        <Button variant="outline-primary" size="sm" onClick={() => openAddAdmin(tenant)}>
+                          Add Admin
+                        </Button>
+                        {tenant.isActive && <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -210,6 +359,49 @@ export default function ManageTenants({ statusFilter, autoOpenCreate = false }: 
           )}
         </Card.Body>
       </Card>
+
+      <div className="row g-3">
+        <div className="col-md-4">
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small mb-1">Active Organizations</div>
+              <div className="h4 fw-bold mb-1">{activeCount}</div>
+              <div className="text-muted small mb-2">
+                {totalCount === 0 ? 0 : ((activeCount / totalCount) * 100).toFixed(1)}% of total
+              </div>
+              <Link to="/platform/organizations/active" className="small text-decoration-none">
+                View all active &rarr;
+              </Link>
+            </Card.Body>
+          </Card>
+        </div>
+        <div className="col-md-4">
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small mb-1">Suspended Organizations</div>
+              <div className="h4 fw-bold mb-1">{suspendedCount}</div>
+              <div className="text-muted small mb-2">
+                {totalCount === 0 ? 0 : ((suspendedCount / totalCount) * 100).toFixed(1)}% of total
+              </div>
+              <Link to="/platform/organizations/suspended" className="small text-decoration-none">
+                View all suspended &rarr;
+              </Link>
+            </Card.Body>
+          </Card>
+        </div>
+        <div className="col-md-4">
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small mb-1">Total Organizations</div>
+              <div className="h4 fw-bold mb-1">{totalCount}</div>
+              <div className="text-muted small mb-2">100% of total</div>
+              <Link to="/platform/organizations" className="small text-decoration-none">
+                View all &rarr;
+              </Link>
+            </Card.Body>
+          </Card>
+        </div>
+      </div>
     </PlatformLayout>
   );
 }

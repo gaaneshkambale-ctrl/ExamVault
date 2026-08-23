@@ -54,6 +54,19 @@ const groupIcons: Record<string, ReactNode> = {
       <line x1="16" y1="17" x2="8" y2="17" />
     </>
   ),
+  questions: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </>
+  ),
+  submissions: (
+    <>
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </>
+  ),
   subscriptions: (
     <>
       <rect x="1" y="4" width="22" height="16" rx="2" />
@@ -138,6 +151,8 @@ const navGroups: NavGroup[] = [
       { key: 'exams-tags', label: 'Tags', path: '/platform/exams/tags' },
     ],
   },
+  { key: 'questions', label: 'Questions', path: '/platform/questions', icon: groupIcons.questions },
+  { key: 'submissions', label: 'Submissions', path: '/platform/submissions', icon: groupIcons.submissions },
   {
     key: 'subscriptions',
     label: 'Subscriptions',

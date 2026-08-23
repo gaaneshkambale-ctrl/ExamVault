@@ -138,4 +138,71 @@ Organization's modal auto-opened with the right sidebar highlight after
 the fix, sidebar group expand/collapse and active-highlighting worked
 across sections, and a Coming Soon page (Security Events) rendered the
 honest not-connected message with correct breadcrumb. Zero console
-errors throughout. Not committed yet.
+errors throughout.
+
+DASHBOARD REDESIGN (2026-08-23, later same day) - user supplied
+`Super_admin_dashboard.png`, a fuller mockup (5 stat cards, a Platform
+Overview trend chart, Recent Organizations, Subscription Overview donut,
+Top Active Exams, System Health) and asked to match it. Also revealed
+two sidebar items not in the original menu file - `Questions` and
+`Submissions` (flat, non-expandable, between Exams and Subscriptions) -
+added to `PlatformSidebar`/`platformComingSoonRoutes.ts` as "not
+connected yet" (no cross-tenant endpoints exist for either). Rebuilt
+`PlatformDashboard.tsx` to match the mockup's layout using this
+codebase's existing no-chart-library convention (hand-rolled SVG, same
+as `ExamsTrendChart`/`PercentageRing`) rather than adding a dependency.
+Kept every number honest rather than matching the mockup's fabricated
+128/24,580/8,420/168,540/96: Total Organizations is real (with a real
+"+N this week" computed from actual `createdAtUtc` values), Recent
+Organizations is real (real name/subdomain/status/relative-time, sorted
+by creation date), and everything the backend can't support yet (Total
+Users/Exams/Submissions, Active Subscriptions, the other 3 Platform
+Overview series, Subscription Overview, Top Active Exams, System Health)
+shows an explicit "not connected yet" instead of a fake number - matches
+this file's own IMPLEMENTATION NOTES principle. Also added
+`NotificationBell` to `PlatformLayout` (previously left out as
+unnecessary for a single-page shell) since it's real, already-built
+functionality now that the console has grown. Verified live: real stat
+card + trend, real Recent Organizations list with correct relative
+timestamps, all "not connected" cards render correctly, Questions/
+Submissions routes work with correct sidebar highlighting. One bug found
+and fixed: the coming-soon breadcrumb read "Platform Admin / Platform
+Admin" for top-level items (Questions, Submissions, System Logs) since
+their `parent` value was itself "Platform Admin" - fixed to collapse to
+one segment. 49/49 frontend tests still green, zero console errors.
+
+ALL ORGANIZATIONS REDESIGN (2026-08-23, later same day) - user supplied
+`Organizations.png`, a much richer mockup: search bar, filter tabs with
+counts (All/Active/Trial/Suspended), a table with Organization/Admin
+Contact/Plan/Status/Users/Exams/Created On/Actions columns, a slide-over
+"Organization Details" panel (tabs: Overview/Usage/Admins/Activity/
+Settings, Edit/Suspend/More actions), and a 4-stat summary row
+(Active/Trial/Suspended/Total). Same honesty principle as the Dashboard
+redesign - matched the VISUAL structure, not the fabricated numbers
+(128 orgs, admin contacts, plans, per-org user/exam counts are all made
+up in the mockup; none of that data exists in this codebase):
+- Kept: search (real, client-side name/subdomain filter), filter tabs
+  (All/Active/Suspended only - real counts, link to the existing 3
+  routes rather than duplicating them as in-page state), the table shape
+  (Organization/Admin Contact/Plan/Users/Exams/Created On/Actions -
+  Admin Contact/Plan/Users/Exams show "-" since none of that data exists:
+  no per-tenant admin-contact lookup, no Subscriptions/Plan model, no
+  cross-tenant Exam/User count endpoint), a new "View" action opening an
+  Organization Details slide-over with only the fields that are real
+  (Name/Subdomain/Status/Created On - the rest of that mockup panel's
+  fields, plus its Usage/Admins/Activity/Settings tabs, are "not
+  connected yet"), and the summary row (Active/Suspended/Total only - 3
+  real cards, no fake Trial card/count).
+- Dropped, not built: the mockup's Trial tab/card (no plan/trial field
+  on Tenant per Phase 1's own scope decision), the "Filter" button (no
+  second filter dimension exists beyond status, which the tabs already
+  cover - would have been a dead control), the inline bottom
+  Create-Organization form's extra fields (Organization Code/Type/Phone
+  Number/Plan - none are real `CreateTenantRequest` fields; kept the
+  existing Name+Slug modal instead of silently accepting and discarding
+  input for fields the backend doesn't have), and the Edit action (no
+  update-tenant endpoint exists).
+- `OrgAvatar` (colored initials tile) and `timeAgo` extracted to shared
+  components/utils since the Dashboard redesign and this page both need
+  them now.
+Not committed yet.
