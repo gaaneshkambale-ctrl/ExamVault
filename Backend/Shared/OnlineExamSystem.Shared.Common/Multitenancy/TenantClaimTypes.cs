@@ -1,4 +1,4 @@
-namespace OnlineExamSystem.Shared.Common.Security;
+namespace OnlineExamSystem.Shared.Common.Multitenancy;
 
 // Shared (not per-service) so every microservice reads the exact same claim
 // name once it starts trusting TenantId off the JWT - each service already

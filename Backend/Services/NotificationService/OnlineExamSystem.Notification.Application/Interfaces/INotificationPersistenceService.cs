@@ -6,6 +6,7 @@ namespace OnlineExamSystem.Notification.Application.Interfaces;
 public interface INotificationPersistenceService
 {
     Task<IReadOnlyList<NotificationEntity>> CreateNotificationsAsync(
+        Guid tenantId,
         Guid batchId,
         IReadOnlyList<NotificationRecipient> recipients,
         NotificationType type,

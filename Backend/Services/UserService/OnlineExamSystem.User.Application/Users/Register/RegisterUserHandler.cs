@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.Shared.Events.User;
 using OnlineExamSystem.User.Application.Interfaces;
-using OnlineExamSystem.User.Domain.Constants;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.Application.Users.Register;
@@ -59,7 +59,7 @@ public class RegisterUserHandler
         await _userRepository.SaveChangesAsync(cancellationToken);
 
         await _eventPublisher.PublishAsync(
-            new UserRegisteredEvent { UserId = user.Id, Email = user.Email, FullName = user.FullName },
+            new UserRegisteredEvent { TenantId = user.TenantId, UserId = user.Id, Email = user.Email, FullName = user.FullName },
             cancellationToken);
 
         return RegisterUserResult.Ok(user);

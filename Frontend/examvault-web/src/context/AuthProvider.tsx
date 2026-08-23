@@ -8,6 +8,7 @@ import {
 } from '../api/axiosClient';
 import { getMyProfile, loginUser, logoutUser, refreshAccessToken } from '../api/userApi';
 import type { UserProfile } from '../types/user';
+import { extractTenantSlug } from '../utils/tenant';
 import { AuthContext } from './authContext';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string, rememberMe = true) => {
-    const response = await loginUser({ email, password });
+    const response = await loginUser({ email, password, tenantSlug: extractTenantSlug(window.location.hostname) });
     setAxiosAccessToken(response.accessToken);
     setRefreshToken(response.refreshToken, rememberMe);
     setUser(response.user);

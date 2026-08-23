@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Common\OnlineExamSystem.Shared.Common.csproj" />
     <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Events\OnlineExamSystem.Shared.Events.csproj" />
     <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Contracts\OnlineExamSystem.Shared.Contracts.csproj" />
   </ItemGroup>

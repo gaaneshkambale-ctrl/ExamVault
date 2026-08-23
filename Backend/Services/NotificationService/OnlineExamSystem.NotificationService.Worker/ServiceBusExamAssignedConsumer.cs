@@ -82,6 +82,7 @@ public class ServiceBusExamAssignedConsumer : BackgroundService
             .ToList();
 
         await persistenceService.CreateNotificationsAsync(
+            tenantId: examAssigned.TenantId,
             batchId: Guid.NewGuid(),
             recipients: recipients,
             type: NotificationType.Exam,

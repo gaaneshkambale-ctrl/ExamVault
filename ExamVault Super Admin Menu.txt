@@ -1,0 +1,141 @@
+ExamVault Super Admin
+│
+├── Dashboard
+│
+├── Organizations
+│   ├── All Organizations
+│   ├── Create Organization
+│   ├── Active Organizations
+│   ├── Trial Organizations
+│   ├── Suspended Organizations
+│   └── Organization Details
+│
+├── Users
+│   ├── All Users
+│   ├── Organization Admins
+│   ├── Students
+│   ├── Platform Admins
+│   └── Roles & Permissions
+│
+├── Exams
+│   ├── All Exams
+│   ├── Exam Categories
+│   ├── Sections
+│   ├── Question Bank
+│   └── Tags
+│
+├── Subscriptions
+│   ├── Plans
+│   ├── Organizations & Plans
+│   ├── Usage
+│   └── Subscription History
+│
+├── System Monitoring
+│   ├── Active Organizations
+│   ├── Active Exams
+│   ├── System Health
+│   ├── API Health
+│   └── Service Status
+│
+├── Notifications
+│   ├── Platform Announcement
+│   ├── Notification History
+│   └── Templates
+│
+├── Reports
+│   ├── Organization Report
+│   ├── User Report
+│   ├── Exam Usage
+│   ├── Platform Usage
+│   └── Audit Reports
+│
+├── Security
+│   ├── Security Events
+│   ├── Login Activity
+│   ├── Failed Login Attempts
+│   └── Audit Logs
+│
+├── Settings
+│   ├── Platform Settings
+│   ├── Tenant Settings
+│   ├── Email Settings
+│   ├── Notification Settings
+│   └── Security Settings
+│
+└── System Logs
+
+IMPLEMENTATION NOTES (written 2026-08-23, before touching code)
+------------------------------------------------------------------------
+Decided with the user: build the FULL sidebar shell now (every item
+above gets a real, distinct route), but only wire real functionality
+where a backend already supports it. Everything else shows an honest
+"not connected yet" placeholder (matching this project's own established
+convention - e.g. Day 27's AI Generate page - never a dead/hidden button,
+never faked data). This is a separate work stream from
+multi_tenant_saas.txt's 5-phase foundation plan (which is done) -
+triggered by this file, not a numbered phase of that plan.
+
+REAL (backend already supports these):
+- Dashboard: stat cards (Total/Active/Inactive Organizations) computed
+  client-side from the existing `GET /api/tenants` list - no new backend.
+- Organizations > All Organizations: the existing Tenants page (built in
+  the SaaS plan's Phase 4), moved to `/platform/organizations`.
+- Organizations > Create Organization: same page, `/platform/organizations/
+  create` auto-opens the existing Create modal.
+- Organizations > Active Organizations / Suspended Organizations: same
+  page, filtered by the existing `isActive` field via
+  `/platform/organizations/active` / `/platform/organizations/suspended`.
+
+EXPLICITLY DEFERRED, not built as real functionality this pass:
+- Subscriptions (all 4 items) - billing/plans stay out of scope, per the
+  original SaaS plan's own SCOPE NOTE and the user's explicit choice to
+  keep it deferred rather than reopen that decision now.
+- Organizations > Trial Organizations - no plan/trial field exists on
+  `Tenant` (Phase 1 deliberately left it out); this is really a
+  Subscriptions-shaped concept parked under Organizations in this menu.
+
+NOT CONNECTED YET (every other leaf) - honest placeholder page naming
+the exact feature, not a generic 404: Organizations > Organization
+Details (no per-tenant details page exists - all actions today are
+inline on the list); the entire Users, Exams, System Monitoring,
+Notifications, Reports, and Settings sections (every one needs new
+cross-tenant backend endpoints - today's Admin-facing equivalents are
+all tenant-scoped by the Phase 2 query filters, by design); Security's
+4 items (Audit Logs/Login Activity have real underlying data - the
+Notification Service's `AuditLog` table already has an `IsSuperAdmin`
+bypass built into its query filter from Phase 2 - but the controller
+action is gated `[Authorize(Roles = "Admin")]`, which a `SuperAdmin`
+role claim doesn't satisfy; confirmed this returns 403 by testing with
+the real Super Admin's JWT before assuming it would just work. Fixing
+that role gate is a small, real, well-scoped follow-up, not bundled into
+this pass since it touches authorization on a live endpoint); System
+Logs (no log viewer exists anywhere in this codebase).
+
+Routing: one data-driven list (`platformComingSoonRoutes.ts`) of every
+not-connected leaf's path/title/parent, rendered through a single shared
+`PlatformComingSoon` component - avoids ~30 near-identical route/page
+files for what is, today, the same message repeated with a different
+name.
+
+DONE (2026-08-23) - built and verified live in a real browser (Chrome
+extension) against the running Docker stack, not just tsc/lint/vitest
+(49/49, zero regressions): full `PlatformSidebar` with all 10 groups/~40
+leaf items from this file, `PlatformLayout` updated to include it,
+`PlatformDashboard` (real stat cards: Total/Active/Inactive
+Organizations from the existing tenant list), `ManageTenants` extended
+with `statusFilter`/`autoOpenCreate` props so `/platform/organizations`,
+`/platform/organizations/create`, `/platform/organizations/active`, and
+`/platform/organizations/suspended` all reuse the same page, and every
+other leaf routed to `PlatformComingSoon`. Login/ChangePassword redirects
+moved from the old `/platform/tenants` to `/platform/dashboard`. One bug
+found and fixed during verification: the Create Organization route
+initially highlighted "All Organizations" in the sidebar instead of
+itself, since the active-nav-key logic only branched on `statusFilter`
+and ignored `autoOpenCreate`. Verified live: Dashboard's counts matched
+the real 5 seeded/created tenants exactly, All/Active/Suspended
+Organizations filters each showed the correct subset, Create
+Organization's modal auto-opened with the right sidebar highlight after
+the fix, sidebar group expand/collapse and active-highlighting worked
+across sections, and a Coming Soon page (Security Events) rendered the
+honest not-connected message with correct breadcrumb. Zero console
+errors throughout. Not committed yet.

@@ -6,6 +6,7 @@ namespace OnlineExamSystem.Exam.Application.Interfaces;
 public interface IAuditClient
 {
     Task RecordAsync(
+        Guid tenantId,
         string module,
         string activity,
         string? details,

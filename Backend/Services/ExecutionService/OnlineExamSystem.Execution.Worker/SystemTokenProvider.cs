@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Execution.Worker;
 
@@ -26,13 +27,18 @@ public class SystemTokenProvider
         _settings = settings.Value;
     }
 
-    public string CreateToken()
+    // tenantId comes from the event that triggered this grading run (see
+    // CodeAnswerSubmittedEvent.TenantId) - without a real tenant_id claim
+    // here, Question/Submission Service's query filters would silently see
+    // nothing once they're wired up, breaking all auto-grading.
+    public string CreateToken(Guid tenantId)
     {
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, SystemUserId.ToString()),
             new Claim(ClaimTypes.NameIdentifier, SystemUserId.ToString()),
             new Claim(ClaimTypes.Role, "Admin"),
+            new Claim(TenantClaimTypes.TenantId, tenantId.ToString()),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 

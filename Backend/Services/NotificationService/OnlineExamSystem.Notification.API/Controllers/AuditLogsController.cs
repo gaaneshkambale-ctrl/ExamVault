@@ -35,6 +35,7 @@ public class AuditLogsController : ControllerBase
     public async Task<IActionResult> Record(RecordAuditLogRequest request, CancellationToken cancellationToken)
     {
         var command = new RecordAuditLogCommand(
+            request.TenantId,
             Enum.Parse<AuditModule>(request.Module, ignoreCase: true),
             request.Activity,
             request.Details,

@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Question.Domain.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Question.Infrastructure.Persistence;
 
-public class QuestionDbContext : DbContext
+public class QuestionDbContext : TenantScopedDbContext
 {
-    public QuestionDbContext(DbContextOptions<QuestionDbContext> options) : base(options)
+    public QuestionDbContext(DbContextOptions<QuestionDbContext> options, ICurrentTenant currentTenant)
+        : base(options, currentTenant)
     {
     }
 
@@ -25,6 +27,9 @@ public class QuestionDbContext : DbContext
             entity.Property(q => q.ProgrammingLanguage).HasMaxLength(50);
             entity.Property(q => q.SampleAnswer).HasMaxLength(4000);
             entity.Property(q => q.FunctionName).HasMaxLength(200);
+            entity.HasIndex(q => q.TenantId);
+            entity.HasQueryFilter(q =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && q.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<QuestionOption>(entity =>
@@ -35,6 +40,8 @@ public class QuestionDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(o => o.QuestionId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(o =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && o.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<QuestionParameter>(entity =>

@@ -16,7 +16,7 @@ export interface UserProfile {
   id: string;
   fullName: string;
   email: string;
-  role: 'Student' | 'Admin';
+  role: 'Student' | 'Admin' | 'SuperAdmin';
   mustChangePassword: boolean;
   phoneNumber: string | null;
   hasPhoto: boolean;
@@ -57,6 +57,10 @@ export interface UserPreferences {
 export interface LoginRequest {
   email: string;
   password: string;
+  // Set from the subdomain the request arrived on (see utils/tenant.ts) so
+  // the same email can exist in two different tenants - omitted entirely
+  // when there's no subdomain to resolve (local dev, today's Azure dev env).
+  tenantSlug?: string;
 }
 
 export interface LoginResponse {

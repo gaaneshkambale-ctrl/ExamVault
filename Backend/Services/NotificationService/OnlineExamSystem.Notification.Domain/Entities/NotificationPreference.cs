@@ -1,9 +1,9 @@
 using OnlineExamSystem.Notification.Domain.Enums;
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Notification.Domain.Entities;
 
-public class NotificationPreference : BaseEntity
+public class NotificationPreference : TenantScopedEntity
 {
     public Guid UserId { get; set; }
     public NotificationType Type { get; set; }

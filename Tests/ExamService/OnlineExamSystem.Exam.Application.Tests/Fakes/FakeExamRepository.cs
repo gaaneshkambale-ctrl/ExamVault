@@ -202,6 +202,7 @@ public class FakeExamRepository : IExamRepository
         var result = _assignments
             .Where(a => a.StartAtUtc > fromUtc && a.StartAtUtc <= toUtc && publishedExamIds.Contains(a.ExamId))
             .Select(a => new UpcomingAssignmentForReminder(
+                a.TenantId,
                 a.Id,
                 a.ExamId,
                 _exams.FirstOrDefault(e => e.Id == a.ExamId)?.Title ?? "Unknown Exam",
@@ -225,6 +226,7 @@ public class FakeExamRepository : IExamRepository
     }
 
     public Task AddReminderLogEntriesAsync(
+        Guid tenantId,
         Guid assignmentId,
         ReminderWindow window,
         IReadOnlyList<Guid> userIds,
@@ -232,7 +234,7 @@ public class FakeExamRepository : IExamRepository
     {
         foreach (var userId in userIds)
         {
-            _reminderLogs.Add(new ExamReminderLog { AssignmentId = assignmentId, UserId = userId, Window = window });
+            _reminderLogs.Add(new ExamReminderLog { TenantId = tenantId, AssignmentId = assignmentId, UserId = userId, Window = window });
         }
 
         return Task.CompletedTask;
@@ -241,6 +243,14 @@ public class FakeExamRepository : IExamRepository
     public Task<ReminderSettings> GetOrCreateReminderSettingsAsync(CancellationToken cancellationToken = default)
     {
         _reminderSettings ??= new ReminderSettings();
+        return Task.FromResult(_reminderSettings);
+    }
+
+    public Task<ReminderSettings> GetOrCreateReminderSettingsForTenantAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        _reminderSettings ??= new ReminderSettings { TenantId = tenantId };
         return Task.FromResult(_reminderSettings);
     }
 

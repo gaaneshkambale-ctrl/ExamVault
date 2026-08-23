@@ -1,9 +1,9 @@
 using OnlineExamSystem.Exam.Domain.Enums;
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Exam.Domain.Entities;
 
-public class ExamAssignment : BaseEntity
+public class ExamAssignment : TenantScopedEntity
 {
     public int AssignmentNumber { get; set; }
     public Guid ExamId { get; set; }

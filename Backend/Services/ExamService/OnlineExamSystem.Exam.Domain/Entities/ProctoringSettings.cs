@@ -1,12 +1,12 @@
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Exam.Domain.Entities;
 
-/// <summary>Single global row controlling which AI proctoring detectors run during exams
+/// <summary>One row per tenant controlling which AI proctoring detectors run during exams
 /// that have EnableProctoring checked at the assignment level. ProctoringEnabled is a
 /// master switch on top of that per-assignment flag. All default to true so the
 /// detectors behave the same as the original per-assignment-only design.</summary>
-public class ProctoringSettings : BaseEntity
+public class ProctoringSettings : TenantScopedEntity
 {
     public bool ProctoringEnabled { get; set; } = true;
     public bool FaceDetectionEnabled { get; set; } = true;

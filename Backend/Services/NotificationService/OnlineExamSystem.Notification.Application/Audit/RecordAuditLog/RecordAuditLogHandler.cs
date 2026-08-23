@@ -16,6 +16,7 @@ public class RecordAuditLogHandler
     {
         var entry = new AuditLog
         {
+            TenantId = command.TenantId,
             Module = command.Module,
             Activity = command.Activity,
             Details = command.Details,

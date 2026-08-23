@@ -86,6 +86,7 @@ public class ExamsController : ControllerBase
         var exam = result.Exam!;
         _logger.LogInformation("Exam {ExamId} created by {UserId}.", exam.Id, createdByUserId);
         await _auditClient.RecordAsync(
+            exam.TenantId,
             "Exams",
             "Created exam",
             exam.Title,
@@ -243,6 +244,7 @@ public class ExamsController : ControllerBase
         if (targetStatus == ExamStatus.Published)
         {
             await _auditClient.RecordAsync(
+                result.Exam!.TenantId,
                 "Exams",
                 "Published exam",
                 result.Exam!.Title,

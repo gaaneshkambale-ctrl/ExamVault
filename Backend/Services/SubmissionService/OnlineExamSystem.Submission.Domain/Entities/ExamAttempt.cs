@@ -1,9 +1,9 @@
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Submission.Domain.Enums;
 
 namespace OnlineExamSystem.Submission.Domain.Entities;
 
-public class ExamAttempt : BaseEntity
+public class ExamAttempt : TenantScopedEntity
 {
     public Guid ExamId { get; set; }
     public Guid UserId { get; set; }

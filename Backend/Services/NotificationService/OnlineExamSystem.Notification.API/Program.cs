@@ -28,7 +28,9 @@ using OnlineExamSystem.Notification.Application.Settings.UpdateSystemSettings;
 using OnlineExamSystem.Notification.API.Jobs;
 using OnlineExamSystem.Notification.Infrastructure.Clients;
 using OnlineExamSystem.Notification.Infrastructure.Email;
+using OnlineExamSystem.Notification.Infrastructure.Multitenancy;
 using OnlineExamSystem.Notification.Infrastructure.Persistence;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Notification.API;
 
@@ -45,6 +47,8 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<NotificationDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationDb")));
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();

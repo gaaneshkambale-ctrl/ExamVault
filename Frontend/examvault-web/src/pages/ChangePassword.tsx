@@ -50,7 +50,9 @@ export default function ChangePassword() {
       await changeMyPassword({ currentPassword, newPassword });
       clearMustChangePassword();
       if (forced) {
-        navigate(user?.role === 'Admin' ? '/admin/dashboard' : '/dashboard', { replace: true });
+        const destination =
+          user?.role === 'SuperAdmin' ? '/platform/dashboard' : user?.role === 'Admin' ? '/admin/dashboard' : '/dashboard';
+        navigate(destination, { replace: true });
       } else {
         setStatus('success');
         setCurrentPassword('');

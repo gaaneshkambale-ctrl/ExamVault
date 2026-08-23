@@ -208,16 +208,22 @@ public class ExamRepository : IExamRepository
         return true;
     }
 
+    // IgnoreQueryFilters() throughout this method: the reminder check background job has no
+    // authenticated caller/current tenant (it runs on a timer, not behind a request), so the
+    // ambient tenant filter would otherwise silently return nothing for every tenant. It must
+    // see every tenant's candidates and let the caller (the job) sort them by TenantId itself.
     public async Task<IReadOnlyList<UpcomingAssignmentForReminder>> GetAssignmentsStartingWithinAsync(
         DateTime fromUtc,
         DateTime toUtc,
         CancellationToken cancellationToken = default)
     {
         var publishedExamIds = _dbContext.Exams
+            .IgnoreQueryFilters()
             .Where(e => e.Status == ExamStatus.Published)
             .Select(e => e.Id);
 
         var candidates = await _dbContext.ExamAssignments
+            .IgnoreQueryFilters()
             .Where(a => a.StartAtUtc > fromUtc && a.StartAtUtc <= toUtc && publishedExamIds.Contains(a.ExamId))
             .ToListAsync(cancellationToken);
         if (candidates.Count == 0)
@@ -226,10 +232,12 @@ public class ExamRepository : IExamRepository
         }
 
         var examTitles = await _dbContext.Exams
+            .IgnoreQueryFilters()
             .Where(e => candidates.Select(a => a.ExamId).Contains(e.Id))
             .ToDictionaryAsync(e => e.Id, e => e.Title, cancellationToken);
         var assignmentIds = candidates.Select(a => a.Id).ToList();
         var targetsByAssignment = await _dbContext.ExamAssignmentTargets
+            .IgnoreQueryFilters()
             .Where(t => assignmentIds.Contains(t.ExamAssignmentId))
             .GroupBy(t => t.ExamAssignmentId)
             .Select(g => new { AssignmentId = g.Key, UserIds = g.Select(t => t.UserId).ToList() })
@@ -237,6 +245,7 @@ public class ExamRepository : IExamRepository
 
         return candidates
             .Select(a => new UpcomingAssignmentForReminder(
+                a.TenantId,
                 a.Id,
                 a.ExamId,
                 examTitles.GetValueOrDefault(a.ExamId, "Unknown Exam"),
@@ -245,6 +254,9 @@ public class ExamRepository : IExamRepository
             .ToList();
     }
 
+    // IgnoreQueryFilters(): same reason as above - called only from the background job. Safe
+    // without an explicit TenantId check because assignmentId already uniquely identifies a
+    // single row regardless of tenant.
     public async Task<IReadOnlyList<Guid>> FilterUserIdsWithoutReminderLogAsync(
         Guid assignmentId,
         ReminderWindow window,
@@ -252,6 +264,7 @@ public class ExamRepository : IExamRepository
         CancellationToken cancellationToken = default)
     {
         var alreadyLogged = await _dbContext.ExamReminderLogs
+            .IgnoreQueryFilters()
             .Where(r => r.AssignmentId == assignmentId && r.Window == window && candidateUserIds.Contains(r.UserId))
             .Select(r => r.UserId)
             .ToListAsync(cancellationToken);
@@ -260,13 +273,20 @@ public class ExamRepository : IExamRepository
     }
 
     public async Task AddReminderLogEntriesAsync(
+        Guid tenantId,
         Guid assignmentId,
         ReminderWindow window,
         IReadOnlyList<Guid> userIds,
         CancellationToken cancellationToken = default)
     {
         var entries = userIds
-            .Select(userId => new ExamReminderLog { AssignmentId = assignmentId, UserId = userId, Window = window })
+            .Select(userId => new ExamReminderLog
+            {
+                TenantId = tenantId,
+                AssignmentId = assignmentId,
+                UserId = userId,
+                Window = window,
+            })
             .ToList();
         await _dbContext.ExamReminderLogs.AddRangeAsync(entries, cancellationToken);
     }
@@ -277,6 +297,23 @@ public class ExamRepository : IExamRepository
         if (settings is null)
         {
             settings = new ReminderSettings();
+            await _dbContext.ReminderSettings.AddAsync(settings, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return settings;
+    }
+
+    public async Task<ReminderSettings> GetOrCreateReminderSettingsForTenantAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var settings = await _dbContext.ReminderSettings
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
+        if (settings is null)
+        {
+            settings = new ReminderSettings { TenantId = tenantId };
             await _dbContext.ReminderSettings.AddAsync(settings, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }

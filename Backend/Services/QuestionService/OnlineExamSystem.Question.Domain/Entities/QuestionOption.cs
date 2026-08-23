@@ -1,8 +1,8 @@
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Question.Domain.Entities;
 
-public class QuestionOption : BaseEntity
+public class QuestionOption : TenantScopedEntity
 {
     public Guid QuestionId { get; set; }
     public string OptionText { get; set; } = string.Empty;

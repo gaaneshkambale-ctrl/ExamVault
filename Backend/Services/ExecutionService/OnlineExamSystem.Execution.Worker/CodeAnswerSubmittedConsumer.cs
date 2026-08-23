@@ -102,7 +102,7 @@ public class CodeAnswerSubmittedConsumer : BackgroundService
         ISubmissionServiceClient submissionClient,
         CancellationToken cancellationToken)
     {
-        var token = tokenProvider.CreateToken();
+        var token = tokenProvider.CreateToken(submitted.TenantId);
 
         var question = await questionClient.GetQuestionAsync(submitted.QuestionId, token, cancellationToken);
         if (question is null)

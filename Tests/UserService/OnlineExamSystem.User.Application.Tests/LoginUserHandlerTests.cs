@@ -8,8 +8,8 @@ namespace OnlineExamSystem.User.Application.Tests;
 
 public class LoginUserHandlerTests
 {
-    private static LoginUserHandler CreateHandler(FakeUserRepository repository) =>
-        new(repository, new LoginUserValidator(), new PasswordHasher<AppUser>(), JwtTestHelper.CreateService());
+    private static LoginUserHandler CreateHandler(FakeUserRepository repository, FakeTenantRepository? tenantRepository = null) =>
+        new(repository, tenantRepository ?? new FakeTenantRepository(), new LoginUserValidator(), new PasswordHasher<AppUser>(), JwtTestHelper.CreateService());
 
     private static async Task<AppUser> SeedUser(
         FakeUserRepository repository,
@@ -104,6 +104,41 @@ public class LoginUserHandlerTests
         var handler = CreateHandler(repository);
 
         var result = await handler.HandleAsync(new LoginUserCommand("", ""));
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task Same_email_in_two_tenants_logs_into_the_one_matching_the_slug()
+    {
+        var tenantRepository = new FakeTenantRepository();
+        var tenantA = new Tenant { Name = "Stanford", Slug = "stanford", IsActive = true };
+        var tenantB = new Tenant { Name = "Acme Corp", Slug = "acmecorp", IsActive = true };
+        await tenantRepository.AddAsync(tenantA);
+        await tenantRepository.AddAsync(tenantB);
+
+        var repository = new FakeUserRepository();
+        var userA = await SeedUser(repository, "admin@gmail.com", "Passw0rd!");
+        userA.TenantId = tenantA.Id;
+        var userB = await SeedUser(repository, "admin@gmail.com", "Passw0rd!");
+        userB.TenantId = tenantB.Id;
+
+        var handler = CreateHandler(repository, tenantRepository);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("admin@gmail.com", "Passw0rd!", TenantSlug: "acmecorp"));
+
+        Assert.True(result.Success);
+        Assert.Equal(userB.Id, result.User!.Id);
+    }
+
+    [Fact]
+    public async Task Unknown_tenant_slug_returns_invalid_credentials_without_revealing_the_slug_is_missing()
+    {
+        var repository = new FakeUserRepository();
+        await SeedUser(repository, "jane@example.com", "Passw0rd!");
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: "does-not-exist"));
 
         Assert.False(result.Success);
     }

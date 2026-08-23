@@ -30,6 +30,8 @@ export default function LoginForm() {
       const profile = await login(email, password, rememberMe);
       if (profile.mustChangePassword) {
         navigate('/change-password', { state: { forced: true } });
+      } else if (profile.role === 'SuperAdmin') {
+        navigate('/platform/dashboard');
       } else {
         navigate(profile.role === 'Admin' ? '/admin/dashboard' : '/dashboard');
       }

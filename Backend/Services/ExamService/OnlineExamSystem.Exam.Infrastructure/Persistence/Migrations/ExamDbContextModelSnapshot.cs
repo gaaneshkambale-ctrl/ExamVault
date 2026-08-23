@@ -82,6 +82,9 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.Property<int>("TargetType")
                         .HasColumnType("int");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("TimeZoneId")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -93,6 +96,8 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ExamId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("ExamAssignments");
                 });
@@ -107,6 +112,9 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<Guid>("ExamAssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("UserId")
@@ -158,10 +166,15 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("ExamDefaults");
                 });
@@ -260,6 +273,9 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -275,6 +291,8 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ExamTypeId");
 
+                    b.HasIndex("TenantId");
+
                     b.ToTable("Exams");
                 });
 
@@ -289,6 +307,9 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
@@ -356,6 +377,9 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Timezone")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -365,6 +389,8 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("GeneralSettings");
                 });
@@ -408,10 +434,15 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.Property<int>("SessionTimeoutMinutes")
                         .HasColumnType("int");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("ProctoringSettings");
                 });
@@ -431,10 +462,15 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Enable24HourReminder")
                         .HasColumnType("bit");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("ReminderSettings");
                 });
@@ -496,9 +532,14 @@ namespace OnlineExamSystem.Exam.Infrastructure.Persistence.Migrations
                     b.Property<bool>("ShuffleQuestions")
                         .HasColumnType("bit");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ExamId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Sections");
                 });

@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  roles?: Array<'Student' | 'Admin'>;
+  roles?: Array<'Student' | 'Admin' | 'SuperAdmin'>;
 }
 
 export default function ProtectedRoute({ children, roles }: ProtectedRouteProps) {

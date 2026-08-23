@@ -1,12 +1,12 @@
 using OnlineExamSystem.Exam.Domain.Enums;
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Exam.Domain.Entities;
 
-/// <summary>Single global row of default values shown on the Exam Settings card.
+/// <summary>One row per tenant of default values shown on the Exam Settings card.
 /// Not yet wired into CreateExam's actual prefill values (deferred) - this round
 /// only makes the values real and editable in Settings.</summary>
-public class ExamDefaults : BaseEntity
+public class ExamDefaults : TenantScopedEntity
 {
     public int DefaultDurationMinutes { get; set; } = 60;
     public int PassingScorePercent { get; set; } = 40;

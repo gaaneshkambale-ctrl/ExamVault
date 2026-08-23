@@ -1,3 +1,5 @@
+using OnlineExamSystem.ApiGateway.Multitenancy;
+
 namespace OnlineExamSystem.ApiGateway;
 
 public class Program
@@ -8,6 +10,12 @@ public class Program
 
         builder.Services.AddReverseProxy()
             .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+
+        builder.Services.AddMemoryCache();
+        builder.Services.AddHttpClient<ITenantLookupClient, TenantLookupClient>(client =>
+        {
+            client.BaseAddress = new Uri(builder.Configuration["Services:UserServiceBaseUrl"]!);
+        });
 
         // Allowed frontend origins come from config (Cors:AllowedOrigins, comma-separated)
         // so each environment (local dev, Azure dev/qa/prod) can allow its own frontend
@@ -29,6 +37,8 @@ public class Program
         app.UseHttpsRedirection();
 
         app.UseCors(frontendCorsPolicy);
+
+        app.UseMiddleware<TenantResolutionMiddleware>();
 
         app.MapGet("/", () => "ExamVault API Gateway");
         app.MapReverseProxy();

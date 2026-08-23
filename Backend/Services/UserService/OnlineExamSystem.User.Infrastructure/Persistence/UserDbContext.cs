@@ -1,13 +1,16 @@
 using Microsoft.EntityFrameworkCore;
-using OnlineExamSystem.User.Domain.Constants;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.Infrastructure.Persistence;
 
 public class UserDbContext : DbContext
 {
-    public UserDbContext(DbContextOptions<UserDbContext> options) : base(options)
+    private readonly ICurrentTenant _currentTenant;
+
+    public UserDbContext(DbContextOptions<UserDbContext> options, ICurrentTenant currentTenant) : base(options)
     {
+        _currentTenant = currentTenant;
     }
 
     public DbSet<AppUser> Users => Set<AppUser>();
@@ -108,8 +111,19 @@ public class UserDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(g => g.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // The guardrail: unlike AppUser (see its own comment), Group is
+            // only ever touched by an authenticated Admin, so it's safe to
+            // filter every query down to the caller's own tenant here -
+            // Super Admin sees every tenant's groups, an unauthenticated
+            // caller sees none, a Tenant Admin sees only their own.
+            entity.HasQueryFilter(g =>
+                _currentTenant.IsSuperAdmin || (_currentTenant.IsAuthenticated && g.TenantId == _currentTenant.TenantId));
         });
 
+        // GroupMember has no TenantId of its own - scoped transitively via
+        // its GroupId (the same "via the owner" pattern as RefreshToken and
+        // UserPreferences above), which is already filtered.
         modelBuilder.Entity<GroupMember>(entity =>
         {
             entity.HasKey(m => m.Id);

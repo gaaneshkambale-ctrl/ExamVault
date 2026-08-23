@@ -100,6 +100,7 @@ public class QuestionsController : ControllerBase
             request.ExamId,
             createdByUserId);
         await _auditClient.RecordAsync(
+            question.TenantId,
             "Questions",
             "Created question",
             request.QuestionText,

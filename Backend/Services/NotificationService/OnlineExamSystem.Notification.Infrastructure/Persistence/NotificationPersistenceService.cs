@@ -18,6 +18,7 @@ public class NotificationPersistenceService : INotificationPersistenceService
     }
 
     public async Task<IReadOnlyList<NotificationEntity>> CreateNotificationsAsync(
+        Guid tenantId,
         Guid batchId,
         IReadOnlyList<NotificationRecipient> recipients,
         NotificationType type,
@@ -30,9 +31,15 @@ public class NotificationPersistenceService : INotificationPersistenceService
         bool sendInApp = true,
         CancellationToken cancellationToken = default)
     {
+        // IgnoreQueryFilters + explicit tenantId: this method is called both from an
+        // authenticated admin request (ambient tenant available) and from background
+        // consumers with no HttpContext at all (see the *Consumer classes) - tenantId is
+        // always passed in explicitly so both callers behave identically rather than the
+        // consumer path silently seeing no preferences at all.
         var recipientIds = recipients.Select(r => r.UserId).ToList();
         var preferences = await _dbContext.NotificationPreferences
-            .Where(p => p.Type == type && recipientIds.Contains(p.UserId))
+            .IgnoreQueryFilters()
+            .Where(p => p.TenantId == tenantId && p.Type == type && recipientIds.Contains(p.UserId))
             .ToListAsync(cancellationToken);
         var preferenceByUserId = preferences.ToDictionary(p => p.UserId);
 
@@ -56,6 +63,7 @@ public class NotificationPersistenceService : INotificationPersistenceService
 
             var entity = new NotificationEntity
             {
+                TenantId = tenantId,
                 BatchId = batchId,
                 UserId = recipient.UserId,
                 Type = type,

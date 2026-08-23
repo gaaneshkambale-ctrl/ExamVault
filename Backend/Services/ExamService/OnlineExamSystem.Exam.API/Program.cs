@@ -37,8 +37,10 @@ using OnlineExamSystem.Exam.Application.Sections.Reorder;
 using OnlineExamSystem.Exam.Application.Sections.Update;
 using OnlineExamSystem.Exam.Infrastructure;
 using OnlineExamSystem.Exam.Infrastructure.Messaging;
+using OnlineExamSystem.Exam.Infrastructure.Multitenancy;
 using OnlineExamSystem.Exam.Infrastructure.Persistence;
 using OnlineExamSystem.Exam.Infrastructure.Repositories;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Events.Publishing;
 
 namespace OnlineExamSystem.Exam.API;
@@ -56,6 +58,8 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<ExamDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("ExamDb")));
         builder.Services.AddScoped<IExamRepository, ExamRepository>();

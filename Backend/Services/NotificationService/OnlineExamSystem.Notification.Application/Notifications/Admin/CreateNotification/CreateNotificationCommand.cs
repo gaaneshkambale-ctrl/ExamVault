@@ -1,6 +1,7 @@
 namespace OnlineExamSystem.Notification.Application.Notifications.Admin.CreateNotification;
 
 public record CreateNotificationCommand(
+    Guid TenantId,
     string Title,
     string Message,
     string Type,

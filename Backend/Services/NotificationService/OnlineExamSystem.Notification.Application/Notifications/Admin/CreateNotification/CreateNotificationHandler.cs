@@ -75,6 +75,7 @@ public class CreateNotificationHandler
         var batchId = Guid.NewGuid();
 
         await _persistenceService.CreateNotificationsAsync(
+            command.TenantId,
             batchId,
             recipients,
             type,

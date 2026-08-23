@@ -1,9 +1,9 @@
 using OnlineExamSystem.Exam.Domain.Enums;
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Exam.Domain.Entities;
 
-public class ExamPaper : BaseEntity
+public class ExamPaper : TenantScopedEntity
 {
     public string Title { get; set; } = string.Empty;
     public string? ExamCode { get; set; }

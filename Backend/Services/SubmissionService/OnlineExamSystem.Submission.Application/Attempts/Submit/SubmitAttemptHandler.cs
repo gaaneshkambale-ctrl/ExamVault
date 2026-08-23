@@ -63,6 +63,7 @@ public class SubmitAttemptHandler
             await _eventPublisher.PublishAsync(
                 new CodeAnswerSubmittedEvent
                 {
+                    TenantId = attempt.TenantId,
                     AttemptId = attempt.Id,
                     QuestionId = answer.QuestionId,
                     AnswerText = answer.AnswerText!,

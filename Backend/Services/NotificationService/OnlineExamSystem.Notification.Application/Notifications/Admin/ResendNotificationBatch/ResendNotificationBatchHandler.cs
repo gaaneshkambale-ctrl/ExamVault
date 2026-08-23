@@ -40,6 +40,7 @@ public class ResendNotificationBatchHandler
         var newBatchId = Guid.NewGuid();
 
         await _persistenceService.CreateNotificationsAsync(
+            first.TenantId,
             newBatchId,
             recipients,
             first.Type,

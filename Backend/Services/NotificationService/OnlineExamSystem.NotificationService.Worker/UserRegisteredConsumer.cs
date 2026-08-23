@@ -66,6 +66,7 @@ public class UserRegisteredConsumer : BackgroundService
             var persistenceService = scope.ServiceProvider.GetRequiredService<INotificationPersistenceService>();
 
             await persistenceService.CreateNotificationsAsync(
+                tenantId: userRegistered.TenantId,
                 batchId: Guid.NewGuid(),
                 recipients: [new NotificationRecipient(userRegistered.UserId, userRegistered.Email, userRegistered.FullName)],
                 type: NotificationType.Account,

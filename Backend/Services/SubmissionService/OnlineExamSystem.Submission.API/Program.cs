@@ -23,9 +23,11 @@ using OnlineExamSystem.Submission.Application.Attempts.Submit;
 using OnlineExamSystem.Submission.Application.Attempts.UpdateViolationStatus;
 using OnlineExamSystem.Submission.Application.Attempts.WatchRecording;
 using OnlineExamSystem.Shared.Events.Publishing;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Submission.Application.Interfaces;
 using OnlineExamSystem.Submission.Infrastructure;
 using OnlineExamSystem.Submission.Infrastructure.Messaging;
+using OnlineExamSystem.Submission.Infrastructure.Multitenancy;
 using OnlineExamSystem.Submission.Infrastructure.Persistence;
 using OnlineExamSystem.Submission.Infrastructure.Repositories;
 
@@ -44,6 +46,8 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<SubmissionDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("SubmissionDb")));
         builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();

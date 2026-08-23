@@ -30,6 +30,7 @@ using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
+using OnlineExamSystem.User.Application.Tenants.GetBySlug;
 using OnlineExamSystem.User.Application.Tenants.List;
 using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
@@ -37,13 +38,14 @@ using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
 using OnlineExamSystem.User.Application.Users.UpdateMyPreferences;
 using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
-using OnlineExamSystem.User.Domain.Constants;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Domain.Enums;
 using OnlineExamSystem.User.Infrastructure.Authentication;
 using OnlineExamSystem.User.Infrastructure.Clients;
 using OnlineExamSystem.User.Infrastructure.Email;
 using OnlineExamSystem.User.Infrastructure.Messaging;
+using OnlineExamSystem.User.Infrastructure.Multitenancy;
 using OnlineExamSystem.User.Infrastructure.Persistence;
 using OnlineExamSystem.User.Infrastructure.Repositories;
 
@@ -62,6 +64,8 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<UserDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("UserDb")));
         builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -118,6 +122,7 @@ public class Program
         builder.Services.AddScoped<CreateTenantHandler>();
         builder.Services.AddScoped<ListTenantsHandler>();
         builder.Services.AddScoped<SetTenantActiveStatusHandler>();
+        builder.Services.AddScoped<GetTenantBySlugHandler>();
         builder.Services.AddScoped<IValidator<CreateTenantAdminCommand>, CreateTenantAdminValidator>();
         builder.Services.AddScoped<CreateTenantAdminHandler>();
 

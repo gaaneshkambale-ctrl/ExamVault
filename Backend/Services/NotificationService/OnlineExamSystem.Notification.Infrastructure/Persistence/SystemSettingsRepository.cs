@@ -26,6 +26,23 @@ public class SystemSettingsRepository : ISystemSettingsRepository
         return settings;
     }
 
+    public async Task<SystemSettings> GetOrCreateForTenantAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var settings = await _dbContext.SystemSettings
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
+        if (settings is null)
+        {
+            settings = new SystemSettings { TenantId = tenantId };
+            await _dbContext.SystemSettings.AddAsync(settings, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return settings;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

@@ -3,6 +3,12 @@ using OnlineExamSystem.User.Domain.Enums;
 
 namespace OnlineExamSystem.User.Domain.Entities;
 
+// Deliberately BaseEntity, not TenantScopedEntity: Login and Register run
+// before any tenant context exists (no JWT yet), so this table cannot carry
+// a global tenant query filter the way Group does - see UserDbContext's own
+// comment. TenantId is still a real, indexed column (Phase 1); every
+// handler that touches it passes tenantId explicitly instead of relying on
+// ambient context.
 public class AppUser : BaseEntity
 {
     public Guid TenantId { get; set; }

@@ -81,14 +81,22 @@ public interface IExamRepository
         CancellationToken cancellationToken = default);
 
     Task AddReminderLogEntriesAsync(
+        Guid tenantId,
         Guid assignmentId,
         ReminderWindow window,
         IReadOnlyList<Guid> userIds,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the single global ReminderSettings row, creating it with both windows
-    /// enabled (the pre-existing default behavior) if it doesn't exist yet.</summary>
+    /// <summary>Returns the caller's own tenant's ReminderSettings row (scoped by the ambient
+    /// query filter), creating it with both windows enabled (the pre-existing default behavior)
+    /// if it doesn't exist yet. For the authenticated HTTP path only.</summary>
     Task<ReminderSettings> GetOrCreateReminderSettingsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Same as above but for an explicitly-given tenant, bypassing the ambient query
+    /// filter - the reminder check background job has no authenticated caller/current tenant of
+    /// its own, so it must check each tenant's settings explicitly rather than relying on ambient
+    /// context.</summary>
+    Task<ReminderSettings> GetOrCreateReminderSettingsForTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the single global ProctoringSettings row, creating it with every
     /// detector enabled (the pre-existing default behavior) if it doesn't exist yet.</summary>

@@ -72,6 +72,10 @@ import NotificationHistory from '../pages/admin/NotificationHistory';
 import NotificationBatchDetails from '../pages/admin/NotificationBatchDetails';
 import NotificationTemplates from '../pages/admin/NotificationTemplates';
 import ProtectedRoute from '../components/ProtectedRoute';
+import ManageTenants from '../pages/platform/ManageTenants';
+import PlatformDashboard from '../pages/platform/PlatformDashboard';
+import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
+import { platformComingSoonRoutes } from './platformComingSoonRoutes';
 
 export default function AppRoutes() {
   return (
@@ -652,6 +656,57 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/platform/dashboard"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/organizations"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <ManageTenants />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/organizations/create"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <ManageTenants autoOpenCreate />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/organizations/active"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <ManageTenants statusFilter="active" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/organizations/suspended"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <ManageTenants statusFilter="suspended" />
+          </ProtectedRoute>
+        }
+      />
+      {platformComingSoonRoutes.map((route) => (
+        <Route
+          key={route.path}
+          path={route.path}
+          element={
+            <ProtectedRoute roles={['SuperAdmin']}>
+              <PlatformComingSoon active={route.active} parent={route.parent} title={route.title} />
+            </ProtectedRoute>
+          }
+        />
+      ))}
     </Routes>
   );
 }

@@ -55,65 +55,73 @@ public class ExamReminderCheckService : BackgroundService
         var examRepository = scope.ServiceProvider.GetRequiredService<IExamRepository>();
         var userLookupClient = scope.ServiceProvider.GetRequiredService<IInternalUserLookupClient>();
 
-        var settings = await examRepository.GetOrCreateReminderSettingsAsync(cancellationToken);
         var now = DateTime.UtcNow;
 
         foreach (var (window, lead) in Windows)
         {
-            var windowEnabled = window == DomainReminderWindow.TwentyFourHour
-                ? settings.Enable24HourReminder
-                : settings.Enable1HourReminder;
-            if (!windowEnabled)
-            {
-                continue;
-            }
-
+            // Candidates span every tenant (the job has no current-tenant context of its own),
+            // so each tenant's own ReminderSettings must be checked individually rather than
+            // once globally - two tenants can have this window enabled differently.
             var assignments = await examRepository.GetAssignmentsStartingWithinAsync(
                 now, now + lead, cancellationToken);
 
-            foreach (var assignment in assignments)
+            foreach (var tenantGroup in assignments.GroupBy(a => a.TenantId))
             {
-                if (assignment.TargetUserIds.Count == 0)
+                var settings = await examRepository.GetOrCreateReminderSettingsForTenantAsync(
+                    tenantGroup.Key, cancellationToken);
+                var windowEnabled = window == DomainReminderWindow.TwentyFourHour
+                    ? settings.Enable24HourReminder
+                    : settings.Enable1HourReminder;
+                if (!windowEnabled)
                 {
                     continue;
                 }
 
-                var dueUserIds = await examRepository.FilterUserIdsWithoutReminderLogAsync(
-                    assignment.AssignmentId, window, assignment.TargetUserIds, cancellationToken);
-                if (dueUserIds.Count == 0)
+                foreach (var assignment in tenantGroup)
                 {
-                    continue;
-                }
-
-                await examRepository.AddReminderLogEntriesAsync(
-                    assignment.AssignmentId, window, dueUserIds, cancellationToken);
-                await examRepository.SaveChangesAsync(cancellationToken);
-
-                var targetUsers = await userLookupClient.GetUsersByIdsAsync(dueUserIds, cancellationToken);
-                if (targetUsers.Count == 0)
-                {
-                    continue;
-                }
-
-                await _eventPublisher.PublishAsync(
-                    new ExamReminderDueEvent
+                    if (assignment.TargetUserIds.Count == 0)
                     {
-                        ExamId = assignment.ExamId,
-                        AssignmentId = assignment.AssignmentId,
-                        ExamTitle = assignment.ExamTitle,
-                        StartAtUtc = assignment.StartAtUtc,
-                        Window = window == DomainReminderWindow.TwentyFourHour
-                            ? EventReminderWindow.TwentyFourHour
-                            : EventReminderWindow.OneHour,
-                        Targets = targetUsers
-                            .Select(u => new AssignedUserInfo { UserId = u.Id, Email = u.Email, FullName = u.FullName })
-                            .ToList(),
-                    },
-                    cancellationToken);
+                        continue;
+                    }
 
-                _logger.LogInformation(
-                    "Published ExamReminderDueEvent for assignment {AssignmentId} ({Window}), {Count} targets.",
-                    assignment.AssignmentId, window, targetUsers.Count);
+                    var dueUserIds = await examRepository.FilterUserIdsWithoutReminderLogAsync(
+                        assignment.AssignmentId, window, assignment.TargetUserIds, cancellationToken);
+                    if (dueUserIds.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    await examRepository.AddReminderLogEntriesAsync(
+                        tenantGroup.Key, assignment.AssignmentId, window, dueUserIds, cancellationToken);
+                    await examRepository.SaveChangesAsync(cancellationToken);
+
+                    var targetUsers = await userLookupClient.GetUsersByIdsAsync(dueUserIds, cancellationToken);
+                    if (targetUsers.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    await _eventPublisher.PublishAsync(
+                        new ExamReminderDueEvent
+                        {
+                            TenantId = tenantGroup.Key,
+                            ExamId = assignment.ExamId,
+                            AssignmentId = assignment.AssignmentId,
+                            ExamTitle = assignment.ExamTitle,
+                            StartAtUtc = assignment.StartAtUtc,
+                            Window = window == DomainReminderWindow.TwentyFourHour
+                                ? EventReminderWindow.TwentyFourHour
+                                : EventReminderWindow.OneHour,
+                            Targets = targetUsers
+                                .Select(u => new AssignedUserInfo { UserId = u.Id, Email = u.Email, FullName = u.FullName })
+                                .ToList(),
+                        },
+                        cancellationToken);
+
+                    _logger.LogInformation(
+                        "Published ExamReminderDueEvent for assignment {AssignmentId} ({Window}), {Count} targets.",
+                        assignment.AssignmentId, window, targetUsers.Count);
+                }
             }
         }
     }

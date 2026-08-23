@@ -121,6 +121,7 @@ public class CreateAssignmentHandler
             await _eventPublisher.PublishAsync(
                 new ExamAssignedEvent
                 {
+                    TenantId = assignment.TenantId,
                     ExamId = exam.Id,
                     ExamTitle = exam.Title,
                     Targets = targetUsers

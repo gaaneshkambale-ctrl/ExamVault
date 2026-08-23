@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OnlineExamSystem.Exam.Domain.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Exam.Infrastructure.Persistence;
 
-public class ExamDbContext : DbContext
+public class ExamDbContext : TenantScopedDbContext
 {
-    public ExamDbContext(DbContextOptions<ExamDbContext> options) : base(options)
+    public ExamDbContext(DbContextOptions<ExamDbContext> options, ICurrentTenant currentTenant)
+        : base(options, currentTenant)
     {
     }
 
@@ -45,10 +47,13 @@ public class ExamDbContext : DbContext
             entity.Property(e => e.Category).HasMaxLength(100);
             entity.Property(e => e.Instructions).HasMaxLength(2000);
             entity.Property(e => e.NegativeMarks).HasColumnType("decimal(5,2)");
+            entity.HasIndex(e => e.TenantId);
             entity.HasOne(e => e.ExamType)
                 .WithMany()
                 .HasForeignKey(e => e.ExamTypeId)
                 .OnDelete(DeleteBehavior.SetNull);
+            entity.HasQueryFilter(e =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && e.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ExamType>(entity =>
@@ -65,10 +70,13 @@ public class ExamDbContext : DbContext
             entity.Property(s => s.Description).HasMaxLength(2000);
             entity.Property(s => s.Instructions).HasMaxLength(2000);
             entity.Property(s => s.NegativeMarks).HasColumnType("decimal(5,2)");
+            entity.HasIndex(s => s.TenantId);
             entity.HasOne<ExamPaper>()
                 .WithMany()
                 .HasForeignKey(s => s.ExamId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(s =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && s.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ExamAssignment>(entity =>
@@ -77,10 +85,13 @@ public class ExamDbContext : DbContext
             entity.Property(a => a.AssignmentNumber).UseIdentityColumn();
             entity.HasIndex(a => a.AssignmentNumber).IsUnique();
             entity.Property(a => a.TimeZoneId).IsRequired().HasMaxLength(100);
+            entity.HasIndex(a => a.TenantId);
             entity.HasOne<ExamPaper>()
                 .WithMany()
                 .HasForeignKey(a => a.ExamId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(a =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && a.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ExamAssignmentTarget>(entity =>
@@ -91,6 +102,8 @@ public class ExamDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(t => t.ExamAssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(t =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && t.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ExamReminderLog>(entity =>
@@ -101,6 +114,24 @@ public class ExamDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(r => r.AssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(r =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && r.TenantId == CurrentTenant.TenantId));
+        });
+
+        modelBuilder.Entity<ProctoringSettings>(entity =>
+        {
+            entity.HasKey(p => p.Id);
+            entity.HasIndex(p => p.TenantId);
+            entity.HasQueryFilter(p =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && p.TenantId == CurrentTenant.TenantId));
+        });
+
+        modelBuilder.Entity<ReminderSettings>(entity =>
+        {
+            entity.HasKey(r => r.Id);
+            entity.HasIndex(r => r.TenantId);
+            entity.HasQueryFilter(r =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && r.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<GeneralSettings>(entity =>
@@ -111,6 +142,9 @@ public class ExamDbContext : DbContext
             entity.Property(g => g.Language).HasMaxLength(100);
             entity.Property(g => g.Timezone).HasMaxLength(100);
             entity.Property(g => g.DateFormat).HasMaxLength(50);
+            entity.HasIndex(g => g.TenantId);
+            entity.HasQueryFilter(g =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && g.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ExamDefaults>(entity =>
@@ -119,6 +153,9 @@ public class ExamDbContext : DbContext
             entity.Property(e => e.NegativeMarkingValue).HasColumnType("decimal(5,2)");
             entity.Property(e => e.QuestionNavigationMode).HasConversion<string>();
             entity.Property(e => e.ResultPublishingMode).HasConversion<string>();
+            entity.HasIndex(e => e.TenantId);
+            entity.HasQueryFilter(e =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && e.TenantId == CurrentTenant.TenantId));
         });
     }
 }

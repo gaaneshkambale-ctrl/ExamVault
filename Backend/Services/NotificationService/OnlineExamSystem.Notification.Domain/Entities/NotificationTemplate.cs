@@ -1,9 +1,9 @@
 using OnlineExamSystem.Notification.Domain.Enums;
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Notification.Domain.Entities;
 
-public class NotificationTemplate : BaseEntity
+public class NotificationTemplate : TenantScopedEntity
 {
     public required string Name { get; set; }
     public NotificationType Type { get; set; }

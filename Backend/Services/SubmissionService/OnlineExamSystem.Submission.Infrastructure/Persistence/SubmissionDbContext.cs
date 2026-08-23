@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Submission.Domain.Entities;
 
 namespace OnlineExamSystem.Submission.Infrastructure.Persistence;
 
-public class SubmissionDbContext : DbContext
+public class SubmissionDbContext : TenantScopedDbContext
 {
-    public SubmissionDbContext(DbContextOptions<SubmissionDbContext> options) : base(options)
+    public SubmissionDbContext(DbContextOptions<SubmissionDbContext> options, ICurrentTenant currentTenant)
+        : base(options, currentTenant)
     {
     }
 
@@ -33,6 +35,9 @@ public class SubmissionDbContext : DbContext
         {
             entity.HasKey(a => a.Id);
             entity.HasIndex(a => new { a.ExamId, a.UserId });
+            entity.HasIndex(a => a.TenantId);
+            entity.HasQueryFilter(a =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && a.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<AttemptAnswer>(entity =>
@@ -45,6 +50,8 @@ public class SubmissionDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(a => a.AttemptId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(a =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && a.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<AttemptSectionState>(entity =>
@@ -55,6 +62,8 @@ public class SubmissionDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(a => a.AttemptId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(a =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && a.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ViolationEvent>(entity =>
@@ -65,6 +74,8 @@ public class SubmissionDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(v => v.AttemptId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(v =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && v.TenantId == CurrentTenant.TenantId));
         });
     }
 }

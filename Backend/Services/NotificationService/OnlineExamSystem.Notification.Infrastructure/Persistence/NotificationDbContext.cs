@@ -1,13 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OnlineExamSystem.Notification.Domain.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using NotificationEntity = OnlineExamSystem.Notification.Domain.Entities.Notification;
 
 namespace OnlineExamSystem.Notification.Infrastructure.Persistence;
 
-public class NotificationDbContext : DbContext
+public class NotificationDbContext : TenantScopedDbContext
 {
-    public NotificationDbContext(DbContextOptions<NotificationDbContext> options) : base(options)
+    public NotificationDbContext(DbContextOptions<NotificationDbContext> options, ICurrentTenant currentTenant)
+        : base(options, currentTenant)
     {
     }
 
@@ -34,9 +36,12 @@ public class NotificationDbContext : DbContext
             entity.HasKey(n => n.Id);
             entity.HasIndex(n => new { n.UserId, n.CreatedAtUtc });
             entity.HasIndex(n => n.BatchId);
+            entity.HasIndex(n => n.TenantId);
             entity.Property(n => n.Type).HasConversion<string>();
             entity.Property(n => n.EmailStatus).HasConversion<string>();
             entity.Property(n => n.ShowInApp).HasDefaultValue(true);
+            entity.HasQueryFilter(n =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && n.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<NotificationPreference>(entity =>
@@ -44,6 +49,8 @@ public class NotificationDbContext : DbContext
             entity.HasKey(p => p.Id);
             entity.HasIndex(p => new { p.UserId, p.Type }).IsUnique();
             entity.Property(p => p.Type).HasConversion<string>();
+            entity.HasQueryFilter(p =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && p.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<AuditLog>(entity =>
@@ -52,10 +59,13 @@ public class NotificationDbContext : DbContext
             entity.HasIndex(a => a.CreatedAtUtc);
             entity.HasIndex(a => a.Module);
             entity.HasIndex(a => a.UserId);
+            entity.HasIndex(a => a.TenantId);
             entity.Property(a => a.Module).HasConversion<string>();
             entity.Property(a => a.Activity).HasMaxLength(200);
             entity.Property(a => a.UserName).HasMaxLength(200);
             entity.Property(a => a.IpAddress).HasMaxLength(64);
+            entity.HasQueryFilter(a =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && a.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<NotificationTemplate>(entity =>
@@ -64,7 +74,10 @@ public class NotificationDbContext : DbContext
             entity.Property(t => t.Type).HasConversion<string>();
             entity.Property(t => t.Name).HasMaxLength(200);
             entity.Property(t => t.Subject).HasMaxLength(300);
+            entity.HasIndex(t => t.TenantId);
             entity.HasData(NotificationTemplateSeed.Templates);
+            entity.HasQueryFilter(t =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && t.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<SystemSettings>(entity =>
@@ -72,6 +85,9 @@ public class NotificationDbContext : DbContext
             entity.HasKey(s => s.Id);
             entity.Property(s => s.BackupFrequency).HasConversion<string>();
             entity.Property(s => s.LogLevel).HasConversion<string>();
+            entity.HasIndex(s => s.TenantId);
+            entity.HasQueryFilter(s =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && s.TenantId == CurrentTenant.TenantId));
         });
     }
 }
@@ -82,6 +98,12 @@ public class NotificationDbContext : DbContext
 // Timestamps are the fixed real date this migration was authored (NOT the
 // notification_templates.png mockup's illustrative per-row dates - backdating
 // these would be fabricating an audit trail).
+//
+// Belong to the seeded Default tenant only (same backfill precedent as every
+// other pre-multi-tenancy row) - a tenant provisioned after this ships starts
+// with zero templates until its own Admin creates some via Create Template.
+// No auto-clone-on-provisioning exists yet; self-service provisioning polish
+// is out of scope per the plan.
 public static class NotificationTemplateSeed
 {
     private static readonly DateTime SeededAtUtc = new(2026, 8, 22, 12, 0, 0, DateTimeKind.Utc);
@@ -91,6 +113,7 @@ public static class NotificationTemplateSeed
         new NotificationTemplate
         {
             Id = Guid.Parse("11111111-1111-4111-8111-111111111101"),
+            TenantId = TenantConstants.DefaultTenantId,
             Name = "Exam Assigned",
             Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.Exam,
             SendEmail = true,
@@ -107,6 +130,7 @@ public static class NotificationTemplateSeed
         new NotificationTemplate
         {
             Id = Guid.Parse("11111111-1111-4111-8111-111111111102"),
+            TenantId = TenantConstants.DefaultTenantId,
             Name = "Exam Reminder",
             Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.Reminder,
             SendEmail = true,
@@ -122,6 +146,7 @@ public static class NotificationTemplateSeed
         new NotificationTemplate
         {
             Id = Guid.Parse("11111111-1111-4111-8111-111111111103"),
+            TenantId = TenantConstants.DefaultTenantId,
             Name = "Result Published",
             Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.Result,
             SendEmail = true,
@@ -137,6 +162,7 @@ public static class NotificationTemplateSeed
         new NotificationTemplate
         {
             Id = Guid.Parse("11111111-1111-4111-8111-111111111104"),
+            TenantId = TenantConstants.DefaultTenantId,
             Name = "Account Created",
             Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.Account,
             SendEmail = true,
@@ -150,6 +176,7 @@ public static class NotificationTemplateSeed
         new NotificationTemplate
         {
             Id = Guid.Parse("11111111-1111-4111-8111-111111111105"),
+            TenantId = TenantConstants.DefaultTenantId,
             Name = "System Announcement",
             Type = OnlineExamSystem.Notification.Domain.Enums.NotificationType.System,
             SendEmail = false,

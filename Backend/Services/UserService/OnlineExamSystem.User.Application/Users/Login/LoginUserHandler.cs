@@ -9,17 +9,20 @@ namespace OnlineExamSystem.User.Application.Users.Login;
 public class LoginUserHandler
 {
     private readonly IUserRepository _userRepository;
+    private readonly ITenantRepository _tenantRepository;
     private readonly IValidator<LoginUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IJwtTokenService _jwtTokenService;
 
     public LoginUserHandler(
         IUserRepository userRepository,
+        ITenantRepository tenantRepository,
         IValidator<LoginUserCommand> validator,
         IPasswordHasher<AppUser> passwordHasher,
         IJwtTokenService jwtTokenService)
     {
         _userRepository = userRepository;
+        _tenantRepository = tenantRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
@@ -35,12 +38,26 @@ public class LoginUserHandler
             return LoginUserResult.InvalidCredentials();
         }
 
-        // No subdomain resolution yet (Phase 3) - tenant isn't known before
-        // login, so this matches by email alone across all tenants. Safe in
-        // practice today (one self-signup tenant, plus manually-provisioned
-        // ones with distinct admin emails) but is a known gap the Phase 3
-        // subdomain-scoped lookup closes for good.
-        var user = await _userRepository.GetByEmailAsync(command.Email, tenantId: null, cancellationToken);
+        // TenantSlug is only ever populated once the Gateway/frontend actually
+        // resolves a subdomain (Phase 3 of multi_tenant_saas.txt) - until then
+        // (local dev, today's single-tenant Azure setup) this stays null and
+        // the lookup matches by email alone across all tenants, same as
+        // before. An unknown/inactive slug returns the same "invalid
+        // credentials" the caller would get for a wrong password - it must
+        // never reveal whether a tenant slug exists.
+        Guid? tenantId = null;
+        if (!string.IsNullOrWhiteSpace(command.TenantSlug))
+        {
+            var tenant = await _tenantRepository.GetBySlugAsync(command.TenantSlug, cancellationToken);
+            if (tenant is null || !tenant.IsActive)
+            {
+                return LoginUserResult.InvalidCredentials();
+            }
+
+            tenantId = tenant.Id;
+        }
+
+        var user = await _userRepository.GetByEmailAsync(command.Email, tenantId, cancellationToken);
         if (user is null)
         {
             return LoginUserResult.InvalidCredentials();

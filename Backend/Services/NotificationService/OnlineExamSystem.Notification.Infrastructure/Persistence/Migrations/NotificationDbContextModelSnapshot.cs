@@ -50,6 +50,9 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -62,6 +65,8 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatedAtUtc");
 
                     b.HasIndex("Module");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("UserId");
 
@@ -105,6 +110,9 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -119,6 +127,8 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BatchId");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("UserId", "CreatedAtUtc");
 
@@ -139,6 +149,9 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("InAppEnabled")
                         .HasColumnType("bit");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -187,6 +200,9 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -195,6 +211,8 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("NotificationTemplates");
 
@@ -209,6 +227,7 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                             SendEmail = true,
                             SendInApp = true,
                             Subject = "Your {{examTitle}} Exam is Assigned",
+                            TenantId = new Guid("11111111-1111-1111-1111-111111111111"),
                             Type = "Exam",
                             UpdatedAtUtc = new DateTime(2026, 8, 22, 12, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -222,6 +241,7 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                             SendEmail = true,
                             SendInApp = false,
                             Subject = "Reminder: {{examTitle}} starts soon",
+                            TenantId = new Guid("11111111-1111-1111-1111-111111111111"),
                             Type = "Reminder",
                             UpdatedAtUtc = new DateTime(2026, 8, 22, 12, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -235,6 +255,7 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                             SendEmail = true,
                             SendInApp = true,
                             Subject = "Your {{examTitle}} results are available",
+                            TenantId = new Guid("11111111-1111-1111-1111-111111111111"),
                             Type = "Result",
                             UpdatedAtUtc = new DateTime(2026, 8, 22, 12, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -248,6 +269,7 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                             SendEmail = true,
                             SendInApp = false,
                             Subject = "Account Update",
+                            TenantId = new Guid("11111111-1111-1111-1111-111111111111"),
                             Type = "Account",
                             UpdatedAtUtc = new DateTime(2026, 8, 22, 12, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -261,6 +283,7 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                             SendEmail = false,
                             SendInApp = true,
                             Subject = "ExamVault Announcement",
+                            TenantId = new Guid("11111111-1111-1111-1111-111111111111"),
                             Type = "System",
                             UpdatedAtUtc = new DateTime(2026, 8, 22, 12, 0, 0, 0, DateTimeKind.Utc)
                         });
@@ -289,10 +312,15 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence.Migrations
                     b.Property<bool>("MaintenanceModeEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("SystemSettings");
                 });

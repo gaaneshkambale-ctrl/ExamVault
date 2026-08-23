@@ -1,11 +1,11 @@
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Exam.Domain.Entities;
 
-/// <summary>Single global row of organization-level settings shown on the General
+/// <summary>One row per tenant of organization-level settings shown on the General
 /// Settings card. Logo/branding isn't stored here yet (needs a real file-storage
 /// decision, deferred).</summary>
-public class GeneralSettings : BaseEntity
+public class GeneralSettings : TenantScopedEntity
 {
     public string OrganizationName { get; set; } = "ExamVault";
     public string SupportEmail { get; set; } = string.Empty;

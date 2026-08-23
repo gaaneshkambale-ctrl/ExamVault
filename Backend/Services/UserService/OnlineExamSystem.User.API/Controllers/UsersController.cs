@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using OnlineExamSystem.Shared.Common.Security;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
 using OnlineExamSystem.User.Application.Interfaces;
@@ -152,7 +152,8 @@ public class UsersController : ControllerBase
             request.Email,
             request.Password,
             Request.Headers.UserAgent.ToString(),
-            HttpContext.Connection.RemoteIpAddress?.ToString());
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            request.TenantSlug);
         var result = await _loginUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsAccountDeactivated)
@@ -172,6 +173,7 @@ public class UsersController : ControllerBase
         var user = result.User!;
         _logger.LogInformation("User {UserId} logged in successfully.", user.Id);
         await _auditClient.RecordAsync(
+            user.TenantId,
             "Auth",
             "User login",
             null,
@@ -296,6 +298,7 @@ public class UsersController : ControllerBase
         _logger.LogInformation("User {UserId} updated by admin.", id);
         var adminId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         await _auditClient.RecordAsync(
+            Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!),
             "Users",
             "Updated user details",
             result.User!.FullName,
@@ -566,6 +569,7 @@ public class UsersController : ControllerBase
 
         _logger.LogInformation("User {UserId} deactivated their own account.", userId);
         await _auditClient.RecordAsync(
+            Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!),
             "Auth",
             "Self-deactivated account",
             null,

@@ -63,6 +63,9 @@ namespace OnlineExamSystem.Submission.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AttemptId", "QuestionId")
@@ -96,6 +99,9 @@ namespace OnlineExamSystem.Submission.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<Guid>("SectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
@@ -157,10 +163,15 @@ namespace OnlineExamSystem.Submission.Infrastructure.Persistence.Migrations
                     b.Property<int>("TabSwitchCount")
                         .HasColumnType("int");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("ExamId", "UserId");
 
@@ -193,6 +204,9 @@ namespace OnlineExamSystem.Submission.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Type")
                         .HasColumnType("int");

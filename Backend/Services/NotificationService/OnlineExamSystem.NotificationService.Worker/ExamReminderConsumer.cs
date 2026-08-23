@@ -74,6 +74,7 @@ public class ExamReminderConsumer : BackgroundService
             var windowText = reminder.Window == ReminderWindow.TwentyFourHour ? "24 hours" : "1 hour";
 
             await persistenceService.CreateNotificationsAsync(
+                tenantId: reminder.TenantId,
                 batchId: Guid.NewGuid(),
                 recipients: recipients,
                 type: NotificationType.Reminder,

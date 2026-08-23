@@ -47,9 +47,20 @@ public class AuditLogRepository : IAuditLogRepository
             .ToListAsync(cancellationToken);
     }
 
-    public Task<int> DeleteOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default) =>
+    public async Task<IReadOnlyList<Guid>> GetDistinctTenantIdsAsync(CancellationToken cancellationToken = default) =>
+        await _dbContext.AuditLogs
+            .IgnoreQueryFilters()
+            .Select(a => a.TenantId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+    public Task<int> DeleteOlderThanAsync(
+        Guid tenantId,
+        DateTime cutoffUtc,
+        CancellationToken cancellationToken = default) =>
         _dbContext.AuditLogs
-            .Where(a => a.CreatedAtUtc < cutoffUtc)
+            .IgnoreQueryFilters()
+            .Where(a => a.TenantId == tenantId && a.CreatedAtUtc < cutoffUtc)
             .ExecuteDeleteAsync(cancellationToken);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>

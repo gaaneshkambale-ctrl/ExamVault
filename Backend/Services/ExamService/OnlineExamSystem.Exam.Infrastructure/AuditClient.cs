@@ -17,6 +17,7 @@ public class AuditClient : IAuditClient
     }
 
     public async Task RecordAsync(
+        Guid tenantId,
         string module,
         string activity,
         string? details,
@@ -28,7 +29,7 @@ public class AuditClient : IAuditClient
     {
         try
         {
-            var request = new RecordAuditLogRequest(module, activity, details, entityId, userId, userName, ipAddress);
+            var request = new RecordAuditLogRequest(tenantId, module, activity, details, entityId, userId, userName, ipAddress);
             using var response = await _httpClient.PostAsJsonAsync("api/audit-logs", request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {

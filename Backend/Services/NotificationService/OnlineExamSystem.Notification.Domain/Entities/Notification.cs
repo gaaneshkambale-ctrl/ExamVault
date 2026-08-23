@@ -1,9 +1,9 @@
 using OnlineExamSystem.Notification.Domain.Enums;
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Notification.Domain.Entities;
 
-public class Notification : BaseEntity
+public class Notification : TenantScopedEntity
 {
     public Guid BatchId { get; set; }
     public Guid UserId { get; set; }

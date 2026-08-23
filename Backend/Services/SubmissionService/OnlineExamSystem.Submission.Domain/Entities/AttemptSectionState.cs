@@ -1,8 +1,8 @@
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Submission.Domain.Entities;
 
-public class AttemptSectionState : BaseEntity
+public class AttemptSectionState : TenantScopedEntity
 {
     public Guid AttemptId { get; set; }
     public Guid SectionId { get; set; }

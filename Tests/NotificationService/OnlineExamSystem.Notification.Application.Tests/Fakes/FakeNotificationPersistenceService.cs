@@ -5,6 +5,7 @@ using NotificationEntity = OnlineExamSystem.Notification.Domain.Entities.Notific
 namespace OnlineExamSystem.Notification.Application.Tests.Fakes;
 
 public record RecordedCreateCall(
+    Guid TenantId,
     Guid BatchId,
     IReadOnlyList<NotificationRecipient> Recipients,
     NotificationType Type,
@@ -21,6 +22,7 @@ public class FakeNotificationPersistenceService : INotificationPersistenceServic
     public List<RecordedCreateCall> Calls { get; } = [];
 
     public Task<IReadOnlyList<NotificationEntity>> CreateNotificationsAsync(
+        Guid tenantId,
         Guid batchId,
         IReadOnlyList<NotificationRecipient> recipients,
         NotificationType type,
@@ -34,12 +36,13 @@ public class FakeNotificationPersistenceService : INotificationPersistenceServic
         CancellationToken cancellationToken = default)
     {
         Calls.Add(new RecordedCreateCall(
-            batchId, recipients, type, title, message, relatedExamId, createdByAdminUserId, scheduledAtUtc,
+            tenantId, batchId, recipients, type, title, message, relatedExamId, createdByAdminUserId, scheduledAtUtc,
             sendEmail, sendInApp));
 
         var entities = recipients
             .Select(r => new NotificationEntity
             {
+                TenantId = tenantId,
                 BatchId = batchId,
                 UserId = r.UserId,
                 Type = type,

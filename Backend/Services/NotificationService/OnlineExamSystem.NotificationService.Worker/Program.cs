@@ -1,13 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Notification.Application.Interfaces;
 using OnlineExamSystem.Notification.Infrastructure.Email;
+using OnlineExamSystem.Notification.Infrastructure.Multitenancy;
 using OnlineExamSystem.Notification.Infrastructure.Persistence;
 using OnlineExamSystem.NotificationService.Worker;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
 
+builder.Services.AddScoped<ICurrentTenant, NullCurrentTenant>();
 builder.Services.AddDbContext<NotificationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationDb")));
 builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();

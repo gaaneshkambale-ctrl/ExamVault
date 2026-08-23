@@ -28,6 +28,7 @@ public class CreateNotificationHandlerTests
 
     private static CreateNotificationCommand Command(
         string sendTo, IReadOnlyList<Guid>? userIds = null, Guid? relatedExamId = null) => new(
+        TenantId: Guid.NewGuid(),
         Title: "Title",
         Message: "Message",
         Type: "System",

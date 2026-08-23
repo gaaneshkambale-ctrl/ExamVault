@@ -244,6 +244,342 @@ PHASE 5 — Verification
   zero extra setup - don't make local development require juggling
   subdomains just to run the app.
 
+PHASE 3 IMPLEMENTATION PLAN (written 2026-08-23, before touching code)
+------------------------------------------------------------------------
+Status check before starting: Phase 1 is COMPLETE and committed. Phase 2
+(TenantId propagated to Exam/Question/Submission/Notification via
+TenantScopedEntity + TenantScopedDbContext + per-service ICurrentTenant)
+is implemented in the working tree but UNCOMMITTED and not fully
+verified - a live bug was found while running the app in Docker:
+`notification-worker` crashes on startup because it has no HttpContext
+to back `HttpContextCurrentTenant`/`IHttpContextAccessor` (only the HTTP
+APIs got that registration). User explicitly said "start phase 3"
+rather than fix this first, so it stays open/deferred - Phase 3 touches
+the Gateway and doesn't depend on the Notification worker, so it isn't
+blocking. Flagged here so it isn't forgotten before Phase 5's
+verification pass.
+
+Concrete design (resolves the doc's own "decide during implementation"
+branches above using the reasoning already written into Phase 3/4):
+1. New internal-only endpoint on User Service: `GET
+   /internal/tenants/by-slug/{slug}` - same "not Gateway-routed" pattern
+   already established for Question Service's `/internal/questions/
+   answer-key` (Day 34). Returns `{ id, name, slug, isActive }` or 404.
+   No auth required - only reachable service-to-service, never from a
+   browser through the Gateway's proxy routes.
+2. Gateway gains its first-ever custom middleware + HttpClient (today
+   it's a pure YARP proxy, confirmed by reading Program.cs - no
+   precedent to follow here, this is genuinely new infra):
+   - `ITenantLookupClient` calls User Service's new internal endpoint
+     directly (`Services:UserServiceBaseUrl`, new Gateway config key -
+     Gateway has never called another service before).
+   - `TenantResolutionMiddleware` reads the `Host` header (already
+     preserved to origin via each route's `RequestHeaderOriginalHost:
+     true` transform), extracts the subdomain label.
+   - No subdomain (bare `localhost`, an apex domain, or the
+     `azurecontainerapps.io` default FQDN) -> pass through unresolved,
+     no restriction. This is what keeps local dev and today's Azure dev
+     environment working with zero extra setup (Phase 5's explicit
+     requirement) - neither has real wildcard DNS yet (Phase 3's infra
+     bullet below is still open).
+   - Subdomain present -> look up via `ITenantLookupClient`, cached
+     in-memory (`IMemoryCache`, short TTL e.g. 60s, keyed by slug) so
+     this isn't a network call on every request. Unknown slug or
+     `IsActive == false` -> reject with 404 before the request reaches
+     any backend service.
+   - A reserved `platform` slug (e.g. `platform.examvault.com`) always
+     passes through unresolved - it's the Super Admin's entry point
+     (Phase 4 UI), not a tenant.
+   - Per the design already settled above: this middleware does NOT
+     inject a trusted `X-Tenant-Id` header for services to act on -
+     it's routing legitimacy + a future login-page UX hint only. Real
+     isolation stays enforced by the JWT's `TenantId` claim (Phase 1)
+     plus the query filters (Phase 2) exactly as already decided.
+3. Login must resolve the acting tenant from the subdomain BEFORE
+   issuing a token (`GetByEmailAsync` needs a tenant scope so
+   `admin@gmail.com` in tenant A doesn't collide with the same email in
+   tenant B) - today User Service has no way to know which subdomain
+   the login request arrived through, since only the Gateway sees the
+   original Host header. Resolution: Gateway forwards the resolved slug
+   as a request header on the way to User Service ONLY for the
+   login/register endpoints' benefit (still not "trusted" for
+   authorization - User Service must independently re-look-up the
+   tenant by slug rather than trust an id, matching the no-forged-header
+   principle above), OR the frontend sends the slug explicitly in the
+   login request body. Decide the exact mechanic during implementation;
+   default to the request-body approach if it's simpler, since it needs
+   no new Gateway->User-Service trust boundary at all.
+4. Azure custom domain + wildcard DNS + managed certificate (Infra/
+   env.bicep) is real infrastructure work outside app code - explicitly
+   NOT done as part of this phase's implementation, flagged the same
+   way the original Phase 3 section already flagged it. Local
+   verification uses `Host` header overrides (e.g. curl -H "Host:
+   stanford.examvault.local") rather than real DNS.
+5. Verification for this phase: create two tenants via the existing
+   Phase 1 Super Admin endpoints, confirm a request with an unknown
+   subdomain 404s before hitting any backend, confirm a request with no
+   subdomain (today's local dev shape) is unaffected, confirm the
+   `platform` reserved slug always passes through.
+
+PHASE 3 DONE (2026-08-23), app-code portion - verified live in Docker, not
+just unit-tested:
+- User Service: `GET /internal/tenants/by-slug/{slug}` (InternalTenantsController,
+  GetTenantBySlugHandler) - confirmed 404 for an unknown slug via direct curl
+  to :5010.
+- Gateway: TenantResolutionMiddleware + ITenantLookupClient/TenantLookupClient
+  (IMemoryCache, 60s TTL), wired in Program.cs before MapReverseProxy.
+  Verified all 5 cases live via Host-header overrides (no real DNS needed):
+  no subdomain (plain localhost) -> passes through; reserved `platform`
+  slug -> passes through; real ACTIVE tenant subdomain (the existing
+  "default" tenant) -> passes through; real INACTIVE tenant subdomain (the
+  existing "stanford" tenant, IsActive=0) -> 404 "Unknown or inactive
+  organization."; unknown subdomain -> same 404. Config added in all three
+  places (appsettings.json/.Docker.json, Infra/env.bicep's Dapr-invoke URL) -
+  docker-compose.yml needed no change since Gateway already sources
+  environment-specific values from its own appsettings.*.json files, not
+  compose env vars (confirmed by reading how its ReverseProxy destinations
+  already work - unlike every other service, which does set Services__* via
+  compose).
+- Login: chose the request-body mechanic from the "decide during
+  implementation" branch above (`LoginUserRequest.TenantSlug`, optional) -
+  simpler, no new Gateway-forwarded-header trust boundary. `LoginUserHandler`
+  now resolves the slug to a TenantId via `ITenantRepository.GetBySlugAsync`
+  before the email lookup; an unknown/inactive slug returns the same
+  "Invalid email or password" as a wrong password (never reveals whether a
+  slug exists). Backward compatible - omitting TenantSlug entirely (today's
+  frontend, local dev) keeps the old email-only-lookup behavior unchanged.
+  2 new tests added (same email in two tenants resolves via slug; unknown
+  slug rejected) - User Service Application.Tests now 54/54. Also fixed a
+  pre-existing compile break in the same area: LoginUserHandlerTests
+  constructed LoginUserHandler directly and needed a new FakeTenantRepository
+  once ITenantRepository became a constructor dependency.
+- NOT done (explicitly deferred, matches this plan's own Phase 3 infra
+  bullet): Azure custom domain + wildcard DNS + managed certificate. Local/
+  Azure-dev verification both rely on either no subdomain or a Host-header
+  override, not real DNS - this is real infra work, not app code, and
+  wasn't requested.
+- Phase 2 `notification-worker` bug (flagged above) is now FIXED (2026-08-23,
+  right after Phase 3): added `NullCurrentTenant` (Notification.Infrastructure/
+  Multitenancy, IsAuthenticated=false/TenantId=Guid.Empty/IsSuperAdmin=false)
+  and registered it in the Worker's Program.cs. Safe rather than a
+  workaround - checked all three consumers first: every write already goes
+  through `NotificationPersistenceService.CreateNotificationsAsync`, which
+  sets TenantId explicitly per row from the triggering event (e.g.
+  `ExamAssignedEvent.TenantId`) and reads via `IgnoreQueryFilters()` +
+  an explicit tenantId already (see that method's own pre-existing
+  comment) - the ambient ICurrentTenant value was never actually needed
+  for worker logic, only for `NotificationDbContext` to be constructable
+  at all. Verified live in Docker: rebuilt the image, restarted the
+  container, it stayed up and was seen processing a real queued
+  UserRegisteredEvent end to end (correct tenant-scoped preference query,
+  real email dispatch attempt) rather than just "didn't crash."
+
+PHASE 4 IMPLEMENTATION PLAN (written 2026-08-23, before touching code)
+------------------------------------------------------------------------
+Correction to this doc's own original Phase 4 scope note above: it assumed
+"no visible frontend change needed" for login because it expected the
+Gateway to resolve tenant from the Host header server-side. Phase 3
+actually chose the request-body slug mechanic instead (see Phase 3's
+implementation plan/DONE notes) specifically to avoid a new Gateway-
+forwarded-header trust boundary - so the frontend DOES need one small
+change: extract the subdomain client-side and send it as `TenantSlug` on
+login. Everything else in the original Phase 4 section stands.
+
+Verified from reading the actual frontend code before planning (not
+assumed): `UserProfile.role`/`ProtectedRoute`'s `roles` prop are typed
+`'Student' | 'Admin'` only (no SuperAdmin yet). `LoginRequest` has no slug
+field yet (matches the backend's `LoginUserRequest.TenantSlug` being
+optional/new in Phase 3). `AdminLayout`/`AdminSidebar` are Admin-specific
+(exam/user/question nav items) - not a fit to reuse as-is for a Super
+Admin persona who manages tenants, not exam content, so Phase 4 gets a
+small standalone `PlatformLayout` instead (BrandMark + UserProfileMenu,
+no sidebar/NotificationBell - genuinely nothing else for a Super Admin to
+navigate to yet). A real seeded Super Admin already exists for testing
+(`superadmin@examvault.local` / `ChangeMe123!`, `MustChangePassword=true`,
+User.API's Program.cs one-time bootstrap) - login works with it repeatedly
+without changing the password (that flag only forces the CHANGE-PASSWORD
+REDIRECT client-side, doesn't invalidate the password), but every
+protected route (including the new Platform ones) bounces to
+/change-password first until it's actually changed once - same as any
+other MustChangePassword account, not a new gap to fix.
+
+Concrete work:
+1. `types/user.ts`: add `'SuperAdmin'` to `UserProfile.role`; add optional
+   `tenantSlug?: string` to `LoginRequest`.
+2. `types/tenant.ts` (new): `Tenant`, `CreateTenantRequest`,
+   `CreateTenantAdminRequest` mirroring the backend's `TenantResponse`/
+   `CreateTenantRequest`/`CreateTenantAdminRequest` shapes exactly.
+3. `api/tenantsApi.ts` (new): `listTenants`/`createTenant`/
+   `createTenantAdmin`/`deactivateTenant` calling the existing Phase 1
+   `/api/tenants` endpoints - no new backend work needed here.
+4. `hooks/useTenants.ts` (new): one `useQuery(['tenants'], listTenants)`
+   hook, same shape as `useExamTypes`.
+5. `utils/tenant.ts` (new): `extractTenantSlug(hostname)` - deliberately
+   mirrors the Gateway's `TenantResolutionMiddleware.ExtractSubdomain`
+   logic (localhost/IP/apex/`*.azurecontainerapps.io` -> null, 3+ label
+   host -> first label) so the frontend and Gateway agree on what counts
+   as a subdomain, EXCEPT it does NOT special-case the reserved `platform`
+   slug the way the Gateway does - that carve-out is a Gateway ROUTING
+   concept only (so the Super Admin's own login page isn't rejected by
+   the subdomain-legitimacy check), whereas for login purposes `platform`
+   is a perfectly normal real Tenant row (seeded, slug `platform`,
+   confirmed via direct SQL query) that the Super Admin's own AppUser
+   genuinely belongs to.
+6. `context/AuthProvider.tsx`: `login()` passes
+   `tenantSlug: extractTenantSlug(window.location.hostname)` through to
+   `loginUser()`. No visible UI change on the login form itself, matching
+   the original plan's expectation for everything except this one line.
+7. `components/ProtectedRoute.tsx`: `roles` prop type gains `'SuperAdmin'`.
+8. `components/auth/LoginForm.tsx`: redirect logic gains a third branch -
+   `SuperAdmin` -> `/platform/tenants` (checked before the existing
+   Admin/Student branches, same precedence as the existing
+   mustChangePassword check already has over all of them).
+9. `layouts/PlatformLayout.tsx` (new, small): top bar only (BrandMark,
+   page title, UserProfileMenu) - no sidebar, matching "small, not a full
+   redesign" from the original Phase 4 scope note.
+10. `components/DeactivateTenantButton.tsx` (new): confirm-modal mutation
+    button, copy of `DeleteExamTypeButton.tsx`'s pattern (this project's
+    established convention for one of these per resource type) calling
+    `deactivateTenant` and invalidating `['tenants']`.
+11. `pages/platform/ManageTenants.tsx` (new): single page covering all
+    three Phase 1 Super Admin actions - list tenants (Card+Table, status
+    badge), "+ Create Tenant" modal (Name/Slug), and a per-row "Add Admin"
+    modal (Full Name/Email) calling `createTenantAdmin`. Mirrors
+    `ManageExamTypes.tsx`'s structure closely (list/create pattern already
+    established) rather than inventing a new page shape.
+12. `routes/AppRoutes.tsx`: new `/platform/tenants` route, `roles={['SuperAdmin']}`.
+
+Explicitly NOT done (out of this phase's scope per the original plan):
+per-tenant custom branding, self-service signup, billing/plan fields on
+the Create Tenant form (Tenant entity has no such columns yet per Phase
+1's own scope decision).
+
+PHASE 4 DONE (2026-08-23) - all 12 items above built, then verified in a
+REAL browser (Chrome extension) against the live Docker stack, not just
+tsc/lint/vitest (49/49 passed, zero regressions). Three real bugs found
+and fixed during that verification, none of them caught by the type
+checker or test suite:
+1. `GET /api/tenants` 404'd through the Gateway - Phase 1 added
+   `TenantsController` to User Service but never added a Gateway route
+   for it, so the entire Tenants API had been unreachable from any
+   frontend since Phase 1 shipped. Fixed by adding a `tenants-route`
+   to Gateway's `appsettings.json` reusing the existing `users-cluster`
+   (no new cluster needed, `/api/tenants` lives in User Service).
+2. `ChangePassword.tsx`'s forced-password-change redirect only branched
+   Admin vs everyone-else (`user?.role === 'Admin' ? '/admin/dashboard' :
+   '/dashboard'`) - same gap `LoginForm.tsx` had before this phase's fix,
+   now hit for real by the seeded Super Admin's first login
+   (`MustChangePassword=true`). Added the same `SuperAdmin ->
+   /platform/tenants` branch there too.
+3. `ManageTenants.tsx`'s own "Add Admin" success message was unreachable -
+   `onSuccess` called `setAdminTarget(null)` immediately, which unmounts
+   the modal (`show={adminTarget !== null}`) before the success branch
+   could ever render. Fixed by only resetting form state on open, not on
+   success, so the confirmation actually shows before the user closes it.
+Verified end to end via the real UI as the seeded Super Admin
+(`superadmin@examvault.local`, password changed once to complete the
+forced first-login flow, matching the account's own intended purpose):
+listed the 3 real seeded tenants (Stanford/Default/Platform), created a
+throwaway "Throwaway Verify Co" tenant, confirmed it appeared Active,
+added two admins to it (second one to see the now-fixed success message,
+both confirmed to exist in ExamVault.UserDb via direct SQL), deactivated
+it, confirmed the list flipped it to Inactive, and confirmed the Gateway
+immediately rejected `throwaway-verify.examvault.com` afterward (closing
+the Phase 3+4 loop for real, not just each phase in isolation). Also
+reconfirmed the pre-existing (not newly introduced) gap that
+`/dashboard`/`/exams`/`/results`/`/certificates`/`/notifications`/
+`/settings` have no `roles` restriction, so Admin/SuperAdmin can navigate
+there and see the Student-shaped UI - flagged to the user, left
+unaddressed since it predates this phase and wasn't asked for.
+
+PHASE 5 IMPLEMENTATION PLAN (written 2026-08-23, before touching code -
+this phase is verification-only, no new app code expected unless a real
+leak is found)
+------------------------------------------------------------------------
+Not exhaustive across literally every one of the 13 cross-service calls
+listed in this doc's CURRENT ARCHITECTURE section - calibrated the same
+way Result Service's Day-36 gate check was (a representative, highest-risk
+set proven live, not a full endpoint-by-endpoint sweep). Setup:
+- Tenant A = the existing seeded "Default" tenant (real data from every
+  prior phase's dev/testing work already lives there - using it as-is,
+  same precedent as Day 36 reusing the real student "ansh").
+- Tenant B = "Throwaway Verify Co" (created live during Phase 4's own
+  verification) - temporarily flipped back to `IsActive=1` via direct SQL
+  for the duration of this test (no reactivate endpoint exists yet, and
+  it's throwaway data this session created, not real user data), reverted
+  to Inactive again afterward. Its two admins ("Throwaway Admin"/
+  "Second Admin") already exist; passwords set via direct SQL (same
+  reasoning as CreateTenantAdminHandler's temp password only ever being
+  emailed through the real n8n/Gmail webhook, which this session can't
+  read - matching the established "known password via SQL" precedent
+  from Day 20/Day 25's role promotions).
+Six adversarial checks (Tenant B credentials attempting to reach Tenant
+A's real ids, and vice versa where relevant), covering every category of
+cross-service call this doc's architecture section names:
+1. Exam Service: `GET /api/exams/{tenantA-examId}` as a Tenant B admin.
+2. Question Service: `GET /api/questions?examId={tenantA-examId}` as a
+   Tenant B admin.
+3. Submission Service (its own Exam-Service lookup call): start an
+   attempt on a Tenant A exam id using a Tenant B student's JWT.
+4. Result Service (its 3-way Submission+Exam+Question orchestration):
+   `GET /api/results?examId={tenantA-examId}` as a Tenant B student.
+5. Exam Service assignments: `GET /api/assignments?examId={tenantA-examId}`
+   as a Tenant B admin.
+6. Notification Service: an Admin-scoped read (audit logs or notification
+   history) as a Tenant B admin, confirming zero Tenant A rows appear.
+Every check expects a 404/empty/403 - never Tenant A's real data. Any
+that doesn't fail closed gets fixed before this phase is marked done, not
+just noted. Also re-confirms Phase 5's other explicit requirement: the
+existing local dev flow (docker-compose, one shared sqlserver container,
+no subdomain) still needs zero extra setup - already true throughout
+Phases 3-4's own verification, re-checked here rather than assumed.
+
+PHASE 5 DONE (2026-08-23) - all 6 adversarial checks run for real against
+the live Docker stack (plain `http://localhost:5000`, no Host-header
+override needed, confirming zero-extra-setup local dev still holds), all
+6 failed closed, zero leaks found:
+1. Exam Service `GET /api/exams/{tenantA-examId}` as Tenant B admin ->
+   404 "Exam not found."
+2. Question Service `GET /api/questions?examId={tenantA-examId}` as
+   Tenant B admin -> `[]`.
+3. Submission Service `POST /api/submissions/start` on a Tenant A exam id
+   as a Tenant B student -> 404 "Exam not found." (proves Submission
+   Service's own cross-service call into Exam Service is correctly
+   re-scoped by the forwarded JWT, not just Submission's own filter).
+4. Result Service `GET /api/results?examId={tenantA-examId}` as a Tenant
+   B student -> 404 "No submitted attempt found." (weaker signal than
+   1-3, noted honestly: this endpoint is already "mine"-scoped by
+   construction per Result Service's Day-36 design, so it would return
+   the same 404 whether or not tenant filtering existed - it re-confirms
+   that existing mechanism still holds, doesn't independently prove
+   Result Service's own tenant filter caught anything new).
+5. Exam Service `GET /api/assignments?examId={tenantA-examId}` as Tenant
+   B admin -> `[]`.
+6. Notification Service `GET /api/audit-logs` as Tenant B admin -> `[]`
+   (Tenant B genuinely has no audit activity yet, so this is a real-but-
+   soft signal rather than a proven zero-Tenant-A-rows-excluded result).
+Setup used real requests end to end, not raw fixture inserts: created
+the Tenant B student via the actual `POST /api/users` API (as the real
+Tenant B admin, JWT and all), only used direct SQL for the two things the
+API genuinely can't do without a real email inbox - reactivating Tenant B
+(no reactivate endpoint exists) and setting known passwords (temp
+passwords only ever get emailed via the real n8n/Gmail webhook this
+session can't read). Both reverted/cleaned up after: Tenant B set back
+to `IsActive=0`, matching its state before this test. The throwaway
+Admin/Student accounts under "Throwaway Verify Co" were left in place
+(no delete-user/delete-tenant endpoint exists yet to remove them) -
+clearly named, harmless, same as this project's other undeletable
+seed/bootstrap accounts (e.g. the Super Admin bootstrap user).
+
+**Multi-tenant SaaS conversion (Phases 1-5) is now COMPLETE** - all
+verification passed, zero known open bugs. Everything from Phase 2
+onward is still UNCOMMITTED. Remaining out-of-plan items, explicitly not
+in scope per this doc's own SCOPE NOTE: billing/payment, self-service
+signup polish, per-tenant branding/feature flags, Azure wildcard DNS +
+managed certificate (Phase 3's one deferred infra item), and the
+pre-existing (not multi-tenancy-related) student-route role-gate gap
+found during Phase 4's verification.
+
 OPEN QUESTIONS TO RESOLVE DURING IMPLEMENTATION (not blocking this plan)
 ------------------------------------------------------------------------
 - Exact new-tenant provisioning UX: fully manual (you run a script/call

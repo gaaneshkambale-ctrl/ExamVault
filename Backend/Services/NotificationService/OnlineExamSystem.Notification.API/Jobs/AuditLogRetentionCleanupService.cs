@@ -44,15 +44,22 @@ public class AuditLogRetentionCleanupService : BackgroundService
         var systemSettingsRepository = scope.ServiceProvider.GetRequiredService<ISystemSettingsRepository>();
         var auditLogRepository = scope.ServiceProvider.GetRequiredService<IAuditLogRepository>();
 
-        var settings = await systemSettingsRepository.GetOrCreateAsync(cancellationToken);
-        var cutoffUtc = DateTime.UtcNow.AddDays(-settings.AuditLogRetentionDays);
-
-        var deletedCount = await auditLogRepository.DeleteOlderThanAsync(cutoffUtc, cancellationToken);
-        if (deletedCount > 0)
+        // No current tenant of its own (no HttpContext) - retention is also a per-tenant
+        // setting now, so this enforces each tenant's own AuditLogRetentionDays rather than
+        // one global cutoff, discovering which tenants exist from the rows themselves.
+        var tenantIds = await auditLogRepository.GetDistinctTenantIdsAsync(cancellationToken);
+        foreach (var tenantId in tenantIds)
         {
-            _logger.LogInformation(
-                "Audit log retention cleanup removed {DeletedCount} rows older than {CutoffUtc} ({RetentionDays} day retention).",
-                deletedCount, cutoffUtc, settings.AuditLogRetentionDays);
+            var settings = await systemSettingsRepository.GetOrCreateForTenantAsync(tenantId, cancellationToken);
+            var cutoffUtc = DateTime.UtcNow.AddDays(-settings.AuditLogRetentionDays);
+
+            var deletedCount = await auditLogRepository.DeleteOlderThanAsync(tenantId, cutoffUtc, cancellationToken);
+            if (deletedCount > 0)
+            {
+                _logger.LogInformation(
+                    "Audit log retention cleanup removed {DeletedCount} rows for tenant {TenantId} older than {CutoffUtc} ({RetentionDays} day retention).",
+                    deletedCount, tenantId, cutoffUtc, settings.AuditLogRetentionDays);
+            }
         }
     }
 }

@@ -20,6 +20,7 @@ using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAllAsRead
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.Preferences;
 using OnlineExamSystem.Notification.Domain.Enums;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Contracts.Responses.Notification;
 using NotificationEntity = OnlineExamSystem.Notification.Domain.Entities.Notification;
@@ -94,6 +95,8 @@ public class NotificationsController : ControllerBase
     }
 
     private Guid CallerId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    private Guid CallerTenantId => Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
 
     private string BearerToken =>
         Request.Headers["Authorization"].ToString()["Bearer ".Length..];
@@ -220,6 +223,7 @@ public class NotificationsController : ControllerBase
     public async Task<IActionResult> Create(CreateNotificationRequest request, CancellationToken cancellationToken)
     {
         var command = new CreateNotificationCommand(
+            CallerTenantId,
             request.Title,
             request.Message,
             request.Type,

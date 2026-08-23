@@ -1,4 +1,4 @@
-using OnlineExamSystem.Shared.Common.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Submission.Domain.Enums;
 
 namespace OnlineExamSystem.Submission.Domain.Entities;
@@ -7,7 +7,7 @@ namespace OnlineExamSystem.Submission.Domain.Entities;
 // only ever hold a running total with no per-occurrence timestamp) - backs
 // Live Monitoring's Security Violations feed, which needs a real "when did
 // this happen" and a real investigate/resolve workflow.
-public class ViolationEvent : BaseEntity
+public class ViolationEvent : TenantScopedEntity
 {
     public Guid AttemptId { get; set; }
     public ProctoringViolationType Type { get; set; }

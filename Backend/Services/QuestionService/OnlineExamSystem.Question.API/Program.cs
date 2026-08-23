@@ -12,8 +12,10 @@ using OnlineExamSystem.Question.Application.Questions.List;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Infrastructure.Clients;
+using OnlineExamSystem.Question.Infrastructure.Multitenancy;
 using OnlineExamSystem.Question.Infrastructure.Persistence;
 using OnlineExamSystem.Question.Infrastructure.Repositories;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 
 namespace OnlineExamSystem.Question.API;
 
@@ -30,6 +32,8 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<QuestionDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("QuestionDb")));
         builder.Services.AddScoped<IQuestionRepository, QuestionRepository>();

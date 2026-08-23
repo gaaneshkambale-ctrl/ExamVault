@@ -1,4 +1,4 @@
-namespace OnlineExamSystem.User.Domain.Constants;
+namespace OnlineExamSystem.Shared.Common.Multitenancy;
 
 // Fixed, deterministic ids for the two tenants seeded by the AddTenants
 // migration - deterministic so the same rows exist across every environment
