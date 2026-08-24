@@ -5,6 +5,7 @@ using OnlineExamSystem.Notification.Application.Settings.UpdateSystemSettings;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Contracts.Responses.Notification;
 using SystemSettingsEntity = OnlineExamSystem.Notification.Domain.Entities.SystemSettings;
+using static OnlineExamSystem.Notification.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Notification.API.Controllers;
 
@@ -14,6 +15,7 @@ namespace OnlineExamSystem.Notification.API.Controllers;
 [ApiController]
 [Route("api/system-settings")]
 [Authorize(Roles = "Admin")]
+[Authorize(Policy = Settings)]
 public class SystemSettingsController : ControllerBase
 {
     private readonly GetSystemSettingsHandler _getSystemSettingsHandler;

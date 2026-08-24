@@ -5,15 +5,18 @@ using OnlineExamSystem.Exam.Application.Settings.UpdateGeneralSettings;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using GeneralSettingsEntity = OnlineExamSystem.Exam.Domain.Entities.GeneralSettings;
+using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
 // Nested under api/exams/general-settings so the Gateway's existing exams-route
 // (/api/exams/{**catch-all}) already proxies this - no new Gateway route needed.
-// Nothing outside the Settings hub consumes this yet, so both verbs are Admin-only.
+// Nothing outside the Settings hub consumes this yet, so both verbs are
+// Admin-only and gated on the Settings feature at class level.
 [ApiController]
 [Route("api/exams/general-settings")]
 [Authorize(Roles = "Admin")]
+[Authorize(Policy = Settings)]
 public class GeneralSettingsController : ControllerBase
 {
     private readonly GetGeneralSettingsHandler _getGeneralSettingsHandler;

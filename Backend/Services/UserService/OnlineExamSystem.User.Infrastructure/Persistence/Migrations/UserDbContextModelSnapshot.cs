@@ -164,6 +164,48 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.ToTable("GroupMembers");
                 });
 
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.Plan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("IncludedFeatures")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Plans");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
+                            CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Every Admin console module included - the default for every organization until Super Admin assigns a different plan.",
+                            IncludedFeatures = "Users,Exams,ExamTypes,LiveMonitoring,Results,Reports,Notifications,Settings",
+                            Name = "Full Access",
+                            UpdatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
+                });
+
             modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -224,12 +266,17 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PlanId");
 
                     b.HasIndex("Slug")
                         .IsUnique();
@@ -243,6 +290,7 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                             CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "Default",
+                            PlanId = new Guid("33333333-3333-3333-3333-333333333333"),
                             Slug = "default"
                         },
                         new
@@ -251,6 +299,7 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                             CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "Platform",
+                            PlanId = new Guid("33333333-3333-3333-3333-333333333333"),
                             Slug = "platform"
                         });
                 });
@@ -331,6 +380,15 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.Tenant", b =>
+                {
+                    b.HasOne("OnlineExamSystem.User.Domain.Entities.Plan", null)
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

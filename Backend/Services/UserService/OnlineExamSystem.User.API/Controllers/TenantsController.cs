@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
+using OnlineExamSystem.User.Application.Tenants.AssignPlan;
 using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
 using OnlineExamSystem.User.Application.Tenants.List;
@@ -21,6 +22,7 @@ public class TenantsController : ControllerBase
     private readonly ListTenantsHandler _listTenantsHandler;
     private readonly SetTenantActiveStatusHandler _setTenantActiveStatusHandler;
     private readonly CreateTenantAdminHandler _createTenantAdminHandler;
+    private readonly AssignPlanToTenantHandler _assignPlanToTenantHandler;
     private readonly ILogger<TenantsController> _logger;
 
     public TenantsController(
@@ -28,12 +30,14 @@ public class TenantsController : ControllerBase
         ListTenantsHandler listTenantsHandler,
         SetTenantActiveStatusHandler setTenantActiveStatusHandler,
         CreateTenantAdminHandler createTenantAdminHandler,
+        AssignPlanToTenantHandler assignPlanToTenantHandler,
         ILogger<TenantsController> logger)
     {
         _createTenantHandler = createTenantHandler;
         _listTenantsHandler = listTenantsHandler;
         _setTenantActiveStatusHandler = setTenantActiveStatusHandler;
         _createTenantAdminHandler = createTenantAdminHandler;
+        _assignPlanToTenantHandler = assignPlanToTenantHandler;
         _logger = logger;
     }
 
@@ -41,7 +45,7 @@ public class TenantsController : ControllerBase
     public async Task<IActionResult> Create(CreateTenantRequest request, CancellationToken cancellationToken)
     {
         var result = await _createTenantHandler.HandleAsync(
-            new CreateTenantCommand(request.Name, request.Slug),
+            new CreateTenantCommand(request.Name, request.Slug, request.PlanId),
             cancellationToken);
 
         if (result.SlugAlreadyExists)
@@ -129,6 +133,26 @@ public class TenantsController : ControllerBase
             user.RollNumber));
     }
 
+    [HttpPut("{id:guid}/plan")]
+    public async Task<IActionResult> AssignPlan(Guid id, AssignPlanRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _assignPlanToTenantHandler.HandleAsync(
+            new AssignPlanToTenantCommand(id, request.PlanId), cancellationToken);
+
+        if (result.TenantNotFound)
+        {
+            return NotFound(new { message = "Tenant not found." });
+        }
+
+        if (result.PlanNotFound)
+        {
+            return NotFound(new { message = "Plan not found." });
+        }
+
+        _logger.LogInformation("Tenant {TenantId} assigned to plan {PlanId}.", id, request.PlanId);
+        return Ok(ToResponse(result.Tenant!));
+    }
+
     private static TenantResponse ToResponse(Tenant tenant) =>
-        new(tenant.Id, tenant.Name, tenant.Slug, tenant.IsActive, tenant.CreatedAtUtc);
+        new(tenant.Id, tenant.Name, tenant.Slug, tenant.IsActive, tenant.CreatedAtUtc, tenant.PlanId);
 }

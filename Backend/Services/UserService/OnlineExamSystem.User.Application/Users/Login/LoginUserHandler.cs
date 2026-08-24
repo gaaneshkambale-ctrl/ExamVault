@@ -10,6 +10,7 @@ public class LoginUserHandler
 {
     private readonly IUserRepository _userRepository;
     private readonly ITenantRepository _tenantRepository;
+    private readonly IPlanRepository _planRepository;
     private readonly IValidator<LoginUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IJwtTokenService _jwtTokenService;
@@ -17,12 +18,14 @@ public class LoginUserHandler
     public LoginUserHandler(
         IUserRepository userRepository,
         ITenantRepository tenantRepository,
+        IPlanRepository planRepository,
         IValidator<LoginUserCommand> validator,
         IPasswordHasher<AppUser> passwordHasher,
         IJwtTokenService jwtTokenService)
     {
         _userRepository = userRepository;
         _tenantRepository = tenantRepository;
+        _planRepository = planRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
@@ -74,7 +77,8 @@ public class LoginUserHandler
             return LoginUserResult.AccountDeactivated();
         }
 
-        var accessToken = _jwtTokenService.GenerateAccessToken(user);
+        var enabledFeatures = await _planRepository.GetFeaturesForTenantAsync(user.TenantId, cancellationToken);
+        var accessToken = _jwtTokenService.GenerateAccessToken(user, enabledFeatures);
         var refreshToken = _jwtTokenService.GenerateRefreshToken();
 
         await _userRepository.AddRefreshTokenAsync(new RefreshToken

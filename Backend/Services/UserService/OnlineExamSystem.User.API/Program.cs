@@ -11,6 +11,12 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Events.Publishing;
+using OnlineExamSystem.User.API.Authorization;
+using OnlineExamSystem.User.Application.Plans.Create;
+using OnlineExamSystem.User.Application.Plans.Delete;
+using OnlineExamSystem.User.Application.Plans.List;
+using OnlineExamSystem.User.Application.Plans.Update;
+using OnlineExamSystem.User.Application.Tenants.AssignPlan;
 using OnlineExamSystem.User.Application.Groups.AddMember;
 using OnlineExamSystem.User.Application.Groups.Create;
 using OnlineExamSystem.User.Application.Groups.Delete;
@@ -79,6 +85,7 @@ public class Program
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<IGroupRepository, GroupRepository>();
         builder.Services.AddScoped<ITenantRepository, TenantRepository>();
+        builder.Services.AddScoped<IPlanRepository, PlanRepository>();
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
@@ -138,6 +145,14 @@ public class Program
         builder.Services.AddScoped<GetTenantBySlugHandler>();
         builder.Services.AddScoped<IValidator<CreateTenantAdminCommand>, CreateTenantAdminValidator>();
         builder.Services.AddScoped<CreateTenantAdminHandler>();
+        builder.Services.AddScoped<AssignPlanToTenantHandler>();
+
+        builder.Services.AddScoped<IValidator<CreatePlanCommand>, CreatePlanValidator>();
+        builder.Services.AddScoped<CreatePlanHandler>();
+        builder.Services.AddScoped<IValidator<UpdatePlanCommand>, UpdatePlanValidator>();
+        builder.Services.AddScoped<UpdatePlanHandler>();
+        builder.Services.AddScoped<DeletePlanHandler>();
+        builder.Services.AddScoped<ListPlansHandler>();
 
         if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
         {
@@ -170,7 +185,7 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
 
         var app = builder.Build();
 

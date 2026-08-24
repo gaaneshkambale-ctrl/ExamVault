@@ -4,6 +4,7 @@ using OnlineExamSystem.Result.Application.GetExamReport;
 using OnlineExamSystem.Result.Application.GetResult;
 using OnlineExamSystem.Result.Domain;
 using OnlineExamSystem.Shared.Contracts.Responses.Result;
+using static OnlineExamSystem.Result.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Result.API.Controllers;
 
@@ -73,6 +74,7 @@ public class ResultsController : ControllerBase
 
     [HttpGet("by-exam/{examId:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = ResultsOrReports)]
     public async Task<IActionResult> ByExam(Guid examId, CancellationToken cancellationToken)
     {
         if (examId == Guid.Empty)

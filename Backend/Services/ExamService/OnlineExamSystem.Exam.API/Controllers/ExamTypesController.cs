@@ -5,6 +5,7 @@ using OnlineExamSystem.Exam.Application.ExamTypes.Delete;
 using OnlineExamSystem.Exam.Application.ExamTypes.List;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
+using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -32,6 +33,7 @@ public class ExamTypesController : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = ExamTypes)]
     public async Task<IActionResult> Create(CreateExamTypeRequest request, CancellationToken cancellationToken)
     {
         var command = new CreateExamTypeCommand(request.Name, request.Purpose);
@@ -59,6 +61,7 @@ public class ExamTypesController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = ExamTypes)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await _deleteExamTypeHandler.HandleAsync(new DeleteExamTypeCommand(id), cancellationToken);

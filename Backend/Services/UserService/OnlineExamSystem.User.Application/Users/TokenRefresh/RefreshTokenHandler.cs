@@ -7,11 +7,13 @@ namespace OnlineExamSystem.User.Application.Users.TokenRefresh;
 public class RefreshTokenHandler
 {
     private readonly IUserRepository _userRepository;
+    private readonly IPlanRepository _planRepository;
     private readonly IJwtTokenService _jwtTokenService;
 
-    public RefreshTokenHandler(IUserRepository userRepository, IJwtTokenService jwtTokenService)
+    public RefreshTokenHandler(IUserRepository userRepository, IPlanRepository planRepository, IJwtTokenService jwtTokenService)
     {
         _userRepository = userRepository;
+        _planRepository = planRepository;
         _jwtTokenService = jwtTokenService;
     }
 
@@ -34,7 +36,12 @@ public class RefreshTokenHandler
 
         storedToken.RevokedAtUtc = DateTime.UtcNow;
 
-        var newAccessToken = _jwtTokenService.GenerateAccessToken(user);
+        // Re-resolved fresh on every refresh (not carried over from the old
+        // token) - this is how a Plan/feature change actually reaches an
+        // already-logged-in Admin, within one refresh cycle rather than
+        // requiring a fresh login.
+        var enabledFeatures = await _planRepository.GetFeaturesForTenantAsync(user.TenantId, cancellationToken);
+        var newAccessToken = _jwtTokenService.GenerateAccessToken(user, enabledFeatures);
         var newRefreshToken = _jwtTokenService.GenerateRefreshToken();
 
         await _userRepository.AddRefreshTokenAsync(new RefreshToken

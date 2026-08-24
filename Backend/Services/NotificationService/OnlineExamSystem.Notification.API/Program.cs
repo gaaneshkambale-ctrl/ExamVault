@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Notification.API.Authorization;
 using OnlineExamSystem.Notification.Application.Audit.Admin.ListAuditLogs;
 using OnlineExamSystem.Notification.Application.Audit.RecordAuditLog;
 using OnlineExamSystem.Notification.Application.Interfaces;
@@ -139,7 +140,7 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
 
         var app = builder.Build();
 

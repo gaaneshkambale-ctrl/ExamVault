@@ -9,7 +9,7 @@ namespace OnlineExamSystem.User.Application.Tests;
 public class LoginUserHandlerTests
 {
     private static LoginUserHandler CreateHandler(FakeUserRepository repository, FakeTenantRepository? tenantRepository = null) =>
-        new(repository, tenantRepository ?? new FakeTenantRepository(), new LoginUserValidator(), new PasswordHasher<AppUser>(), JwtTestHelper.CreateService());
+        new(repository, tenantRepository ?? new FakeTenantRepository(), new FakePlanRepository(), new LoginUserValidator(), new PasswordHasher<AppUser>(), JwtTestHelper.CreateService());
 
     private static async Task<AppUser> SeedUser(
         FakeUserRepository repository,

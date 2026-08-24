@@ -25,6 +25,7 @@ using OnlineExamSystem.Submission.Domain.Entities;
 using OnlineExamSystem.Submission.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Submission;
 using OnlineExamSystem.Shared.Contracts.Responses.Submission;
+using static OnlineExamSystem.Submission.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Submission.API.Controllers;
 
@@ -308,6 +309,7 @@ public class SubmissionsController : ControllerBase
     // until this has been explicitly turned on for the attempt in question.
     [HttpPut("{attemptId:guid}/live-watch")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = LiveMonitoring)]
     public async Task<IActionResult> SetLiveWatch(
         Guid attemptId,
         SetLiveWatchRequest request,
@@ -336,6 +338,7 @@ public class SubmissionsController : ControllerBase
     // not grant watch access.
     [HttpPost("{attemptId:guid}/recording/watch")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = LiveMonitoring)]
     public async Task<IActionResult> WatchRecording(Guid attemptId, CancellationToken cancellationToken)
     {
         var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -410,6 +413,7 @@ public class SubmissionsController : ControllerBase
     // already produces when time runs out, just admin-initiated instead.
     [HttpPost("{attemptId:guid}/force-submit")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = LiveMonitoring)]
     public async Task<IActionResult> ForceSubmit(Guid attemptId, CancellationToken cancellationToken)
     {
         var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -526,6 +530,7 @@ public class SubmissionsController : ControllerBase
 
     [HttpGet("by-exam/{examId:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = ResultsOrReports)]
     public async Task<IActionResult> ByExam(Guid examId, CancellationToken cancellationToken)
     {
         var attempts = await _listAttemptsByExamHandler.HandleAsync(
@@ -545,6 +550,7 @@ public class SubmissionsController : ControllerBase
     // screen needs to see exams with a student currently mid-attempt.
     [HttpGet("by-exam/{examId:guid}/live")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = LiveMonitoring)]
     public async Task<IActionResult> LiveByExam(Guid examId, CancellationToken cancellationToken)
     {
         var attempts = await _listLiveAttemptsByExamHandler.HandleAsync(
@@ -561,6 +567,7 @@ public class SubmissionsController : ControllerBase
 
     [HttpGet("by-user/{userId:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = ResultsOrReports)]
     public async Task<IActionResult> ByUser(Guid userId, CancellationToken cancellationToken)
     {
         var attempts = await _listAttemptsByUserHandler.HandleAsync(
@@ -575,6 +582,7 @@ public class SubmissionsController : ControllerBase
     // on ExamAttempt), each with its own timestamp/severity/status.
     [HttpGet("by-exam/{examId:guid}/violations")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = LiveMonitoring)]
     public async Task<IActionResult> ViolationsByExam(Guid examId, CancellationToken cancellationToken)
     {
         var events = await _listViolationsByExamHandler.HandleAsync(
@@ -586,6 +594,7 @@ public class SubmissionsController : ControllerBase
 
     [HttpPut("violations/{violationId:guid}/status")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = LiveMonitoring)]
     public async Task<IActionResult> UpdateViolationStatus(
         Guid violationId,
         UpdateViolationStatusRequest request,
@@ -629,6 +638,7 @@ public class SubmissionsController : ControllerBase
     // completed attempts for this exam.
     [HttpGet("ungraded")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> Ungraded([FromQuery] Guid examId, CancellationToken cancellationToken)
     {
         var answers = await _listUngradedAnswersByExamHandler.HandleAsync(
@@ -647,6 +657,7 @@ public class SubmissionsController : ControllerBase
 
     [HttpPut("{attemptId:guid}/answers/{questionId:guid}/grade")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> GradeAnswer(
         Guid attemptId,
         Guid questionId,

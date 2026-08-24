@@ -11,4 +11,10 @@ public class Tenant : BaseEntity
     // Gateway subdomain routing ships - not enforced yet.
     public string Slug { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+
+    // Which Admin-console modules this org has access to. Always set -
+    // every Tenant seeded/created before subscription plans shipped got
+    // backfilled to the "Full Access" plan, and Create Organization
+    // defaults to it too.
+    public Guid PlanId { get; set; }
 }

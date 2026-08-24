@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Domain.Entities;
 
@@ -19,6 +21,7 @@ public class UserDbContext : DbContext
     public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<Plan> Plans => Set<Plan>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,7 +35,8 @@ public class UserDbContext : DbContext
 
             // Seeded so every pre-multi-tenancy row (Default) and every
             // future Super Admin (Platform) has a real tenant to belong to
-            // from the moment this migration runs.
+            // from the moment this migration runs. Both backfilled onto the
+            // "Full Access" Plan below - subscription gating ships additive.
             entity.HasData(
                 new Tenant
                 {
@@ -40,6 +44,7 @@ public class UserDbContext : DbContext
                     Name = TenantConstants.DefaultTenantName,
                     Slug = TenantConstants.DefaultTenantSlug,
                     IsActive = true,
+                    PlanId = TenantConstants.FullAccessPlanId,
                     CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, DateTimeKind.Utc),
                 },
                 new Tenant
@@ -48,8 +53,52 @@ public class UserDbContext : DbContext
                     Name = TenantConstants.PlatformTenantName,
                     Slug = TenantConstants.PlatformTenantSlug,
                     IsActive = true,
+                    PlanId = TenantConstants.FullAccessPlanId,
                     CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, DateTimeKind.Utc),
                 });
+
+            entity.HasOne<Plan>()
+                .WithMany()
+                .HasForeignKey(t => t.PlanId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Plan>(entity =>
+        {
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.Name).IsRequired().HasMaxLength(200);
+            entity.Property(p => p.Description).HasMaxLength(1000);
+
+            // Stored as a comma-separated string (e.g. "Users,Exams") - no
+            // native array/JSON column type needed for 8 possible values.
+            // The ValueComparer is required for EF Core to detect in-place
+            // mutations of the List<T> itself (e.g. .Add()), not just
+            // reference swaps.
+            var featuresConverter = new ValueConverter<List<PlanFeature>, string>(
+                v => string.Join(',', v),
+                v => v.Length == 0
+                    ? new List<PlanFeature>()
+                    : v.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Enum.Parse<PlanFeature>).ToList());
+            var featuresComparer = new ValueComparer<List<PlanFeature>>(
+                (a, b) => (a ?? new()).SequenceEqual(b ?? new()),
+                v => v.Aggregate(0, (hash, f) => HashCode.Combine(hash, f)),
+                v => v.ToList());
+            entity.Property(p => p.IncludedFeatures)
+                .HasConversion(featuresConverter, featuresComparer)
+                .HasMaxLength(200);
+
+            // Every Tenant seeded above (and every one that existed before
+            // subscription plans shipped) points at this - full access,
+            // nothing silently locked out on migration day.
+            entity.HasData(new Plan
+            {
+                Id = TenantConstants.FullAccessPlanId,
+                Name = TenantConstants.FullAccessPlanName,
+                Description = "Every Admin console module included - the default for every organization until Super Admin assigns a different plan.",
+                IncludedFeatures = Enum.GetValues<PlanFeature>().ToList(),
+                UpdatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, DateTimeKind.Utc),
+            });
         });
 
         modelBuilder.Entity<AppUser>(entity =>

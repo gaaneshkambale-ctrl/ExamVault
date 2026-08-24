@@ -17,4 +17,11 @@ public static class TenantConstants
     public static readonly Guid PlatformTenantId = new("22222222-2222-2222-2222-222222222222");
     public const string PlatformTenantName = "Platform";
     public const string PlatformTenantSlug = "platform";
+
+    // Seeded alongside the two tenants above so every pre-subscription-plans
+    // Tenant row (and every newly created one that doesn't pick a plan) has
+    // a real Plan with every PlanFeature included - subscription gating
+    // ships additive, no existing org loses access on migration day.
+    public static readonly Guid FullAccessPlanId = new("33333333-3333-3333-3333-333333333333");
+    public const string FullAccessPlanName = "Full Access";
 }

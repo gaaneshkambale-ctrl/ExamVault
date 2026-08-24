@@ -1,3 +1,3 @@
 namespace OnlineExamSystem.User.Application.Tenants.Create;
 
-public record CreateTenantCommand(string Name, string Slug);
+public record CreateTenantCommand(string Name, string Slug, Guid? PlanId = null);

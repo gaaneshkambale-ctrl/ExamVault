@@ -14,6 +14,7 @@ using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Question;
 using OnlineExamSystem.Shared.Contracts.Responses.Question;
+using static OnlineExamSystem.Question.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Question.API.Controllers;
 
@@ -56,6 +57,7 @@ public class QuestionsController : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> Create(CreateQuestionRequest request, CancellationToken cancellationToken)
     {
         var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -130,6 +132,7 @@ public class QuestionsController : ControllerBase
 
     [HttpPut("bulk-assign-section")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> BulkAssignSection(
         BulkAssignSectionRequest request,
         CancellationToken cancellationToken)
@@ -160,6 +163,7 @@ public class QuestionsController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> Update(Guid id, UpdateQuestionRequest request, CancellationToken cancellationToken)
     {
         var command = new UpdateQuestionCommand(
@@ -208,6 +212,7 @@ public class QuestionsController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await _deleteQuestionHandler.HandleAsync(new DeleteQuestionCommand(id), cancellationToken);

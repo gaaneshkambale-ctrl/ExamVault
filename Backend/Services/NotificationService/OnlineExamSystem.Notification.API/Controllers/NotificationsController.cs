@@ -24,6 +24,7 @@ using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Contracts.Responses.Notification;
 using NotificationEntity = OnlineExamSystem.Notification.Domain.Entities.Notification;
+using static OnlineExamSystem.Notification.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Notification.API.Controllers;
 
@@ -227,6 +228,7 @@ public class NotificationsController : ControllerBase
     // disabled instead of pretending this reaches every organization.
     [HttpPost("admin")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> Create(CreateNotificationRequest request, CancellationToken cancellationToken)
     {
         var command = new CreateNotificationCommand(
@@ -269,6 +271,7 @@ public class NotificationsController : ControllerBase
 
     [HttpGet("admin/history")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> GetHistory(
         [FromQuery] string? type,
         [FromQuery] string? search,
@@ -317,6 +320,7 @@ public class NotificationsController : ControllerBase
 
     [HttpGet("admin/history/stats")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> GetHistoryStats(CancellationToken cancellationToken)
     {
         var stats = await _getNotificationHistoryStatsHandler.HandleAsync(
@@ -328,6 +332,7 @@ public class NotificationsController : ControllerBase
 
     [HttpGet("admin/history/{batchId:guid}")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> GetBatchDetails(Guid batchId, CancellationToken cancellationToken)
     {
         var result = await _getNotificationBatchDetailsHandler.HandleAsync(
@@ -357,6 +362,7 @@ public class NotificationsController : ControllerBase
 
     [HttpPost("admin/history/{batchId:guid}/resend")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> Resend(Guid batchId, CancellationToken cancellationToken)
     {
         var result = await _resendNotificationBatchHandler.HandleAsync(
@@ -378,6 +384,7 @@ public class NotificationsController : ControllerBase
 
     [HttpDelete("admin/history/{batchId:guid}")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> DeleteBatch(Guid batchId, CancellationToken cancellationToken)
     {
         var result = await _deleteNotificationBatchHandler.HandleAsync(
@@ -395,6 +402,7 @@ public class NotificationsController : ControllerBase
 
     [HttpGet("admin/templates")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> ListTemplates(
         [FromQuery] string? search,
         [FromQuery] string? type,
@@ -412,6 +420,7 @@ public class NotificationsController : ControllerBase
 
     [HttpPost("admin/templates")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> CreateTemplate(CreateNotificationTemplateRequest request, CancellationToken cancellationToken)
     {
         var result = await _createTemplateHandler.HandleAsync(
@@ -433,6 +442,7 @@ public class NotificationsController : ControllerBase
 
     [HttpPut("admin/templates/{id:guid}")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> UpdateTemplate(Guid id, UpdateNotificationTemplateRequest request, CancellationToken cancellationToken)
     {
         var result = await _updateTemplateHandler.HandleAsync(
@@ -459,6 +469,7 @@ public class NotificationsController : ControllerBase
 
     [HttpPost("admin/templates/{id:guid}/duplicate")]
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = Notifications)]
     public async Task<IActionResult> DuplicateTemplate(Guid id, CancellationToken cancellationToken)
     {
         var result = await _duplicateTemplateHandler.HandleAsync(new DuplicateTemplateCommand(id), cancellationToken);

@@ -5,6 +5,7 @@ using OnlineExamSystem.Exam.Application.Proctoring.UpdateProctoringSettings;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using ProctoringSettingsEntity = OnlineExamSystem.Exam.Domain.Entities.ProctoringSettings;
+using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -37,6 +38,7 @@ public class ProctoringSettingsController : ControllerBase
 
     [HttpPut]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Settings)]
     public async Task<IActionResult> Update(UpdateProctoringSettingsRequest request, CancellationToken cancellationToken)
     {
         var settings = await _updateProctoringSettingsHandler.HandleAsync(

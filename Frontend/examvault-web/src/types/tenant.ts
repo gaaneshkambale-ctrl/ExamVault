@@ -4,11 +4,13 @@ export interface Tenant {
   slug: string;
   isActive: boolean;
   createdAtUtc: string;
+  planId: string;
 }
 
 export interface CreateTenantRequest {
   name: string;
   slug: string;
+  planId?: string;
 }
 
 export interface CreateTenantAdminRequest {

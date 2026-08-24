@@ -11,6 +11,7 @@ using OnlineExamSystem.Exam.Application.Assignments.Update;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
+using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -66,6 +67,7 @@ public class AssignmentsController : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> Create(CreateAssignmentRequest request, CancellationToken cancellationToken)
     {
         var authorizationHeader = Request.Headers["Authorization"].ToString();
@@ -129,6 +131,7 @@ public class AssignmentsController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> Update(Guid id, UpdateAssignmentRequest request, CancellationToken cancellationToken)
     {
         var authorizationHeader = Request.Headers["Authorization"].ToString();
@@ -181,6 +184,7 @@ public class AssignmentsController : ControllerBase
 
     [HttpGet]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> List([FromQuery] Guid? examId, CancellationToken cancellationToken)
     {
         if (examId is { } id)
@@ -197,6 +201,7 @@ public class AssignmentsController : ControllerBase
 
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _getAssignmentHandler.HandleAsync(new GetAssignmentQuery(id), cancellationToken);
@@ -210,6 +215,7 @@ public class AssignmentsController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await _deleteAssignmentHandler.HandleAsync(new DeleteAssignmentCommand(id), cancellationToken);

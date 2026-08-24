@@ -5,6 +5,7 @@ using OnlineExamSystem.Exam.Application.Reminders.UpdateReminderSettings;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using ReminderSettingsEntity = OnlineExamSystem.Exam.Domain.Entities.ReminderSettings;
+using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -13,6 +14,7 @@ namespace OnlineExamSystem.Exam.API.Controllers;
 [ApiController]
 [Route("api/exams/reminder-settings")]
 [Authorize(Roles = "Admin")]
+[Authorize(Policy = Settings)]
 public class ReminderSettingsController : ControllerBase
 {
     private readonly GetReminderSettingsHandler _getReminderSettingsHandler;

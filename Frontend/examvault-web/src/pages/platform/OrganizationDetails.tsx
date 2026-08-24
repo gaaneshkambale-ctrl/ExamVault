@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Alert, Badge, Button, Card, Form, Modal, Spinner } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
 import { createTenantAdmin } from '../../api/tenantsApi';
+import { assignPlanToTenant, listPlans } from '../../api/plansApi';
 import { extractServerError } from '../../utils/apiError';
+import { PLAN_FEATURE_LABELS } from '../../types/plan';
 
 // Matches org_submenu.png's Organization Details page - all 8 tabs from
 // the mockup exist as real nav, but only Overview has any real data
@@ -39,14 +41,28 @@ export default function OrganizationDetails() {
   const { id } = useParams<{ id: string }>();
   const { data: tenants, isLoading } = useTenants();
   const tenant = tenants?.find((t) => t.id === id);
+  const queryClient = useQueryClient();
+
+  const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
+  const currentPlan = plans?.find((p) => p.id === tenant?.planId);
 
   const [tab, setTab] = useState<DetailTab>('Overview');
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
+  const [showChangePlan, setShowChangePlan] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
 
   const createAdminMutation = useMutation({
     mutationFn: () => createTenantAdmin(tenant!.id, { fullName: adminFullName, email: adminEmail }),
+  });
+
+  const assignPlanMutation = useMutation({
+    mutationFn: () => assignPlanToTenant(tenant!.id, selectedPlanId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      setShowChangePlan(false);
+    },
   });
 
   const openAddAdmin = () => {
@@ -54,6 +70,12 @@ export default function OrganizationDetails() {
     setAdminFullName('');
     setAdminEmail('');
     setShowAddAdmin(true);
+  };
+
+  const openChangePlan = () => {
+    assignPlanMutation.reset();
+    setSelectedPlanId(tenant?.planId ?? '');
+    setShowChangePlan(true);
   };
 
   if (isLoading) {
@@ -105,7 +127,7 @@ export default function OrganizationDetails() {
             </div>
             <div>
               <div>Plan</div>
-              <div className="text-body">&mdash;</div>
+              <div className="text-body">{currentPlan?.name ?? '—'}</div>
             </div>
             <div>
               <div>Admin Contact</div>
@@ -148,7 +170,7 @@ export default function OrganizationDetails() {
                   <InfoRow label="Organization Code" value="—" />
                   <InfoRow label="Subdomain" value={`${tenant.slug}.examvault.com`} />
                   <InfoRow label="Organization Type" value="—" />
-                  <InfoRow label="Plan / Subscription" value="—" />
+                  <InfoRow label="Plan / Subscription" value={currentPlan?.name ?? '—'} />
                   <InfoRow label="Status" value={tenant.isActive ? 'Active' : 'Inactive'} />
                   <InfoRow label="Registration Date" value={new Date(tenant.createdAtUtc).toLocaleString()} />
                   <InfoRow label="Description" value="—" />
@@ -174,17 +196,57 @@ export default function OrganizationDetails() {
               <Card className="border-0 shadow-sm mb-3">
                 <Card.Body>
                   <h2 className="h6 fw-bold mb-3">Subscription Information</h2>
-                  <NotConnected label="Subscription Information" />
+                  <InfoRow label="Current Plan" value={currentPlan?.name ?? '—'} />
+                  <InfoRow label="Plan Description" value={currentPlan?.description ?? '—'} />
                 </Card.Body>
               </Card>
 
               <Card className="border-0 shadow-sm">
                 <Card.Body>
                   <h2 className="h6 fw-bold mb-3">Modules &amp; Features</h2>
-                  <NotConnected label="Modules & Features" />
+                  {!currentPlan || currentPlan.includedFeatures.length === 0 ? (
+                    <div className="text-center text-muted small py-3">No modules included in the current plan.</div>
+                  ) : (
+                    <div className="d-flex flex-wrap gap-1">
+                      {currentPlan.includedFeatures.map((f) => (
+                        <Badge key={f} bg="light" text="dark" className="border">
+                          {PLAN_FEATURE_LABELS[f]}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </Card.Body>
               </Card>
             </>
+          )}
+
+          {tab === 'Subscriptions' && (
+            <Card className="border-0 shadow-sm">
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h2 className="h6 fw-bold mb-0">Subscription</h2>
+                  <Button variant="primary" size="sm" onClick={openChangePlan}>
+                    Change Plan
+                  </Button>
+                </div>
+                <InfoRow label="Current Plan" value={currentPlan?.name ?? '—'} />
+                <InfoRow label="Plan Description" value={currentPlan?.description ?? '—'} />
+                <div className="mt-3">
+                  <div className="text-muted small mb-2">Included Modules</div>
+                  {!currentPlan || currentPlan.includedFeatures.length === 0 ? (
+                    <div className="text-muted small">No modules included.</div>
+                  ) : (
+                    <div className="d-flex flex-wrap gap-1">
+                      {currentPlan.includedFeatures.map((f) => (
+                        <Badge key={f} bg="light" text="dark" className="border">
+                          {PLAN_FEATURE_LABELS[f]}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card.Body>
+            </Card>
           )}
 
           {tab === 'Admins' && (
@@ -203,7 +265,7 @@ export default function OrganizationDetails() {
             </Card>
           )}
 
-          {tab !== 'Overview' && tab !== 'Admins' && (
+          {tab !== 'Overview' && tab !== 'Admins' && tab !== 'Subscriptions' && (
             <Card className="border-0 shadow-sm">
               <Card.Body>
                 <NotConnected label={tab} />
@@ -238,7 +300,7 @@ export default function OrganizationDetails() {
                 <Button variant="outline-secondary" size="sm" disabled title="Not connected yet">
                   Edit Organization
                 </Button>
-                <Button variant="outline-secondary" size="sm" disabled title="Not connected yet">
+                <Button variant="outline-secondary" size="sm" onClick={openChangePlan}>
                   Change Plan / Upgrade
                 </Button>
                 {tenant.isActive ? (
@@ -299,6 +361,40 @@ export default function OrganizationDetails() {
               {createAdminMutation.isPending ? 'Creating...' : 'Create Admin'}
             </Button>
           )}
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showChangePlan} onHide={() => setShowChangePlan(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Change Plan for {tenant.name}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {assignPlanMutation.isError && <Alert variant="danger">{extractServerError(assignPlanMutation.error)}</Alert>}
+          <Form.Group controlId="changePlanSelect">
+            <Form.Label>Plan</Form.Label>
+            <Form.Select value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
+              <option value="" disabled>
+                Select a plan...
+              </option>
+              {plans?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowChangePlan(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!selectedPlanId || selectedPlanId === tenant.planId || assignPlanMutation.isPending}
+            onClick={() => assignPlanMutation.mutate()}
+          >
+            {assignPlanMutation.isPending ? 'Saving...' : 'Save'}
+          </Button>
         </Modal.Footer>
       </Modal>
     </PlatformLayout>

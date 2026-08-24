@@ -1,4 +1,5 @@
 using FluentValidation;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Entities;
 
@@ -31,7 +32,12 @@ public class CreateTenantHandler
             return CreateTenantResult.Conflict();
         }
 
-        var tenant = new Tenant { Name = command.Name, Slug = command.Slug };
+        var tenant = new Tenant
+        {
+            Name = command.Name,
+            Slug = command.Slug,
+            PlanId = command.PlanId ?? TenantConstants.FullAccessPlanId,
+        };
         await _tenantRepository.AddAsync(tenant, cancellationToken);
         await _tenantRepository.SaveChangesAsync(cancellationToken);
 

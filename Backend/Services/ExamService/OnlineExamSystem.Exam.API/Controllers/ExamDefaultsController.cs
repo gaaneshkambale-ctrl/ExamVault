@@ -5,16 +5,18 @@ using OnlineExamSystem.Exam.Application.Settings.UpdateExamDefaults;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using ExamDefaultsEntity = OnlineExamSystem.Exam.Domain.Entities.ExamDefaults;
+using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
 // Nested under api/exams/defaults so the Gateway's existing exams-route
 // (/api/exams/{**catch-all}) already proxies this - no new Gateway route needed.
 // Not yet wired into CreateExam's actual prefill values (deferred - see
-// ActionPlan.txt), so both verbs are Admin-only for now.
+// ActionPlan.txt), so both verbs are Admin-only for now, gated on Settings.
 [ApiController]
 [Route("api/exams/defaults")]
 [Authorize(Roles = "Admin")]
+[Authorize(Policy = Settings)]
 public class ExamDefaultsController : ControllerBase
 {
     private readonly GetExamDefaultsHandler _getExamDefaultsHandler;

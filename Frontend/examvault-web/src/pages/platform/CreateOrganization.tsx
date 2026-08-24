@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
 import { createTenant, createTenantAdmin } from '../../api/tenantsApi';
+import { listPlans } from '../../api/plansApi';
 import { extractServerError } from '../../utils/apiError';
 
 // Matches org_submenu.png's Create Organization page. Real fields: Name,
@@ -21,16 +22,18 @@ export default function CreateOrganization() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: tenants } = useTenants();
+  const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [planId, setPlanId] = useState('');
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminWarning, setAdminWarning] = useState('');
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const tenant = await createTenant({ name, slug });
+      const tenant = await createTenant({ name, slug, planId: planId || undefined });
       if (adminFullName.trim() && adminEmail.trim()) {
         try {
           await createTenantAdmin(tenant.id, { fullName: adminFullName, email: adminEmail });
@@ -98,6 +101,22 @@ export default function CreateOrganization() {
                       <option>Select type</option>
                     </Form.Select>
                     <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row className="g-3 mb-2">
+                <Col md={6}>
+                  <Form.Group controlId="orgPlan">
+                    <Form.Label>Plan</Form.Label>
+                    <Form.Select value={planId} onChange={(e) => setPlanId(e.target.value)}>
+                      <option value="">Full Access (default)</option>
+                      {plans?.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </Form.Select>
+                    <Form.Text className="text-muted">Determines which Admin console modules this organization can use.</Form.Text>
                   </Form.Group>
                 </Col>
               </Row>
