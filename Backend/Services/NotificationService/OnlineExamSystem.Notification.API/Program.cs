@@ -28,6 +28,10 @@ using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.Preferences;
 using OnlineExamSystem.Notification.Application.Settings.GetSystemSettings;
 using OnlineExamSystem.Notification.Application.Settings.UpdateSystemSettings;
+using OnlineExamSystem.Notification.Application.SystemLogs.ListSystemErrorLogs;
+using OnlineExamSystem.Notification.Application.SystemLogs.RecordSystemErrorLog;
+using OnlineExamSystem.Notification.Application.SystemLogs.ResolveSystemErrorLog;
+using OnlineExamSystem.Notification.Domain.Enums;
 using OnlineExamSystem.Notification.API.Jobs;
 using OnlineExamSystem.Notification.Infrastructure.Clients;
 using OnlineExamSystem.Notification.Infrastructure.Email;
@@ -60,12 +64,17 @@ public class Program
         builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         builder.Services.AddScoped<ISystemSettingsRepository, SystemSettingsRepository>();
+        builder.Services.AddScoped<ISystemErrorLogRepository, SystemErrorLogRepository>();
         builder.Services.AddScoped<RecordAuditLogHandler>();
         builder.Services.AddScoped<ListAuditLogsHandler>();
         builder.Services.AddScoped<GetSystemSettingsHandler>();
         builder.Services.AddScoped<IValidator<UpdateSystemSettingsCommand>, UpdateSystemSettingsValidator>();
         builder.Services.AddScoped<UpdateSystemSettingsHandler>();
+        builder.Services.AddScoped<RecordSystemErrorLogHandler>();
+        builder.Services.AddScoped<ListSystemErrorLogsHandler>();
+        builder.Services.AddScoped<ResolveSystemErrorLogHandler>();
         builder.Services.AddHostedService<AuditLogRetentionCleanupService>();
+        builder.Services.AddHostedService<SystemErrorLogRetentionCleanupService>();
 
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
@@ -145,6 +154,43 @@ public class Program
             app.UseSwagger();
             app.UseSwaggerUI();
         }
+
+        // First, so it wraps every later middleware/controller. Reports directly
+        // to RecordSystemErrorLogHandler in-process rather than over HTTP - this
+        // IS the service the other 8 report to, calling out to itself would just
+        // be a pointless round-trip to its own not-yet-recovered process.
+        app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+        {
+            var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+            if (exception is not null)
+            {
+                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogError(exception, "Unhandled exception in Notification Service.");
+
+                try
+                {
+                    var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
+                    var recordHandler = context.RequestServices.GetRequiredService<RecordSystemErrorLogHandler>();
+                    await recordHandler.HandleAsync(new RecordSystemErrorLogCommand(
+                        "Notification Service",
+                        SystemLogLevel.Error,
+                        exception.Message,
+                        exception.GetType().Name,
+                        exception.StackTrace,
+                        context.Request.Path,
+                        context.Request.Method,
+                        currentTenant.IsAuthenticated ? currentTenant.TenantId : null));
+                }
+                catch (Exception recordEx)
+                {
+                    logger.LogWarning(recordEx, "Failed to record system error log entry.");
+                }
+            }
+
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new { message = "An unexpected error occurred." }));
+        }));
 
         app.UseHttpsRedirection();
 

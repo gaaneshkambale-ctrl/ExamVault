@@ -18,6 +18,7 @@ public class NotificationDbContext : TenantScopedDbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+    public DbSet<SystemErrorLog> SystemErrorLogs => Set<SystemErrorLog>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. Forcing Kind=Utc on
@@ -88,6 +89,23 @@ public class NotificationDbContext : TenantScopedDbContext
             entity.HasIndex(s => s.TenantId);
             entity.HasQueryFilter(s =>
                 CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && s.TenantId == CurrentTenant.TenantId));
+        });
+
+        modelBuilder.Entity<SystemErrorLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.CreatedAtUtc);
+            entity.HasIndex(e => e.Service);
+            entity.HasIndex(e => e.Severity);
+            entity.HasIndex(e => e.IsResolved);
+            entity.Property(e => e.Severity).HasConversion<string>();
+            entity.Property(e => e.Service).HasMaxLength(100);
+            entity.Property(e => e.Message).HasMaxLength(2000);
+            entity.Property(e => e.ExceptionType).HasMaxLength(200);
+            entity.Property(e => e.StackTrace).HasMaxLength(4000);
+            entity.Property(e => e.RequestPath).HasMaxLength(500);
+            entity.Property(e => e.RequestMethod).HasMaxLength(16);
+            // No HasQueryFilter - deliberately cross-tenant, see SystemErrorLog's own comment.
         });
     }
 }

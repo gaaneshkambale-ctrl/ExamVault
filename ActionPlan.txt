@@ -5341,3 +5341,96 @@ VERIFICATION
    one is stopped, as a sanity check); System Health shows Database/
    Message Queue Healthy; Active Organizations/Active Exams show real rows
    matching the already-verified Organizations/Exams pages.
+
+===============================================================================
+SYSTEM LOGS (real backend error capture) - fills the last System Monitoring
+placeholder ("Platform Admin > System Logs")
+===============================================================================
+
+User ask: any unhandled error/exception anywhere in the backend should land
+in the Super Admin's System Logs page, so a real person can see and resolve
+it - not a synthetic/demo feed. Follows the exact precedent already in this
+codebase for AuditLog (RecordAuditLogHandler/AuditLogsController/AuditClient
+in Notification Service): a fire-and-forget, unauthenticated, service-to-
+service write endpoint that only the docker network can reach, paired with
+an [Authorize(Roles=SuperAdmin)] read endpoint the Gateway does expose.
+
+BACKEND
+
+1. Notification Service gets a second cross-cutting entity alongside
+   AuditLog: `SystemErrorLog` (Notification.Domain.Entities), extends
+   BaseEntity directly (NOT TenantScopedEntity) - unlike an audit entry, an
+   unhandled exception may have no tenant at all (pre-auth failure, a
+   Gateway-level error) and SuperAdmin must see every row regardless of
+   tenant, so no per-tenant query filter belongs here.
+   Fields: Service (string - "Exam Service", "Gateway", ...), Severity
+   (enum: Warning|Error), Message, ExceptionType (e.g.
+   "NullReferenceException" - useful for triage/grouping), StackTrace
+   (string?, capped ~4000 chars), RequestPath/RequestMethod (string?),
+   TenantId (Guid?, best-effort from HttpContext when present), IsResolved
+   (bool, default false), ResolvedAtUtc (DateTime?), ResolvedByUserId
+   (Guid?) - the resolve workflow is the one deliberate difference from
+   AuditLog: SuperAdmin needs to mark an issue handled, an audit entry
+   never needed that.
+   New migration, repository (ISystemErrorLogRepository), and
+   RecordSystemErrorLogHandler/ListSystemErrorLogsHandler/
+   ResolveSystemErrorLogHandler mirroring the audit ones.
+
+2. New SystemLogsController in Notification.API (`api/system-logs`):
+   - `POST` (record) - deliberately NOT [Authorize], same reasoning as
+     RecordAuditLog's own comment: only reachable inside the docker
+     network, no Gateway route exists for this exact path+method.
+   - `GET` - `[Authorize(Roles = "SuperAdmin")]`, query by
+     fromUtc/toUtc/service/severity/resolved, mirrors ListAuditLogs's
+     date-range shape.
+   - `POST {id}/resolve` - `[Authorize(Roles = "SuperAdmin")]`.
+   - A 30-day fixed retention cleanup BackgroundService (simpler than
+     AuditLogRetentionCleanupService's per-tenant setting - these aren't
+     tenant data, one global cutoff is enough).
+
+3. Gateway ReverseProxy config (appsettings.json + .Docker.json): two new
+   routes on notifications-cluster - `system-logs-list-route` (GET
+   `/api/system-logs`) and `system-logs-resolve-route` (POST
+   `/api/system-logs/{id}/resolve`). The bare `POST /api/system-logs`
+   (record) gets no route at all, exactly like audit-logs-route today -
+   unreachable from outside the docker network by construction, not by an
+   auth check.
+
+4. Every one of the 9 HTTP-facing services (Gateway + 8 APIs) gets a global
+   exception-handling middleware - none exists anywhere in this codebase
+   today, confirmed via grep. Same copy-paste-per-service precedent as the
+   health-check ResponseWriter: a small local `SystemLogClient` (fire-and-
+   forget POST to Services:NotificationServiceBaseUrl + "api/system-logs",
+   must never throw - mirrors IAuditClient's own "never throw" contract)
+   plus `app.UseExceptionHandler(...)` registered first, right after
+   `app.Build()`, that logs locally via ILogger (existing convention),
+   reports to System Logs, and returns a generic
+   `{ message = "An unexpected error occurred." }` 500 - never leaks
+   exception internals to the caller, only to SuperAdmin's own console.
+   4 services (Ai, Execution, Result, Submission) don't yet have
+   Services:NotificationServiceBaseUrl wired at all - add it to their
+   appsettings.Development.json (`http://localhost:5070`, matching the
+   value already used by User/Exam/Question) and to their docker-compose.yml
+   env block (`Services__NotificationServiceBaseUrl: http://notification-api:8080`).
+   Notification Service's own middleware reports to itself in-process
+   (skip the HTTP round-trip, call the handler directly) rather than
+   calling out to its own not-yet-running self.
+
+FRONTEND
+
+5. `api/systemLogsApi.ts` - `listSystemLogs(filters)`, `resolveSystemLog(id)`.
+6. `pages/platform/SystemLogs.tsx` replaces the `system-logs` entry in
+   platformComingSoonRoutes.ts - table of logs (Service, Severity badge,
+   Message, ExceptionType, When, Resolved badge) with a "Resolve" action,
+   filters for service/severity/resolved, matching ServiceStatus.tsx's
+   conventions (Card/Table/Badge, PlatformLayout).
+
+VERIFICATION
+
+7. Trigger a real unhandled exception in one service (e.g. a temporary bad
+   route or malformed request that bypasses validation) and confirm it
+   shows up in System Logs within seconds, with the right service name and
+   stack trace, then resolve it from the UI and confirm IsResolved flips.
+8. Rebuild + restart all 9 services one at a time (per this session's own
+   lesson: this machine's ~8GB RAM crashes Docker's engine under parallel
+   .NET builds - see feedback memory). `npm run build` for the frontend.

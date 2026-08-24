@@ -1,12 +1,15 @@
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
+using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.User.Application.Groups.AddMember;
 using OnlineExamSystem.User.Application.Groups.Create;
@@ -86,6 +89,11 @@ public class Program
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient("system-logs", client =>
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(3);
+        });
         builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
         builder.Services.AddScoped<RegisterUserHandler>();
         builder.Services.AddScoped<GetUserProfileHandler>();
@@ -202,6 +210,22 @@ public class Program
             app.UseSwaggerUI();
         }
 
+        // First, so it wraps every later middleware/controller.
+        app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+        {
+            var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+            if (exception is not null)
+            {
+                context.RequestServices.GetRequiredService<ILogger<Program>>()
+                    .LogError(exception, "Unhandled exception in User Service.");
+                await ReportSystemErrorAsync(context, exception, "User Service");
+            }
+
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new { message = "An unexpected error occurred." }));
+        }));
+
         app.UseHttpsRedirection();
 
         app.UseAuthentication();
@@ -211,6 +235,33 @@ public class Program
         app.MapControllers();
 
         app.Run();
+    }
+
+    // Fire-and-forget to Notification Service's system-logs endpoint - never
+    // throws, a down/unreachable Notification Service must never mask the
+    // real 500 response for the error that triggered this.
+    private static async Task ReportSystemErrorAsync(HttpContext context, Exception exception, string serviceName)
+    {
+        try
+        {
+            var currentTenant = context.RequestServices.GetService<ICurrentTenant>();
+            var request = new RecordSystemErrorLogRequest(
+                serviceName,
+                "Error",
+                exception.Message,
+                exception.GetType().Name,
+                exception.StackTrace,
+                context.Request.Path,
+                context.Request.Method,
+                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null);
+
+            var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("system-logs");
+            await client.PostAsJsonAsync("api/system-logs", request);
+        }
+        catch
+        {
+            // Swallow - logging failures must never mask the real error response.
+        }
     }
 
     // Gateway's MonitoringController is the only consumer - no [Authorize] here,

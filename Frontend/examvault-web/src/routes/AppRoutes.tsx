@@ -100,6 +100,7 @@ import MonitoringActiveOrganizations from '../pages/platform/monitoring/ActiveOr
 import MonitoringActiveExams from '../pages/platform/monitoring/ActiveExams';
 import MonitoringSystemHealth from '../pages/platform/monitoring/SystemHealth';
 import MonitoringServiceStatus from '../pages/platform/monitoring/ServiceStatus';
+import SystemLogs from '../pages/platform/SystemLogs';
 import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
 import { platformComingSoonRoutes } from './platformComingSoonRoutes';
 
@@ -963,6 +964,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <MonitoringServiceStatus />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/system-logs"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SystemLogs />
           </ProtectedRoute>
         }
       />

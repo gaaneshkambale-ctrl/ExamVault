@@ -1,7 +1,11 @@
+using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.ApiGateway.Multitenancy;
+using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 
 namespace OnlineExamSystem.ApiGateway;
 
@@ -99,6 +103,45 @@ public class Program
         });
 
         var app = builder.Build();
+
+        // First, so it wraps every later middleware/controller. Reuses the
+        // "notification-api" named client already registered above for
+        // MonitoringController's health probes - no ICurrentTenant here,
+        // the Gateway isn't tenant-scoped in that sense, so TenantId is
+        // always null.
+        app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+        {
+            var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+            if (exception is not null)
+            {
+                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogError(exception, "Unhandled exception in Gateway.");
+
+                try
+                {
+                    var request = new RecordSystemErrorLogRequest(
+                        "Gateway",
+                        "Error",
+                        exception.Message,
+                        exception.GetType().Name,
+                        exception.StackTrace,
+                        context.Request.Path,
+                        context.Request.Method,
+                        TenantId: null);
+
+                    var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("notification-api");
+                    await client.PostAsJsonAsync("api/system-logs", request);
+                }
+                catch (Exception recordEx)
+                {
+                    logger.LogWarning(recordEx, "Failed to record system error log entry.");
+                }
+            }
+
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new { message = "An unexpected error occurred." }));
+        }));
 
         app.UseHttpsRedirection();
 

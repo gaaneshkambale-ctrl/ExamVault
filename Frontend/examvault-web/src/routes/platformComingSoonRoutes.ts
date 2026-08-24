@@ -31,6 +31,4 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
   { path: '/platform/security', active: 'sec-events', parent: 'Security', title: 'Security Events' },
   { path: '/platform/security/events', active: 'sec-events', parent: 'Security', title: 'Security Events' },
   { path: '/platform/security/failed-logins', active: 'sec-failed-logins', parent: 'Security', title: 'Failed Login Attempts' },
-
-  { path: '/platform/system-logs', active: 'system-logs', parent: 'Platform Admin', title: 'System Logs' },
 ];
