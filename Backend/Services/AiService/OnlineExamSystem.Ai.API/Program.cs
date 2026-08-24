@@ -1,6 +1,9 @@
 using System.Text;
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Ai.Application.Generate;
 using OnlineExamSystem.Ai.Application.Interfaces;
@@ -22,6 +25,7 @@ public class Program
         builder.Services.AddSwaggerGen();
 
         // No DbContext/repository registrations here - AI Service owns no database.
+        builder.Services.AddHealthChecks();
 
         builder.Services.AddHttpClient<IAiQuestionGenerator, N8nQuestionGenerator>();
         builder.Services.AddScoped<IValidator<GenerateQuestionsRequest>, GenerateQuestionsValidator>();
@@ -65,8 +69,22 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
+        app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealthCheckResponse });
         app.MapControllers();
 
         app.Run();
+    }
+
+    // Gateway's MonitoringController is the only consumer - no [Authorize] here,
+    // this is an infra probe like every other service's /health.
+    private static Task WriteHealthCheckResponse(HttpContext context, HealthReport report)
+    {
+        context.Response.ContentType = "application/json";
+        var payload = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new { name = e.Key, status = e.Value.Status.ToString() }),
+        };
+        return context.Response.WriteAsync(JsonSerializer.Serialize(payload));
     }
 }

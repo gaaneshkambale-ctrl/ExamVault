@@ -31,4 +31,5 @@ public record ExamResponse(
     bool AutoSubmitOnTimeEnd,
     bool ConfirmBeforeSubmit,
     Guid? ExamTypeId = null,
-    string? ExamTypeName = null);
+    string? ExamTypeName = null,
+    Guid TenantId = default);

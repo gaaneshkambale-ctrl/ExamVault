@@ -242,6 +242,7 @@ services:
       context: .
       dockerfile: Backend/Gateway/OnlineExamSystem.ApiGateway/Dockerfile
     environment:
+      <<: [*jwt-env, *rabbitmq-env]
       ASPNETCORE_ENVIRONMENT: Docker
     depends_on:
       - user-api

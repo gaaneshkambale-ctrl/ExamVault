@@ -1,5 +1,8 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Result.Application.GetExamReport;
 using OnlineExamSystem.Result.Application.GetResult;
@@ -23,6 +26,7 @@ public class Program
 
         // No DbContext/repository registrations here - Result Service owns no
         // database, it computes results on demand from the services that do.
+        builder.Services.AddHealthChecks();
 
         // Trailing slash is required: HttpClient/Uri combine a relative request path against
         // BaseAddress per RFC 3986 §5.3, which drops the last base path segment (e.g. Dapr's
@@ -83,8 +87,22 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
+        app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealthCheckResponse });
         app.MapControllers();
 
         app.Run();
+    }
+
+    // Gateway's MonitoringController is the only consumer - no [Authorize] here,
+    // this is an infra probe like every other service's /health.
+    private static Task WriteHealthCheckResponse(HttpContext context, HealthReport report)
+    {
+        context.Response.ContentType = "application/json";
+        var payload = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new { name = e.Key, status = e.Value.Status.ToString() }),
+        };
+        return context.Response.WriteAsync(JsonSerializer.Serialize(payload));
     }
 }

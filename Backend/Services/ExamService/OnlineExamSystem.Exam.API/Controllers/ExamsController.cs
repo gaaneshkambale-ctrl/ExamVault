@@ -293,5 +293,6 @@ public class ExamsController : ControllerBase
             exam.AutoSubmitOnTimeEnd,
             exam.ConfirmBeforeSubmit,
             exam.ExamTypeId,
-            exam.ExamType?.Name);
+            exam.ExamType?.Name,
+            exam.TenantId);
 }

@@ -26,12 +26,7 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
 
   { path: '/platform/subscriptions/history', active: 'subs-history', parent: 'Subscriptions', title: 'Subscription History' },
 
-  { path: '/platform/monitoring', active: 'mon-active-orgs', parent: 'System Monitoring', title: 'Active Organizations' },
-  { path: '/platform/monitoring/active-organizations', active: 'mon-active-orgs', parent: 'System Monitoring', title: 'Active Organizations' },
-  { path: '/platform/monitoring/active-exams', active: 'mon-active-exams', parent: 'System Monitoring', title: 'Active Exams' },
-  { path: '/platform/monitoring/system-health', active: 'mon-system-health', parent: 'System Monitoring', title: 'System Health' },
   { path: '/platform/monitoring/api-health', active: 'mon-api-health', parent: 'System Monitoring', title: 'API Health' },
-  { path: '/platform/monitoring/service-status', active: 'mon-service-status', parent: 'System Monitoring', title: 'Service Status' },
 
   { path: '/platform/security', active: 'sec-events', parent: 'Security', title: 'Security Events' },
   { path: '/platform/security/events', active: 'sec-events', parent: 'Security', title: 'Security Events' },

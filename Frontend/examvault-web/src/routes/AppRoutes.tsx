@@ -95,6 +95,11 @@ import PlatformAnnouncement from '../pages/platform/PlatformAnnouncement';
 import PlatformNotificationHistory from '../pages/platform/PlatformNotificationHistory';
 import PlatformNotificationTemplates from '../pages/platform/PlatformNotificationTemplates';
 import PlatformDashboard from '../pages/platform/PlatformDashboard';
+import MonitoringOverview from '../pages/platform/monitoring/MonitoringOverview';
+import MonitoringActiveOrganizations from '../pages/platform/monitoring/ActiveOrganizations';
+import MonitoringActiveExams from '../pages/platform/monitoring/ActiveExams';
+import MonitoringSystemHealth from '../pages/platform/monitoring/SystemHealth';
+import MonitoringServiceStatus from '../pages/platform/monitoring/ServiceStatus';
 import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
 import { platformComingSoonRoutes } from './platformComingSoonRoutes';
 
@@ -918,6 +923,46 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <PlatformNotificationTemplates />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/monitoring"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <MonitoringOverview />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/monitoring/active-organizations"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <MonitoringActiveOrganizations />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/monitoring/active-exams"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <MonitoringActiveExams />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/monitoring/system-health"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <MonitoringSystemHealth />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/monitoring/service-status"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <MonitoringServiceStatus />
           </ProtectedRoute>
         }
       />

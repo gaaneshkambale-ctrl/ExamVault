@@ -1,7 +1,10 @@
 using System.Text;
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Submission.Application.Attempts.CompleteSection;
 using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
@@ -50,6 +53,8 @@ public class Program
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<SubmissionDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("SubmissionDb")));
+        builder.Services.AddHealthChecks()
+            .AddDbContextCheck<SubmissionDbContext>("database");
         builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
 
         builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
@@ -153,8 +158,22 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
+        app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealthCheckResponse });
         app.MapControllers();
 
         app.Run();
+    }
+
+    // Gateway's MonitoringController is the only consumer - no [Authorize] here,
+    // this is an infra probe like every other service's /health.
+    private static Task WriteHealthCheckResponse(HttpContext context, HealthReport report)
+    {
+        context.Response.ContentType = "application/json";
+        var payload = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new { name = e.Key, status = e.Value.Status.ToString() }),
+        };
+        return context.Response.WriteAsync(JsonSerializer.Serialize(payload));
     }
 }

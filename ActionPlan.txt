@@ -5228,3 +5228,116 @@ DONE - built, tested, deployed, and verified live:
 EditExam.tsx intentionally still has an editable Exam Code field
 (admin can override the generated code later) - left alone per the
 user's literal scope of "create exam page" only.
+
+===============================================================================
+SYSTEM MONITORING (real parts only) - matches Monitoring.png
+===============================================================================
+
+User supplied Monitoring.png (System Monitoring dashboard mockup: 5 stat
+cards, Active Organizations table, Active Exams table, System Health donut
++ component list + CPU/Memory/Disk/Network sparklines, API Health line
+chart + request counters, Service Status table for 18 services) and asked
+to implement it. Confirmed scope with user before starting (per this
+file's own "never fake data" convention, already established across
+Dashboard/Reports/ExamUsageReport): build only what can be real given this
+codebase. Skip host resource metrics (CPU/Memory/Disk/Network) and the API
+request-history chart entirely - no metrics-collection infra exists for
+either, and neither maps to the target Azure Container Apps deployment
+(see multi_tenant_saas.txt). "Storage" and "Background Jobs" rows from the
+mockup's System Health widget are dropped too - no real concept for
+either here (the 2 worker services have no HTTP endpoint to probe).
+
+Real, buildable: Active Organizations, Active Exams, System Health
+(Database + Message Queue only), Service Status (all 9 HTTP-facing
+services: Gateway + 8 APIs). API Health stays PlatformComingSoon.
+
+BACKEND
+
+1. Health check endpoint on every HTTP-facing service (Gateway + 8 APIs =
+   9; the 2 workers - Execution.Worker, Notification.Worker - stay out of
+   scope, no Kestrel listener to add a probe to):
+   - 5 DbContext-backed services (User, Exam, Question, Submission,
+     Notification): `AddHealthChecks().AddDbContextCheck<XDbContext>("database")`.
+   - 3 DB-less services (Ai, Execution, Result): `AddHealthChecks()` with
+     no checks - the endpoint responding at all is the useful signal.
+   - All 9: `app.MapHealthChecks("/health", ...)` with a small per-service
+     JSON ResponseWriter (local static method, duplicated per Program.cs -
+     matches this codebase's existing precedent of copy-pasting small
+     helpers like RabbitMqSettings.cs rather than sharing) emitting
+     `{ "status": "Healthy|Unhealthy", "checks": [{name, status}] }`.
+     No [Authorize] on it - infra probe, only consumer is the Gateway
+     (itself gated), matches how every other stack exposes /health.
+
+2. Gateway gets its first controller + its first auth (today it's pure
+   YARP pass-through - no AddControllers, no JWT validation of its own,
+   downstream services each validate the bearer token independently):
+   - Add `AddControllers()` + the same JWT bearer
+     issuer/audience/signingkey block already duplicated in all 8 services
+     + `AddAuthorization()`.
+   - Add `Services:{Exam,Question,Ai,Submission,Result,Notification,Execution}ServiceBaseUrl`
+     to appsettings.json/.Development.json/.Docker.json (UserServiceBaseUrl
+     already exists) - same URLs already in ReverseProxy:Clusters, just
+     named for direct HttpClient use.
+   - New `MonitoringController`, `[Authorize(Roles = "SuperAdmin")]`:
+     - `GET /api/monitoring/services` - calls all 9 services' `/health` in
+       parallel (~3s timeout each), returns
+       `{ name, status: Online|Degraded|Offline, responseTimeMs }[]`.
+       Online = 200 + Healthy. Degraded = 200 + Unhealthy (process up, a
+       dependency check failed). Offline = timeout/connection refused.
+     - `GET /api/monitoring/system-health` - same probe rolled up into
+       `{ database: Healthy|Unhealthy, messageQueue: Healthy|Unhealthy }`.
+       Database = Healthy iff every one of the 5 DB-backed services'
+       "database" check is Healthy. Message Queue = direct call to
+       RabbitMQ's management HTTP API
+       (`http://rabbitmq:15672/api/healthchecks/node`, guest/guest - the
+       real default per RabbitMqSettings.cs, management API already
+       published on 15672 in docker-compose.yml).
+
+3. Exam Service: add `TenantId` to the exam response DTO/mapping (Exam
+   entity already has it, just never surfaced to callers) so the frontend
+   can label each exam's organization. Same shape as the `isAdmin`
+   role-gate widenings already done this session for ExamUsageReport.
+
+FRONTEND
+
+4. `api/monitoringApi.ts` - `listServiceStatus()`, `getSystemHealth()`
+   calling the two new Gateway endpoints.
+5. Replace 4 of the 5 `platformComingSoonRoutes` monitoring entries with
+   real pages (PlatformLayout, same structure/conventions as
+   OrganizationReport.tsx/ExamUsageReport.tsx):
+   - ActiveOrganizations.tsx (mon-active-orgs) - reuses useTenants(),
+     table of orgs filtered to isActive (same real fields ManageTenants.tsx
+     already shows).
+   - ActiveExams.tsx (mon-active-exams) - reuses listExams() + useTenants()
+     (joined via the new TenantId), filtered to Published exams whose
+     startAtUtc/endAtUtc window is now-or-upcoming; Status column
+     (Live/Upcoming) derived from those real timestamps. No "Participants"
+     column - no cross-tenant submissions endpoint exists (same gap
+     ExamUsageReport already documents), omitted rather than faked.
+   - SystemHealth.tsx (mon-system-health) - Database/Message Queue status
+     rows from getSystemHealth().
+   - ServiceStatus.tsx (mon-service-status) - table of all 9 services
+     (name, status badge, response time) from listServiceStatus(), polled
+     via react-query `refetchInterval` so it's actually live.
+   - mon-api-health stays on PlatformComingSoon - no real request-metrics
+     collection exists anywhere in this codebase; out of confirmed scope.
+   - Remove the 4 converted entries from platformComingSoonRoutes.ts;
+     register the 4 new pages in AppRoutes.tsx.
+6. `/platform/monitoring` (the section's own root, today aliased to
+   mon-active-orgs) becomes a real MonitoringOverview.tsx - loosely
+   matches Monitoring.png's combined layout: real stat cards (Active
+   Organizations count, Active Exams count, Services Online ratio) + the
+   4 widgets condensed, each with "View All" to its detail page. Reuses
+   the same data hooks as the 4 detail pages (react-query caches, no
+   duplicate fetches).
+
+VERIFICATION
+7. Backend: run each touched service's test suite if one exists; rebuild
+   + redeploy all 9 HTTP services + gateway one at a time (docker-compose).
+8. Frontend: `npm run build` (the real script, not just tsc --noEmit) -
+   per this file's own "verify with real build command" lesson.
+9. Live verification as SuperAdmin: Monitoring overview loads real counts;
+   Service Status shows Online for all running containers (and Offline if
+   one is stopped, as a sanity check); System Health shows Database/
+   Message Queue Healthy; Active Organizations/Active Exams show real rows
+   matching the already-verified Organizations/Exams pages.
