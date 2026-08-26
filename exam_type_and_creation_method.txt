@@ -1,0 +1,184 @@
+EXAM TYPE (dynamic, DB-backed) + rename existing ExamType -> Creation Method
+==============================================================================
+Status: PLANNED, not yet implemented.
+
+USER'S ASK (verbatim intent)
+-----------------------------
+1. The existing "Exam Type" field (Manual / AI Generated) is being renamed to
+   "Creation Method" everywhere - label and, since a literal new concept is about
+   to take the name "Exam Type", the code symbol too (avoids two different things
+   both being called ExamType in the same codebase).
+2. "Category" (Technical/Database/Aptitude/Programming/Soft Skills/General) stays
+   exactly as it is today - untouched, not part of this feature.
+3. A NEW "Exam Type" field is added, holding purpose-based values:
+     Practice Exam       - Student practice, usually unlimited/repeated attempts
+     Mock Exam           - Simulates the actual examination
+     Assessment Exam     - Regular academic/skill assessment
+     Competitive Exam    - Competitive/ranked examination
+     Certification Exam  - Used to award a certificate
+     Entrance Exam       - Admission/selection
+     Recruitment Exam    - Hiring/employee assessment
+     Internal Exam       - Organization/college internal examination
+   This list must be DYNAMIC - stored in the database, admin can add and delete
+   entries (not a hardcoded frontend const like EXAM_CATEGORIES is today).
+
+CURRENT STATE (confirmed by reading the actual code, not assumed)
+-----------------------------------------------------------------
+- Backend/Services/ExamService/OnlineExamSystem.Exam.Domain/Entities/ExamPaper.cs
+  has `public ExamType ExamType { get; set; }` (enum Manual/AiGenerated) and a
+  plain `public string Category { get; set; }` with NO backing entity/table -
+  Category is just a free-text string validated against nothing but MaxLength(100)
+  in CreateExamValidator; EXAM_CATEGORIES in the frontend (types/exam.ts) is a
+  hardcoded const array, not sourced from the backend at all.
+- ExamType enum: Backend/Services/ExamService/OnlineExamSystem.Exam.Domain/Enums/ExamType.cs
+  (Manual = 0, AiGenerated = 1).
+- CreateExamRequest/UpdateExamRequest/ExamResponse (Shared.Contracts) all carry
+  `string ExamType` (validated via IsEnumName against the enum). Category is
+  create-only - UpdateExamRequest has no Category field at all (immutable after
+  creation), confirmed by reading the record definition.
+- ExamsController (api/exams) already has the exact CQRS shape to mirror for a
+  new CRUD entity: Admin-only [Authorize(Roles = "Admin")] on Create/Update/Delete,
+  plain [Authorize] on List/GetById, one Handler class per operation, no MediatR.
+  SectionsController is the closest sibling precedent (per-operation Command/Query
+  + Handler + Validator folders, ToResponse() mapper at the bottom).
+- No HasData/InsertData seeding exists anywhere in ExamDbContext today, but
+  NotificationService's AddNotificationTemplates migration
+  (20260822032451_AddNotificationTemplates.cs) is a concrete precedent: fixed
+  GUIDs + migrationBuilder.InsertData(...) seeding 5 rows. Same pattern reused here
+  for the 8 exam types.
+- Frontend ManageGroups.tsx + DeleteGroupButton.tsx is the closest existing
+  "list + add (modal) + delete (confirm modal)" admin CRUD page in this repo -
+  template for the new Manage Exam Types page.
+- AdminSidebar.tsx's navItems all currently have real paths (no item uses the
+  `path: null` placeholder pattern today, though the rendering code supports it).
+
+SCOPE DECISIONS (flagged explicitly, not silently assumed)
+------------------------------------------------------------
+- New entity name: `ExamType` (frees up cleanly once the old enum is renamed to
+  `CreationMethod`). Table: ExamTypes. Fields: Id (Guid), Name (string, required,
+  max 100), Purpose (string?, max 500 - the "Purpose" column from the table above),
+  CreatedAtUtc (DateTime).
+- ExamPaper gains a NULLABLE `ExamTypeId` (Guid?) FK. Nullable because existing
+  real exams in the database have no value to backfill - forcing it non-null would
+  either break existing exams or require guessing a default for each one. New
+  exams are NOT required to pick one at creation time (optional field), matching
+  how this codebase already treats several settings as optional-with-sensible-default
+  rather than mandatory.
+- Delete behavior when an ExamType in use is deleted: SET NULL on any exams
+  referencing it (DeleteBehavior.SetNull), not blocked. This matches the existing
+  precedent in this exact codebase where deleting a Section clears its questions'
+  SectionId back to null rather than deleting the questions or blocking the delete.
+- CRUD surface: Create + List + Delete only (matches the literal ask "add and
+  delete" - no Update/rename endpoint, keeps scope tight).
+- api/exam-types: POST (Admin), GET (any authenticated user - the Create/Edit Exam
+  dropdown needs to list options for non-admin... actually only Admins create
+  exams, but GET stays plain [Authorize] to match the List pattern on every other
+  list endpoint in ExamsController/SectionsController), DELETE (Admin).
+- ExamResponse gets both `ExamTypeId` (Guid?) AND a denormalized `ExamTypeName`
+  (string?) so list/table views don't need a second round-trip per row - matches
+  this codebase's established anti-N+1 convention (e.g. Question Service's
+  GetOptionsByQuestionIdsAsync batching).
+- Sidebar placement: new top-level "Exam Types" nav entry in AdminSidebar.tsx,
+  positioned right after "Exams" - NOT nested as a child of "Exams" (would add an
+  extra click to the existing single-link "Exams" item) and NOT under Settings
+  (this is exam-domain data, matches how "Exams"/"Results"/"Reports" are already
+  top-level, not tucked under Settings).
+- OUT OF SCOPE for this pass (flagged, not silently dropped): filtering exam
+  lists BY the new Exam Type (ManageExams.tsx, MyExams.tsx, AdminReports.tsx
+  already filter by Creation Method / Category - adding a third filter dimension
+  everywhere is a separate, larger UI pass); CSV import support for Exam Type;
+  AI-generated exam auto-assignment of an Exam Type. These can be follow-up asks.
+
+BACKEND TOUCH LIST
+--------------------
+Exam Service:
+- Domain/Enums/ExamType.cs -> rename file+type to CreationMethod.cs / enum
+  CreationMethod (values unchanged: Manual = 0, AiGenerated = 1).
+- Domain/Entities/ExamPaper.cs: `ExamType ExamType` -> `CreationMethod CreationMethod`;
+  add `Guid? ExamTypeId { get; set; }` + nav property `public ExamType? ExamType { get; set; }`
+  (new entity, same name as the removed-and-renamed-away enum - now unambiguous).
+- New Domain/Entities/ExamType.cs: Id, Name, Purpose (nullable), CreatedAtUtc.
+- ExamDbContext.cs: rename existing entity config property references
+  (Category config untouched); add `DbSet<ExamType> ExamTypes`; configure
+  ExamType entity (Name required/max100, Purpose max500) and the ExamPaper ->
+  ExamType relationship (optional, DeleteBehavior.SetNull).
+- Before writing the migration: confirm how CreationMethod (ex-ExamType) enum is
+  actually persisted today (int vs string via a global convention) so the rename
+  migration matches - do not assume.
+- Two migrations: (1) rename the ExamType column on Exams to CreationMethod;
+  (2) create ExamTypes table + seed the 8 rows via InsertData (fixed GUIDs,
+  mirroring AddNotificationTemplates.cs's pattern) + add nullable ExamTypeId FK
+  column to Exams.
+- Application layer: rename every ExamType reference to CreationMethod in
+  CreateExamCommand/Handler/Validator, UpdateExamCommand/Handler/Validator, and
+  wherever ExamResponse is built; add ExamTypeId handling (accept on
+  create/update, include in response) + ExamTypeName lookup for the response.
+- New Application/ExamTypes/{Create,Delete,List}/ folders (Command or Query +
+  Handler + Validator each), mirroring Sections' exact structure.
+- New ExamTypesController (api/exam-types), mirroring SectionsController's shape
+  (Admin-only Create/Delete, plain-Authorize List, ToResponse() mapper).
+- Shared.Contracts: rename ExamType -> CreationMethod property in
+  CreateExamRequest/UpdateExamRequest/ExamResponse; add `Guid? ExamTypeId` to
+  Create/Update requests, `Guid? ExamTypeId` + `string? ExamTypeName` to
+  ExamResponse; new CreateExamTypeRequest(string Name, string? Purpose) and
+  ExamTypeResponse(Guid Id, string Name, string? Purpose, DateTime CreatedAtUtc).
+- Repo-wide grep for `.ExamType` / `ExamType ` before touching anything, to catch
+  any other backend service that might read ExamPaper's old ExamType field
+  cross-service (not surfaced by the frontend-focused research pass) - verify
+  completeness rather than assume it's Exam-Service-only.
+
+FRONTEND TOUCH LIST
+----------------------
+Rename ExamType -> CreationMethod (type + field), "Exam Type" label text ->
+"Creation Method", in every file the research pass confirmed references it:
+  types/exam.ts, CreateExam.tsx, EditExam.tsx, ManageExams.tsx,
+  admin ExamDetails.tsx, ExamWizardReview.tsx, AssignExam.tsx,
+  student ExamDetails.tsx, MyExams.tsx, StudentDashboard.tsx, AdminDashboard.tsx,
+  AdminReports.tsx, MyResults.tsx, MyCertificates.tsx, ResultDetails.tsx,
+  SectionForm.tsx (functional check, not just a label - `exam.examType ===
+  'AiGenerated'`), AiGenerateQuestion.tsx (same), createExamValidation.test.ts.
+Every `Record<ExamType, string>` label map (9 separate local copies found) needs
+its type updated to `Record<CreationMethod, string>` and its variable renamed
+`creationMethodLabel`. AssignExam.tsx's two inline ternaries (no label map) also
+need the field-name rename.
+
+New Exam Type feature:
+- types/examType.ts (or extend types/exam.ts): ExamTypeOption interface, API
+  functions (getExamTypes/createExamType/deleteExamType) + hooks
+  (useExamTypes/useCreateExamType/useDeleteExamType), mirroring the
+  useGroups/useCreateGroup/useDeleteGroup trio.
+- New pages/admin/ManageExamTypes.tsx + components/DeleteExamTypeButton.tsx,
+  copied structurally from ManageGroups.tsx + DeleteGroupButton.tsx (table:
+  Name/Purpose/Created/Actions; "+ Add Exam Type" modal: Name + Purpose fields).
+- New route /admin/exam-types in AppRoutes.tsx, roles={['Admin']}.
+- AdminSidebar.tsx: new top-level "Exam Types" nav entry after "Exams" (real
+  path, not a `path: null` placeholder - this ships built, not a stub).
+- CreateExam.tsx / EditExam.tsx: new "Exam Type" dropdown (populated from
+  useExamTypes(), optional/nullable selection) placed near the renamed
+  "Creation Method" dropdown but visually distinct; small "+ Manage Exam Types"
+  link under it pointing to /admin/exam-types.
+- Display the new Exam Type as a new column/field wherever Category is already
+  shown (ManageExams.tsx table, admin ExamDetails.tsx, ExamWizardReview.tsx
+  review step) - showing "-" for exams with no type set.
+
+VERIFICATION PLAN (mirrors this project's established pattern)
+-----------------------------------------------------------------
+- Backend: dotnet build ExamVault.sln clean; dotnet test ExamVault.sln --no-build,
+  full suite green, note before/after test counts (new ExamTypes CRUD tests +
+  updated Create/UpdateExamValidator tests for the renamed field).
+- Frontend: npx tsc -b (NOT tsc --noEmit -p . - already burned once this session
+  by that false-positive), npm run lint, npx vitest run, npm run build.
+- Docker: rebuild only exam-api + frontend (not the whole stack, per this
+  machine's ~8GB RAM constraint), docker compose up -d (no --build) for the rest.
+- Live verification in the browser as admin: create a new Exam Type via
+  /admin/exam-types, confirm it appears in Create Exam's dropdown, create an exam
+  with it selected, confirm ManageExams.tsx/ExamDetails.tsx show the new type
+  name; delete that Exam Type while the exam still references it, confirm the
+  exam's ExamTypeId goes back to null (not deleted, not blocked) and the UI shows
+  "-" instead of crashing; confirm every renamed "Creation Method" label reads
+  correctly (dropdown, table column, badges) instead of the old "Exam Type" text,
+  and that Manual/AI Generated exam creation flows still work unchanged (the
+  rename must be a pure rename, not a behavior change).
+
+OUT OF SCOPE (explicit, see above): filtering exam lists by the new Exam Type,
+CSV import support for it, AI-generation auto-assigning one.

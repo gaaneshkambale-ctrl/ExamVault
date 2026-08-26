@@ -1,0 +1,296 @@
+ExamVault - Functionality Manual
+=================================
+This file lists every functional screen/feature currently available in
+ExamVault, grouped by role. Items marked (placeholder - not built yet) are
+visible in the UI (usually greyed out) but have no working page behind them.
+
+
+======================
+ADMIN SIDE
+======================
+
+1. Dashboard
+   Landing page after Admin login. Shows Total Users, Total Exams, Total
+   Questions, and Published Exams stat cards, a Recent Exams list, and an
+   "Exams created per month" chart. All numbers are live, pulled from the
+   real data.
+
+2. Users - Manage Users
+   Table of every registered user (Name, Email, Role, Joined On) with
+   search. Actions per row: View (profile), Edit, Delete. A "+ Create User"
+   button lets an Admin create a new account directly (without the person
+   self-registering).
+
+3. Users - Create User
+   Form to manually create a new account (name, email, password, role).
+
+4. Users - Edit User
+   Edit an existing user's name/email/role.
+
+5. Users - Reset Password
+   Admin sets a new password for a user directly (no email reset flow).
+
+6. Users - Delete User
+   Removes a user account (confirmation prompt).
+
+7. Users - Roles & Permissions
+   Read-only reference page. Lists the two roles that exist in the system
+   (Admin, Student), a short description of each, and a live count of how
+   many users currently hold each role. Nothing here is editable - roles
+   are fixed at the code level, not configurable.
+
+8. Users - Groups (Manage Groups)
+   Create named groups of students (e.g. "Batch 2026"). Used purely as a
+   reusable recipient list: instead of picking the same set of students
+   every time you assign an exam, save them as a Group once. "+ Create
+   Group" makes a new one; each group shows a member count and a "Manage
+   Members" link.
+
+9. Users - Group Details (Manage Members)
+   Add or remove students from one specific group.
+
+10. Exams - Manage Exams
+    Table of every exam (Title, Type, Total Questions, Duration, Total
+    Marks, Status, Created On) with search and Type/Status filters. Stat
+    cards show Total/Published/Draft/Archived counts. Actions per row:
+    View, Edit, Delete.
+
+11. Exams - Create Exam
+    Form to create a new exam: Title, Type (Manual / AI Generated),
+    Description, Duration, Total Marks, Passing Marks, Instructions. New
+    exams always start as Draft.
+
+12. Exams - Exam Details (View)
+    Read-only summary of one exam: type, duration, total/passing marks,
+    total questions, created date, instructions, plus Publish / Save as
+    Draft / Archive buttons and a shortcut into "Assign Students."
+
+13. Exams - Edit Exam
+    Edit Basic Information (title/description/duration/marks/instructions)
+    and Exam Settings (Shuffle Questions, Shuffle Options, Show Result to
+    Student, Show Correct Answers, Allow Review, Schedule start/end time,
+    Maximum Attempts, Negative Marking, plus a few visual-only toggles:
+    Question Navigation, Auto Submit, Exam Instructions). Also carries the
+    Publish / Save as Draft / Archive actions.
+    Note: this page does NOT show the exam's question list anymore - that
+    was intentionally moved to the Questions page (see #15) so question
+    management lives in one place.
+
+14. Exams - Publish / Save as Draft / Archive
+    Status workflow for an exam. Draft <-> Published, and either can move
+    to Archived (terminal - no way back). Available from both Exam Details
+    and Edit Exam.
+
+15. Exams - Delete Exam
+    Permanently deletes an exam (confirmation prompt). Does not delete its
+    questions in Question Service (known gap - no cross-service cascade).
+
+16. Exams - Exam Assignment (list)
+    Table of every assignment made (which exam, assigned to how many
+    students, start/end date, status: Upcoming/Active/Expired). Actions:
+    Edit, Delete.
+
+17. Exams - Assign Exam (create/edit)
+    4-step wizard:
+      Step 1: pick which exam to assign.
+      Step 2: pick recipients - individually ("Students"), by a saved
+              Group ("Batch"), or "All Students".
+      Step 3: schedule (start/end date+time, timezone), Maximum Attempts,
+              Allow Late Join + grace minutes, and per-assignment toggles:
+              Show Exam Instructions, Show Results After Submit, Show
+              Correct Answers, Allow Review After Submit, Auto Submit on
+              Time Over, Enable Proctoring (visual only - no real
+              proctoring feature exists).
+      Step 4: review everything and confirm.
+    These per-assignment settings (not the older exam-level ones from Edit
+    Exam) are what actually control what a student sees after they submit.
+
+18. Questions - Question Bank
+    Single page listing every question across every exam (Question, Type,
+    Exam, Difficulty, Marks) with tabs (All / Multiple Choice / True-
+    False), search, and Exam/Difficulty filters. "+ Add Question" opens a
+    picker asking which exam the question is for, then routes to either
+    the manual Add Question form or the AI Generate flow depending on that
+    exam's type.
+
+19. Questions - Add Question (manual)
+    Form to hand-write a question for a specific exam: type (Multiple
+    Choice or True/False - other types are reserved but not supported
+    yet), difficulty, question text, marks, options with a "Correct
+    Answer" dropdown, and a per-question Shuffle Options checkbox.
+
+20. Questions - AI Generate Questions
+    Generates draft questions via an AI provider (n8n workflow) either
+    "From Existing Exam" (topic derived from the exam's title/description)
+    or "From Topic / Text" ("From Document" is visibly disabled - not
+    built). Choose question count, types (Multiple Choice / True-False -
+    Short Answer disabled), difficulty level(s), and optional extra
+    instructions.
+
+21. Questions - AI Generated Questions Preview
+    Shows the drafts returned by the AI with per-row and select-all
+    checkboxes. Each draft can be Edited (text/marks/difficulty/options)
+    or Deleted before approval. "Regenerate" re-runs generation with the
+    same inputs. "Add Selected to Exam" saves the checked drafts as real
+    questions (going through the exact same validated create-question path
+    as a manually typed one).
+
+22. Questions - Question Details (View)
+    Read-only view of one question: text, options, which one is correct,
+    difficulty, marks.
+
+23. Questions - Edit Question
+    Edit an existing question's text/marks/difficulty/options (same form
+    shape as Add Question). Saving replaces the entire options list.
+
+24. Questions - Delete Question
+    Permanently deletes a question (confirmation prompt); its options are
+    cleaned up automatically.
+
+25. Categories (placeholder - not built yet)
+    Sidebar label only, greyed out. No question-category feature exists.
+
+26. Results
+    Global table of every student's every submitted attempt across every
+    exam (Student, Exam, Score, Percentage, Grade, Status, Submitted On),
+    with stat cards (Total Results/Passed/Failed/Average Score), search by
+    student or exam, and an Exam filter. Each row has a "View Report" link
+    into that exam's Reports page. This is the admin equivalent of the
+    student's "My Results", but system-wide instead of self-scoped.
+
+27. Reports
+    Pick an exam (from a searchable list) to see its performance report:
+    stat cards (Total Attempts/Average Score/Pass Rate/Failed), a score
+    distribution bar chart (0-20/20-40/40-60/60-80/80-100%), and a "Most
+    Missed Questions" table (% correct, correct/incorrect/unanswered
+    counts per question, worst-first, capped to the worst 10).
+
+28. Notifications - Admin Notifications (inbox)
+    The Admin's own personal notification inbox (same concept as a
+    student's, e.g. system/account notifications addressed to that admin).
+
+29. Notifications - Create Notification
+    Compose and send a notification: Title, Message, Type (Exam / Reminder
+    / Result / System / Account), optional Related Exam, and a target -
+    All Students, Selected Students (searchable multi-pick list), Specific
+    Exam Candidates, or Admins. Can be sent immediately or scheduled for a
+    future date/time (scheduling just delays when it becomes visible to
+    recipients - there is no background dispatcher or scheduled email).
+
+30. Notifications - History
+    Every notification ever sent, system-triggered (e.g. Welcome emails,
+    exam-assignment alerts) or admin-authored, grouped into batches with
+    recipient count, sent date, and delivery status. "View" opens a
+    batch's full detail/recipient breakdown. Supports resend/delete on a
+    batch.
+
+31. Notifications - Notification Settings
+    Per-notification-type In-App / Email toggle grid, shared with the
+    student side (same page, same account-level preferences). Email is
+    delivered via an n8n workflow over Gmail; SMS is not supported at all.
+
+32. Settings
+    Account settings for the logged-in Admin: Change Password (sets a
+    new password immediately, no current-password re-entry required
+    since the request is already authenticated), and a link to
+    Notification Settings.
+
+33. Profile (Admin)
+    View/update the Admin's own name/email/role display, avatar
+    placeholder, "Change Photo" (visual only - no upload wired up).
+
+
+======================
+STUDENT SIDE
+======================
+
+1. Dashboard
+   Landing page after Student login. Shows Upcoming Exams, Completed
+   Exams, Average Score, and Certificates stat cards, an Upcoming Exams
+   list, Recent Results, and a Performance Overview chart. All numbers are
+   real, computed from the student's actual attempts/results.
+   Known gap: the Upcoming Exams count doesn't exclude exams the student
+   already completed.
+
+2. My Exams
+   Every exam assigned to this student (not all published exams - only
+   ones an Admin has explicitly assigned via Exam Assignment), with
+   All / Upcoming / Completed / In Progress tabs, search, and a Type
+   filter. Shows question count, duration, and status, with a "Start
+   Exam" / "Continue" / "View Result" action depending on state.
+
+3. Upcoming Exams
+   Same My Exams page, pre-filtered to the Upcoming tab.
+
+4. Exam Details
+   Read-only summary of one assigned exam before starting it: total
+   questions, duration, total/passing marks, exam type, start/end date,
+   full instructions, and a "Start Exam Now" button.
+
+5. Take Exam
+   The live exam-taking screen: countdown timer (auto-submits at zero),
+   one question at a time with Next/Previous, a Question Navigator showing
+   Answered / Not Answered / Marked for Review / Not Visited state per
+   question, and a "Mark for Review" checkbox. Questions/options are
+   shuffled per the exam's shuffle settings. Reloading mid-attempt resumes
+   exactly where the student left off (their saved answers are restored).
+   "Submit Exam" leads to a Review Before Submit summary (counts of
+   answered/not answered/marked) before final submission.
+
+6. My Results
+   List of every exam this student has completed, with stat cards (Total
+   Results / Passed / Failed / Average Score) and search. Shows score,
+   total marks, percentage, grade, pass/fail, and submission date.
+
+7. Result Details
+   Score, percentage, grade, and pass/fail for one exam. If the exam
+   assignment has "Show Correct Answers" enabled, also shows a full
+   per-question Answer Review (each option, the correct one highlighted,
+   and the student's own choice marked if wrong). If that setting is off,
+   only the score is shown with a note that correct answers aren't
+   available.
+   Known gap: only the most recent attempt is viewable, even on exams that
+   allow multiple attempts.
+
+8. My Certificates (placeholder - not built yet)
+   Sidebar label only, greyed out. No certificate feature exists anywhere
+   in the app yet.
+
+9. Profile (Student)
+   View/update the student's own name/email, avatar placeholder, "Change
+   Photo" (visual only), "Update Profile" button.
+
+10. Notifications - My Notifications (inbox)
+    List of every notification addressed to this student - both automatic
+    (Welcome email on registration, "New Exam Assigned" when an Admin
+    assigns them an exam, result-ready alerts) and admin-broadcast ones.
+    Unread count badge shown on the bell icon in the header on every page.
+
+11. Notifications - Notification Details
+    Full text of one notification, with a delete action, and a link to
+    the related exam/result if the notification references one.
+
+12. Notifications - Notification Settings
+    Per-type (Exam / Reminder / Result / System / Account) In-App and
+    Email toggle grid - the student controls which categories they get
+    notified about and through which channel. Email delivery only (no
+    SMS).
+
+13. Settings (placeholder - not built yet)
+    Sidebar label only, greyed out.
+
+
+======================
+SHARED / PRE-LOGIN
+======================
+
+1. Home page - marketing/landing page with "Get Started" and "Login"
+   entry points.
+2. Register - self-service account creation. Every new account is created
+   as a Student; there is no self-service way to become Admin (an existing
+   Admin has to create the account as Admin, or promote a Student's Role
+   directly in the database).
+3. Login - authenticates and redirects to /admin/dashboard for Admins or
+   /dashboard for Students. Session survives a page reload (silent token
+   refresh); logging out clears it and protected pages redirect back to
+   Login.

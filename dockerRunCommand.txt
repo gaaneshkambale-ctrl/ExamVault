@@ -1,0 +1,106 @@
+ExamVault — Run the Full Stack Locally in Docker
+==================================================
+All commands below are run from the repo root:
+D:\Ganesh\Practice\Project\MyProj\Examvault
+
+Everything (SQL Server, RabbitMQ, all 7 backend services + worker, Gateway,
+frontend) is defined in docker-compose.yml. Nothing else needs to be
+installed locally except Docker Desktop.
+
+0) PREREQUISITE
+----------------
+- Docker Desktop must be installed and running.
+  Check: docker --version
+         docker compose version
+
+1) ONE-TIME SETUP: ENVIRONMENT FILE
+------------------------------------
+.env already exists at the repo root (gitignored) but is MISSING the n8n
+webhook URLs that .env.example defines. Open .env and add these three keys
+(same values you use for local dotnet user-secrets), or leave them blank if
+you don't need email-sending to work for this run:
+
+    N8N_USER_WEBHOOK_URL=https://your-n8n-host/webhook/examvault/notify-credential
+    N8N_NOTIFICATION_WEBHOOK_URL=https://your-n8n-host/webhook/examvault/notify
+    N8N_AI_WEBHOOK_URL=https://your-n8n-host/webhook/examvault/generate-questions
+
+.env currently has (values already filled in, do not overwrite):
+    SQL_SA_PASSWORD
+    RABBITMQ_USER
+    RABBITMQ_PASSWORD
+    JWT_SIGNING_KEY
+
+If starting from scratch instead: copy .env.example to .env and fill in
+every value.
+    cp .env.example .env
+
+2) BUILD AND START EVERYTHING
+------------------------------
+    docker compose up -d --build
+
+This builds every service's image from its Dockerfile and starts:
+  sqlserver, rabbitmq, user-api, exam-api, question-api, ai-api,
+  submission-api, result-api, notification-api, notification-worker,
+  gateway, frontend
+
+Each API applies its own EF Core migrations automatically on startup
+(Database.Migrate() in Program.cs) — no manual migration step needed.
+First run takes a few minutes (image builds + SQL Server init).
+
+3) CHECK EVERYTHING IS UP
+---------------------------
+    docker compose ps
+
+All services should show "running" (sqlserver/rabbitmq should show
+"healthy" once their healthchecks pass — other services wait on that).
+
+4) VIEW LOGS
+-------------
+    docker compose logs -f                     (all services)
+    docker compose logs -f user-api             (one service)
+    docker compose logs -f exam-api notification-worker   (a few services)
+
+5) ACCESS THE APP
+-------------------
+    Frontend (React):        http://localhost:5173
+    API Gateway:              http://localhost:5000
+    RabbitMQ management UI:   http://localhost:15672  (login: RABBITMQ_USER / RABBITMQ_PASSWORD from .env)
+    SQL Server:                localhost,1433  (login: sa / SQL_SA_PASSWORD from .env)
+
+    Direct service ports (bypassing the Gateway, for debugging only):
+    user-api            5010
+    exam-api            5020
+    question-api        5030
+    ai-api               5040
+    submission-api       5050
+    result-api           5060
+    notification-api     5001
+
+6) REBUILD AFTER A CODE CHANGE
+---------------------------------
+Rebuild + restart just the service(s) you changed:
+    docker compose up -d --build user-api
+
+Rebuild everything:
+    docker compose up -d --build
+
+7) STOP THE STACK
+-------------------
+Stop containers, keep data (SQL volume, images):
+    docker compose down
+
+Stop and wipe the SQL Server volume too (fresh database next start):
+    docker compose down -v
+
+8) COMMON TROUBLESHOOTING
+----------------------------
+- A service keeps restarting / exits immediately:
+      docker compose logs -f <service-name>
+- Port already in use (e.g. 5173, 5000, 1433, 5672 taken by a local
+  process): stop the local dotnet/npm process using that port, or edit
+  the "ports:" mapping in docker-compose.yml.
+- Config/env change not taking effect: docker compose up -d --build
+  (compose does not re-read .env into a running container).
+- Start completely clean:
+      docker compose down -v
+      docker compose up -d --build

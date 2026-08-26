@@ -1,0 +1,378 @@
+ExamVault - Database Schema Reference
+================================================
+Generated 2026-08-23 by reading the actual EF Core DbContexts and Domain
+entity classes in the repo (not from a diagram, not from memory). Reflects
+the code as of commit 758004d on branch dev.
+
+Architecture: one shared SQL Server instance ("sqlserver" container), one
+separate physical database PER MICROSERVICE (not one shared DB across all
+services). Every entity inherits BaseEntity: Id (Guid, PK) and CreatedAtUtc
+(DateTime). That's implicit on every table below and not repeated per row.
+
+Services with NO database at all: Result Service and AI Service (see their
+own notes at the bottom) - both are stateless/compute-only.
+
+
+================================================
+1. USER SERVICE  -  DbContext: UserDbContext  -  DB: ExamVault.UserDb
+================================================
+
+Users                          (AppUser)
+  Id                Guid    PK
+  CreatedAtUtc      DateTime
+  FullName          string  required, max 200
+  RollNumber        string? max 40
+  Email             string  required, max 256, UNIQUE
+  PasswordHash      string  required
+  Role              enum (UserRole: Student/Admin/...)
+  IsActive          bool    default true
+  PhoneNumber       string? max 20
+  MustChangePassword bool
+  PhotoData         byte[]?
+  PhotoContentType  string? max 100
+  Username          string? max 100
+  AlternateEmail    string? max 256
+  Gender            enum?   (stored as string)
+  DateOfBirth       DateTime?
+  Location          string? max 200
+  Department        string? max 100
+  LastLoginAtUtc    DateTime?
+  UserNumber        int     identity column, UNIQUE (formats as "EV-ADM-0001" etc.)
+
+RefreshTokens                  (RefreshToken)
+  Id, CreatedAtUtc
+  UserId            Guid    FK -> Users.Id (cascade delete)
+  TokenHash         string  required, max 256, UNIQUE
+  ExpiresAtUtc      DateTime
+  RevokedAtUtc      DateTime?
+  DeviceLabel       string? max 100
+  IpAddress         string? max 64
+
+Groups                          (Group)
+  Id, CreatedAtUtc
+  Name              string  required, max 200, UNIQUE
+
+GroupMembers                    (GroupMember)
+  Id, CreatedAtUtc
+  GroupId           Guid    FK -> Groups.Id (cascade delete)
+  UserId            Guid    (no DB-level FK to Users - soft reference)
+  UNIQUE (GroupId, UserId)
+
+UserPreferences                 (UserPreferences)
+  Id, CreatedAtUtc
+  UserId            Guid    UNIQUE (no DB-level FK to Users - soft reference)
+  Language          string  default "English (United States)"
+  Timezone          string  default "UTC"
+  DateFormat        string  default "DD MMM YYYY"
+  TimeFormat        enum (Hour12/Hour24, stored as string)
+  Theme             enum (System/Light/Dark, stored as string)
+
+
+================================================
+2. EXAM SERVICE  -  DbContext: ExamDbContext  -  DB: ExamVault.ExamDb
+================================================
+
+Exams                           (ExamPaper)
+  Id, CreatedAtUtc
+  Title             string  required, max 200
+  ExamCode          string? max 40 (system-generated, e.g. "TEC-2026-29870F")
+  Description       string  max 2000
+  Category          string  max 100
+  ContainsSections  bool
+  CreationMethod    enum (Manual/AiGenerated)
+  ExamTypeId        Guid?   FK -> ExamTypes.Id (SetNull on delete)
+  DurationMinutes   int
+  TotalMarks        int
+  PassingMarks      int
+  Instructions      string  max 2000
+  Status            enum (Draft/Published/Archived/...)
+  TotalQuestions    int     (admin-entered target, not auto-synced)
+  CreatedByUserId   Guid    (no DB-level FK to Users - cross-service, soft reference)
+  ShuffleQuestions/ShuffleOptions/ShowResult/ShowCorrectAnswers/AllowReview  bool
+  StartAtUtc / EndAtUtc  DateTime?  (forced Kind=Utc on read)
+  MaxAttempts       int     default 1
+  NegativeMarkingEnabled bool
+  NegativeMarks     decimal(5,2)
+  ShowSectionSummaryToStudents/AllowCalculator/AllowNotes/AutoSubmitOnTimeEnd/ConfirmBeforeSubmit  bool
+
+ExamTypes                       (ExamType)
+  Id, CreatedAtUtc
+  Name              string  required, max 100
+  Purpose           string? max 500
+
+Sections                        (Section)
+  Id, CreatedAtUtc
+  ExamId            Guid    FK -> Exams.Id (cascade delete)
+  Name              string  required, max 200
+  Description       string  max 2000
+  Instructions      string  max 2000
+  DisplayOrder      int
+  QuestionCount     int     (admin-entered target)
+  Marks             int
+  DurationMinutes   int
+  NavigationType    enum (Free/Sequential)
+  NegativeMarkingEnabled bool
+  NegativeMarks     decimal(5,2)
+  ShuffleQuestions/ShuffleOptions/AllowReview  bool
+
+ExamAssignments                 (ExamAssignment)
+  Id, CreatedAtUtc
+  AssignmentNumber  int     identity column, UNIQUE
+  ExamId            Guid    FK -> Exams.Id (cascade delete)
+  TargetType        enum (Individual/Group/...)
+  GroupId           Guid?   (no DB-level FK - soft reference, own service though no Group table here)
+  StartAtUtc / EndAtUtc  DateTime  (forced Kind=Utc on read)
+  TimeZoneId        string  required, max 100
+  MaxAttempts       int     default 1
+  AllowLateJoin     bool
+  GraceTimeMinutes  int
+  ShowInstructions/ShowResultsAfterSubmit/ShowCorrectAnswers/AllowReviewAfterSubmit/AutoSubmitOnTimeOver/EnableProctoring/EnableLiveVideo  bool
+
+ExamAssignmentTargets            (ExamAssignmentTarget)
+  Id, CreatedAtUtc
+  ExamAssignmentId  Guid    FK -> ExamAssignments.Id (cascade delete)
+  UserId            Guid    (no DB-level FK to Users - cross-service, soft reference)
+  UNIQUE (ExamAssignmentId, UserId)
+
+ExamReminderLogs                 (ExamReminderLog)
+  Id, CreatedAtUtc
+  AssignmentId      Guid    FK -> ExamAssignments.Id (cascade delete)
+  UserId            Guid    (soft reference)
+  Window            enum (ReminderWindow: 24h/1h)
+  UNIQUE (AssignmentId, UserId, Window)
+
+ReminderSettings                 (single global row - Settings hub)
+  Id, CreatedAtUtc
+  Enable24HourReminder / Enable1HourReminder  bool  default true
+  UpdatedAtUtc      DateTime
+
+ProctoringSettings               (single global row - Settings hub)
+  Id, CreatedAtUtc
+  ProctoringEnabled/FaceDetectionEnabled/MultiPersonDetectionEnabled/
+  ScreenMonitoringEnabled/FullscreenExitEnabled/MultipleTabsEnabled/
+  CopyPasteBlockingEnabled/RightClickBlockingEnabled/MultipleMonitorsEnabled  bool default true
+  SessionTimeoutMinutes  int  default 30
+  UpdatedAtUtc      DateTime
+
+GeneralSettings                  (single global row - Settings hub)
+  Id, CreatedAtUtc
+  OrganizationName  string  default "ExamVault"
+  SupportEmail      string
+  Language          string  default "English (United States)"
+  Timezone          string  default "UTC"
+  DateFormat        string  default "DD MMM YYYY"
+  UpdatedAtUtc      DateTime
+
+ExamDefaults                     (single global row - Settings hub)
+  Id, CreatedAtUtc
+  DefaultDurationMinutes  int  default 60
+  PassingScorePercent     int  default 40
+  DefaultMaxAttempts      int  default 3
+  NegativeMarkingEnabled  bool default true
+  NegativeMarkingValue    decimal(5,2)  default 0.25
+  AutoSaveEnabled/AutoSubmitEnabled  bool default true
+  QuestionNavigationMode  enum (Free/Sequential, stored as string)
+  ResultPublishingMode    enum (Manual/Automatic, stored as string)
+  UpdatedAtUtc      DateTime
+
+
+================================================
+3. QUESTION SERVICE  -  DbContext: QuestionDbContext  -  DB: ExamVault.QuestionDb
+================================================
+
+Questions                        (ExamQuestion)
+  Id, CreatedAtUtc
+  ExamId            Guid    (no DB-level FK - cross-service soft reference to Exam Service's Exams table)
+  SectionId         Guid?   (no DB-level FK - cross-service soft reference to Exam Service's Sections table)
+  QuestionType      enum (MultipleChoice/MultiSelect/TrueFalse/ShortAnswer/LongAnswer/CodeProgramming/Sql...)
+  QuestionText      string  required, max 2000
+  Marks             int
+  Difficulty        enum (Easy/Medium/Hard)
+  ShuffleOptions    bool
+  CreatedByUserId   Guid    (soft reference to User Service)
+  StarterCode       string? max 4000  (Code/Programming only)
+  ProgrammingLanguage string? max 50
+  AllowLanguageChange bool
+  SampleAnswer      string? max 4000  (admin/grading-only reference answer)
+  FunctionName      string? max 200   (auto-grading harness)
+  ReturnType        enum?   (ParameterType, auto-grading harness)
+
+QuestionOptions                  (QuestionOption)
+  Id, CreatedAtUtc
+  QuestionId        Guid    FK -> Questions.Id (cascade delete)
+  OptionText        string  required, max 500
+  IsCorrect         bool
+  DisplayOrder      int
+
+QuestionParameters                (QuestionParameter)
+  Id, CreatedAtUtc
+  QuestionId        Guid    FK -> Questions.Id (cascade delete)
+  Name              string  required, max 100
+  Type              enum (ParameterType)
+  DisplayOrder      int
+
+QuestionTestCases                 (QuestionTestCase)
+  Id, CreatedAtUtc
+  QuestionId        Guid    FK -> Questions.Id (cascade delete)
+  ArgumentsJson     string  required, max 2000  (JSON array, one el per parameter)
+  ExpectedOutputJson string required, max 2000  (JSON-encoded value matching ReturnType)
+  DisplayOrder      int
+
+QuestionSqlTestCases               (QuestionSqlTestCase)
+  Id, CreatedAtUtc
+  QuestionId        Guid    FK -> Questions.Id (cascade delete)
+  SetupSql          string  required  (CREATE TABLE / INSERT, run fresh per grading)
+  DisplayOrder      int
+
+
+================================================
+4. SUBMISSION SERVICE  -  DbContext: SubmissionDbContext  -  DB: ExamVault.SubmissionDb
+================================================
+
+ExamAttempts                      (ExamAttempt)
+  Id, CreatedAtUtc
+  ExamId            Guid    (soft reference to Exam Service)
+  UserId            Guid    (soft reference to User Service)
+  INDEX (ExamId, UserId)
+  AttemptNumber     int
+  StartedAtUtc      DateTime  (forced Kind=Utc on read)
+  SubmittedAtUtc    DateTime? (forced Kind=Utc on read)
+  Status            enum (AttemptStatus: InProgress/Submitted/...)
+  FullscreenExitCount/NoFaceDetectedCount/MultipleFacesDetectedCount/
+  TabSwitchCount/MultipleTabsCount/CopyPasteCount/RightClickCount/
+  MultipleMonitorsCount  int  (running totals)
+  LiveWatchEnabled  bool    (per-session, admin-granted only)
+
+AttemptAnswers                    (AttemptAnswer)
+  Id, CreatedAtUtc
+  AttemptId         Guid    FK -> ExamAttempts.Id (cascade delete)
+  QuestionId        Guid    (soft reference to Question Service)
+  UNIQUE (AttemptId, QuestionId)
+  SelectedOptionId  Guid?   (soft reference to Question Service's QuestionOptions)
+  SelectedOptionIdsJson string? max 4000  (MultiSelect only - JSON array of option-id GUIDs)
+  IsMarkedForReview bool
+  AnsweredAtUtc     DateTime
+  AnswerText        string? max 4000  (Code/Programming free-text answer)
+  MarksAwarded      int?    (null = not graded yet, not "scored zero")
+  GradedByUserId    Guid?   (soft reference to User Service)
+  GradedAtUtc       DateTime?
+
+AttemptSectionStates               (AttemptSectionState)
+  Id, CreatedAtUtc
+  AttemptId         Guid    FK -> ExamAttempts.Id (cascade delete)
+  SectionId         Guid    (soft reference to Exam Service)
+  UNIQUE (AttemptId, SectionId)
+  EnteredAtUtc      DateTime
+  DeadlineUtc       DateTime
+  IsCompleted       bool
+  CompletedAtUtc    DateTime?
+
+ViolationEvents                    (ViolationEvent)
+  Id, CreatedAtUtc
+  AttemptId         Guid    FK -> ExamAttempts.Id (cascade delete)  INDEX
+  Type              enum (ProctoringViolationType)
+  Severity          enum (ViolationSeverity)
+  Status            enum (ViolationStatus: Open/Resolved/...)
+  DetectedAtUtc     DateTime
+  ResolvedAtUtc     DateTime?
+  ResolvedByAdminUserId  Guid?  (soft reference to User Service)
+
+
+================================================
+5. NOTIFICATION SERVICE  -  DbContext: NotificationDbContext  -  DB: ExamVault.NotificationDb
+================================================
+
+Notifications                      (Notification)
+  Id, CreatedAtUtc
+  BatchId           Guid
+  UserId            Guid    (soft reference to User Service)
+  INDEX (UserId, CreatedAtUtc), INDEX (BatchId)
+  Type              enum (NotificationType: Exam/Reminder/Result/Account/System, stored as string)
+  Title             string  required
+  Message           string  required
+  IsRead            bool
+  RelatedExamId     Guid?   (soft reference to Exam Service)
+  EmailStatus       enum (Pending/Sent/Failed, stored as string)
+  CreatedByAdminUserId Guid? (soft reference to User Service)
+  ScheduledAtUtc    DateTime?
+  ShowInApp         bool    default true
+
+NotificationPreferences             (NotificationPreference)
+  Id, CreatedAtUtc
+  UserId            Guid    (soft reference to User Service)
+  Type              enum (NotificationType, stored as string)
+  UNIQUE (UserId, Type)
+  InAppEnabled/EmailEnabled  bool  default true
+
+AuditLogs                           (AuditLog)
+  Id, CreatedAtUtc
+  Module            enum (AuditModule, stored as string)  INDEX
+  Activity          string  required, max 200
+  Details           string?
+  EntityId          string?
+  UserId            Guid?   (soft reference)  INDEX
+  UserName          string? max 200
+  IpAddress         string? max 64
+  INDEX (CreatedAtUtc)
+
+NotificationTemplates                (NotificationTemplate)
+  Id, CreatedAtUtc
+  Name              string  required, max 200
+  Type              enum (NotificationType, stored as string)
+  SendEmail/SendInApp  bool  default true
+  Subject           string  required, max 300
+  Body              string  required
+  IsActive          bool    default true
+  UpdatedAtUtc      DateTime
+  NOTE: seeded with 5 fixed rows (HasData) - Exam Assigned, Exam Reminder,
+  Result Published, Account Created, System Announcement.
+
+SystemSettings                       (single global row - Settings hub)
+  Id, CreatedAtUtc
+  MaintenanceModeEnabled  bool
+  BackupFrequency   enum (BackupFrequency, stored as string)  default Daily
+  AuditLogRetentionDays  int  default 180
+  LogLevel          enum (SystemLogLevel, stored as string)  default Information
+  UpdatedAtUtc      DateTime
+
+
+================================================
+6. RESULT SERVICE  -  NO DATABASE
+================================================
+No DbContext anywhere in this service. It is pure compute/aggregation: on
+each request it calls ExamServiceClient, QuestionServiceClient, and
+SubmissionServiceClient (HTTP clients into the three services above),
+combines their responses in AttemptScorer, and returns a computed result
+(GetResultHandler / GetExamReportHandler). Nothing persisted here.
+
+
+================================================
+7. AI SERVICE  -  NO DATABASE
+================================================
+No DbContext anywhere in this service either. GenerateQuestionsHandler
+calls out to an external n8n webhook (N8nQuestionGenerator) and returns
+DraftQuestion[] directly to the caller for the admin to review/approve.
+Approved drafts are persisted by the FRONTEND calling Question Service's
+own createQuestion API - the AI Service itself never writes to any DB.
+
+
+================================================
+SUMMARY
+================================================
+Total tables (real DbSets with data): 29
+  User Service:          5  (Users, RefreshTokens, Groups, GroupMembers, UserPreferences)
+  Exam Service:          10 (Exams, ExamTypes, Sections, ExamAssignments,
+                              ExamAssignmentTargets, ExamReminderLogs,
+                              ReminderSettings, ProctoringSettings,
+                              GeneralSettings, ExamDefaults)
+  Question Service:      5  (Questions, QuestionOptions, QuestionParameters,
+                              QuestionTestCases, QuestionSqlTestCases)
+  Submission Service:    4  (ExamAttempts, AttemptAnswers,
+                              AttemptSectionStates, ViolationEvents)
+  Notification Service:  5  (Notifications, NotificationPreferences,
+                              AuditLogs, NotificationTemplates, SystemSettings)
+  Result Service / AI Service: 0 (no persistence, see notes above)
+
+Tenant/organization scoping: NONE of the 24 tables above have a TenantId
+(or equivalent) column today - multi-tenant conversion has not started.
+See multi_tenant_saas.txt for that conversion plan.

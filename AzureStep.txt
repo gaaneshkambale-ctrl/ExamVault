@@ -1,0 +1,420 @@
+ExamVault — Azure Dev Environment: Step-by-Step Runbook
+=========================================================
+This is a reproducible, step-by-step record of how the "dev" Azure
+environment was built, in the order it actually happened, plus the current
+status and open issues. Written so the same steps can be re-run (for qa/prod
+later) or re-applied if the dev environment ever needs rebuilding.
+
+Prerequisites (already true on this machine)
+----------------------------------------------
+- Azure CLI installed and logged in: `az login`, `az account show` confirms
+  the right subscription is active.
+- Docker Desktop installed and running (used for local image builds - see
+  Step 6, the CD pipeline route hit an unresolved problem).
+- Bicep CLI available (`az bicep install` if not).
+
+STEP 1 — Register required Azure resource providers
+------------------------------------------------------
+One-time per subscription. All were `NotRegistered` initially.
+    az provider register -n Microsoft.App
+    az provider register -n Microsoft.ServiceBus
+    az provider register -n Microsoft.Sql
+    az provider register -n Microsoft.ContainerRegistry
+    az provider register -n Microsoft.OperationalInsights
+Check status with: az provider show -n <name> --query registrationState -o tsv
+
+STEP 2 — Deploy the shared Azure Container Registry
+--------------------------------------------------------
+One registry, shared across dev/qa/prod (not per-environment). Lives in its
+own resource group so its lifecycle is independent of any single
+environment.
+    az group create --name rg-examvault-shared --location centralindia
+    az deployment group create \
+      --resource-group rg-examvault-shared \
+      --template-file Infra/shared.bicep
+
+Result: acrexamvaultshared.azurecr.io
+
+STEP 3 — Deploy the dev environment infrastructure (Bicep)
+----------------------------------------------------------------
+Template: Infra/env.bicep (see Infra/README.md for full parameter list and
+design notes). Provisions: Log Analytics, Container Apps Environment, Azure
+SQL server + Basic elastic pool (5 databases), Service Bus namespace
+(Standard tier), and 10 Container Apps bootstrapped on a public placeholder
+image with no registry wired yet.
+
+    az group create --name rg-examvault-dev --location centralindia
+
+    az deployment group what-if \
+      --resource-group rg-examvault-dev \
+      --template-file Infra/env.bicep \
+      --parameters environmentName=dev sharedResourceGroupName=rg-examvault-shared \
+      --parameters sqlAdminPassword=<generate-strong> jwtSigningKey=<same-as-local-dev> \
+      --parameters n8nUserWebhookUrl=<...> n8nNotificationWebhookUrl=<...> n8nAiWebhookUrl=<...>
+
+    (review the what-if output, then re-run with `create` instead of `what-if`)
+
+    IMPORTANT: for the three n8n*WebhookUrl parameters above, use the exact
+    same values as N8N_USER_WEBHOOK_URL / N8N_NOTIFICATION_WEBHOOK_URL /
+    N8N_AI_WEBHOOK_URL in your local .env - those are the confirmed-working
+    n8n endpoints (verified by local docker-compose actually delivering
+    emails/AI generations through them). Do NOT guess a plausible-looking
+    path here. On 2026-08-17, ca-notification-worker-dev and
+    ca-notification-api-dev were found live with n8nNotificationWebhookUrl
+    set to ".../webhook/examvault/notify" (404, wrong) instead of the
+    correct ".../webhook/examvault/notify-credential" - exam-assignment and
+    welcome/reset-password emails were silently failing on dev until this
+    was manually corrected via `az containerapp secret set`. If this bicep
+    deployment is ever re-run, it will reset the secret back to whatever
+    value is passed here, so get it from .env, not from memory.
+
+Known gotcha hit here: deploying the Container Apps Environment and all 10
+apps in ONE deployment made every app's first revision fail with
+"Operation expired" - the environment reports Succeeded before it's
+actually ready to accept app-create calls. Fix: just re-run the same
+`az deployment group create` command again (idempotent) once or twice until
+every app shows provisioningState=Succeeded. Took 3 attempts in practice.
+
+Known gotcha #2: the bicep template originally set a `registries` entry on
+every Container App at create time (pointing at the ACR, using the app's own
+system-assigned identity). This made EVERY app hang and fail identically,
+because the identity's AcrPull role assignment (granted in the same
+deployment) hadn't propagated yet. Fix, now baked into env.bicep: don't set
+`registries` at bootstrap - wire it later via `az containerapp registry set`
+once the role assignment has had time to propagate (Step 5).
+
+STEP 4 — Set up GitHub Actions OIDC identity (for automated CD)
+-----------------------------------------------------------------------
+    az ad app create --display-name "examvault-github-actions-dev"
+    az ad sp create --id <appId>
+    az ad app federated-credential create --id <objectId> --parameters '{
+      "name": "examvault-dev-branch",
+      "issuer": "https://token.actions.githubusercontent.com",
+      "subject": "repo:<owner>@<ownerId>/<repo>@<repoId>:ref:refs/heads/dev",
+      "audiences": ["api://AzureADTokenExchange"]
+    }'
+    MSYS_NO_PATHCONV=1 az role assignment create --assignee <appId> --role Contributor --scope /subscriptions/<sub>/resourceGroups/rg-examvault-dev
+    MSYS_NO_PATHCONV=1 az role assignment create --assignee <appId> --role AcrPush --scope /subscriptions/<sub>/resourceGroups/rg-examvault-shared/providers/Microsoft.ContainerRegistry/registries/acrexamvaultshared
+
+IMPORTANT gotcha: GitHub's OIDC subject claim format is
+`repo:<owner>@<ownerId>/<repo>@<repoId>:ref:refs/heads/<branch>` (includes
+immutable numeric IDs) - NOT the simpler `repo:<owner>/<repo>:ref:...`
+documented in older guides. Get the real subject from the actual
+AADSTS700213 error message on a failed run (it tells you exactly what
+subject GitHub presented) rather than guessing the format.
+
+IMPORTANT gotcha (Git Bash on Windows): any `az` command with a leading-`/`
+`--scope` argument gets mangled by MSYS path conversion
+(`/subscriptions/...` becomes `C:/Program Files/Git/subscriptions/...`).
+Always prefix with `MSYS_NO_PATHCONV=1` when running from Git Bash.
+
+Status: even after fixing the subject claim, GitHub repo secrets
+(AZURE_CLIENT_ID/AZURE_TENANT_ID/AZURE_SUBSCRIPTION_ID) never reached
+azure/login@v2 across many attempts - root cause never found (not a naming,
+scope, or propagation issue - verified repeatedly). Worked around by
+hardcoding the 3 identifiers directly in cd-dev.yml's `env:` block instead
+of using secrets (they're not actually sensitive - see Infra/README.md for
+the reasoning). GitHub CLI (`gh auth login`) also could not complete its
+device-flow login on this machine across 5 attempts (2 different shells,
+full user approval confirmed each time) - something in this environment
+blocks its polling; abandoned as a diagnostic tool.
+
+UPDATE - CD pipeline fully fixed and confirmed working end-to-end.
+Two more real fixes were needed on top of the above, in order:
+  1. Actually fixed the federated credential subject (the gotcha above was
+     identified but never applied - deleted the old credential and
+     recreated it with the correct
+     `repo:gaaneshkambale-ctrl@315715166/ExamVault@1330714536:ref:refs/heads/dev`
+     subject via `az ad app federated-credential delete` + `create`). This
+     got every job's "Azure login (OIDC)" step to finally succeed.
+  2. With login fixed, the next failure was `az acr build` itself - it
+     never created a single ACR task run (`az acr task list-runs` came back
+     empty), confirmed on GitHub's own hosted runners this time, not just
+     this local machine - ruling out local resource constraints as the
+     cause once and for all. Root cause on the ACR/subscription side still
+     unknown. Fix: replaced `az acr build` (ACR Tasks, a remote build
+     service) with a plain `docker build` + `docker push` in the workflow,
+     authenticated via `az acr login` using the same already-working OIDC
+     session - no ACR Tasks involved at all. This is what actually pushes
+     images now.
+
+Verified live: a real push to `dev` triggered the full pipeline
+(build+test -> build+push all 10 images -> deploy) and completed with
+`conclusion: success`; confirmed the 2 spot-checked Container Apps
+(`gateway`, `exam-api`) were running the exact new image tag matching that
+commit's SHA, and that a real login against the freshly-deployed app still
+returned a valid JWT. Push-to-dev now really does mean automatic deploy,
+no manual steps.
+
+STEP 5 — Build, push, and deploy real images (manual route)
+-------------------------------------------------------------------
+Used because the GitHub Actions CD path (Step 4) hit the unresolved secrets
+problem, and `az acr build`'s remote tar-and-upload step separately hung on
+this machine (never completed, no ACR task run ever got created - suspected
+local resource constraints). Local `docker build` + `docker push` worked
+fine as a substitute:
+
+    az acr login --name acrexamvaultshared
+
+    docker build -f <service>/Dockerfile \
+      -t acrexamvaultshared.azurecr.io/<service>:dev-<gitsha> \
+      -t acrexamvaultshared.azurecr.io/<service>:dev-latest \
+      .
+    docker push acrexamvaultshared.azurecr.io/<service>:dev-<gitsha>
+    docker push acrexamvaultshared.azurecr.io/<service>:dev-latest
+
+    (frontend needs --build-arg VITE_API_BASE_URL=<gateway's external URL>)
+
+Then, per app, wire the registry (now safe - role assignment has propagated)
+and roll out the image:
+
+    az containerapp registry set --name <app> --resource-group rg-examvault-dev \
+      --server acrexamvaultshared.azurecr.io --identity system
+    az containerapp update --name <app> --resource-group rg-examvault-dev \
+      --image acrexamvaultshared.azurecr.io/<service>:dev-<gitsha>
+
+Result at this point: all 10 Container Apps running real code. Each
+individually confirmed working (e.g. exam-api hit directly returns a
+correct 401 on an unauthenticated request in ~22s cold-start).
+
+STEP 6 — Gateway-to-backend networking: unresolved problem, still being
+worked (as of last update)
+--------------------------------------------------------------------------------------
+Symptom: Gateway (YARP reverse proxy) cannot reach ANY backend service
+through its normal proxy path - every proxied request either hangs for
+~100s and 504s, or fails near-instantly with a low-level TLS handshake
+exception (`SslStream.EnsureFullTlsFrameAsync` / `ReceiveHandshakeFrameAsync`
+failing to read a complete TLS response frame).
+
+Ruled out one by one (each confirmed NOT the cause via a direct test):
+  - Internal vs external ingress on the backend apps
+  - HTTP/2 vs HTTP/1.1 (forced via YARP's per-cluster `HttpRequest.Version`/
+    `VersionPolicy` config - note this goes under `HttpRequest`, NOT
+    `HttpClient`, in YARP's cluster config schema; putting it under
+    `HttpClient` is silently ignored)
+  - TLS certificate validation (`DangerousAcceptAnyServerCertificate: true`
+    made no difference)
+  - Forced TLS 1.2 (`SslProtocols: ["Tls12"]` under `HttpClient` - no change)
+  - Cold-start timing (`minReplicas: 1` to keep a backend always-warm - no
+    change, failure is instant/consistent either way)
+  - The specific destination: proxying to `https://management.azure.com`
+    (Microsoft's own, always-on endpoint) fails identically - this is NOT
+    specific to calling other Container Apps in this environment.
+  - The .NET runtime patch version (tested pinning the base image down to
+    `mcr.microsoft.com/dotnet/aspnet:8.0.11` instead of the floating `8.0`
+    tag - same failure).
+  - Missing CA certs (confirmed present and populated inside the container
+    via `az containerapp exec`).
+
+Confirmed working: plain HTTP (no TLS) outbound from Gateway's container
+works completely fine and fast (e.g. proxying to `http://example.com`
+returns a real response in ~1.3s). So this is TLS-specific, not a general
+network/egress block.
+
+Also confirmed: Container Apps' `allowInsecure` ingress option (accepts
+plain HTTP directly, meant to let a caller skip TLS) does NOT work for
+app-to-app calls within this environment either (internal or external) -
+both returned Azure's generic "This Container App is stopped or does not
+exist" platform error page instead of routing to the real app, suggesting
+Container Apps' routing genuinely depends on TLS/SNI to identify the
+target, even for allowInsecure apps.
+
+Net conclusion: outbound TLS specifically is broken for this container /
+this Container Apps Environment instance, for reasons not identified through
+application-level configuration. This affects Gateway AND any other
+service's own outbound HTTPS calls (e.g. Submission Service calling Exam
+Service), since they use the same base image and same Services__*BaseUrl
+pattern - not just a Gateway-specific problem.
+
+UPDATE - environment recreation test completed, same result:
+Deleted cae-examvault-dev and all 10 apps, redeployed fresh via
+`az deployment group create` against the unchanged Infra/env.bicep (SQL
+Server, Service Bus namespace, and the shared ACR were untouched - only the
+compute layer was rebuilt). Confirmed genuinely new: new environment default
+domain (`purplegrass-5a45369b...` vs the original `bluemoss-9df6d0cb...`).
+
+Gotcha hit during recreation: redeploying the same template against
+existing (but now-orphaned) role assignments failed with
+`RoleAssignmentUpdateNotPermitted: Tenant ID, application ID, principal ID,
+and scope are not allowed to be updated.` - deleting a Container App and
+recreating it under the same name gives it a brand NEW system-assigned
+identity (new principalId), but the AcrPull role assignment's Bicep-computed
+name (`guid(acr.id, app.id, 'AcrPull')`) is deterministic and collides with
+the OLD orphaned role assignment (still pointing at the deleted principal).
+Fix: list and delete the stale role assignments first
+(`az role assignment list --scope <acr-id>` filtered to roleDefinitionName
+'AcrPull', then `az role assignment delete --ids <id>` for each), then
+redeploy. Needed if this environment is ever recreated again.
+
+RESULT: identical failure in the brand-new environment. Same exact
+`SslStream.EnsureFullTlsFrameAsync` / `ReceiveHandshakeFrameAsync` exception,
+same instant-fail pattern. This conclusively rules out "this one environment
+instance had a fault" - it's not instance-specific. Whatever is breaking
+outbound TLS from Container Apps containers in this subscription/region is
+either a genuine, currently-active Azure platform issue, or something at the
+subscription/tenant level (not the environment level).
+
+UPDATE - cross-region differential test completed, split result:
+This subscription only allows 1 Container Apps Environment total (globally,
+not per-region - a signature of a trial/low default-quota subscription:
+`MaxNumberOfGlobalEnvironmentsInSubExceeded`, later also hit
+`MaxNumberOfRegionalEnvironmentsInSubExceeded` at 1-per-region too). Testing
+a second region required deleting the centralindia one first each time.
+
+Quick isolated test: created a throwaway environment + one Container App
+(just the Gateway image, no SQL/Service Bus needed) in `centralus`,
+pointed its exams-cluster destination at `https://management.azure.com`
+(the same well-known target that failed in centralindia). RESULT: SUCCESS -
+"Received HTTP/1.1 response 400" in gateway's own log, real TLS handshake
+completed. This proves general outbound TLS to arbitrary internet HTTPS
+destinations, which was completely broken in centralindia, works fine in
+centralus. Region-specific bug #1, confirmed fixed by moving region.
+
+Followed through with a FULL migration: deleted the centralindia SQL
+Server, Service Bus namespace, and Log Analytics workspace (all empty/
+fresh, no real data lost), redeployed the entire Infra/env.bicep stack with
+`location=centralus` into the same `rg-examvault-dev` resource group
+(a resource group's own location is just deployment metadata - it does not
+constrain what region the resources inside it live in). Needed the same
+stale-role-assignment cleanup as the earlier recreation (Step 6's gotcha)
+before it would succeed - this time via the shared ACR's role assignment
+list again. Deployed real images to all 10 apps in the new centralus
+environment (`ca-gateway-dev.proudmushroom-43e29194.centralus.
+azurecontainerapps.io` etc.) the same way as Step 5.
+
+RESULT: general outbound TLS bug is gone (confirmed by the isolated test
+above) - BUT Gateway calling another Container App in the SAME environment
+(exam-api) STILL fails, in centralus too, both via internal ingress
+(instant `SslStream.EnsureFullTlsFrameAsync` failure, same as centralindia)
+and via external ingress (this time a ~40-100s HANG with no response at
+all, or occasionally an Envoy-level "upstream connect error... Connection
+refused" 503 - a different symptom, suggesting Container Apps' own ingress
+proxy layer, not .NET's TLS stack, is now where this manifests). Confirmed
+this isn't a cold-start artifact: set exam-api's `minReplicas` to 1, waited
+for it to show a warm replica, retried - same hang.
+
+CONCLUSION: there are two SEPARATE bugs, not one -
+  1. General outbound HTTPS from a Container App to ANY destination -
+     region-specific to centralindia, CONFIRMED FIXED by moving to
+     centralus.
+  2. Container-App-to-Container-App calls within the same environment -
+     present in BOTH regions, unaffected by the region fix, so it's a
+     different root cause. Not resolved as of last update.
+
+Bug #2 is now the sole remaining blocker for the golden path (Gateway is
+still unable to reach any backend service). Next things worth trying, not
+yet attempted:
+  - Open an Azure support ticket specifically about bug #2 now that bug #1
+    is isolated and confirmed separately fixed - this makes for a much more
+    precise repro to hand to support than the original combined symptom.
+  - Try a Container Apps Environment WITH a custom VNet (workload profile)
+    instead of the default Consumption-only environment, in case internal
+    (or even external) app-to-app HTTPS specifically needs VNet integration
+    to route reliably within the same environment, despite Microsoft's docs
+    saying VNet shouldn't be required for this.
+  - Try Dapr service invocation (Container Apps' built-in service-to-service
+    call mechanism, distinct from raw HttpClient/YARP calls) as an
+    alternative to Gateway's own outbound HTTP client for reaching sibling
+    apps - if Dapr's own transport succeeds where YARP fails, that narrows
+    the bug to something specific about how a plain .NET HttpClient (used by
+    both YARP forwarding and Services__*BaseUrl calls) opens connections to
+    another app in the same environment specifically.
+  - Try Azure App Service or another compute host entirely for just the
+    Gateway, as a way to unblock the golden path while bug #2 is
+    investigated separately - Gateway calling out to backend App Services
+    (not Container Apps) might not hit whatever is specific to
+    Container-App-to-Container-App traffic.
+
+STEP 6 RESOLVED - Dapr service invocation fixes bug #2
+-----------------------------------------------------------
+Given the free-trial time/cost pressure, stopped hunting the exact platform
+root cause and went straight for the most promising available fix: Azure
+Container Apps' built-in Dapr integration, which routes app-to-app calls
+through a local sidecar (`localhost:3500`) instead of the app's own public
+HTTPS URL - a genuinely different code path than everything tried so far.
+
+Applied:
+  1. Enabled Dapr on Gateway + all 7 backend APIs (frontend and
+     notification-worker don't need it - they never call another Container
+     App directly):
+       az containerapp dapr enable --name <app> --resource-group rg-examvault-dev \
+         --dapr-app-id <short-name> --dapr-app-port 8080 --dapr-app-protocol http
+     dapr-app-id used: gateway, user-api, exam-api, question-api, ai-api,
+     submission-api, result-api, notification-api.
+  2. Changed every cross-app URL - Gateway's 7 YARP cluster Destination
+     addresses AND every `Services__*BaseUrl` env var (exam-api->user-api,
+     submission-api->exam-api, result-api->exam-api/question-api/
+     submission-api, notification-api->user-api/exam-api) - from
+     `https://ca-<app>-dev.internal.<domain>` to
+     `http://localhost:3500/v1.0/invoke/<dapr-app-id>/method`. Dapr appends
+     the caller's own request path after `/method/`, forwarding it
+     unchanged to the target app's real HTTP listener - e.g. a request to
+     `/api/exams` becomes `http://localhost:3500/v1.0/invoke/exam-api/method/api/exams`
+     server-side, which Dapr resolves and forwards to exam-api's own
+     `/api/exams` route.
+  3. Reverted exam-api back to internal-only ingress + minReplicas=0 (the
+     external-ingress/always-warm workaround from the failed diagnostic
+     attempts) - Dapr's mesh doesn't care about an app's ingress type at
+     all, so there's no reason for backend APIs to be externally reachable
+     once Dapr is wired. Confirmed still worked after reverting.
+
+RESULT: fully confirmed working, real requests through the real Gateway
+URL, not synthetic tests -
+  - `POST /api/users/register` -> 201, real user created
+  - `POST /api/users/login` -> 200, real JWT issued
+  - `GET /api/exams` with that JWT -> 200 `[]` (correct empty result,
+    proving the full path: Gateway -> Dapr -> exam-api -> JWT validation
+    -> real database query -> real response)
+
+This is now baked into `Infra/env.bicep` permanently (not just applied via
+one-off `az` commands to the running apps) - every backend API's
+`configuration.dapr` block and every cross-app URL in the template itself
+were updated to match, so this is what a fresh deploy produces automatically
+going forward, not a manual step to remember. `location` default also
+changed from `centralindia` to `centralus` in the same template, since
+that's what fixed bug #1. See `Infra/README.md`'s "Why Dapr, not direct
+HTTPS" section for the condensed version of this whole story.
+
+Not yet re-verified after the Bicep changes: a full redeploy-from-scratch
+using the now-updated `env.bicep` (everything above was applied to the
+already-running centralus apps via direct `az` commands, then mirrored into
+the template - the template itself hasn't been used to build this exact
+working state from zero yet). Worth doing once, deliberately, to prove the
+template alone reproduces this without any manual follow-up steps.
+
+STEP 7 — Current state: WORKING
+------------------------------------
+- All Azure infra (SQL, Service Bus, Container Apps Environment, ACR): in
+  `centralus` now (migrated from `centralindia` mid-investigation),
+  provisioned, healthy.
+- All 10 Container Apps: running real application images, Dapr-enabled
+  where needed.
+- Gateway's full reverse-proxy path to every backend: WORKING (Step 6
+  resolved this).
+- Golden path verified live: register -> login -> authenticated API call,
+  all through the real public Gateway URL.
+- Gateway URL: `https://ca-gateway-dev.proudmushroom-43e29194.centralus.azurecontainerapps.io`
+- Frontend URL: `https://ca-frontend-dev.proudmushroom-43e29194.centralus.azurecontainerapps.io`
+  (note: frontend's baked-in `VITE_API_BASE_URL` was set to the OLD
+  centralindia gateway URL during an earlier build - needs a rebuild+push
+  with the current centralus gateway URL before the frontend itself will
+  correctly reach the API; the backend/API side is fully verified
+  independent of this).
+- Not yet done: full golden-path click-through in an actual browser (only
+  curl-level API verification so far), and the "not yet re-verified"
+  from-scratch template test noted above.
+
+STEP 8 — Repo files this all lives in
+------------------------------------------
+- Infra/shared.bicep - shared ACR
+- Infra/env.bicep - per-environment resources (dev now; qa/prod = same file,
+  different environmentName param, when ready)
+- Infra/modules/acrRoleAssignment.bicep - cross-resource-group AcrPull grant
+- Infra/README.md - deployment commands, cost shape, all the gotchas above
+  in more detail
+- .github/workflows/cd-dev.yml - the CD pipeline (builds via `az acr build`,
+  currently unverified end-to-end due to Step 4's unresolved secrets issue -
+  last known-good manual path is Step 5)
+- Backend/Gateway/OnlineExamSystem.ApiGateway/appsettings.json - the YARP
+  cluster config, including the diagnostic HttpRequest/HttpClient settings
+  added while chasing Step 6 (currently left in place, harmless if unused)

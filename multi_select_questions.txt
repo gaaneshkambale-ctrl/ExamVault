@@ -1,0 +1,155 @@
+ExamVault — True Multi-Select Question Type: Implementation Plan
+================================================================
+Goal: a genuine "select all that apply" question type (2+ correct answers,
+student checks multiple boxes), sitting ALONGSIDE the existing single-answer
+type (recently relabeled "Single Choice" - see [[feedback]] history: the
+backend enum/DB value for that type is still literally "MultipleChoice",
+which is exactly why this was confusing before). This plan reclaims the
+label "Multiple Choice" for the NEW type, matching the naming this codebase
+had already anticipated (see `types/ai.ts`'s `DISABLED_QUESTION_TYPES`
+comment, written before this was built: "true multi-select Multiple Choice
+needs AttemptAnswer to support more than one selected option per question
+(it's singular today)" - this plan is exactly that fix).
+
+DECISION LOCKED IN (confirmed with the user before writing this plan)
+------------------------------------------------------------------------
+Scoring is ALL-OR-NOTHING: full marks only if the student's selected set
+exactly equals the correct set (no more, no less); anything else scores 0
+(or negative marks, if the exam/section has negative marking enabled - same
+existing rule single-choice already uses, just applied to a set-comparison
+instead of a scalar one). No partial credit.
+
+NAMING
+------------------------------------------------------------------------
+New backend `QuestionType` enum value: `MultiSelect = 7` (next unused
+ordinal - existing values are never renumbered, they're persisted). New
+frontend `QuestionType` union member: `'MultiSelect'`. Display label
+everywhere: "Multiple Choice" (matches the AI-generate pages' existing
+disabled chip, and what a plain-English "select all that apply" question
+type is normally called). The OLD "MultipleChoice" enum/DB value keeps
+meaning today's single-answer type - never renamed, no migration risk.
+
+QUESTION SERVICE — small (data model already supports N correct options)
+------------------------------------------------------------------------
+`QuestionOption.IsCorrect` per-option already has no cardinality
+constraint in the schema - the "exactly one correct" rule was always
+FluentValidation-only, not a DB constraint. So:
+- Domain: add `MultiSelect = 7` to `QuestionType` enum.
+- `CreateQuestionValidator`/`UpdateQuestionValidator`: add `"MultiSelect"`
+  to `SupportedQuestionTypes`. New rule: MultiSelect requires
+  `Options.Count(o => o.IsCorrect) >= 2` (distinguishes it from a
+  single-choice question in a way "at least 1" wouldn't - if there's only
+  one right answer it should be authored as Single Choice instead).
+  `HaveValidOptionsForType` switch gains `"MultiSelect" => Options.Count >= 2`
+  (already implied by the >=2-correct rule, kept for switch-consistency).
+  The existing "exactly one correct" rule (`OptionBasedQuestionTypes =
+  ["MultipleChoice", "TrueFalse"]`) is UNCHANGED - MultiSelect gets its
+  own separate rule, not folded into that array.
+- No repository/entity/migration changes needed - QuestionOption already
+  supports this.
+
+SUBMISSION SERVICE — the real work (AttemptAnswer only stores ONE
+selected option today)
+------------------------------------------------------------------------
+`AttemptAnswer.SelectedOptionId: Guid?` is singular - the actual blocker
+this whole feature was waiting on. Rather than a new child table (this
+codebase's usual child-entity pattern, e.g. QuestionTestCase), a JSON
+string column on the SAME row is simpler and has direct precedent in this
+codebase already (QuestionTestCase.ArgumentsJson/ExpectedOutputJson store
+JSON-encoded values in a plain string column) - no new table, no cascade
+FK, no repository/handler dictionary-threading across GetMyAttemptHandler/
+ListAttemptsByExamHandler/ListLiveAttemptsByExamHandler just to attach a
+child collection to each answer.
+- `AttemptAnswer` gains `string? SelectedOptionIdsJson` (nullable, JSON
+  array of option-id GUIDs, e.g. `["<guid>","<guid>"]`) - null for every
+  other question type, exactly like AnswerText is null for option-based
+  questions today. New migration `AddSelectedOptionIdsJsonToAttemptAnswer`
+  - single nullable column add, no data migration needed.
+- `SaveAnswerRequest`/`SaveAnswerCommand`/`AttemptAnswerResponse` gain
+  `SelectedOptionIds: IReadOnlyList<Guid>? = null` alongside the existing
+  singular `SelectedOptionId` (untouched, still used by Single Choice/
+  True-False/the Code auto-grading path). `SaveAnswerHandler` serializes
+  the incoming list to JSON before writing (`JsonSerializer.Serialize`,
+  null when the list is empty/absent - "deselect all" clears it) in both
+  the create and update branches; `SubmissionsController.ToResponse`
+  deserializes it back out for every read path (Mine/ByExam/LiveByExam/
+  GradeAnswer all funnel through this one method already).
+
+RESULT SERVICE — scoring + the same field threaded through 3 more DTOs
+------------------------------------------------------------------------
+`AttemptScorer.cs` currently has exactly two branches: `"CodeProgram"`
+(manual grading) and everything else (single-option equality). Add a
+third: `"MultiSelect"` - compare `HashSet<Guid>` of selected vs correct
+option ids via `SetEquals` (all-or-nothing per the locked decision),
+reusing the exact same negative-marking branch structure the single-option
+path already has (wrong-but-answered loses marks per section/exam config,
+unanswered never penalized). This is the ONE place actual scoring logic
+lives - both `GetResultHandler` (student's own result) and
+`GetExamReportHandler` (admin's exam report) already call this same
+`AttemptScorer.Score` method, so fixing it once covers both.
+`SelectedOptionIds` needs threading through, mirroring `SelectedOptionId`'s
+existing path at each hop: `SubmissionAnswer` (ISubmissionLookupClient) ->
+`SubmissionServiceClient.ToResult`'s private DTO -> `QuestionResult`/
+`QuestionResultOption` domain (Result.Domain) -> `QuestionResultResponse`
+(Shared.Contracts, used by both the student result and admin report
+response shapes) -> `ResultsController.ToResponse`.
+
+FRONTEND
+------------------------------------------------------------------------
+- `types/question.ts`: `QuestionType` gains `'MultiSelect'`. Every
+  `Record<QuestionType, string>` label map in the app (CreateQuestionModal/
+  EditQuestion/SectionForm dropdowns, QuestionDetails/SectionDetails/
+  CsvImportPanel label maps) gains a `MultiSelect: 'Multiple Choice'`/
+  `<option value="MultiSelect">Multiple Choice</option>` entry - mandatory
+  for TS to compile once the union grows, not optional polish.
+- `types/submission.ts`/`types/result.ts`: `selectedOptionIds?: string[] | null`
+  added alongside the existing singular fields, mirroring the backend.
+- Admin authoring (CreateQuestionModal.tsx/EditQuestion.tsx): the options
+  list (add/remove/text-edit) already renders identically for any
+  option-based type - just needs the add/remove-button gate extended from
+  `questionType === 'MultipleChoice'` to also include `'MultiSelect'`. The
+  "Correct Answer" section branches: MultiSelect renders one checkbox per
+  option (toggles that option's `isCorrect` independently, unlike
+  `markCorrect` which clears all others) instead of the existing single
+  `<Form.Select>` dropdown. The actual submit payload
+  (`options.map(({optionText, isCorrect}) => ({optionText, isCorrect}))`)
+  needs NO changes - it already forwards whatever `isCorrect` flags are set
+  regardless of type. `createQuestionValidation.ts` gains a MultiSelect
+  branch requiring `correctCount >= 2` instead of `=== 1`.
+- Student-facing (TakeExam.tsx): `AnswerState` gains
+  `selectedOptionIds: string[] | null`. The options-rendering block (not
+  currently branched by question type at all - MultipleChoice and
+  TrueFalse both render the same radio group) gains a MultiSelect branch:
+  independent `Form.Check type="checkbox"` per option, toggling membership
+  in the array. `navState`'s answered-check, the save-answer mutation
+  payload, and the mine-lookup restore-on-resume logic all need the same
+  `selectedOptionIds` alongside `selectedOptionId`.
+- Result review (`AnswerReviewPanel.tsx`): both "Your Answer" and "Correct
+  Answer" currently `.find()` a single option - MultiSelect needs
+  `.filter()` + list rendering instead, gated on
+  `question.questionType === 'MultiSelect'`. `ResultDetails.tsx`'s
+  `isAttempted` helper gains an `|| q.selectedOptionIds?.length` check for
+  the correct/incorrect/unattempted tallies to count MultiSelect answers
+  correctly.
+
+EXPLICITLY OUT OF SCOPE (not asked for, flagged rather than silently
+built or silently skipped)
+------------------------------------------------------------------------
+- CSV import: the parser's `normalizeType` won't recognize a MultiSelect
+  type string, so CSV rows for this type simply won't import (same
+  limitation CSV import already has for CodeProgram) - not extended this
+  pass.
+- AI-generated MultiSelect questions: `DISABLED_QUESTION_TYPES` in
+  `types/ai.ts` keeps the "Multiple Choice" chip disabled on both AI-
+  generate pages - AI generation of this type is a separate scope (prompt
+  engineering, DraftQuestion support, approval flow) not touched here.
+  The stale part of that file's comment (which cites AttemptAnswer being
+  "singular today" as the blocker) gets a one-line correction since this
+  plan fixes exactly that, but the chip itself stays disabled.
+
+STATUS: plan written, implementation starting service by service
+(Question -> Submission -> Result -> Frontend), build/test checkpoint
+after each service, then a live end-to-end verification (admin authors a
+MultiSelect question with 2+ correct options, student selects the exact
+correct set and gets full marks, then a partial/wrong selection to confirm
+all-or-nothing scores 0).

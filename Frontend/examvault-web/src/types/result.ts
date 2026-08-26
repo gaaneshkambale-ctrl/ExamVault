@@ -1,0 +1,72 @@
+export interface QuestionResultOptionResponse {
+  optionId: string;
+  optionText: string;
+  isCorrect: boolean;
+}
+
+export interface QuestionResultResponse {
+  questionId: string;
+  questionText: string;
+  marks: number;
+  marksAwarded: number;
+  selectedOptionId: string | null;
+  isCorrect: boolean;
+  options: QuestionResultOptionResponse[];
+  questionType: string;
+  answerText: string | null;
+  isPendingGrading: boolean;
+  selectedOptionIds: string[] | null;
+}
+
+export interface ResultSummaryResponse {
+  attemptId: string;
+  examId: string;
+  examTitle: string;
+  totalScore: number;
+  totalMarks: number;
+  passingMarks: number;
+  passed: boolean;
+  submittedAtUtc: string;
+  questions: QuestionResultResponse[] | null;
+  hasPendingGrading: boolean;
+}
+
+// Admin-only: one row per student attempt on an exam, always carries the
+// per-question breakdown (no ShowCorrectAnswers gating - that only applies
+// to the student-facing "mine" result).
+export interface AdminAttemptResultResponse {
+  attemptId: string;
+  userId: string;
+  examId: string;
+  examTitle: string;
+  totalScore: number;
+  totalMarks: number;
+  passingMarks: number;
+  passed: boolean;
+  submittedAtUtc: string;
+  questions: QuestionResultResponse[];
+  hasPendingGrading: boolean;
+  fullscreenExitCount: number;
+  noFaceDetectedCount: number;
+  multipleFacesDetectedCount: number;
+  tabSwitchCount: number;
+  multipleTabsCount: number;
+  copyPasteCount: number;
+  rightClickCount: number;
+  multipleMonitorsCount: number;
+}
+
+export type Grade = 'A+' | 'A' | 'B' | 'C' | 'F';
+
+// A failed attempt is always graded F regardless of percentage, since
+// PassingMarks doesn't necessarily line up with the percentage bands below.
+export function getGrade(totalScore: number, totalMarks: number, passed: boolean): Grade {
+  if (!passed) {
+    return 'F';
+  }
+  const percentage = totalMarks > 0 ? (totalScore / totalMarks) * 100 : 0;
+  if (percentage >= 90) return 'A+';
+  if (percentage >= 75) return 'A';
+  if (percentage >= 60) return 'B';
+  return 'C';
+}

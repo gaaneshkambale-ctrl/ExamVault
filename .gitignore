@@ -14,7 +14,10 @@ build/
 
 # ---- Environment / Secrets ----
 .env
-.env.*
+.env.local
+.env.*.local
+!.env.example
+!.env.development
 appsettings.Local.json
 appsettings.*.Local.json
 secrets.json

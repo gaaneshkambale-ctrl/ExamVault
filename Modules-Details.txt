@@ -1,0 +1,239 @@
+===============================================================================
+EXAMVAULT - MODULES & FEATURES BY ROLE
+===============================================================================
+Generated from the live frontend routes/sidebars (AppRoutes.tsx, AdminSidebar.tsx,
+DashboardSidebar.tsx, PlatformSidebar.tsx) and each page's own source comments.
+Three roles: Student (regular User), Admin (organization admin), Super Admin
+(platform admin, cross-tenant).
+
+Legend used throughout:
+  [REAL]         Fully backed by real API data.
+  [PARTIAL]      Page is real but some fields/widgets are honest "not
+                 connected yet" placeholders - noted explicitly below.
+  [PLACEHOLDER]  Menu item exists, page loads, but nothing behind it yet
+                 ("isn't connected yet" shell page).
+
+===============================================================================
+1. STUDENT (role: Student) - regular exam-taking user
+===============================================================================
+Sidebar: Dashboard, My Exams, My Results, My Certificates, Profile,
+Notifications, Settings.
+
+- Dashboard [REAL] - overview/welcome page with the student's own activity.
+- My Exams [REAL] - list of exams assigned to the student.
+  - Exam Details [REAL] - a single exam's info before starting.
+  - Take Exam [REAL] - the live exam-taking screen (timed, answer capture,
+    section navigation, auto/manual submit).
+- My Results [REAL] - list of the student's own results.
+  - Result Details [REAL] - a single result's breakdown.
+- My Certificates [REAL] - list of earned certificates.
+  - Certificate Details [REAL] - a single certificate (view/download).
+- Notifications [REAL] - the student's own notification inbox.
+  - Notification Details [REAL]
+  - Notification Settings [REAL] - per-user notification preferences.
+- Profile [REAL] - view/edit own profile.
+- Change Password [REAL]
+- Settings [REAL] - account settings page.
+
+Everything on the Student side is real, working functionality - this is the
+core product, not a mockup-driven console.
+
+===============================================================================
+2. ADMIN (role: Admin) - organization admin, scoped to their own tenant
+===============================================================================
+Sidebar: Dashboard, Users, Exams, Exam Types, Live Monitoring, Results,
+Reports, Notifications, Settings.
+
+--- Dashboard ---
+- Dashboard [REAL] - org-level overview.
+
+--- Users ---
+- All Users [REAL] - list/manage users in the org.
+- Add User [REAL] - create a user.
+- Import Users [REAL] - bulk user import.
+- Edit User / User Details / Reset Password [REAL]
+- Roles & Permissions [REAL]
+- User Groups [REAL] - manage groups, group details, add/remove members.
+
+--- Exams ---
+- Exams (Manage Exams) [REAL] - list/manage the org's exams.
+- Exam Types [REAL] - manage/create dynamic exam-purpose types.
+- Create Exam [REAL], Edit Exam [REAL], Exam Details [REAL].
+- Exam creation wizard [REAL] - Sections step, Configuration step, Review step.
+- Manage Sections [REAL] - create/edit/reorder/delete sections per exam.
+- Question management [REAL] - Question Details, Edit Question.
+- AI Generate Question [REAL] - AI-assisted question generation + preview
+  before saving.
+- Assign Exam [REAL] - create/edit exam assignments (who/when/target group).
+- Grade Answers [REAL] - manual grading workflow for subjective answers.
+
+--- Live Monitoring ---
+- Active Exams [REAL] - exams currently live, polled in real time.
+- Student Attempts [REAL] - live in-progress attempts.
+- Security Violations [REAL] - proctoring/fullscreen-exit violation feed,
+  polled in real time.
+- Proctoring [REAL] - live video/recording monitoring, polled in real time.
+
+--- Results ---
+- Exam Results [REAL]
+- Student Results [REAL]
+- Result Analytics [REAL]
+- Publish Results [REAL] - control when results become visible to students.
+
+--- Reports ---
+- Exam Reports [REAL]
+- Student Reports [REAL]
+- Performance Reports [REAL]
+- Audit Reports [REAL] - org-scoped audit log.
+- Exam Report Details [REAL] - drill-down for a single exam.
+
+--- Notifications ---
+- Create Notification [REAL] - send a notification/announcement to the org.
+- History [REAL] - sent-notification batch history + batch details.
+- Notification Templates [REAL] - reusable notification templates (CRUD).
+
+--- Settings ---
+- Settings hub [REAL], with dedicated pages for:
+  - General Settings [REAL]
+  - Exam Settings (defaults) [REAL]
+  - Security Settings [REAL]
+  - Proctoring Settings [REAL]
+  - Notification Settings [REAL]
+  - System Settings [REAL]
+
+Every Admin-side feature is real, functioning product - this is the original
+core application, built out fully before the Super Admin console existed.
+
+===============================================================================
+3. SUPER ADMIN (role: SuperAdmin) - platform admin, cross-tenant
+===============================================================================
+This console was retrofitted on top of the existing product to match a set of
+UI mockups (see *.png files at the project root and "ExamVault Super Admin
+Menu.txt"). The guiding rule enforced throughout: never fabricate data - a
+field either shows real cross-tenant data, or an honest "not connected yet" /
+"-" placeholder. Sidebar: Dashboard, Organizations, Users, Exams, Questions,
+Submissions, Subscriptions, System Monitoring, Notifications, Reports,
+Security, Settings, System Logs.
+
+--- Dashboard ---
+- Dashboard [PARTIAL] - Total Organizations is real (tenant list); Total
+  Users/Exams/Submissions and Active Subscriptions are "not connected yet"
+  (no cross-tenant aggregate endpoint exists for those yet). Recent
+  Organizations list is real.
+
+--- Organizations ---
+- All Organizations [REAL] - full tenant list, search, status.
+- Create Organization [PARTIAL] - Name/Subdomain/Admin Full Name/Admin Email
+  are real and create a tenant + its first admin in one step. Every other
+  mockup field (Org Code, Org Type, Phone, Designation, Address section, 3
+  toggles) is disabled/unsaved - no backing field exists.
+- Active Organizations [REAL] - filtered tenant list.
+- Trial Organizations [PLACEHOLDER] - no "trial" tenant concept exists.
+- Suspended Organizations [REAL] - filtered tenant list (uses IsActive).
+- Organization Details [PARTIAL] - all 8 mockup tabs exist as real nav, but
+  only the Overview tab has real data (Name/Subdomain/Status/Created On).
+  Org Code/Type/Plan/Billing/Description, Admin Info, Address, Subscription
+  Info, Quick Stats, Modules & Features are all honest placeholders.
+
+--- Users ---
+- All Users [REAL] - genuine cross-tenant user list (fixed a real
+  cross-tenant data-leak bug in UserRepository along the way). Users by
+  Status donut drops the mockup's "Suspended"/"Pending" states (only
+  Active/Inactive exist). Last Login uses real "time ago" data.
+- Organization Admins [REAL] - filtered to Admin role.
+- Students [REAL] - filtered to Student role.
+- Platform Admins [REAL] - filtered to SuperAdmin role.
+- Roles & Permissions [PLACEHOLDER].
+
+--- Exams (platform-wide) ---
+- All Exams [PLACEHOLDER]
+- Exam Categories [PLACEHOLDER]
+- Sections [PLACEHOLDER]
+- Question Bank [PLACEHOLDER]
+- Tags [PLACEHOLDER]
+
+--- Platform Admin (top-level) ---
+- Questions [PLACEHOLDER]
+- Submissions [PLACEHOLDER]
+- System Logs [PLACEHOLDER]
+
+--- Subscriptions ---
+- Plans [PARTIAL] - deliberately a static reference pricing table, not a
+  fake CRUD list (no Plan entity exists anywhere in this codebase; billing
+  is out of scope). Create/Edit are disabled with an explicit note.
+- Organizations & Plans [PARTIAL] - Organization/Subdomain/Status/Created On
+  are real; Plan/Students/Exams/Billing/Amount are "-" placeholders.
+- Usage [PARTIAL] - Total Students is real; Exams Conducted/Active
+  Exams/Storage Used/API Calls and the usage trend/breakdown are honest
+  placeholders (no such aggregation or metering exists).
+- Subscription History [PLACEHOLDER].
+
+--- System Monitoring ---
+- System Monitoring overview [REAL] - real stat cards (active org/exam
+  counts, services-online ratio) and condensed live widgets.
+- Active Organizations [REAL] - active tenants.
+- Active Exams [REAL] - published exams that are live now or upcoming,
+  derived from real schedule timestamps (no "Participants" column - no
+  cross-tenant submissions endpoint exists).
+- System Health [REAL] - Database + Message Queue (RabbitMQ) status, polled
+  live every 15s via the Gateway's new health-check aggregation.
+- Service Status [REAL] - live health + response time for the Gateway and
+  all 8 backend services, polled every 15s.
+- API Health [PLACEHOLDER] - no request-metrics collection exists anywhere
+  in this codebase. Host-resource metrics (CPU/memory/disk/network) are
+  intentionally out of scope entirely for the same reason.
+
+--- Notifications (platform-wide) ---
+- Platform Announcement [PARTIAL] - the recent-activity table is real
+  (widened existing tenant-Admin notification history/template endpoints to
+  also accept SuperAdmin); "+ New Announcement" stays disabled since the
+  Super Admin's own reserved "Platform" tenant has no real audience.
+- Notification History [REAL] - stat cards + batch history, cross-tenant.
+- Templates [REAL] - full CRUD.
+
+--- Reports ---
+- Organization Report [REAL] - Total/Active/Inactive orgs, status donut,
+  Top Organizations by Users.
+- User Report [REAL] - stat cards, Users-by-Role donut, New Users Trend.
+- Exam Usage [PARTIAL] - Total Exams and Exams-by-Status donut are real
+  (widened ExamsController's admin check to accept SuperAdmin); Exam
+  Attempts, Avg Pass %, Attempts Trend, and Top Exams by Attempts are
+  honest placeholders (no cross-tenant attempts endpoint exists).
+- Platform Usage [PARTIAL] - Total Logins/Unique Users and a Logins Over
+  Time trend are real (reuses audit-log login events); anything
+  session/API-call/storage related is a placeholder.
+- Audit Reports [REAL] - re-skin of Security > Audit Logs with a Role
+  column joined client-side from the Users list.
+
+--- Security ---
+- Security Events [PLACEHOLDER]
+- Login Activity [REAL] - filtered from real audit-log "User login" entries
+  (IP address only - no geo-IP/device parsing since that isn't recorded).
+- Failed Login Attempts [PLACEHOLDER]
+- Audit Logs [REAL] - genuine cross-tenant audit log (was blocked only by
+  an Admin-only role gate, since fixed).
+
+--- Settings (platform-wide) ---
+All five pages are visual shells only - explicit user choice, since none of
+these config concepts (platform settings, tenant defaults, SMTP, notification
+defaults, security policy) exist as real backend entities in this codebase.
+Every toggle/input is disabled and pre-filled with illustrative values; live-
+looking stats (e.g. Security Score, Email delivery rate) are shown as "-"
+rather than fabricated numbers.
+- Platform Settings [PLACEHOLDER shell]
+- Tenant Settings [PLACEHOLDER shell]
+- Email Settings [PLACEHOLDER shell]
+- Notification Settings [PLACEHOLDER shell]
+- Security Settings [PLACEHOLDER shell]
+
+===============================================================================
+SUMMARY
+===============================================================================
+- Student and Admin: the original core product. Every feature listed is
+  real, working functionality - no placeholders.
+- Super Admin: a console retrofitted to match UI mockups. Organizations,
+  Users, System Monitoring, Notifications, and most of Reports/Security are
+  real. Exams/Questions/Submissions (platform-wide), Subscriptions/Billing,
+  Roles & Permissions, and all platform-wide Settings remain placeholders
+  or static shells, by design - nothing here is faked, every gap is an
+  honest "not connected yet" rather than invented data.

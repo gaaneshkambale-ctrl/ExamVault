@@ -1,0 +1,176 @@
+name: CD - Dev
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: acrexamvaultshared
+  ACR_LOGIN_SERVER: acrexamvaultshared.azurecr.io
+  RESOURCE_GROUP: rg-examvault-dev
+  # Not secrets: an OIDC app registration's client-id/tenant-id/subscription-id
+  # are plain identifiers, not credentials. The actual security boundary is
+  # the federated credential's subject restriction
+  # (repo:gaaneshkambale-ctrl/ExamVault:ref:refs/heads/dev, configured on the
+  # Azure AD app) - only a workflow run on that exact repo+branch can ever
+  # exchange a token, regardless of who knows these three values. Hardcoded
+  # directly rather than via repo secrets after repo secrets repeatedly
+  # failed to reach azure/login@v2 in this environment for unresolved reasons.
+  AZURE_CLIENT_ID: 91f3c28c-6224-4020-9e1e-3093016790f9
+  AZURE_TENANT_ID: bfc976e1-17a8-446a-8bbc-d7606d729d9f
+  AZURE_SUBSCRIPTION_ID: 55f5a744-20e8-42dc-92d1-c6ef16c7fc9d
+
+jobs:
+  test-backend:
+    name: Backend (.NET)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet restore ExamVault.sln
+      - run: dotnet build ExamVault.sln --no-restore --configuration Release
+      - run: dotnet test ExamVault.sln --no-build --configuration Release
+
+  test-frontend:
+    name: Frontend (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/examvault-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: Frontend/examvault-web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test --if-present
+
+  build-and-push:
+    name: Build & push (${{ matrix.service }})
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: gateway
+            dockerfile: Backend/Gateway/OnlineExamSystem.ApiGateway/Dockerfile
+          - service: user-api
+            dockerfile: Backend/Services/UserService/OnlineExamSystem.User.API/Dockerfile
+          - service: exam-api
+            dockerfile: Backend/Services/ExamService/OnlineExamSystem.Exam.API/Dockerfile
+          - service: question-api
+            dockerfile: Backend/Services/QuestionService/OnlineExamSystem.Question.API/Dockerfile
+          - service: ai-api
+            dockerfile: Backend/Services/AiService/OnlineExamSystem.Ai.API/Dockerfile
+          - service: submission-api
+            dockerfile: Backend/Services/SubmissionService/OnlineExamSystem.Submission.API/Dockerfile
+          - service: result-api
+            dockerfile: Backend/Services/ResultService/OnlineExamSystem.Result.API/Dockerfile
+          - service: notification-api
+            dockerfile: Backend/Services/NotificationService/OnlineExamSystem.Notification.API/Dockerfile
+          - service: notification-worker
+            dockerfile: Backend/Services/NotificationService/OnlineExamSystem.NotificationService.Worker/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+      - name: Build & push ${{ matrix.service }}
+        # az acr build (ACR Tasks) never even creates a task run on this
+        # subscription for reasons unresolved (see AzureStep.txt) - use a
+        # plain local docker build + push instead, authenticated via the
+        # OIDC-derived az session (az acr login), no ACR Tasks involved.
+        run: |
+          az acr login --name ${{ env.ACR_NAME }}
+          docker build \
+            -f ${{ matrix.dockerfile }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}:dev-${{ github.sha }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}:dev-latest \
+            .
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}:dev-${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}:dev-latest
+
+  build-and-push-frontend:
+    name: Build & push (frontend)
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+      - name: Resolve Gateway URL
+        id: gateway-url
+        run: |
+          FQDN=$(az containerapp show --name ca-gateway-dev --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+          echo "url=https://$FQDN" >> "$GITHUB_OUTPUT"
+      - name: Build & push frontend
+        run: |
+          az acr login --name ${{ env.ACR_NAME }}
+          docker build \
+            -f Frontend/examvault-web/Dockerfile \
+            --build-arg VITE_API_BASE_URL=${{ steps.gateway-url.outputs.url }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/frontend:dev-${{ github.sha }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/frontend:dev-latest \
+            Frontend/examvault-web
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:dev-${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:dev-latest
+
+  deploy:
+    name: Deploy to Container Apps
+    needs: [build-and-push, build-and-push-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+      - name: Roll out new images
+        run: |
+          set -e
+          declare -A APPS=(
+            [ca-gateway-dev]=gateway
+            [ca-user-api-dev]=user-api
+            [ca-exam-api-dev]=exam-api
+            [ca-question-api-dev]=question-api
+            [ca-ai-api-dev]=ai-api
+            [ca-submission-api-dev]=submission-api
+            [ca-result-api-dev]=result-api
+            [ca-notification-api-dev]=notification-api
+            [ca-notification-worker-dev]=notification-worker
+            [ca-frontend-dev]=frontend
+          )
+          for app in "${!APPS[@]}"; do
+            svc="${APPS[$app]}"
+            # Bicep bootstraps every app on a public placeholder image with no
+            # registry configured (adding it at create time raced the AcrPull
+            # role assignment and hung provisioning) - wire the ACR here, on
+            # first real deploy, once that role assignment has long since
+            # propagated. Idempotent on every later run.
+            az containerapp registry set \
+              --name "$app" \
+              --resource-group "$RESOURCE_GROUP" \
+              --server "$ACR_LOGIN_SERVER" \
+              --identity system
+            az containerapp update \
+              --name "$app" \
+              --resource-group "$RESOURCE_GROUP" \
+              --image "$ACR_LOGIN_SERVER/$svc:dev-${{ github.sha }}"
+          done
