@@ -363,6 +363,7 @@ resource aiApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Jwt__AccessTokenMinutes', value: '15' }
             { name: 'Jwt__RefreshTokenDays', value: '7' }
             { name: 'N8n__WebhookUrl', secretRef: 'n8n-webhook-url' }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]
@@ -414,6 +415,7 @@ resource submissionApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Services__ExamServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
             { name: 'Metered__ApiKey', secretRef: 'metered-api-key' }
             { name: 'Metered__AppDomain', value: meteredAppDomain }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]
@@ -462,6 +464,7 @@ resource resultApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Services__ExamServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
             { name: 'Services__QuestionServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/question-api/method' }
             { name: 'Services__SubmissionServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/submission-api/method' }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]
