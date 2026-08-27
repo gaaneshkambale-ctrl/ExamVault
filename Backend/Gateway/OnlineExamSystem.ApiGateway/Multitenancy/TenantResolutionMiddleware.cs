@@ -11,9 +11,12 @@ namespace OnlineExamSystem.ApiGateway.Multitenancy;
 // act on, since a service-to-service call could forge one.
 public class TenantResolutionMiddleware
 {
-    // The reserved entry point for Super Admin tenant-management screens
-    // (Phase 4) - it isn't itself a tenant, so it always passes through.
-    private static readonly string[] ReservedSlugs = ["platform"];
+    // Reserved, non-tenant hostnames under the wildcard domain: "platform" is
+    // the Super Admin entry point (Phase 4), "api" is this Gateway's own
+    // custom domain (api.examvaults.in), "www" is the frontend's apex alias.
+    // None of these are ever a real tenant slug, so all must always pass
+    // through unresolved rather than 404ing as an unknown organization.
+    private static readonly string[] ReservedSlugs = ["platform", "api", "www"];
 
     private readonly RequestDelegate _next;
 
