@@ -108,9 +108,13 @@ public class Program
                         return true;
                     }
 
-                    // Allow explicitly configured origins or any *.examvaults.in / *.examvault.com subdomain
+                    // Allow explicitly configured origins, the bare apex domains
+                    // themselves (examvaults.in/examvault.com - EndsWith(".x") alone
+                    // misses the apex since it has no leading dot), and any subdomain.
                     return allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase) ||
+                           uri.Host.Equals("examvaults.in", StringComparison.OrdinalIgnoreCase) ||
                            uri.Host.EndsWith(".examvaults.in", StringComparison.OrdinalIgnoreCase) ||
+                           uri.Host.Equals("examvault.com", StringComparison.OrdinalIgnoreCase) ||
                            uri.Host.EndsWith(".examvault.com", StringComparison.OrdinalIgnoreCase);
                 })
                 .AllowAnyHeader()
