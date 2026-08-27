@@ -14,5 +14,5 @@ public class UserPreferences : BaseEntity
     public string Timezone { get; set; } = "UTC";
     public string DateFormat { get; set; } = "DD MMM YYYY";
     public TimeFormat TimeFormat { get; set; } = TimeFormat.Hour12;
-    public AppTheme Theme { get; set; } = AppTheme.System;
+    public AppTheme Theme { get; set; } = AppTheme.Light;
 }

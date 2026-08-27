@@ -7,7 +7,7 @@ const THEME_STORAGE_KEY = 'examvault.theme';
 
 function loadStoredTheme(): AppTheme {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === 'Light' || stored === 'Dark' || stored === 'System' ? stored : 'System';
+  return stored === 'Light' || stored === 'Dark' || stored === 'System' ? stored : 'Light';
 }
 
 function resolveBsTheme(theme: AppTheme): 'light' | 'dark' {
