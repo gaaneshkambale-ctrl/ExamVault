@@ -1,0 +1,113 @@
+================================================================================
+                    ANTIGRAVITY CHANGES CHANGELOG / SUMMARY
+================================================================================
+
+Date: 2026-08-26
+Workspace: ExamVault
+
+--------------------------------------------------------------------------------
+1. Admin Panel - All Users Page (ManageUsers.tsx)
+--------------------------------------------------------------------------------
+File: Frontend/examvault-web/src/pages/admin/ManageUsers.tsx
+Route: /admin/users
+
+Changes:
+- Removed the "Bulk Import" button from the top-right header action bar.
+- Retained the "Export" and "+ Add User" buttons in the header.
+- Maintained all Delete functionalities:
+  * Individual row-level Delete button (trash icon / DeleteUserButton) for each user.
+  * "Delete Selected" button in the bulk-selection toolbar with the confirmation modal.
+
+--------------------------------------------------------------------------------
+2. Admin Panel - Add User Page (CreateUser.tsx)
+--------------------------------------------------------------------------------
+File: Frontend/examvault-web/src/pages/admin/CreateUser.tsx
+Route: /admin/users/create
+
+Changes:
+- Verified and retained the "Bulk Import" button link in the header alongside "← Back to Users".
+
+--------------------------------------------------------------------------------
+3. Automated Tests for Admin User Pages (AdminUserPages.test.tsx)
+--------------------------------------------------------------------------------
+File: Frontend/examvault-web/src/pages/admin/AdminUserPages.test.tsx
+
+Changes:
+- Added comprehensive Vitest unit tests:
+  * Tests that CreateUser page renders both "Bulk Import" and "← Back to Users".
+  * Tests that ManageUsers page does NOT render "Bulk Import", while ensuring View, Edit, and Delete action buttons are present.
+
+--------------------------------------------------------------------------------
+4. Notification Plan Gating & Error Handling (useNotifications.ts)
+--------------------------------------------------------------------------------
+File: Frontend/examvault-web/src/hooks/useNotifications.ts
+
+Changes:
+- Added `retryUnlessClientError` helper function.
+- Applied client-error check to `useNotificationHistory`, `useNotificationHistoryStats`, and `useNotificationBatchDetails` queries so that 403 Forbidden responses (due to feature gating) do not trigger unnecessary network retries.
+
+--------------------------------------------------------------------------------
+5. Admin Dashboard Notification Widget (AdminDashboard.tsx)
+--------------------------------------------------------------------------------
+File: Frontend/examvault-web/src/pages/admin/AdminDashboard.tsx
+Route: /admin/dashboard
+
+Changes:
+- Handled `isNotificationsError` state on the Recent Notifications card.
+- Displays "Notifications aren't included in your current plan." when the organization's plan does not include notifications.
+- Hides the "View all" link when notification feature is disabled/errored.
+
+--------------------------------------------------------------------------------
+6. Subdomain Resolution & Cross-Origin Fix
+--------------------------------------------------------------------------------
+Files:
+- Frontend/examvault-web/src/utils/tenant.ts
+- Frontend/examvault-web/src/utils/tenant.test.ts
+- Frontend/examvault-web/vite.config.ts
+- Backend/Gateway/OnlineExamSystem.ApiGateway/Multitenancy/TenantResolutionMiddleware.cs
+- Backend/Gateway/OnlineExamSystem.ApiGateway/Program.cs
+
+Changes:
+- Frontend (`tenant.ts` & `tenant.test.ts`):
+  * Added 2-label `*.localhost` subdomain extraction (e.g. `hero.localhost:5173` -> `"hero"`).
+  * Maintained 3+ label production domain resolution (`hero.examvault.com` -> `"hero"`).
+  * Added port stripping for clean domain parsing.
+- Vite Config (`vite.config.ts`):
+  * Configured `host: true` and `allowedHosts: true` to allow all subdomain requests to the Vite dev server.
+- API Gateway (`TenantResolutionMiddleware.cs` & `Program.cs`):
+  * Stripped port from Host headers and mapped `*.localhost` to active tenant records.
+  * Updated Gateway CORS policy to dynamically accept all `*.localhost` and `*.examvault.com` origins so browser calls from subdomains are never blocked.
+
+--------------------------------------------------------------------------------
+7. Dynamic Tenant Login URLs in Email Notifications & n8n Webhook
+--------------------------------------------------------------------------------
+Files:
+- Backend/Services/UserService/OnlineExamSystem.User.Application/Interfaces/ITenantUrlBuilder.cs
+- Backend/Services/UserService/OnlineExamSystem.User.Application/Interfaces/IEmailDispatcher.cs
+- Backend/Services/UserService/OnlineExamSystem.User.Infrastructure/Email/AppUrlSettings.cs
+- Backend/Services/UserService/OnlineExamSystem.User.Infrastructure/Email/TenantUrlBuilder.cs
+- Backend/Services/UserService/OnlineExamSystem.User.Infrastructure/Email/N8nEmailDispatcher.cs
+- Backend/Services/UserService/OnlineExamSystem.User.Application/Tenants/CreateAdmin/CreateTenantAdminHandler.cs
+- Backend/Services/UserService/OnlineExamSystem.User.Application/Users/Create/CreateUserHandler.cs
+- Backend/Services/UserService/OnlineExamSystem.User.API/Program.cs
+- Frontend/examvault-web/src/utils/tenant.ts
+- Frontend/examvault-web/src/utils/tenant.test.ts
+
+Changes:
+- Created `ITenantUrlBuilder` & `TenantUrlBuilder` to dynamically generate tenant-specific login URLs (`http://{slug}.localhost:5173/login` in dev, `https://{slug}.examvault.com/login` in prod).
+- Updated `CreateTenantAdminHandler` and `CreateUserHandler` to inject `ITenantUrlBuilder`, embed `Login URL: {loginUrl}` in the email body, and pass `loginUrl` and `tenantSlug` to `_emailDispatcher.SendAsync`.
+- Updated `N8nEmailDispatcher` to send `loginUrl` and `tenantSlug` directly in the webhook payload.
+- Added `buildTenantLoginUrl` helper to `tenant.ts` with unit test coverage.
+- Updated n8n email HTML template script to dynamically render `<a href="...">` using the webhook's `loginUrl` property with fallbacks.
+
+--------------------------------------------------------------------------------
+8. Verification Status
+--------------------------------------------------------------------------------
+- Unit Tests: 8 test files, 60 tests passing.
+- TypeScript Static Check: `npx tsc --noEmit` -> 0 errors.
+- Backend Compilation: `dotnet build` on UserService -> 0 errors, 0 warnings.
+- Docker: `examvault-user-api` container built and running.
+- End-to-End Subdomain Testing: Verified tenant subdomain login (`http://hero.localhost:5173/login`) for admin user `gkkamble.net@gmail.com`.
+- n8n Webhook Integration: Verified payload mapping and template script update.
+
+================================================================================

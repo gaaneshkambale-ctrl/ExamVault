@@ -83,7 +83,7 @@ export default function EmailSettings() {
                       <Col md={6}>
                         <Form.Group>
                           <Form.Label className="small text-muted">From Email</Form.Label>
-                          <Form.Control defaultValue="no-reply@examvault.com" disabled />
+                          <Form.Control defaultValue="no-reply@examvaults.in" disabled />
                         </Form.Group>
                       </Col>
                       <Col md={6}>

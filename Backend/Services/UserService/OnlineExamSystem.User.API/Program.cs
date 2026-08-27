@@ -89,6 +89,8 @@ public class Program
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
+        builder.Services.Configure<AppUrlSettings>(builder.Configuration.GetSection(AppUrlSettings.SectionName));
+        builder.Services.AddSingleton<ITenantUrlBuilder, TenantUrlBuilder>();
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
 

@@ -109,7 +109,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
           )}
           {createAdminMutation.isSuccess ? (
             <Alert variant="success" className="mb-0">
-              Admin created. They can log in at {adminTarget?.slug}.examvault.com once a password is set.
+              Admin created. They can log in at {adminTarget?.slug}.examvaults.in once a password is set.
             </Alert>
           ) : (
             <>
@@ -183,7 +183,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                         <div>
                           <div className="fw-medium">{tenant.name}</div>
                           <div className="text-muted" style={{ fontSize: 12 }}>
-                            {tenant.slug}.examvault.com
+                            {tenant.slug}.examvaults.in
                           </div>
                         </div>
                       </div>

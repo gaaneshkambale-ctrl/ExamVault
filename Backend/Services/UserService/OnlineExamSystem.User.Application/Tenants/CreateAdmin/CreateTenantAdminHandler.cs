@@ -18,6 +18,7 @@ public class CreateTenantAdminHandler
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IPasswordGenerator _passwordGenerator;
     private readonly IEmailDispatcher _emailDispatcher;
+    private readonly ITenantUrlBuilder _tenantUrlBuilder;
     private readonly ILogger<CreateTenantAdminHandler> _logger;
 
     public CreateTenantAdminHandler(
@@ -27,6 +28,7 @@ public class CreateTenantAdminHandler
         IPasswordHasher<AppUser> passwordHasher,
         IPasswordGenerator passwordGenerator,
         IEmailDispatcher emailDispatcher,
+        ITenantUrlBuilder tenantUrlBuilder,
         ILogger<CreateTenantAdminHandler> logger)
     {
         _tenantRepository = tenantRepository;
@@ -35,6 +37,7 @@ public class CreateTenantAdminHandler
         _passwordHasher = passwordHasher;
         _passwordGenerator = passwordGenerator;
         _emailDispatcher = emailDispatcher;
+        _tenantUrlBuilder = tenantUrlBuilder;
         _logger = logger;
     }
 
@@ -76,17 +79,22 @@ public class CreateTenantAdminHandler
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
+        var loginUrl = _tenantUrlBuilder.GetLoginUrl(tenant.Slug);
+
         var emailSent = await _emailDispatcher.SendAsync(
             toEmail: user.Email,
             toName: user.FullName,
             subject: $"Your ExamVault admin account for {tenant.Name}",
             body: $"Hello {user.FullName},\n\n" +
                   $"An ExamVault Admin account has been created for you at {tenant.Name}.\n\n" +
+                  $"Login URL: {loginUrl}\n" +
                   $"Email: {user.Email}\n" +
                   $"Temporary password: {temporaryPassword}\n\n" +
                   "Please log in with this temporary password - you will be asked to " +
                   "set a new password of your own before you can continue.\n\n" +
                   "Thanks & Regards,\nExamVault",
+            loginUrl: loginUrl,
+            tenantSlug: tenant.Slug,
             cancellationToken: cancellationToken);
         if (!emailSent)
         {

@@ -117,7 +117,7 @@ export default function OrganizationDetails() {
               <h1 className="h5 fw-bold mb-0">{tenant.name}</h1>
               <Badge bg={tenant.isActive ? 'success' : 'secondary'}>{tenant.isActive ? 'Active' : 'Inactive'}</Badge>
             </div>
-            <div className="text-muted small">{tenant.slug}.examvault.com</div>
+            <div className="text-muted small">{tenant.slug}.examvaults.in</div>
             <div className="text-muted small">Tenant ID: {tenant.id}</div>
           </div>
           <div className="d-flex gap-4 small text-muted">
@@ -168,7 +168,7 @@ export default function OrganizationDetails() {
                   <h2 className="h6 fw-bold mb-3">Organization Information</h2>
                   <InfoRow label="Organization Name" value={tenant.name} />
                   <InfoRow label="Organization Code" value="—" />
-                  <InfoRow label="Subdomain" value={`${tenant.slug}.examvault.com`} />
+                  <InfoRow label="Subdomain" value={`${tenant.slug}.examvaults.in`} />
                   <InfoRow label="Organization Type" value="—" />
                   <InfoRow label="Plan / Subscription" value={currentPlan?.name ?? '—'} />
                   <InfoRow label="Status" value={tenant.isActive ? 'Active' : 'Inactive'} />
@@ -333,7 +333,7 @@ export default function OrganizationDetails() {
           {createAdminMutation.isError && <Alert variant="danger">{extractServerError(createAdminMutation.error)}</Alert>}
           {createAdminMutation.isSuccess ? (
             <Alert variant="success" className="mb-0">
-              Admin created. They can log in at {tenant.slug}.examvault.com once a password is set.
+              Admin created. They can log in at {tenant.slug}.examvaults.in once a password is set.
             </Alert>
           ) : (
             <>

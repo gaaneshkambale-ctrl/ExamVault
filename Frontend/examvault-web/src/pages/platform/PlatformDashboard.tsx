@@ -215,7 +215,7 @@ export default function PlatformDashboard() {
                         <div className="flex-grow-1 overflow-hidden">
                           <div className="fw-medium text-truncate small">{tenant.name}</div>
                           <div className="text-muted text-truncate" style={{ fontSize: 12 }}>
-                            {tenant.slug}.examvault.com
+                            {tenant.slug}.examvaults.in
                           </div>
                         </div>
                         <div className="text-end flex-shrink-0">

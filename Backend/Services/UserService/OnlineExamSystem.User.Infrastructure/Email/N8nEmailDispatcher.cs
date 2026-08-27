@@ -28,11 +28,13 @@ public class N8nEmailDispatcher : IEmailDispatcher
         string toName,
         string subject,
         string body,
+        string? loginUrl = null,
+        string? tenantSlug = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var payload = new { toEmail, toName, subject, body };
+            var payload = new { toEmail, toName, subject, body, loginUrl, tenantSlug };
 
             var response = await _httpClient.PostAsJsonAsync(_settings.WebhookUrl, payload, cancellationToken);
             if (!response.IsSuccessStatusCode)

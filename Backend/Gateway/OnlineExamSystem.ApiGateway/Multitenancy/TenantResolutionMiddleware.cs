@@ -51,11 +51,20 @@ public class TenantResolutionMiddleware
     internal static string? ExtractSubdomain(string host)
     {
         if (string.IsNullOrWhiteSpace(host)) return null;
-        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return null;
-        if (IPAddress.TryParse(host, out _)) return null;
-        if (host.EndsWith(".azurecontainerapps.io", StringComparison.OrdinalIgnoreCase)) return null;
 
-        var labels = host.Split('.');
+        // Strip port if present (e.g. "stanford.localhost:5000")
+        var cleanHost = host.Split(':')[0];
+        if (cleanHost.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return null;
+        if (IPAddress.TryParse(cleanHost, out _)) return null;
+        if (cleanHost.EndsWith(".azurecontainerapps.io", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var labels = cleanHost.Split('.');
+        // Support *.localhost (e.g. "stanford.localhost") in local dev
+        if (labels.Length == 2 && labels[1].Equals("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return labels[0];
+        }
+        // Support production domains (e.g. "stanford.examvaults.in" or "stanford.examvault.com")
         return labels.Length >= 3 ? labels[0] : null;
     }
 }

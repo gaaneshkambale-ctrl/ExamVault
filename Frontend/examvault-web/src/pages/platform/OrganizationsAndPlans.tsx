@@ -55,7 +55,7 @@ export default function OrganizationsAndPlans() {
                         <div>
                           <div className="fw-medium">{tenant.name}</div>
                           <div className="text-muted" style={{ fontSize: 12 }}>
-                            {tenant.slug}.examvault.com
+                            {tenant.slug}.examvaults.in
                           </div>
                         </div>
                       </div>

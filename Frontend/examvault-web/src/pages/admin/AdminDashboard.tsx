@@ -258,11 +258,11 @@ export default function AdminDashboard() {
   const { data: assignments, isLoading: isLoadingAssignments } = useAssignments(isAdmin);
   const questionCounts = useQuestionCountsByExam(isAdmin ? exams?.map((e) => e.id) : undefined);
   const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(isAdmin ? exams : undefined);
-  const { data: notificationHistory, isLoading: isLoadingNotifications } = useNotificationHistory(
-    undefined,
-    1,
-    RECENT_NOTIFICATIONS_COUNT,
-  );
+  const {
+    data: notificationHistory,
+    isLoading: isLoadingNotifications,
+    isError: isNotificationsError,
+  } = useNotificationHistory(undefined, 1, RECENT_NOTIFICATIONS_COUNT);
 
   const publishedExamIds = useMemo(
     () => (exams ?? []).filter((exam) => exam.status === 'Published').map((exam) => exam.id),
@@ -738,9 +738,11 @@ export default function AdminDashboard() {
                 <Card.Body className={(notificationHistory?.items.length ?? 0) === 0 ? '' : 'p-0'}>
                   <div className="d-flex justify-content-between align-items-center p-4 pb-3">
                     <h2 className="h6 fw-bold mb-0">Recent Notifications</h2>
-                    <Link to="/admin/notifications/history" className="small">
-                      View all
-                    </Link>
+                    {!isNotificationsError && (
+                      <Link to="/admin/notifications/history" className="small">
+                        View all
+                      </Link>
+                    )}
                   </div>
 
                   {isLoadingNotifications && (
@@ -749,11 +751,17 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-                  {!isLoadingNotifications && (notificationHistory?.items.length ?? 0) === 0 && (
+                  {isNotificationsError && (
+                    <div className="text-center text-muted py-5">
+                      Notifications aren&apos;t included in your current plan.
+                    </div>
+                  )}
+
+                  {!isLoadingNotifications && !isNotificationsError && (notificationHistory?.items.length ?? 0) === 0 && (
                     <div className="text-center text-muted py-5">No notifications sent yet.</div>
                   )}
 
-                  {!isLoadingNotifications && (notificationHistory?.items.length ?? 0) > 0 && (
+                  {!isLoadingNotifications && !isNotificationsError && (notificationHistory?.items.length ?? 0) > 0 && (
                     <div className="px-4 pb-2">
                       {notificationHistory!.items.map((batch) => (
                         <Link

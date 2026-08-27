@@ -10,25 +10,31 @@ namespace OnlineExamSystem.User.Application.Users.Create;
 public class CreateUserHandler
 {
     private readonly IUserRepository _userRepository;
+    private readonly ITenantRepository _tenantRepository;
     private readonly IValidator<CreateUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IPasswordGenerator _passwordGenerator;
     private readonly IEmailDispatcher _emailDispatcher;
+    private readonly ITenantUrlBuilder _tenantUrlBuilder;
     private readonly ILogger<CreateUserHandler> _logger;
 
     public CreateUserHandler(
         IUserRepository userRepository,
+        ITenantRepository tenantRepository,
         IValidator<CreateUserCommand> validator,
         IPasswordHasher<AppUser> passwordHasher,
         IPasswordGenerator passwordGenerator,
         IEmailDispatcher emailDispatcher,
+        ITenantUrlBuilder tenantUrlBuilder,
         ILogger<CreateUserHandler> logger)
     {
         _userRepository = userRepository;
+        _tenantRepository = tenantRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
         _passwordGenerator = passwordGenerator;
         _emailDispatcher = emailDispatcher;
+        _tenantUrlBuilder = tenantUrlBuilder;
         _logger = logger;
     }
 
@@ -67,17 +73,24 @@ public class CreateUserHandler
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
+        var tenant = await _tenantRepository.GetByIdAsync(command.TenantId, cancellationToken);
+        var loginUrl = _tenantUrlBuilder.GetLoginUrl(tenant?.Slug);
+        var orgName = tenant?.Name;
+
         var emailSent = await _emailDispatcher.SendAsync(
             toEmail: user.Email,
             toName: user.FullName,
-            subject: "Your ExamVault account",
+            subject: orgName != null ? $"Your ExamVault account for {orgName}" : "Your ExamVault account",
             body: $"Hello {user.FullName},\n\n" +
-                  "An ExamVault account has been created for you.\n\n" +
+                  (orgName != null ? $"An ExamVault account has been created for you at {orgName}.\n\n" : "An ExamVault account has been created for you.\n\n") +
+                  $"Login URL: {loginUrl}\n" +
                   $"Email: {user.Email}\n" +
                   $"Temporary password: {temporaryPassword}\n\n" +
                   "Please log in with this temporary password - you will be asked to " +
                   "set a new password of your own before you can continue.\n\n" +
                   "Thanks & Regards,\nExamVault",
+            loginUrl: loginUrl,
+            tenantSlug: tenant?.Slug,
             cancellationToken: cancellationToken);
         if (!emailSent)
         {

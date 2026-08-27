@@ -89,7 +89,7 @@ export default function CreateOrganization() {
                     <Form.Label>Subdomain *</Form.Label>
                     <div className="d-flex align-items-center gap-2">
                       <Form.Control value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="greenfield" />
-                      <span className="text-muted text-nowrap">.examvault.com</span>
+                      <span className="text-muted text-nowrap">.examvaults.in</span>
                     </div>
                     <Form.Text className="text-muted">This will be used for tenant access.</Form.Text>
                   </Form.Group>

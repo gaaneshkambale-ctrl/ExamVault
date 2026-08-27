@@ -244,9 +244,6 @@ export default function ManageUsers() {
           <p className="text-muted mb-0">Manage all users, view details and control access.</p>
         </div>
         <div className="d-flex gap-2">
-          <Link to="/admin/users/import" className="btn btn-outline-secondary">
-            Bulk Import
-          </Link>
           <Button variant="outline-primary" disabled={!users || users.length === 0} onClick={() => exportUsersToCsv(filteredUsers)}>
             Export
           </Button>
