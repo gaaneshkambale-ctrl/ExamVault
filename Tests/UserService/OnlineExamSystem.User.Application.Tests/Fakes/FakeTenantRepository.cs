@@ -22,5 +22,14 @@ public class FakeTenantRepository : ITenantRepository
         return Task.CompletedTask;
     }
 
+    public Task RemoveAsync(Tenant tenant, CancellationToken cancellationToken = default)
+    {
+        _tenants.RemoveAll(t => t.Id == tenant.Id);
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteUsersAndGroupsForTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
