@@ -214,6 +214,9 @@ resource userApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'ServiceBus__TopicName', value: 'examvault.events' }
             { name: 'N8n__WebhookUrl', secretRef: 'n8n-webhook-url' }
             { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
+            { name: 'App__FrontendBaseUrl', value: 'https://examvaults.in' }
+            { name: 'App__BaseDomain', value: 'examvaults.in' }
+            { name: 'App__Scheme', value: 'https' }
           ]
         }
       ]

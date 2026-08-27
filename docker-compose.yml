@@ -54,6 +54,9 @@ services:
       ConnectionStrings__UserDb: Server=sqlserver;Database=ExamVault.UserDb;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
       N8n__WebhookUrl: ${N8N_USER_WEBHOOK_URL}
       Services__NotificationServiceBaseUrl: http://notification-api:8080
+      App__FrontendBaseUrl: http://localhost:5173
+      App__BaseDomain: localhost:5173
+      App__Scheme: http
     depends_on:
       sqlserver:
         condition: service_healthy
