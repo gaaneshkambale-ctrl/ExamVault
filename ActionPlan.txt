@@ -5434,3 +5434,123 @@ VERIFICATION
 8. Rebuild + restart all 9 services one at a time (per this session's own
    lesson: this machine's ~8GB RAM crashes Docker's engine under parallel
    .NET builds - see feedback memory). `npm run build` for the frontend.
+
+ORGANIZATION DETAILS: WIRE UP THE 4 DISABLED ACTIONS
+------------------------------------------------------
+OrganizationDetails.tsx's Actions panel has 4 buttons already sitting there
+disabled with "Not connected yet" - Edit Organization, Reset Admin
+Password, View Activity Log, Delete Organization. This makes all 4 real.
+
+BACKEND (UserService)
+
+1. `ITenantRepository` gets two new members: `RemoveAsync(Tenant)` and
+   `DeleteUsersAndGroupsForTenantAsync(Guid tenantId)`. The second one is
+   bulk `ExecuteDeleteAsync` on `Groups`/`Users` filtered to that tenantId
+   (`IgnoreQueryFilters` - the caller is SuperAdmin resolving a tenant that
+   isn't their own ambient one) - AppUser->Tenant and Group->Tenant are
+   both `DeleteBehavior.Restrict` (confirmed in UserDbContext), so the
+   Tenant row itself cannot be deleted until its Users/Groups are gone
+   first. RefreshTokens/UserPreferences/GroupMembers all cascade
+   automatically at the DB level once their owning User/Group is deleted -
+   no need to touch those tables directly.
+
+2. `Tenants/Update/` (new): `UpdateTenantCommand(Guid TenantId, string
+   Name, string Slug)`, `UpdateTenantHandler`, `UpdateTenantResult`
+   (Success/NotFound/SlugAlreadyExists/ValidationErrors), validator reuses
+   CreateTenantValidator's exact Name/Slug rules. Slug uniqueness check
+   excludes the tenant's own current row. Note for the UI copy: since
+   Gateway resolves tenants by subdomain (yesterday's pull), changing Slug
+   changes this org's login URL immediately - existing bookmarks break,
+   which is expected for a rename, not a bug.
+
+3. `Tenants/Delete/` (new): `DeleteTenantCommand(Guid TenantId)`,
+   `DeleteTenantHandler`, `DeleteTenantResult`
+   (Success/NotFound/CannotDeletePlatformTenant). Hard delete, matching
+   this codebase's existing convention (DeleteUserHandler has no soft-
+   delete either) - guarded so `TenantConstants.PlatformTenantId` (the
+   seeded Super Admin's own tenant) can never be targeted. Sequence:
+   `DeleteUsersAndGroupsForTenantAsync` then `RemoveAsync(tenant)`.
+   Scope call-out: Tenant only exists in UserDb (confirmed - no other
+   service defines a Tenant entity); Exam/Question/Submission/
+   Notification DBs just carry a bare TenantId column with no cross-DB FK.
+   Deleting the tenant here does not touch those rows - they become
+   permanently unreachable (no tenant to resolve the subdomain, no user
+   left who could log in as it), the same reachability a Deactivated
+   tenant already has today, just irreversible. A full cross-service purge
+   is out of scope for this pass; flagging it here rather than silently
+   deciding it doesn't matter.
+
+4. `Tenants/ResetAdminPassword/` (new): `ResetTenantAdminPasswordCommand
+   (Guid TenantId, Guid AdminUserId)`, `ResetTenantAdminPasswordHandler`,
+   `ResetTenantAdminPasswordResult`
+   (Success+TemporaryPassword/TenantNotFound/UserNotFound/
+   UserNotAdminOfTenant). Mirrors CreateTenantAdminHandler's shape:
+   generates a temp password via the existing `IPasswordGenerator`, hashes
+   it with `IPasswordHasher<AppUser>`, sets `MustChangePassword = true`
+   (forces a real change on next login, same as a freshly-created admin),
+   emails it via `IEmailDispatcher`/`ITenantUrlBuilder` the same way
+   CreateAdmin's invite does, AND returns the plaintext temp password in
+   the response so the Super Admin can relay it directly too (email
+   delivery in this app is best-effort/non-blocking, per N8nEmailDispatcher's
+   own contract - the UI showing it directly is the reliable path).
+
+5. `TenantsController`: `PUT {id}` (Update), `DELETE {id}` (Delete),
+   `POST {id}/admins/{userId}/reset-password` (ResetAdminPassword) - all
+   `[Authorize(Roles = "SuperAdmin")]` like the rest of this controller.
+
+6. New request/response contracts in Shared.Contracts: `UpdateTenantRequest
+   (string Name, string Slug)`,
+   `ResetTenantAdminPasswordResponse(string TemporaryPassword)`. Register
+   the 2 new handlers + validator in Program.cs next to the existing
+   Tenant ones.
+
+FRONTEND
+
+7. `api/tenantsApi.ts`: `updateTenant(id, request)`, `deleteTenant(id)`,
+   `resetTenantAdminPassword(tenantId, adminUserId)`.
+
+8. OrganizationDetails.tsx Actions panel:
+   - Edit Organization: opens a modal (Name/Slug fields, pre-filled),
+     same Alert/Modal.Footer shape as the existing Add Admin/Change Plan
+     modals on this page. On success, invalidate `['tenants']`.
+   - Reset Admin Password: filters the org's existing users (already
+     fetched cross-tenant via `listAllUsers` on AllUsers.tsx's pattern -
+     reuse `useQuery(['platform-users'], listAllUsers)` here too) down to
+     `tenantId === tenant.id && role === 'Admin'`. Zero admins -> button
+     stays disabled with a "No admin found for this organization" tooltip
+     (real, not the placeholder "Not connected yet" text). One admin ->
+     confirm modal, reset directly. More than one -> confirm modal adds a
+     `<Form.Select>` to pick which admin first. On success, show the
+     returned temporary password in the modal (copy-to-clipboard button,
+     same idea as this component library's other one-time-secret displays)
+     rather than auto-closing.
+   - Delete Organization: destructive and irreversible (no undo, unlike
+     Deactivate) - the one action in this whole console with real
+     permanent data loss, so its confirm modal deliberately asks the
+     Super Admin to type the organization's exact name before the Delete
+     button enables, a stricter bar than every other confirm modal here
+     (DeactivateTenantButton's plain Cancel/Deactivate). On success,
+     navigate back to `/platform/organizations` (the tenant this page was
+     showing no longer exists) and invalidate `['tenants']`.
+   - View Activity Log: no backend change needed - `GET /api/audit-logs`
+     already returns every tenant's entries with a `tenantId` field for a
+     Super Admin caller (confirmed: SecurityAuditLogs.tsx already does
+     exactly this cross-tenant fetch). The Activity Log tab reuses
+     `getAuditLogs` with the same 365-day default range as
+     SecurityAuditLogs.tsx, filtered client-side to `log.tenantId ===
+     tenant.id`, rendered as the same Table shape (Time/User/Action/
+     Module/Details/IP, minus the Organization column since it's implied
+     by the page).
+
+VERIFICATION
+
+9. Rebuild + restart `user-api` only (the only service touched). Through
+   the real UI as the seeded Super Admin: rename a test org and confirm
+   its subdomain changes accordingly; reset a real admin's password and
+   log in as that admin with the returned temp password, confirming the
+   forced change-password redirect fires; view a test org's Activity Log
+   tab and confirm it only shows that org's own entries, not another
+   tenant's; create a disposable throwaway org, delete it, confirm it
+   disappears from All Organizations and its former admin can no longer
+   log in. Confirm attempting to delete the Platform tenant is rejected
+   (there's no UI path to it, so this one's a direct API call check).

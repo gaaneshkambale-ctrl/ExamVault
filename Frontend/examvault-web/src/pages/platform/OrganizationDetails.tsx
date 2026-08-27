@@ -1,26 +1,34 @@
-import { useState } from 'react';
-import { Alert, Badge, Button, Card, Form, Modal, Spinner } from 'react-bootstrap';
-import { Link, useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Alert, Badge, Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
-import { createTenantAdmin } from '../../api/tenantsApi';
+import {
+  createTenantAdmin,
+  deleteTenant,
+  resetTenantAdminPassword,
+  updateTenant,
+} from '../../api/tenantsApi';
 import { assignPlanToTenant, listPlans } from '../../api/plansApi';
+import { listAllUsers } from '../../api/userApi';
+import { getAuditLogs } from '../../api/auditApi';
 import { extractServerError } from '../../utils/apiError';
 import { PLAN_FEATURE_LABELS } from '../../types/plan';
 
+const ACTIVITY_LOG_FROM = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+const ACTIVITY_LOG_TO = new Date().toISOString();
+
 // Matches org_submenu.png's Organization Details page - all 8 tabs from
-// the mockup exist as real nav, but only Overview has any real data
-// behind it (Name/Subdomain/Status/Created On, same fields ManageTenants'
-// old slide-over showed). Everything else the mockup's Overview shows
-// (Organization Code/Type/Plan/Billing/Description, Admin Information,
-// Address Information, Subscription Information, Quick Stats, Modules &
-// Features) has no backing field anywhere in this codebase - honest
-// placeholders throughout, matching every other "not connected yet"
-// surface in this console. Add Admin (real) lives on the Admins tab;
-// Suspend (real, existing Deactivate) lives in the Actions panel.
+// the mockup exist as real nav. Overview/Admins/Subscriptions/Activity Log
+// have real data behind them; Usage/Users/Exams/Settings still show the
+// mockup's Organization Code/Type/Billing/Address/Quick Stats fields with
+// no backing field anywhere in this codebase - honest placeholders,
+// matching every other "not connected yet" surface in this console. Add
+// Admin (real) lives on the Admins tab; Suspend/Edit/Reset Admin Password/
+// Delete (all real) live in the Actions panel.
 const TABS = ['Overview', 'Usage', 'Admins', 'Users', 'Exams', 'Subscriptions', 'Activity Log', 'Settings'] as const;
 type DetailTab = (typeof TABS)[number];
 
@@ -76,6 +84,72 @@ export default function OrganizationDetails() {
     assignPlanMutation.reset();
     setSelectedPlanId(tenant?.planId ?? '');
     setShowChangePlan(true);
+  };
+
+  // Cross-tenant, same query AllUsers.tsx already uses for its Super Admin
+  // "see everyone" view - filtered down to this one org below rather than
+  // adding a new tenant-scoped endpoint for a feature this small.
+  const { data: allUsers } = useQuery({ queryKey: ['platform-users'], queryFn: listAllUsers });
+  const tenantAdmins = useMemo(
+    () => (allUsers ?? []).filter((u) => u.tenantId === tenant?.id && u.role === 'Admin'),
+    [allUsers, tenant?.id],
+  );
+
+  const { data: activityLogs, isLoading: isLoadingActivity, isError: isActivityError } = useQuery({
+    queryKey: ['platform-audit-logs'],
+    queryFn: () => getAuditLogs(ACTIVITY_LOG_FROM, ACTIVITY_LOG_TO),
+    enabled: tab === 'Activity Log',
+  });
+  const tenantActivityLogs = (activityLogs ?? []).filter((log) => log.tenantId === tenant?.id);
+
+  const [showEditOrg, setShowEditOrg] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editSlug, setEditSlug] = useState('');
+
+  const updateTenantMutation = useMutation({
+    mutationFn: () => updateTenant(tenant!.id, { name: editName.trim(), slug: editSlug.trim() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      setShowEditOrg(false);
+    },
+  });
+
+  const openEditOrg = () => {
+    updateTenantMutation.reset();
+    setEditName(tenant?.name ?? '');
+    setEditSlug(tenant?.slug ?? '');
+    setShowEditOrg(true);
+  };
+
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetTargetAdminId, setResetTargetAdminId] = useState('');
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: () => resetTenantAdminPassword(tenant!.id, resetTargetAdminId),
+  });
+
+  const openResetPassword = () => {
+    resetPasswordMutation.reset();
+    setResetTargetAdminId(tenantAdmins[0]?.id ?? '');
+    setShowResetPassword(true);
+  };
+
+  const [showDeleteOrg, setShowDeleteOrg] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const navigate = useNavigate();
+
+  const deleteTenantMutation = useMutation({
+    mutationFn: () => deleteTenant(tenant!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      navigate('/platform/organizations');
+    },
+  });
+
+  const openDeleteOrg = () => {
+    deleteTenantMutation.reset();
+    setDeleteConfirmText('');
+    setShowDeleteOrg(true);
   };
 
   if (isLoading) {
@@ -258,14 +332,88 @@ export default function OrganizationDetails() {
                     + Add Admin
                   </Button>
                 </div>
-                <div className="text-muted small">
-                  There's no way yet to list an organization's existing admins from here - adding one still works.
-                </div>
+                {tenantAdmins.length === 0 ? (
+                  <div className="text-center text-muted small py-3">No admins yet. Click "+ Add Admin" to add one.</div>
+                ) : (
+                  <Table responsive hover size="sm" className="mb-0 align-middle">
+                    <thead className="text-muted small text-uppercase bg-light">
+                      <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tenantAdmins.map((admin) => (
+                        <tr key={admin.id}>
+                          <td>{admin.fullName}</td>
+                          <td className="text-muted">{admin.email}</td>
+                          <td>
+                            <Badge bg={admin.isActive ? 'success' : 'secondary'}>
+                              {admin.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
               </Card.Body>
             </Card>
           )}
 
-          {tab !== 'Overview' && tab !== 'Admins' && tab !== 'Subscriptions' && (
+          {tab === 'Activity Log' && (
+            <Card className="border-0 shadow-sm">
+              <Card.Body className={isLoadingActivity || isActivityError || tenantActivityLogs.length === 0 ? '' : 'p-0'}>
+                <h2 className="h6 fw-bold mb-3 px-4 pt-4">Activity Log</h2>
+                {isLoadingActivity && (
+                  <div className="d-flex justify-content-center py-5">
+                    <Spinner animation="border" />
+                  </div>
+                )}
+                {isActivityError && (
+                  <div className="text-center text-danger py-5">Couldn't load activity log. Please try again.</div>
+                )}
+                {!isLoadingActivity && !isActivityError && tenantActivityLogs.length === 0 && (
+                  <div className="text-center text-muted py-5">No activity recorded for this organization yet.</div>
+                )}
+                {!isLoadingActivity && !isActivityError && tenantActivityLogs.length > 0 && (
+                  <Table responsive hover className="mb-0 align-middle">
+                    <thead className="text-muted small text-uppercase bg-light">
+                      <tr>
+                        <th className="ps-4">Time</th>
+                        <th>User</th>
+                        <th>Action</th>
+                        <th>Module</th>
+                        <th className="pe-4">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tenantActivityLogs.map((log) => (
+                        <tr key={log.id}>
+                          <td className="ps-4 text-muted" style={{ fontSize: 13 }}>
+                            {new Date(log.timestampUtc).toLocaleString()}
+                          </td>
+                          <td>{log.userName ?? '—'}</td>
+                          <td>
+                            <Badge bg="light" text="dark" className="border">
+                              {log.activity}
+                            </Badge>
+                          </td>
+                          <td className="text-muted">{log.module}</td>
+                          <td className="pe-4 text-muted" style={{ fontSize: 13 }}>
+                            {log.details ?? '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
+              </Card.Body>
+            </Card>
+          )}
+
+          {tab !== 'Overview' && tab !== 'Admins' && tab !== 'Subscriptions' && tab !== 'Activity Log' && (
             <Card className="border-0 shadow-sm">
               <Card.Body>
                 <NotConnected label={tab} />
@@ -297,7 +445,7 @@ export default function OrganizationDetails() {
             <Card.Body>
               <h2 className="h6 fw-bold mb-3">Actions</h2>
               <div className="d-flex flex-column gap-2">
-                <Button variant="outline-secondary" size="sm" disabled title="Not connected yet">
+                <Button variant="outline-secondary" size="sm" onClick={openEditOrg}>
                   Edit Organization
                 </Button>
                 <Button variant="outline-secondary" size="sm" onClick={openChangePlan}>
@@ -310,13 +458,19 @@ export default function OrganizationDetails() {
                     Already Suspended
                   </Button>
                 )}
-                <Button variant="outline-secondary" size="sm" disabled title="Not connected yet">
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  disabled={tenantAdmins.length === 0}
+                  title={tenantAdmins.length === 0 ? 'No admin found for this organization' : undefined}
+                  onClick={openResetPassword}
+                >
                   Reset Admin Password
                 </Button>
-                <Button variant="outline-secondary" size="sm" disabled title="Not connected yet">
+                <Button variant="outline-secondary" size="sm" onClick={() => setTab('Activity Log')}>
                   View Activity Log
                 </Button>
-                <Button variant="outline-danger" size="sm" disabled title="Not connected yet - no delete endpoint exists">
+                <Button variant="outline-danger" size="sm" onClick={openDeleteOrg}>
                   Delete Organization
                 </Button>
               </div>
@@ -394,6 +548,126 @@ export default function OrganizationDetails() {
             onClick={() => assignPlanMutation.mutate()}
           >
             {assignPlanMutation.isPending ? 'Saving...' : 'Save'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showEditOrg} onHide={() => setShowEditOrg(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Edit {tenant.name}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {updateTenantMutation.isError && <Alert variant="danger">{extractServerError(updateTenantMutation.error)}</Alert>}
+          <Form.Group className="mb-3" controlId="editOrgName">
+            <Form.Label>Organization Name</Form.Label>
+            <Form.Control value={editName} onChange={(e) => setEditName(e.target.value)} />
+          </Form.Group>
+          <Form.Group controlId="editOrgSlug">
+            <Form.Label>Subdomain</Form.Label>
+            <Form.Control value={editSlug} onChange={(e) => setEditSlug(e.target.value.toLowerCase())} />
+            <Form.Text className="text-muted">
+              {editSlug || 'slug'}.examvaults.in - changing this changes the organization's login URL immediately.
+            </Form.Text>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowEditOrg(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!editName.trim() || !editSlug.trim() || updateTenantMutation.isPending}
+            onClick={() => updateTenantMutation.mutate()}
+          >
+            {updateTenantMutation.isPending ? 'Saving...' : 'Save'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showResetPassword} onHide={() => setShowResetPassword(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Reset Admin Password</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {resetPasswordMutation.isError && <Alert variant="danger">{extractServerError(resetPasswordMutation.error)}</Alert>}
+          {resetPasswordMutation.isSuccess ? (
+            <>
+              <Alert variant="success">
+                Password reset and emailed to the admin. Temporary password (also shown here in case email delivery
+                is delayed):
+              </Alert>
+              <div className="d-flex gap-2">
+                <Form.Control readOnly value={resetPasswordMutation.data ?? ''} className="font-monospace" />
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => navigator.clipboard.writeText(resetPasswordMutation.data ?? '')}
+                >
+                  Copy
+                </Button>
+              </div>
+              <div className="text-muted small mt-2">
+                The admin will be asked to set their own password on next login.
+              </div>
+            </>
+          ) : (
+            <Form.Group controlId="resetPasswordAdminSelect">
+              <Form.Label>Admin</Form.Label>
+              {tenantAdmins.length > 1 ? (
+                <Form.Select value={resetTargetAdminId} onChange={(e) => setResetTargetAdminId(e.target.value)}>
+                  {tenantAdmins.map((admin) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.fullName} ({admin.email})
+                    </option>
+                  ))}
+                </Form.Select>
+              ) : (
+                <Form.Control readOnly value={tenantAdmins[0] ? `${tenantAdmins[0].fullName} (${tenantAdmins[0].email})` : ''} />
+              )}
+            </Form.Group>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowResetPassword(false)}>
+            {resetPasswordMutation.isSuccess ? 'Close' : 'Cancel'}
+          </Button>
+          {!resetPasswordMutation.isSuccess && (
+            <Button
+              variant="primary"
+              disabled={!resetTargetAdminId || resetPasswordMutation.isPending}
+              onClick={() => resetPasswordMutation.mutate()}
+            >
+              {resetPasswordMutation.isPending ? 'Resetting...' : 'Reset Password'}
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showDeleteOrg} onHide={() => setShowDeleteOrg(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete {tenant.name}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {deleteTenantMutation.isError && <Alert variant="danger">{extractServerError(deleteTenantMutation.error)}</Alert>}
+          <Alert variant="danger">
+            This permanently deletes <strong>{tenant.name}</strong> and every one of its users. This cannot be undone.
+          </Alert>
+          <Form.Group controlId="deleteOrgConfirm">
+            <Form.Label>
+              Type <strong>{tenant.name}</strong> to confirm.
+            </Form.Label>
+            <Form.Control value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowDeleteOrg(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            disabled={deleteConfirmText !== tenant.name || deleteTenantMutation.isPending}
+            onClick={() => deleteTenantMutation.mutate()}
+          >
+            {deleteTenantMutation.isPending ? 'Deleting...' : 'Delete Organization'}
           </Button>
         </Modal.Footer>
       </Modal>

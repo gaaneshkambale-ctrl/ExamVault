@@ -26,6 +26,18 @@ public class TenantRepository : ITenantRepository
     public Task AddAsync(Tenant tenant, CancellationToken cancellationToken = default) =>
         _dbContext.Tenants.AddAsync(tenant, cancellationToken).AsTask();
 
+    public Task RemoveAsync(Tenant tenant, CancellationToken cancellationToken = default)
+    {
+        _dbContext.Tenants.Remove(tenant);
+        return Task.CompletedTask;
+    }
+
+    public async Task DeleteUsersAndGroupsForTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        await _dbContext.Groups.IgnoreQueryFilters().Where(g => g.TenantId == tenantId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.Users.IgnoreQueryFilters().Where(u => u.TenantId == tenantId).ExecuteDeleteAsync(cancellationToken);
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

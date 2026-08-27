@@ -1,5 +1,5 @@
 import apiClient from './axiosClient';
-import type { CreateTenantAdminRequest, CreateTenantRequest, Tenant } from '../types/tenant';
+import type { CreateTenantAdminRequest, CreateTenantRequest, Tenant, UpdateTenantRequest } from '../types/tenant';
 
 export async function listTenants(): Promise<Tenant[]> {
   const { data } = await apiClient.get<Tenant[]>('/api/tenants');
@@ -18,4 +18,20 @@ export async function createTenantAdmin(tenantId: string, request: CreateTenantA
 export async function deactivateTenant(tenantId: string): Promise<Tenant> {
   const { data } = await apiClient.post<Tenant>(`/api/tenants/${tenantId}/deactivate`);
   return data;
+}
+
+export async function updateTenant(tenantId: string, request: UpdateTenantRequest): Promise<Tenant> {
+  const { data } = await apiClient.put<Tenant>(`/api/tenants/${tenantId}`, request);
+  return data;
+}
+
+export async function deleteTenant(tenantId: string): Promise<void> {
+  await apiClient.delete(`/api/tenants/${tenantId}`);
+}
+
+export async function resetTenantAdminPassword(tenantId: string, adminUserId: string): Promise<string> {
+  const { data } = await apiClient.post<{ temporaryPassword: string }>(
+    `/api/tenants/${tenantId}/admins/${adminUserId}/reset-password`,
+  );
+  return data.temporaryPassword;
 }

@@ -17,3 +17,8 @@ export interface CreateTenantAdminRequest {
   fullName: string;
   email: string;
 }
+
+export interface UpdateTenantRequest {
+  name: string;
+  slug: string;
+}
