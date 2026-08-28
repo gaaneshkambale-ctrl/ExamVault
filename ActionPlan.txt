@@ -5634,3 +5634,33 @@ VERIFICATION
    check against a page already known to be correct rather than trusting a
    new page in isolation), and Admin Contact shows the right email for an
    org with exactly one admin.
+
+ORGANIZATIONS & PLANS (SUBSCRIPTIONS PAGE): SAME TREATMENT
+------------------------------------------------------------------------
+`OrganizationsAndPlans.tsx` (subscription.png's screen) has the same kind
+of "-" placeholders for Plan/Students/Exams - same real data sources as
+the All Organizations pass above, just a different table. Students here
+specifically means `role === 'Student'` (the column is literally labeled
+"Students", unlike All Organizations' generic "Users" total) - narrower
+filter than that page used.
+
+Next Billing and Amount are explicitly NOT implementable here - there is
+no billing/subscription-cycle model anywhere in this codebase (Plans have
+no price or renewal cadence, Tenants have no billing-date field), and this
+was already called out as out of scope in multi_tenant_saas.txt. Left as
+the honest "-" placeholders they already are, matching this page's own
+header comment - not silently faked.
+
+FRONTEND ONLY
+
+1. `OrganizationsAndPlans.tsx`: same 2 queries as ManageTenants.tsx
+   (`listPlans` keyed `['plans']`, `listAllUsers` keyed `['platform-users']`,
+   `listExams` keyed `['platform-exams']` - same keys, so no duplicate
+   fetch if the user already visited either page this session), same
+   per-tenant Map-building pattern, Students filtered to `role ===
+   'Student'` specifically.
+
+VERIFICATION
+
+2. `npm run build`. Confirm Plan/Exams match ManageTenants.tsx for the same
+   org, and Students only counts Student-role users (not Admins).
