@@ -384,9 +384,6 @@ export default function EditExam() {
                           </option>
                         ))}
                       </Form.Select>
-                      <Form.Text>
-                        <Link to="/admin/exam-types">+ Manage Exam Types</Link>
-                      </Form.Text>
                     </Form.Group>
                   </Col>
                 </Row>
