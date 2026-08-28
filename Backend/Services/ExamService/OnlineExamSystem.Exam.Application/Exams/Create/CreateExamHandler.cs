@@ -38,6 +38,7 @@ public class CreateExamHandler
             Title = command.Title,
             Description = command.Description,
             Category = command.Category,
+            Tags = command.Tags,
             ContainsSections = command.ContainsSections,
             CreationMethod = Enum.Parse<CreationMethod>(command.CreationMethod, ignoreCase: true),
             ExamTypeId = command.ExamTypeId,

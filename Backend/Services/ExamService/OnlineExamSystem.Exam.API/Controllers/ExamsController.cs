@@ -68,7 +68,8 @@ public class ExamsController : ControllerBase
             request.Instructions,
             createdByUserId,
             request.ExamCode,
-            request.ExamTypeId);
+            request.ExamTypeId,
+            request.Tags);
 
         var result = await _createExamHandler.HandleAsync(command, cancellationToken);
 
@@ -301,5 +302,6 @@ public class ExamsController : ControllerBase
             exam.ConfirmBeforeSubmit,
             exam.ExamTypeId,
             exam.ExamType?.Name,
-            exam.TenantId);
+            exam.TenantId,
+            exam.Tags);
 }

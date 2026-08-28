@@ -49,6 +49,18 @@ public class ExamRepository : IExamRepository
             .OrderBy(s => s.DisplayOrder)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<SectionWithExamTitle>> GetAllSectionsAsync(CancellationToken cancellationToken = default)
+    {
+        var sections = await _dbContext.Sections
+            .OrderBy(s => s.DisplayOrder)
+            .ToListAsync(cancellationToken);
+        var examTitles = await _dbContext.Exams.ToDictionaryAsync(e => e.Id, e => e.Title, cancellationToken);
+
+        return sections
+            .Select(s => new SectionWithExamTitle(s, examTitles.GetValueOrDefault(s.ExamId, "Unknown Exam")))
+            .ToList();
+    }
+
     public async Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
     {
         var section = await _dbContext.Sections.FirstOrDefaultAsync(s => s.Id == sectionId, cancellationToken);

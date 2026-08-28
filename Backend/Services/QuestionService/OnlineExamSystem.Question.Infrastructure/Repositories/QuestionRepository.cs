@@ -60,6 +60,9 @@ public class QuestionRepository : IQuestionRepository
         return await query.OrderByDescending(q => q.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ExamQuestion>> GetAllQuestionsAsync(CancellationToken cancellationToken = default) =>
+        await _dbContext.Questions.OrderByDescending(q => q.CreatedAtUtc).ToListAsync(cancellationToken);
+
     public async Task BulkSetSectionIdAsync(
         Guid? sectionId,
         IReadOnlyList<Guid> questionIds,

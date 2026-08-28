@@ -22,6 +22,7 @@ const initialFormState: CreateExamRequest = {
   passingMarks: 40,
   instructions: '',
   examTypeId: null,
+  tags: '',
 };
 
 export default function CreateExam() {
@@ -148,6 +149,21 @@ export default function CreateExam() {
                   checked={form.containsSections}
                   onChange={(e) => updateField('containsSections', e.target.checked)}
                 />
+              </Col>
+            </Row>
+
+            <Row>
+              <Col md={8}>
+                <Form.Group className="mb-3" controlId="examTags">
+                  <Form.Label className="fw-bold">Tags</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="e.g. midterm, java, entry-level (comma-separated)"
+                    value={form.tags ?? ''}
+                    onChange={(e) => updateField('tags', e.target.value)}
+                  />
+                  <Form.Text className="text-muted">Optional, comma-separated - helps you and the platform find this exam later.</Form.Text>
+                </Form.Group>
               </Col>
             </Row>
 

@@ -22,6 +22,7 @@ export interface CreateExamRequest {
   passingMarks: number;
   instructions: string;
   examTypeId?: string | null;
+  tags?: string;
 }
 
 export interface ExamSettings {
@@ -51,6 +52,7 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
   createdOn: string;
   examTypeName?: string | null;
   tenantId: string;
+  tags: string;
 }
 
 // Dynamic, admin-manageable exam-purpose classification (Practice/Mock/

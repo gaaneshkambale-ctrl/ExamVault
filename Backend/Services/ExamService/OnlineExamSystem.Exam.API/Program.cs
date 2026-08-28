@@ -40,6 +40,7 @@ using OnlineExamSystem.Exam.Application.Sections.Delete;
 using OnlineExamSystem.Exam.Application.Sections.GetById;
 using OnlineExamSystem.Exam.Application.Sections.GetOrCreateDefault;
 using OnlineExamSystem.Exam.Application.Sections.List;
+using OnlineExamSystem.Exam.Application.Sections.ListAll;
 using OnlineExamSystem.Exam.Application.Sections.Reorder;
 using OnlineExamSystem.Exam.Application.Sections.Update;
 using OnlineExamSystem.Exam.Infrastructure;
@@ -121,6 +122,7 @@ public class Program
         builder.Services.AddScoped<DeleteSectionHandler>();
         builder.Services.AddScoped<GetSectionHandler>();
         builder.Services.AddScoped<ListSectionsHandler>();
+        builder.Services.AddScoped<ListAllSectionsHandler>();
         builder.Services.AddScoped<ReorderSectionsHandler>();
         builder.Services.AddScoped<GetOrCreateDefaultSectionHandler>();
 

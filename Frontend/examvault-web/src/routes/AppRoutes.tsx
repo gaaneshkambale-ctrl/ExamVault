@@ -101,6 +101,11 @@ import MonitoringActiveExams from '../pages/platform/monitoring/ActiveExams';
 import MonitoringSystemHealth from '../pages/platform/monitoring/SystemHealth';
 import MonitoringServiceStatus from '../pages/platform/monitoring/ServiceStatus';
 import SystemLogs from '../pages/platform/SystemLogs';
+import PlatformAllExams from '../pages/platform/PlatformAllExams';
+import PlatformExamCategories from '../pages/platform/PlatformExamCategories';
+import PlatformSections from '../pages/platform/PlatformSections';
+import PlatformQuestionBank from '../pages/platform/PlatformQuestionBank';
+import PlatformExamTags from '../pages/platform/PlatformExamTags';
 import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
 import { platformComingSoonRoutes } from './platformComingSoonRoutes';
 
@@ -760,6 +765,46 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <AllUsers roleFilter="SuperAdmin" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformAllExams />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams/categories"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformExamCategories />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams/sections"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformSections />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams/question-bank"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformQuestionBank />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams/tags"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformExamTags />
           </ProtectedRoute>
         }
       />

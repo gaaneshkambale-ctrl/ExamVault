@@ -8,6 +8,7 @@ using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.ListAll;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Application.Interfaces;
@@ -26,6 +27,7 @@ public class QuestionsController : ControllerBase
     private readonly CreateQuestionHandler _createQuestionHandler;
     private readonly GetQuestionHandler _getQuestionHandler;
     private readonly ListQuestionsHandler _listQuestionsHandler;
+    private readonly ListAllQuestionsHandler _listAllQuestionsHandler;
     private readonly UpdateQuestionHandler _updateQuestionHandler;
     private readonly DeleteQuestionHandler _deleteQuestionHandler;
     private readonly BulkAssignSectionHandler _bulkAssignSectionHandler;
@@ -37,6 +39,7 @@ public class QuestionsController : ControllerBase
         CreateQuestionHandler createQuestionHandler,
         GetQuestionHandler getQuestionHandler,
         ListQuestionsHandler listQuestionsHandler,
+        ListAllQuestionsHandler listAllQuestionsHandler,
         UpdateQuestionHandler updateQuestionHandler,
         DeleteQuestionHandler deleteQuestionHandler,
         BulkAssignSectionHandler bulkAssignSectionHandler,
@@ -47,6 +50,7 @@ public class QuestionsController : ControllerBase
         _createQuestionHandler = createQuestionHandler;
         _getQuestionHandler = getQuestionHandler;
         _listQuestionsHandler = listQuestionsHandler;
+        _listAllQuestionsHandler = listAllQuestionsHandler;
         _updateQuestionHandler = updateQuestionHandler;
         _deleteQuestionHandler = deleteQuestionHandler;
         _bulkAssignSectionHandler = bulkAssignSectionHandler;
@@ -128,6 +132,24 @@ public class QuestionsController : ControllerBase
             cancellationToken);
         return Ok(questions.Select(q =>
             ToResponse(q.Question, q.Options, q.Parameters, q.TestCases, q.SqlTestCases, RevealAnswers)));
+    }
+
+    // Super Admin platform-wide Question Bank browse across every tenant's
+    // exams, not one exam's own questions.
+    [HttpGet("all")]
+    [Authorize(Roles = "SuperAdmin")]
+    public async Task<IActionResult> ListAll(CancellationToken cancellationToken)
+    {
+        var questions = await _listAllQuestionsHandler.HandleAsync(new ListAllQuestionsQuery(), cancellationToken);
+        return Ok(questions.Select(q => new PlatformQuestionResponse(
+            q.Id,
+            q.ExamId,
+            q.TenantId,
+            q.QuestionType.ToString(),
+            q.QuestionText,
+            q.Marks,
+            q.Difficulty.ToString(),
+            q.CreatedAtUtc)));
     }
 
     [HttpPut("bulk-assign-section")]
@@ -229,7 +251,7 @@ public class QuestionsController : ControllerBase
     // Admin sees real IsCorrect flags; any other authenticated caller (a student
     // taking an exam) gets them masked so the correct answer can't be read off
     // the network response while GET /api/questions is open to any authenticated role.
-    private bool RevealAnswers => User.IsInRole("Admin");
+    private bool RevealAnswers => User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
 
     private static QuestionTestCaseInput ToTestCaseInput(QuestionTestCaseRequest request) =>
         new(

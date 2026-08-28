@@ -15,12 +15,6 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
 
   { path: '/platform/users/roles', active: 'users-roles', parent: 'Users', title: 'Roles & Permissions' },
 
-  { path: '/platform/exams', active: 'exams-all', parent: 'Exams', title: 'All Exams' },
-  { path: '/platform/exams/categories', active: 'exams-categories', parent: 'Exams', title: 'Exam Categories' },
-  { path: '/platform/exams/sections', active: 'exams-sections', parent: 'Exams', title: 'Sections' },
-  { path: '/platform/exams/question-bank', active: 'exams-question-bank', parent: 'Exams', title: 'Question Bank' },
-  { path: '/platform/exams/tags', active: 'exams-tags', parent: 'Exams', title: 'Tags' },
-
   { path: '/platform/questions', active: 'questions', parent: 'Platform Admin', title: 'Questions' },
   { path: '/platform/submissions', active: 'submissions', parent: 'Platform Admin', title: 'Submissions' },
 

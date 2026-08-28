@@ -24,6 +24,13 @@ public interface IQuestionRepository
         bool unassignedOnly = false,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Every question across every tenant/exam - Super Admin platform-wide
+    /// browse only. Relies on QuestionDbContext's own IsSuperAdmin query-filter bypass
+    /// for cross-tenant scoping. No exam titles here - QuestionService has no Exams
+    /// table of its own (different database/service); the frontend joins ExamId
+    /// against the platform's own already-fetched cross-tenant exam list instead.</summary>
+    Task<IReadOnlyList<ExamQuestion>> GetAllQuestionsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Sets SectionId on every given question. Pass a null sectionId to unassign.</summary>
     Task BulkSetSectionIdAsync(
         Guid? sectionId,

@@ -5780,3 +5780,93 @@ VERIFICATION
    Inactive immediately with no Status picker shown; log in as that
    student with the temp password, complete the forced change, confirm
    they now show Active in Manage Users.
+
+SUPER ADMIN "EXAMS" MENU: BUILD ALL 5 SUBMENU ITEMS FOR REAL
+------------------------------------------------------------------------
+Explicit ask (2026-08-28): all 5 items under the Platform sidebar's Exams
+group (All Exams, Exam Categories, Sections, Question Bank, Tags) were
+`PlatformComingSoon` placeholders - build all of them for real. Researched
+each one's actual buildability before writing any code (see the
+conversation's own investigation): 2 needed zero backend work (All Exams,
+Categories - `GET /api/exams` already has a SuperAdmin cross-tenant bypass
+from the Exam Usage report work), 2 needed a small new cross-tenant
+aggregate endpoint (Sections, Question Bank - the DB-level SuperAdmin
+bypass already existed via each entity's own `IsSuperAdmin` EF query
+filter, there was just no platform-wide "list all" route, only per-exam
+ones), and 1 (Tags) didn't exist as a concept ANYWHERE in the app, not
+even for a regular Admin - confirmed via a full-repo search before
+assuming otherwise.
+
+BACKEND - Exam Service
+
+1. `ExamPaper.Tags` (new `string`, default `""`, `HasMaxLength(500)`) -
+   genuinely free-text (unlike `Category`, which is UI-constrained to
+   `EXAM_CATEGORIES`), single comma-separated string column rather than a
+   normalized many-to-many table - matches this codebase's own prior
+   stated intent for Tags ("a simple string field... matching how
+   Category is handled"). New migration `AddTagsToExamPaper`. Threaded
+   through `CreateExamRequest`/`CreateExamCommand`/`ExamResponse`/
+   `ExamsController` (both the Create mapping and `ToResponse`).
+2. New cross-tenant Sections endpoint: `GET /api/exams/sections`
+   (absolute route on `SectionsController`, escapes its
+   `{examId:guid}` prefix), `[Authorize(Roles = "SuperAdmin")]`. New
+   `SectionWithExamTitle` record + `IExamRepository.GetAllSectionsAsync`
+   (mirrors the existing `GetAllAssignmentsAsync`/`AssignmentWithExamTitle`
+   pattern exactly - sections joined against an in-memory exam-id→title
+   dictionary, not a second round trip per row). New
+   `PlatformSectionResponse` DTO, separate from the existing
+   `SectionResponse` (used by a tenant Admin's own per-exam Section
+   management) rather than adding ExamTitle/TenantId to that shared
+   contract.
+
+BACKEND - Question Service
+
+3. New cross-tenant endpoint: `GET /api/questions/all`,
+   `[Authorize(Roles = "SuperAdmin")]`. New
+   `IQuestionRepository.GetAllQuestionsAsync` + new `PlatformQuestionResponse`
+   DTO (separate from `QuestionResponse`, which carries options/test-cases/
+   answer-masking a Question Bank browse doesn't need). No `ExamTitle` on
+   this DTO - QuestionService has no `Exams` table of its own (different
+   database/service entirely); the frontend joins `ExamId` against the
+   platform's own already-fetched cross-tenant exam list instead, same
+   `AllUsers.tsx`-style client-side join this console already uses
+   elsewhere for tenant names. Also widened `RevealAnswers` (`User.IsInRole
+   ("Admin")` -> `|| User.IsInRole("SuperAdmin")`) so a Super Admin's
+   Question Bank browse doesn't get every correct answer masked.
+4. Test fakes: `FakeExamRepository`/`FakeQuestionRepository` both needed
+   the new interface members (same lesson as earlier this session - build
+   the full solution, not just the touched service, to catch this before
+   pushing).
+
+FRONTEND
+
+5. `types/exam.ts`: `tags?: string` on `CreateExamRequest`, `tags: string`
+   on `ExamResponse`. `CreateExam.tsx` gets a real Tags text input
+   (comma-separated, genuinely free text unlike the Category dropdown) -
+   `EditExam.tsx` deliberately NOT touched, matching that Category itself
+   isn't editable there either (`UpdateExamRequest` has no Category field) -
+   consistent with existing precedent, not a new gap.
+6. `types/section.ts`/`api/sectionApi.ts`: `PlatformSectionResponse` +
+   `listAllSections()`. `types/question.ts`/`api/questionApi.ts`:
+   `PlatformQuestionResponse` + `listAllQuestions()`.
+7. 5 new pages replacing their `PlatformComingSoon` placeholders (removed
+   from `platformComingSoonRoutes.ts`, routed for real in `AppRoutes.tsx`):
+   `PlatformAllExams`, `PlatformExamCategories` (groups the same cross-
+   tenant exam list by Category, `Accordion`), `PlatformExamTags` (same
+   grouping, split on the new Tags field's commas - an exam with multiple
+   tags appears under each), `PlatformSections`, `PlatformQuestionBank`.
+   All reuse the SAME query keys (`['platform-exams']`, `['platform-
+   sections']`, `['platform-questions']`) already used elsewhere in this
+   console (Exam Usage report, etc.) so React Query dedupes fetches across
+   pages instead of re-hitting the same endpoint.
+
+VERIFICATION
+
+8. `dotnet build ExamVault.sln` + `dotnet test` (all 8 test projects, 335
+   tests) + `npm run build` + `npm test` (60 tests) - all green. Verified
+   live via real API calls (not just unit tests): `GET /api/exams` returns
+   `tags` on every row (empty string for pre-existing exams, confirming no
+   silent data loss); `GET /api/exams/sections` and `GET /api/questions/all`
+   both return real cross-tenant rows with correct `tenantId`/`examTitle`
+   joins; a regular Admin's JWT gets 403 from both new endpoints (the
+   SuperAdmin-only gate actually works, not just present in source).

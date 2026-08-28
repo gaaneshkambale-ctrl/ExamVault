@@ -16,6 +16,11 @@ public interface IExamRepository
     Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Section>> GetSectionsByExamIdAsync(Guid examId, CancellationToken cancellationToken = default);
 
+    /// <summary>Every section across every tenant, with its exam's title - Super Admin
+    /// platform-wide browse only. Relies on the DbContext's own IsSuperAdmin query-filter
+    /// bypass on Section for cross-tenant scoping, same as GetAllAssignmentsAsync's pattern.</summary>
+    Task<IReadOnlyList<SectionWithExamTitle>> GetAllSectionsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Returns true if the section was found and removed.</summary>
     Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default);
 

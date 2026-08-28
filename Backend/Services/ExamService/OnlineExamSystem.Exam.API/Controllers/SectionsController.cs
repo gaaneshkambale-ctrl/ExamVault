@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Exam.Application.Sections;
 using OnlineExamSystem.Exam.Application.Sections.Create;
 using OnlineExamSystem.Exam.Application.Sections.Delete;
 using OnlineExamSystem.Exam.Application.Sections.GetById;
 using OnlineExamSystem.Exam.Application.Sections.GetOrCreateDefault;
 using OnlineExamSystem.Exam.Application.Sections.List;
+using OnlineExamSystem.Exam.Application.Sections.ListAll;
 using OnlineExamSystem.Exam.Application.Sections.Reorder;
 using OnlineExamSystem.Exam.Application.Sections.Update;
 using OnlineExamSystem.Exam.Domain.Entities;
@@ -24,6 +26,7 @@ public class SectionsController : ControllerBase
     private readonly DeleteSectionHandler _deleteSectionHandler;
     private readonly GetSectionHandler _getSectionHandler;
     private readonly ListSectionsHandler _listSectionsHandler;
+    private readonly ListAllSectionsHandler _listAllSectionsHandler;
     private readonly ReorderSectionsHandler _reorderSectionsHandler;
     private readonly GetOrCreateDefaultSectionHandler _getOrCreateDefaultSectionHandler;
     private readonly ILogger<SectionsController> _logger;
@@ -34,6 +37,7 @@ public class SectionsController : ControllerBase
         DeleteSectionHandler deleteSectionHandler,
         GetSectionHandler getSectionHandler,
         ListSectionsHandler listSectionsHandler,
+        ListAllSectionsHandler listAllSectionsHandler,
         ReorderSectionsHandler reorderSectionsHandler,
         GetOrCreateDefaultSectionHandler getOrCreateDefaultSectionHandler,
         ILogger<SectionsController> logger)
@@ -43,6 +47,7 @@ public class SectionsController : ControllerBase
         _deleteSectionHandler = deleteSectionHandler;
         _getSectionHandler = getSectionHandler;
         _listSectionsHandler = listSectionsHandler;
+        _listAllSectionsHandler = listAllSectionsHandler;
         _reorderSectionsHandler = reorderSectionsHandler;
         _getOrCreateDefaultSectionHandler = getOrCreateDefaultSectionHandler;
         _logger = logger;
@@ -94,6 +99,27 @@ public class SectionsController : ControllerBase
     {
         var sections = await _listSectionsHandler.HandleAsync(new ListSectionsQuery(examId), cancellationToken);
         return Ok(sections.Select(ToResponse));
+    }
+
+    // Absolute route (escapes this controller's {examId:guid} prefix) -
+    // Super Admin platform-wide browse across every tenant's exams, not
+    // one exam's own sections.
+    [HttpGet("/api/exams/sections")]
+    [Authorize(Roles = "SuperAdmin")]
+    public async Task<IActionResult> ListAll(CancellationToken cancellationToken)
+    {
+        var sections = await _listAllSectionsHandler.HandleAsync(new ListAllSectionsQuery(), cancellationToken);
+        return Ok(sections.Select(s => new PlatformSectionResponse(
+            s.Section.Id,
+            s.Section.ExamId,
+            s.ExamTitle,
+            s.Section.TenantId,
+            s.Section.Name,
+            s.Section.DisplayOrder,
+            s.Section.QuestionCount,
+            s.Section.Marks,
+            s.Section.DurationMinutes,
+            s.Section.CreatedAtUtc)));
     }
 
     [HttpGet("default")]

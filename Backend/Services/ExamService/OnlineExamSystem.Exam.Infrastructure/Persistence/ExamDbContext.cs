@@ -45,6 +45,7 @@ public class ExamDbContext : TenantScopedDbContext
             entity.Property(e => e.ExamCode).HasMaxLength(40);
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Category).HasMaxLength(100);
+            entity.Property(e => e.Tags).HasMaxLength(500);
             entity.Property(e => e.Instructions).HasMaxLength(2000);
             entity.Property(e => e.NegativeMarks).HasColumnType("decimal(5,2)");
             entity.HasIndex(e => e.TenantId);

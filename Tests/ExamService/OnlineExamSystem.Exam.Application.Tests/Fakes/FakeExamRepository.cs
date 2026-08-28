@@ -66,6 +66,15 @@ public class FakeExamRepository : IExamRepository
         Task.FromResult<IReadOnlyList<Section>>(
             _sections.Where(s => s.ExamId == examId).OrderBy(s => s.DisplayOrder).ToList());
 
+    public Task<IReadOnlyList<SectionWithExamTitle>> GetAllSectionsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = _sections
+            .OrderBy(s => s.DisplayOrder)
+            .Select(s => new SectionWithExamTitle(s, _exams.FirstOrDefault(e => e.Id == s.ExamId)?.Title ?? "Unknown Exam"))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<SectionWithExamTitle>>(result);
+    }
+
     public Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
     {
         var removed = _sections.RemoveAll(s => s.Id == sectionId) > 0;
