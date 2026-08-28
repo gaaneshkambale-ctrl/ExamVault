@@ -5592,3 +5592,45 @@ VERIFICATION
    subdomain 404s ("Unknown or inactive organization"); reactivate it from
    both the All Organizations list and Organization Details, confirm the
    subdomain resolves again and its users can log in.
+
+ALL ORGANIZATIONS LIST: FILL IN ADMIN CONTACT/PLAN/USERS/EXAMS COLUMNS
+------------------------------------------------------------------------
+`ManageTenants.tsx`'s table has these 4 columns rendering as "—" placeholders.
+No backend work needed - every piece of data already exists and is already
+SuperAdmin-accessible cross-tenant, just never wired into this one table:
+- Plan: `listPlans()` + `tenant.planId`, same lookup `OrganizationDetails.tsx`
+  already does.
+- Admin Contact: `listAllUsers()` (already used by `AllUsers.tsx` and
+  `OrganizationDetails.tsx`'s Reset Admin Password flow) filtered to
+  `tenantId === tenant.id && role === 'Admin'` - show the first admin's
+  email, "—" if none, "+N more" suffix if more than one.
+- Users: same `listAllUsers()` fetch, count of all entries (any role) for
+  that tenantId.
+- Exams: `listExams()` (already used by `ExamUsageReport.tsx`, real per its
+  own comment - ExamsController.List already accepts SuperAdmin) filtered
+  by `tenantId === tenant.id`, count.
+
+FRONTEND ONLY
+
+1. `ManageTenants.tsx`: add 3 new queries (`listPlans`, `listAllUsers`,
+   `listExams`) alongside the existing `useTenants()`, each keyed the same
+   as their other real usages elsewhere (`['plans']`, `['platform-users']`,
+   `['platform-exams']`) so React Query dedupes the cache instead of
+   re-fetching if the user already visited AllUsers/ExamUsageReport/an
+   Organization Details page this session. Build 3 small per-tenant lookup
+   Maps (planNameById, adminByTenantId, userCountByTenantId,
+   examCountByTenantId) with `useMemo`, same pattern `OrganizationDetails.tsx`
+   and `AllUsers.tsx` already use for their own tenant-name lookups.
+2. Replace the 4 "—" cells with the real values. Loading state: while any
+   of the 3 new queries are still pending, show a small inline spinner per
+   cell rather than blocking the whole table (the Organization/Status
+   columns are already populated from `useTenants()` alone and shouldn't
+   wait on unrelated data).
+
+VERIFICATION
+
+3. `npm run build`, then through the real UI: confirm Plan/Users/Exams
+   match what Organization Details already shows for the same org (cross-
+   check against a page already known to be correct rather than trusting a
+   new page in isolation), and Admin Contact shows the right email for an
+   org with exactly one admin.

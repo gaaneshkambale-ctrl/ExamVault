@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge, Card, Form, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
 import ReactivateTenantButton from '../../components/ReactivateTenantButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
+import { listPlans } from '../../api/plansApi';
+import { listAllUsers } from '../../api/userApi';
+import { listExams } from '../../api/examApi';
 
 interface ManageTenantsProps {
   // Undefined = "All Organizations". PlatformSidebar's nav key for
@@ -20,6 +24,44 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
   const { data: tenants, isLoading, isError } = useTenants();
 
   const [searchText, setSearchText] = useState('');
+
+  // Same real, already-SuperAdmin-accessible cross-tenant queries
+  // OrganizationDetails.tsx/AllUsers.tsx/ExamUsageReport.tsx already use -
+  // same query keys so React Query dedupes the cache across pages instead
+  // of re-fetching.
+  const { data: plans, isLoading: isLoadingPlans } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
+  const { data: allUsers, isLoading: isLoadingUsers } = useQuery({ queryKey: ['platform-users'], queryFn: listAllUsers });
+  const { data: allExams, isLoading: isLoadingExams } = useQuery({ queryKey: ['platform-exams'], queryFn: listExams });
+
+  const planNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (plans ?? []).forEach((p) => map.set(p.id, p.name));
+    return map;
+  }, [plans]);
+
+  const adminsByTenantId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    (allUsers ?? [])
+      .filter((u) => u.role === 'Admin')
+      .forEach((u) => {
+        const existing = map.get(u.tenantId) ?? [];
+        existing.push(u.email);
+        map.set(u.tenantId, existing);
+      });
+    return map;
+  }, [allUsers]);
+
+  const userCountByTenantId = useMemo(() => {
+    const map = new Map<string, number>();
+    (allUsers ?? []).forEach((u) => map.set(u.tenantId, (map.get(u.tenantId) ?? 0) + 1));
+    return map;
+  }, [allUsers]);
+
+  const examCountByTenantId = useMemo(() => {
+    const map = new Map<string, number>();
+    (allExams ?? []).forEach((e) => map.set(e.tenantId, (map.get(e.tenantId) ?? 0) + 1));
+    return map;
+  }, [allExams]);
 
   const statusFiltered = tenants?.filter((tenant) => {
     if (statusFilter === 'active') return tenant.isActive;
@@ -129,15 +171,31 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                         </div>
                       </div>
                     </td>
-                    <td className="text-muted">&mdash;</td>
-                    <td className="text-muted">&mdash;</td>
+                    <td className="text-muted">
+                      {isLoadingUsers ? (
+                        <Spinner animation="border" size="sm" />
+                      ) : (
+                        (() => {
+                          const admins = adminsByTenantId.get(tenant.id) ?? [];
+                          if (admins.length === 0) return '—';
+                          return admins.length > 1 ? `${admins[0]} (+${admins.length - 1} more)` : admins[0];
+                        })()
+                      )}
+                    </td>
+                    <td className="text-muted">
+                      {isLoadingPlans ? <Spinner animation="border" size="sm" /> : (planNameById.get(tenant.planId) ?? '—')}
+                    </td>
                     <td>
                       <Badge bg={tenant.isActive ? 'success' : 'secondary'}>
                         {tenant.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </td>
-                    <td className="text-muted">&mdash;</td>
-                    <td className="text-muted">&mdash;</td>
+                    <td className="text-muted">
+                      {isLoadingUsers ? <Spinner animation="border" size="sm" /> : (userCountByTenantId.get(tenant.id) ?? 0)}
+                    </td>
+                    <td className="text-muted">
+                      {isLoadingExams ? <Spinner animation="border" size="sm" /> : (examCountByTenantId.get(tenant.id) ?? 0)}
+                    </td>
                     <td>{new Date(tenant.createdAtUtc).toLocaleDateString()}</td>
                     <td className="pe-4">
                       <div className="d-flex gap-2">
