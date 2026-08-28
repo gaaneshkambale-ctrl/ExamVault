@@ -5,6 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { updateMyProfile } from '../../api/userApi';
 import { useAuth } from '../../hooks/useAuth';
 import { extractServerError } from '../../utils/apiError';
+import { isValidEmail } from '../../utils/email';
 import type { Gender } from '../../types/user';
 
 function toDateInputValue(iso: string | null): string {
@@ -92,7 +93,9 @@ export default function PersonalInfoPanel() {
               value={alternateEmail}
               onChange={(e) => setAlternateEmail(e.target.value)}
               placeholder="Optional"
+              isInvalid={alternateEmail.trim().length > 0 && !isValidEmail(alternateEmail)}
             />
+            <Form.Control.Feedback type="invalid">Enter a valid email address.</Form.Control.Feedback>
           </Form.Group>
         </Col>
       </Row>
@@ -157,7 +160,11 @@ export default function PersonalInfoPanel() {
       </Row>
 
       <div className="d-flex justify-content-end">
-        <Button type="submit" variant="primary" disabled={updateMutation.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={updateMutation.isPending || (alternateEmail.trim().length > 0 && !isValidEmail(alternateEmail))}
+        >
           {updateMutation.isPending ? (
             <>
               <Spinner animation="border" size="sm" className="me-2" />

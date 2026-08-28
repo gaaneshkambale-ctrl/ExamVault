@@ -19,6 +19,7 @@ import { assignPlanToTenant, listPlans } from '../../api/plansApi';
 import { listAllUsers } from '../../api/userApi';
 import { getAuditLogs } from '../../api/auditApi';
 import { extractServerError } from '../../utils/apiError';
+import { isValidEmail } from '../../utils/email';
 import { PLAN_FEATURE_LABELS } from '../../types/plan';
 
 const ACTIVITY_LOG_FROM = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
@@ -512,7 +513,13 @@ export default function OrganizationDetails() {
               </Form.Group>
               <Form.Group controlId="detailAdminEmail">
                 <Form.Label>Email</Form.Label>
-                <Form.Control type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
+                <Form.Control
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  isInvalid={adminEmail.trim().length > 0 && !isValidEmail(adminEmail)}
+                />
+                <Form.Control.Feedback type="invalid">Enter a valid email address.</Form.Control.Feedback>
               </Form.Group>
             </>
           )}
@@ -524,7 +531,12 @@ export default function OrganizationDetails() {
           {!createAdminMutation.isSuccess && (
             <Button
               variant="primary"
-              disabled={!adminFullName.trim() || !adminEmail.trim() || createAdminMutation.isPending}
+              disabled={
+                !adminFullName.trim() ||
+                !adminEmail.trim() ||
+                !isValidEmail(adminEmail) ||
+                createAdminMutation.isPending
+              }
               onClick={() => createAdminMutation.mutate()}
             >
               {createAdminMutation.isPending ? 'Creating...' : 'Create Admin'}

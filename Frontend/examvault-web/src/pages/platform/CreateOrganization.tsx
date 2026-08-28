@@ -8,6 +8,7 @@ import { useTenants } from '../../hooks/useTenants';
 import { createTenant, createTenantAdmin } from '../../api/tenantsApi';
 import { listPlans } from '../../api/plansApi';
 import { extractServerError } from '../../utils/apiError';
+import { isValidEmail } from '../../utils/email';
 
 // Matches org_submenu.png's Create Organization page. Real fields: Name,
 // Subdomain, and (new this pass) Admin Full Name/Email - if both are
@@ -42,22 +43,31 @@ export default function CreateOrganization() {
         isTrial,
         trialEndsAtUtc: isTrial && trialEndDate ? new Date(trialEndDate).toISOString() : undefined,
       });
+      let adminError: string | null = null;
       if (adminFullName.trim() && adminEmail.trim()) {
         try {
           await createTenantAdmin(tenant.id, { fullName: adminFullName, email: adminEmail });
         } catch (error) {
-          setAdminWarning(
-            `${tenant.name} was created, but the admin account couldn't be added: ${extractServerError(error)}`,
-          );
+          adminError = `${tenant.name} was created, but the admin account couldn't be added: ${extractServerError(error)}`;
         }
       }
-      return tenant;
+      return { tenant, adminError };
     },
-    onSuccess: (tenant) => {
+    onSuccess: ({ tenant, adminError }) => {
       queryClient.invalidateQueries({ queryKey: ['tenants'] });
-      navigate(`/platform/organizations/${tenant.id}`);
+      if (adminError) {
+        // Stay on this page instead of navigating away - the org was
+        // created but its admin wasn't, and the user needs to actually
+        // see why (previously this warning was set right before an
+        // immediate navigate(), so it was set but never rendered).
+        setAdminWarning(adminError);
+      } else {
+        navigate(`/platform/organizations/${tenant.id}`);
+      }
     },
   });
+
+  const adminEmailInvalid = adminEmail.trim().length > 0 && !isValidEmail(adminEmail);
 
   const activeOrgs = (tenants ?? []).filter((t) => t.isActive).slice(0, 5);
   const suspendedOrgs = (tenants ?? []).filter((t) => !t.isActive).slice(0, 5);
@@ -172,7 +182,9 @@ export default function CreateOrganization() {
                       value={adminEmail}
                       onChange={(e) => setAdminEmail(e.target.value)}
                       placeholder="admin@greenfield.edu"
+                      isInvalid={adminEmailInvalid}
                     />
+                    <Form.Control.Feedback type="invalid">Enter a valid email address.</Form.Control.Feedback>
                   </Form.Group>
                 </Col>
               </Row>
@@ -213,7 +225,13 @@ export default function CreateOrganization() {
                 </Link>
                 <Button
                   variant="primary"
-                  disabled={!name.trim() || !slug.trim() || (isTrial && !trialEndDate) || createMutation.isPending}
+                  disabled={
+                    !name.trim() ||
+                    !slug.trim() ||
+                    (isTrial && !trialEndDate) ||
+                    adminEmailInvalid ||
+                    createMutation.isPending
+                  }
                   onClick={() => createMutation.mutate()}
                 >
                   {createMutation.isPending ? 'Creating...' : '+ Create Organization'}

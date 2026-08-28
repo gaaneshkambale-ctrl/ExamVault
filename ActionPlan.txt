@@ -6079,3 +6079,32 @@ VERIFICATION
    real data. Sequential Docker rebuild of `user-api` + `frontend` only.
    Commit, push, confirm CD deploy via `az containerapp show --query
    properties.template.containers[0].image`.
+
+================================================================================
+BUG FIX: CREATE ORGANIZATION ADMIN EMAIL SILENTLY DROPPED
+================================================================================
+User report (2026-08-28): "create organization email not work expected."
+Reproduced live: `CreateOrganization.tsx` has no wrapping `<form>` element
+(only `Form.Group`/`Form.Control` subcomponents), so the Admin Email
+field's `type="email"` never actually validated anything - native HTML5
+validation only fires on real form submission, and this page's Create
+button is a plain `onClick` handler. Entering a malformed admin email let
+the org get created (tenant creation doesn't touch admin email at all),
+then `createTenantAdmin` correctly got rejected by the backend's
+FluentValidation `EmailAddress()` rule - but the resulting `adminWarning`
+was set in state right before `onSuccess` immediately called `navigate()`
+away from the page, so the warning was set but NEVER rendered. Net effect:
+org created with a silently-missing admin and zero visible error.
+
+Fix: added `utils/email.ts` (`isValidEmail`), wired into
+`CreateOrganization.tsx` (inline `isInvalid` feedback + disables the
+Create button on a malformed email) and restructured its mutation so
+`onSuccess` only navigates away when there's NO admin-creation warning to
+show - if there is one, it stays on the page instead. Same gap existed
+(minus the losing-the-warning part, which didn't apply there) in
+`OrganizationDetails.tsx`'s "Add Admin" modal and
+`PersonalInfoPanel.tsx`'s Alternate Email field - both use the identical
+`createTenantAdmin`/profile-update path, fixed the same way for
+consistency. Verified live: bad email now disables the button with a red
+inline message; fixing the email re-enables it and creates the org with a
+real, Active admin visible on the Admins tab.
