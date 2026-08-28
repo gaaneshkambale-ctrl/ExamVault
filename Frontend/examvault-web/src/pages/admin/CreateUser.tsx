@@ -7,7 +7,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import { createUser } from '../../api/userApi';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
-import { COSMETIC_ROLES, COSMETIC_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
+import { COSMETIC_ROLES, ADMIN_PERMISSIONS, STUDENT_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
 
 type CreateUserFormState = CreateUserRequest;
 
@@ -32,12 +32,23 @@ export default function CreateUser() {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateUserFormState, string>>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
-  const [checkedPermissions, setCheckedPermissions] = useState<Set<string>>(
-    () => new Set(COSMETIC_PERMISSIONS.slice(0, 8)),
-  );
+  const [checkedPermissions, setCheckedPermissions] = useState<Set<string>>(() => new Set(STUDENT_PERMISSIONS));
+
+  // Only Admin/Student are real, selectable roles (the rest are disabled
+  // "not available" options) - same per-role permission sets UserDetails.tsx
+  // already uses for its own (read-only) permissions display.
+  const rolePermissions = form.role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS;
 
   const updateField = <K extends keyof CreateUserFormState>(field: K, value: CreateUserFormState[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateRole = (role: UserRole) => {
+    updateField('role', role);
+    // Irrelevant-to-the-new-role permissions (e.g. "Exams - Create" for a
+    // Student) shouldn't stay checked, or even stay visible - reset to
+    // that role's own full set, matching its own default-granted list.
+    setCheckedPermissions(new Set(role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS));
   };
 
   const togglePermission = (perm: string) => {
@@ -212,7 +223,7 @@ export default function CreateUser() {
                   <Col md={6}>
                     <Form.Group className="mb-4" controlId="createUserRole">
                       <Form.Label className="fw-bold">Select Role</Form.Label>
-                      <Form.Select value={form.role} onChange={(e) => updateField('role', e.target.value as UserRole)}>
+                      <Form.Select value={form.role} onChange={(e) => updateRole(e.target.value as UserRole)}>
                         <option value="Student">Student</option>
                         <option value="Admin">Admin</option>
                         {COSMETIC_ROLES.map((r) => (
@@ -232,14 +243,15 @@ export default function CreateUser() {
 
                 <Alert variant="secondary" className="py-2 small">
                   Only Admin and Student actually control access in ExamVault today. The permission checklist
-                  below is a preview of a future permissions system - it isn't saved or enforced yet.
+                  below is a preview of a future permissions system - it isn't saved or enforced yet. Only
+                  permissions relevant to the selected role are shown.
                 </Alert>
 
                 <div className="mb-1 fw-bold">
-                  Permissions ({checkedPermissions.size} of {COSMETIC_PERMISSIONS.length} selected)
+                  Permissions ({checkedPermissions.size} of {rolePermissions.length} selected)
                 </div>
                 <Row className="mb-4">
-                  {COSMETIC_PERMISSIONS.map((perm) => (
+                  {rolePermissions.map((perm) => (
                     <Col xs={6} md={4} key={perm} className="mb-2">
                       <Form.Check
                         type="checkbox"
