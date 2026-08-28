@@ -29,9 +29,12 @@ public class AssignPlanToTenantHandler
             return AssignPlanToTenantResult.NoPlan();
         }
 
+        var planUnchanged = tenant.PlanId == command.PlanId;
+        var previousPlan = planUnchanged ? plan : await _planRepository.GetByIdAsync(tenant.PlanId, cancellationToken);
+
         tenant.PlanId = command.PlanId;
         await _tenantRepository.SaveChangesAsync(cancellationToken);
 
-        return AssignPlanToTenantResult.Ok(tenant);
+        return AssignPlanToTenantResult.Ok(tenant, planUnchanged, previousPlan?.Name, plan.Name);
     }
 }

@@ -18,7 +18,5 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
   { path: '/platform/questions', active: 'questions', parent: 'Platform Admin', title: 'Questions' },
   { path: '/platform/submissions', active: 'submissions', parent: 'Platform Admin', title: 'Submissions' },
 
-  { path: '/platform/subscriptions/history', active: 'subs-history', parent: 'Subscriptions', title: 'Subscription History' },
-
   { path: '/platform/monitoring/api-health', active: 'mon-api-health', parent: 'System Monitoring', title: 'API Health' },
 ];

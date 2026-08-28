@@ -82,6 +82,7 @@ import PlatformUsage from '../pages/platform/PlatformUsage';
 import SecurityAuditLogs from '../pages/platform/SecurityAuditLogs';
 import LoginActivity from '../pages/platform/LoginActivity';
 import SecurityEvents from '../pages/platform/SecurityEvents';
+import SubscriptionHistory from '../pages/platform/SubscriptionHistory';
 import FailedLoginAttempts from '../pages/platform/FailedLoginAttempts';
 import OrganizationReport from '../pages/platform/OrganizationReport';
 import UserReport from '../pages/platform/UserReport';
@@ -839,6 +840,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <PlatformUsage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/subscriptions/history"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SubscriptionHistory />
           </ProtectedRoute>
         }
       />

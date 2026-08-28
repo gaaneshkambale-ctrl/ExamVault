@@ -5933,3 +5933,72 @@ VERIFICATION
    the correct actor (Super Admin) and target org; `GET /api/audit-logs?
    module=Security` returns exactly those 2 rows in the shape
    `SecurityEvents.tsx` expects.
+
+================================================================================
+SUPER ADMIN SUBSCRIPTIONS: SUBSCRIPTION HISTORY
+================================================================================
+Explicit ask (2026-08-28): implement the last `PlatformComingSoon` placeholder
+under Subscriptions (`subs-history`, `/platform/subscriptions/history`).
+
+Researched first: no history of plan CHANGES exists anywhere. `Tenant.PlanId`
+is a single always-set field that gets silently overwritten by
+`AssignPlanToTenantHandler` on every `PUT /api/tenants/{id}/plan` call - no
+prior value is kept, and `TenantsController.AssignPlan` (unlike Deactivate/
+Reactivate/Delete/Reset Admin Password, all wired to `RecordSecurityEventAsync`
+in the last feature) writes no audit entry at all today. So "Subscription
+History" cannot show billing/invoices (no billing model exists anywhere - see
+multi_tenant_saas.txt's own scope notes, same class of gap as "Next
+Billing/Amount" flagged earlier and left honestly unfaked), but a real "which
+org moved from which plan to which plan, when, by whom" trail is entirely
+buildable using the same `AuditModule.Security` mechanism just built for
+Security Events - it just isn't wired to plan changes yet.
+
+Decision: build it as a plan-assignment history log, Activity = "Plan
+changed", reusing `AuditModule.Security` (not a new module - it's the same
+class of "sensitive platform action" as the other 4 events already there).
+Skip writing an entry when the assigned plan is unchanged (re-saving the same
+plan is a no-op, not a history event).
+
+BACKEND
+
+1. `AssignPlanToTenantResult` gains `PreviousPlanName` (string?, null only if
+   somehow no prior plan existed - shouldn't happen since `PlanId` is always
+   set) and `NewPlanName` (string) so the controller can build a human Details
+   string without a second `IPlanRepository` dependency of its own.
+2. `AssignPlanToTenantHandler`: look up the tenant's CURRENT plan (by its
+   existing `PlanId`) before overwriting it, for its name. If the current
+   `PlanId` already equals `command.PlanId`, still succeed (unchanged
+   behavior) but flag "no real change" so the controller skips the audit
+   write.
+3. `TenantsController.AssignPlan`: on a real change, call
+   `RecordSecurityEventAsync(id, "Plan changed", cancellationToken,
+   entityId: request.PlanId.ToString())` with a new `details` parameter
+   threaded through (`RecordSecurityEventAsync` currently hardcodes `null`
+   for `details` - extend it with an optional `string? details = null`) set
+   to `"{PreviousPlanName} -> {NewPlanName}"`.
+4. Update `FakeTenantRepository`/`FakePlanRepository`-adjacent test fakes and
+   `AssignPlanToTenantHandler` unit tests for the new lookup + result shape;
+   full solution build to catch any other break.
+
+FRONTEND
+
+5. New `SubscriptionHistory.tsx` (`pages/platform/`) - `getAuditLogs(from,
+   to, 'Security')` (same query key as `SecurityEvents.tsx`, dedupes the
+   fetch), filtered client-side to `activity === 'Plan changed'`. Table:
+   Time / Organization / Plan Change (renders `details` as "Old -> New") /
+   Changed By. Reuses `useTenants()` for org-name lookup, same pattern as
+   `SecurityEvents.tsx`.
+6. Routed for real in `AppRoutes.tsx` at `/platform/subscriptions/history`
+   (`active="subs-history"`), removed from `platformComingSoonRoutes.ts`.
+
+VERIFICATION
+
+7. Full solution build + full backend test suite + frontend build + frontend
+   test suite, all green. Live: assign a real test tenant to a different real
+   plan via the existing Organizations & Plans UI, confirm exactly one new
+   `Security`/`"Plan changed"` row appears with the correct old/new plan
+   names and acting Super Admin; re-assigning the SAME plan produces no new
+   row. Sequential Docker rebuild of `user-api` + `frontend` only. Commit,
+   push, confirm CD deploy via `az containerapp show --query
+   properties.template.containers[0].image` (GitHub API rate limit still
+   assumed exhausted).

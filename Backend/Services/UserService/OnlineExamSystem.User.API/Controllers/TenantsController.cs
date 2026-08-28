@@ -185,6 +185,15 @@ public class TenantsController : ControllerBase
         }
 
         _logger.LogInformation("Tenant {TenantId} assigned to plan {PlanId}.", id, request.PlanId);
+        if (!result.PlanUnchanged)
+        {
+            await RecordSecurityEventAsync(
+                id,
+                "Plan changed",
+                cancellationToken,
+                entityId: request.PlanId.ToString(),
+                details: $"{result.PreviousPlanName} -> {result.NewPlanName}");
+        }
         return Ok(ToResponse(result.Tenant!));
     }
 
@@ -270,14 +279,15 @@ public class TenantsController : ControllerBase
         Guid targetTenantId,
         string activity,
         CancellationToken cancellationToken,
-        string? entityId = null)
+        string? entityId = null,
+        string? details = null)
     {
         var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return _auditClient.RecordAsync(
             targetTenantId,
             "Security",
             activity,
-            null,
+            details,
             entityId,
             actorId is not null ? Guid.Parse(actorId) : null,
             User.FindFirstValue(ClaimTypes.Email),
