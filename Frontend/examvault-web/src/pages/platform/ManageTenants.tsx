@@ -1,14 +1,11 @@
 import { useState } from 'react';
-import { Alert, Badge, Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap';
+import { Badge, Card, Form, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
+import ReactivateTenantButton from '../../components/ReactivateTenantButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
-import { createTenantAdmin } from '../../api/tenantsApi';
-import { extractServerError } from '../../utils/apiError';
-import type { Tenant } from '../../types/tenant';
 
 interface ManageTenantsProps {
   // Undefined = "All Organizations". PlatformSidebar's nav key for
@@ -23,21 +20,6 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
   const { data: tenants, isLoading, isError } = useTenants();
 
   const [searchText, setSearchText] = useState('');
-
-  const [adminTarget, setAdminTarget] = useState<Tenant | null>(null);
-  const [adminFullName, setAdminFullName] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
-
-  const createAdminMutation = useMutation({
-    mutationFn: () => createTenantAdmin(adminTarget!.id, { fullName: adminFullName, email: adminEmail }),
-  });
-
-  const openAddAdmin = (tenant: Tenant) => {
-    createAdminMutation.reset();
-    setAdminFullName('');
-    setAdminEmail('');
-    setAdminTarget(tenant);
-  };
 
   const statusFiltered = tenants?.filter((tenant) => {
     if (statusFilter === 'active') return tenant.isActive;
@@ -98,47 +80,6 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
           );
         })}
       </div>
-
-      <Modal show={adminTarget !== null} onHide={() => setAdminTarget(null)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Add Admin to {adminTarget?.name}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {createAdminMutation.isError && (
-            <Alert variant="danger">{extractServerError(createAdminMutation.error)}</Alert>
-          )}
-          {createAdminMutation.isSuccess ? (
-            <Alert variant="success" className="mb-0">
-              Admin created. They can log in at {adminTarget?.slug}.examvaults.in once a password is set.
-            </Alert>
-          ) : (
-            <>
-              <Form.Group className="mb-3" controlId="tenantAdminFullName">
-                <Form.Label>Full Name</Form.Label>
-                <Form.Control value={adminFullName} onChange={(e) => setAdminFullName(e.target.value)} />
-              </Form.Group>
-              <Form.Group controlId="tenantAdminEmail">
-                <Form.Label>Email</Form.Label>
-                <Form.Control type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
-              </Form.Group>
-            </>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="outline-secondary" onClick={() => setAdminTarget(null)}>
-            {createAdminMutation.isSuccess ? 'Close' : 'Cancel'}
-          </Button>
-          {!createAdminMutation.isSuccess && (
-            <Button
-              variant="primary"
-              disabled={!adminFullName.trim() || !adminEmail.trim() || createAdminMutation.isPending}
-              onClick={() => createAdminMutation.mutate()}
-            >
-              {createAdminMutation.isPending ? 'Creating...' : 'Create Admin'}
-            </Button>
-          )}
-        </Modal.Footer>
-      </Modal>
 
       <Card className="border-0 shadow-sm mb-3">
         <Card.Body className={isLoading || isError || filteredTenants?.length === 0 ? '' : 'p-0'}>
@@ -210,10 +151,11 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                             <circle cx="12" cy="12" r="3" />
                           </svg>
                         </Link>
-                        <Button variant="outline-primary" size="sm" onClick={() => openAddAdmin(tenant)}>
-                          Add Admin
-                        </Button>
-                        {tenant.isActive && <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />}
+                        {tenant.isActive ? (
+                          <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />
+                        ) : (
+                          <ReactivateTenantButton tenantId={tenant.id} />
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -20,6 +20,11 @@ export async function deactivateTenant(tenantId: string): Promise<Tenant> {
   return data;
 }
 
+export async function reactivateTenant(tenantId: string): Promise<Tenant> {
+  const { data } = await apiClient.post<Tenant>(`/api/tenants/${tenantId}/reactivate`);
+  return data;
+}
+
 export async function updateTenant(tenantId: string, request: UpdateTenantRequest): Promise<Tenant> {
   const { data } = await apiClient.put<Tenant>(`/api/tenants/${tenantId}`, request);
   return data;

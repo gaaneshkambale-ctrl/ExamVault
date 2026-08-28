@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
+import ReactivateTenantButton from '../../components/ReactivateTenantButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
 import {
@@ -454,9 +455,7 @@ export default function OrganizationDetails() {
                 {tenant.isActive ? (
                   <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />
                 ) : (
-                  <Button variant="outline-secondary" size="sm" disabled>
-                    Already Suspended
-                  </Button>
+                  <ReactivateTenantButton tenantId={tenant.id} />
                 )}
                 <Button
                   variant="outline-secondary"

@@ -5554,3 +5554,41 @@ VERIFICATION
    disappears from All Organizations and its former admin can no longer
    log in. Confirm attempting to delete the Platform tenant is rejected
    (there's no UI path to it, so this one's a direct API call check).
+
+REACTIVATE ORGANIZATION
+------------------------
+Deactivate exists (`POST /api/tenants/{id}/deactivate`) but there's no way
+back - `SetTenantActiveStatusHandler` already takes an `isActive` bool, it's
+just never been called with `true` from anywhere. Adds the missing other
+half.
+
+BACKEND
+
+1. `TenantsController`: new `POST {id}/reactivate`, calls the existing
+   `SetTenantActiveStatusHandler` with `SetTenantActiveStatusCommand(id,
+   true)` - no new Application-layer code needed, this handler was already
+   generic.
+
+FRONTEND
+
+2. `api/tenantsApi.ts`: `reactivateTenant(tenantId)`.
+3. `ManageTenants.tsx` (All Organizations list): where `tenant.isActive`
+   currently renders `DeactivateTenantButton`, the `else` branch currently
+   renders nothing - add a "Reactivate" button there.
+4. `OrganizationDetails.tsx` Actions panel: replace the disabled "Already
+   Suspended" button (inactive branch) with a working "Reactivate" button.
+   Unlike Deactivate, no confirm modal - reactivating isn't destructive
+   (nothing to lose, fully reversible by deactivating again), so a direct
+   click-to-act button matches this console's existing risk-proportionate
+   confirmation pattern (compare Delete Organization's stricter type-to-
+   confirm vs Deactivate's plain Cancel/Confirm vs a two-way toggle needing
+   none at all).
+5. Both call sites invalidate `['tenants']` on success, same as
+   DeactivateTenantButton already does.
+
+VERIFICATION
+
+6. Rebuild + restart `user-api` only. Deactivate a test org, confirm its
+   subdomain 404s ("Unknown or inactive organization"); reactivate it from
+   both the All Organizations list and Organization Details, confirm the
+   subdomain resolves again and its users can log in.

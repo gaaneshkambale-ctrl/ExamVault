@@ -102,6 +102,22 @@ public class TenantsController : ControllerBase
         return Ok(ToResponse(result.Tenant!));
     }
 
+    [HttpPost("{id:guid}/reactivate")]
+    public async Task<IActionResult> Reactivate(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _setTenantActiveStatusHandler.HandleAsync(
+            new SetTenantActiveStatusCommand(id, true),
+            cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Tenant not found." });
+        }
+
+        _logger.LogInformation("Tenant {TenantId} reactivated.", id);
+        return Ok(ToResponse(result.Tenant!));
+    }
+
     [HttpPost("{id:guid}/admins")]
     public async Task<IActionResult> CreateAdmin(
         Guid id,
