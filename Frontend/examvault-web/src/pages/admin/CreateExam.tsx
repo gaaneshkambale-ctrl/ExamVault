@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createExam } from '../../api/examApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
@@ -137,9 +137,6 @@ export default function CreateExam() {
                       </option>
                     ))}
                   </Form.Select>
-                  <Form.Text>
-                    <Link to="/admin/exam-types">+ Manage Exam Types</Link>
-                  </Form.Text>
                 </Form.Group>
               </Col>
               <Col md={4} className="d-flex align-items-start pt-4">
