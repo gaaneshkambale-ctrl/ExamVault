@@ -2,7 +2,7 @@ import { Card, Col, Container, Row } from 'react-bootstrap';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 
-const SUPPORT_EMAIL = 'ganesh.kamble222@gmail.com';
+const SUPPORT_EMAIL = 'support@examvaults.in';
 
 export default function Contact() {
   return (
