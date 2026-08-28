@@ -11,6 +11,7 @@ using OnlineExamSystem.User.Application.Tenants.Delete;
 using OnlineExamSystem.User.Application.Tenants.List;
 using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
 using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
+using OnlineExamSystem.User.Application.Tenants.SetTrial;
 using OnlineExamSystem.User.Application.Tenants.Update;
 using OnlineExamSystem.User.Domain.Entities;
 
@@ -31,6 +32,7 @@ public class TenantsController : ControllerBase
     private readonly UpdateTenantHandler _updateTenantHandler;
     private readonly DeleteTenantHandler _deleteTenantHandler;
     private readonly ResetTenantAdminPasswordHandler _resetTenantAdminPasswordHandler;
+    private readonly SetTenantTrialHandler _setTenantTrialHandler;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<TenantsController> _logger;
 
@@ -43,6 +45,7 @@ public class TenantsController : ControllerBase
         UpdateTenantHandler updateTenantHandler,
         DeleteTenantHandler deleteTenantHandler,
         ResetTenantAdminPasswordHandler resetTenantAdminPasswordHandler,
+        SetTenantTrialHandler setTenantTrialHandler,
         IAuditClient auditClient,
         ILogger<TenantsController> logger)
     {
@@ -54,6 +57,7 @@ public class TenantsController : ControllerBase
         _updateTenantHandler = updateTenantHandler;
         _deleteTenantHandler = deleteTenantHandler;
         _resetTenantAdminPasswordHandler = resetTenantAdminPasswordHandler;
+        _setTenantTrialHandler = setTenantTrialHandler;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -62,7 +66,7 @@ public class TenantsController : ControllerBase
     public async Task<IActionResult> Create(CreateTenantRequest request, CancellationToken cancellationToken)
     {
         var result = await _createTenantHandler.HandleAsync(
-            new CreateTenantCommand(request.Name, request.Slug, request.PlanId),
+            new CreateTenantCommand(request.Name, request.Slug, request.PlanId, request.IsTrial, request.TrialEndsAtUtc),
             cancellationToken);
 
         if (result.SlugAlreadyExists)
@@ -267,8 +271,33 @@ public class TenantsController : ControllerBase
         return Ok(new ResetTenantAdminPasswordResponse(result.TemporaryPassword!));
     }
 
+    [HttpPut("{id:guid}/trial")]
+    public async Task<IActionResult> SetTrial(Guid id, SetTenantTrialRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _setTenantTrialHandler.HandleAsync(
+            new SetTenantTrialCommand(id, request.IsTrial, request.TrialEndsAtUtc), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Tenant not found." });
+        }
+
+        if (result.IsInvalid)
+        {
+            return BadRequest(new { message = result.ErrorMessage });
+        }
+
+        _logger.LogInformation("Tenant {TenantId} trial set to {IsTrial}.", id, request.IsTrial);
+        await RecordSecurityEventAsync(
+            id,
+            request.IsTrial ? "Trial started" : "Trial ended",
+            cancellationToken,
+            details: request.IsTrial ? $"Ends {request.TrialEndsAtUtc:yyyy-MM-dd}" : null);
+        return Ok(ToResponse(result.Tenant!));
+    }
+
     private static TenantResponse ToResponse(Tenant tenant) =>
-        new(tenant.Id, tenant.Name, tenant.Slug, tenant.IsActive, tenant.CreatedAtUtc, tenant.PlanId);
+        new(tenant.Id, tenant.Name, tenant.Slug, tenant.IsActive, tenant.CreatedAtUtc, tenant.PlanId, tenant.IsTrial, tenant.TrialEndsAtUtc);
 
     // Gives AuditModule.Security (defined but never written anywhere until
     // now) a real purpose - the Super Admin's own tenant-lifecycle actions.

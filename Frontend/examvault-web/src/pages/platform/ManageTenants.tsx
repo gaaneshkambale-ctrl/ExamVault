@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
 import ReactivateTenantButton from '../../components/ReactivateTenantButton';
+import StartTrialButton from '../../components/StartTrialButton';
+import EndTrialButton from '../../components/EndTrialButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
 import { listPlans } from '../../api/plansApi';
@@ -13,11 +15,15 @@ import { listExams } from '../../api/examApi';
 
 interface ManageTenantsProps {
   // Undefined = "All Organizations". PlatformSidebar's nav key for
-  // highlighting derives from this page being mounted at one of three
-  // routes (org-all/active/suspended) - see AppRoutes.tsx. Create and
+  // highlighting derives from this page being mounted at one of four
+  // routes (org-all/active/suspended/trial) - see AppRoutes.tsx. Create and
   // per-org Details are their own dedicated pages (CreateOrganization.tsx,
   // OrganizationDetails.tsx), not modals/panels on this list anymore.
-  statusFilter?: 'active' | 'suspended';
+  statusFilter?: 'active' | 'suspended' | 'trial';
+}
+
+function daysRemaining(trialEndsAtUtc: string): number {
+  return Math.ceil((new Date(trialEndsAtUtc).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
 export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
@@ -66,6 +72,9 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
   const statusFiltered = tenants?.filter((tenant) => {
     if (statusFilter === 'active') return tenant.isActive;
     if (statusFilter === 'suspended') return !tenant.isActive;
+    // Trial is independent of Active/Suspended - an org can be either
+    // while on a trial, so this doesn't partition the other two tabs.
+    if (statusFilter === 'trial') return tenant.isTrial;
     return true;
   });
 
@@ -77,15 +86,26 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
   const totalCount = tenants?.length ?? 0;
   const activeCount = tenants?.filter((t) => t.isActive).length ?? 0;
   const suspendedCount = totalCount - activeCount;
+  const trialCount = tenants?.filter((t) => t.isTrial).length ?? 0;
 
-  const activeNavKey = statusFilter === 'active' ? 'org-active' : statusFilter === 'suspended' ? 'org-suspended' : 'org-all';
-  const pageTitle =
-    statusFilter === 'active' ? 'Active Organizations' : statusFilter === 'suspended' ? 'Suspended Organizations' : 'Organizations';
+  const navKeyByFilter: Record<string, string> = {
+    active: 'org-active',
+    suspended: 'org-suspended',
+    trial: 'org-trial',
+  };
+  const activeNavKey = statusFilter ? navKeyByFilter[statusFilter] : 'org-all';
+  const titleByFilter: Record<string, string> = {
+    active: 'Active Organizations',
+    suspended: 'Suspended Organizations',
+    trial: 'Trial Organizations',
+  };
+  const pageTitle = statusFilter ? titleByFilter[statusFilter] : 'Organizations';
 
-  const tabs: Array<{ label: string; count: number; path: string; filter?: 'active' | 'suspended' }> = [
+  const tabs: Array<{ label: string; count: number; path: string; filter?: 'active' | 'suspended' | 'trial' }> = [
     { label: 'All', count: totalCount, path: '/platform/organizations' },
     { label: 'Active', count: activeCount, path: '/platform/organizations/active', filter: 'active' },
     { label: 'Suspended', count: suspendedCount, path: '/platform/organizations/suspended', filter: 'suspended' },
+    { label: 'Trial', count: trialCount, path: '/platform/organizations/trial', filter: 'trial' },
   ];
 
   return (
@@ -151,6 +171,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                   <th>Admin Contact</th>
                   <th>Plan</th>
                   <th>Status</th>
+                  {statusFilter === 'trial' && <th>Trial Ends</th>}
                   <th>Users</th>
                   <th>Exams</th>
                   <th>Created On</th>
@@ -190,6 +211,22 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                         {tenant.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </td>
+                    {statusFilter === 'trial' && (
+                      <td>
+                        {tenant.trialEndsAtUtc ? (
+                          (() => {
+                            const remaining = daysRemaining(tenant.trialEndsAtUtc);
+                            return (
+                              <Badge bg={remaining < 0 ? 'danger' : remaining <= 3 ? 'warning' : 'info'}>
+                                {remaining < 0 ? 'Expired' : `${remaining}d left`}
+                              </Badge>
+                            );
+                          })()
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    )}
                     <td className="text-muted">
                       {isLoadingUsers ? <Spinner animation="border" size="sm" /> : (userCountByTenantId.get(tenant.id) ?? 0)}
                     </td>
@@ -214,6 +251,12 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                         ) : (
                           <ReactivateTenantButton tenantId={tenant.id} />
                         )}
+                        {statusFilter === 'trial' &&
+                          (tenant.isTrial ? (
+                            <EndTrialButton tenantId={tenant.id} />
+                          ) : (
+                            <StartTrialButton tenantId={tenant.id} tenantName={tenant.name} />
+                          ))}
                       </div>
                     </td>
                   </tr>
@@ -225,7 +268,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
       </Card>
 
       <div className="row g-3">
-        <div className="col-md-4">
+        <div className="col-md-3">
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Active Organizations</div>
@@ -239,7 +282,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
             </Card.Body>
           </Card>
         </div>
-        <div className="col-md-4">
+        <div className="col-md-3">
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Suspended Organizations</div>
@@ -253,7 +296,21 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
             </Card.Body>
           </Card>
         </div>
-        <div className="col-md-4">
+        <div className="col-md-3">
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small mb-1">Trial Organizations</div>
+              <div className="h4 fw-bold mb-1">{trialCount}</div>
+              <div className="text-muted small mb-2">
+                {totalCount === 0 ? 0 : ((trialCount / totalCount) * 100).toFixed(1)}% of total
+              </div>
+              <Link to="/platform/organizations/trial" className="small text-decoration-none">
+                View all trial &rarr;
+              </Link>
+            </Card.Body>
+          </Card>
+        </div>
+        <div className="col-md-3">
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Total Organizations</div>

@@ -5,12 +5,16 @@ export interface Tenant {
   isActive: boolean;
   createdAtUtc: string;
   planId: string;
+  isTrial: boolean;
+  trialEndsAtUtc: string | null;
 }
 
 export interface CreateTenantRequest {
   name: string;
   slug: string;
   planId?: string;
+  isTrial?: boolean;
+  trialEndsAtUtc?: string | null;
 }
 
 export interface CreateTenantAdminRequest {

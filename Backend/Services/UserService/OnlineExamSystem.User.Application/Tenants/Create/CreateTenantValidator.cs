@@ -17,5 +17,11 @@ public class CreateTenantValidator : AbstractValidator<CreateTenantCommand>
             .MaximumLength(100)
             .Matches("^[a-z0-9]+(-[a-z0-9]+)*$")
             .WithMessage("Slug must be lowercase letters, numbers, and hyphens only (e.g. \"stanford\").");
+
+        RuleFor(x => x.TrialEndsAtUtc)
+            .NotNull()
+            .GreaterThan(_ => DateTime.UtcNow)
+            .When(x => x.IsTrial)
+            .WithMessage("Trial end date must be set and in the future.");
     }
 }

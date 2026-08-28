@@ -30,10 +30,18 @@ export default function CreateOrganization() {
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminWarning, setAdminWarning] = useState('');
+  const [isTrial, setIsTrial] = useState(false);
+  const [trialEndDate, setTrialEndDate] = useState('');
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const tenant = await createTenant({ name, slug, planId: planId || undefined });
+      const tenant = await createTenant({
+        name,
+        slug,
+        planId: planId || undefined,
+        isTrial,
+        trialEndsAtUtc: isTrial && trialEndDate ? new Date(trialEndDate).toISOString() : undefined,
+      });
       if (adminFullName.trim() && adminEmail.trim()) {
         try {
           await createTenantAdmin(tenant.id, { fullName: adminFullName, email: adminEmail });
@@ -53,6 +61,8 @@ export default function CreateOrganization() {
 
   const activeOrgs = (tenants ?? []).filter((t) => t.isActive).slice(0, 5);
   const suspendedOrgs = (tenants ?? []).filter((t) => !t.isActive).slice(0, 5);
+  const trialOrgs = (tenants ?? []).filter((t) => t.isTrial).slice(0, 5);
+  const minTrialDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   return (
     <PlatformLayout active="org-create">
@@ -119,6 +129,27 @@ export default function CreateOrganization() {
                     <Form.Text className="text-muted">Determines which Admin console modules this organization can use.</Form.Text>
                   </Form.Group>
                 </Col>
+                <Col md={6}>
+                  <Form.Group controlId="orgTrial">
+                    <Form.Label className="d-block">Trial</Form.Label>
+                    <Form.Check
+                      type="checkbox"
+                      id="orgIsTrial"
+                      label="Mark as trial organization"
+                      checked={isTrial}
+                      onChange={(e) => setIsTrial(e.target.checked)}
+                    />
+                    {isTrial && (
+                      <Form.Control
+                        type="date"
+                        className="mt-2"
+                        min={minTrialDate}
+                        value={trialEndDate}
+                        onChange={(e) => setTrialEndDate(e.target.value)}
+                      />
+                    )}
+                  </Form.Group>
+                </Col>
               </Row>
 
               <h2 className="h6 fw-bold mb-3 mt-4">Admin Information</h2>
@@ -182,7 +213,7 @@ export default function CreateOrganization() {
                 </Link>
                 <Button
                   variant="primary"
-                  disabled={!name.trim() || !slug.trim() || createMutation.isPending}
+                  disabled={!name.trim() || !slug.trim() || (isTrial && !trialEndDate) || createMutation.isPending}
                   onClick={() => createMutation.mutate()}
                 >
                   {createMutation.isPending ? 'Creating...' : '+ Create Organization'}
@@ -214,7 +245,18 @@ export default function CreateOrganization() {
           <Card className="border-0 shadow-sm mb-3">
             <Card.Body>
               <h2 className="h6 fw-bold mb-3">Trial Organizations</h2>
-              <div className="text-center text-muted small py-4">Not connected yet.</div>
+              {trialOrgs.length === 0 && <div className="text-muted small py-3 text-center">No trial organizations.</div>}
+              <div className="d-flex flex-column gap-2">
+                {trialOrgs.map((tenant) => (
+                  <div key={tenant.id} className="d-flex align-items-center gap-2">
+                    <OrgAvatar name={tenant.name} size={28} />
+                    <div className="small text-truncate">{tenant.name}</div>
+                  </div>
+                ))}
+              </div>
+              <Link to="/platform/organizations/trial" className="small text-decoration-none d-inline-block mt-2">
+                View all trial &rarr;
+              </Link>
             </Card.Body>
           </Card>
 

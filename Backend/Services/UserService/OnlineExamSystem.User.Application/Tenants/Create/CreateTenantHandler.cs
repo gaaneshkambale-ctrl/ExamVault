@@ -41,6 +41,8 @@ public class CreateTenantHandler
             // completes their forced first password change
             // (ChangePasswordHandler), or manually via Reactivate.
             IsActive = false,
+            IsTrial = command.IsTrial,
+            TrialEndsAtUtc = command.IsTrial ? command.TrialEndsAtUtc : null,
         };
         await _tenantRepository.AddAsync(tenant, cancellationToken);
         await _tenantRepository.SaveChangesAsync(cancellationToken);

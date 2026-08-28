@@ -740,6 +740,14 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/platform/organizations/trial"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <ManageTenants statusFilter="trial" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/platform/users"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>

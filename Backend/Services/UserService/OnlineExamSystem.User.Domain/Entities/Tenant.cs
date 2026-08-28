@@ -17,4 +17,10 @@ public class Tenant : BaseEntity
     // backfilled to the "Full Access" plan, and Create Organization
     // defaults to it too.
     public Guid PlanId { get; set; }
+
+    // Manual, Super Admin controlled - not derived from CreatedAtUtc or
+    // any fixed platform-wide duration. TrialEndsAtUtc is only meaningful
+    // while IsTrial is true; ending a trial always clears it.
+    public bool IsTrial { get; set; } = false;
+    public DateTime? TrialEndsAtUtc { get; set; }
 }

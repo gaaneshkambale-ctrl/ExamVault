@@ -6002,3 +6002,80 @@ VERIFICATION
    push, confirm CD deploy via `az containerapp show --query
    properties.template.containers[0].image` (GitHub API rate limit still
    assumed exhausted).
+
+================================================================================
+SUPER ADMIN ORGANIZATIONS: TRIAL ORGANIZATIONS
+================================================================================
+Explicit ask (2026-08-28): implement `/platform/organizations/trial`
+("Trial Organizations"). Unlike Security Events/Subscription History (which
+reused already-real infrastructure that just wasn't wired up), this one is
+different: `ExamVault Super Admin Menu.txt` and `Modules-Details.txt` both
+document that this was PREVIOUSLY, DELIBERATELY dropped - "no plan/trial
+field exists on Tenant... user chose not to add one now." No trial concept
+exists anywhere (`Tenant` is just Name/Slug/IsActive/PlanId). Building this
+for real means inventing the concept, not wiring existing data - asked the
+user how it should work rather than guessing. Decision: a manual flag,
+Super Admin controlled - `Tenant.IsTrial` + `TrialEndsAtUtc`, settable at
+Create Organization time or toggled later on an existing org. NOT automatic/
+time-based-from-creation (that was the rejected alternative - too rigid,
+hardcoded platform-wide duration, no per-org control).
+
+BACKEND
+
+1. `Tenant.cs`: `bool IsTrial { get; set; } = false` + `DateTime?
+   TrialEndsAtUtc { get; set; }`. New EF Core migration
+   `AddTrialFieldsToTenant` (`dotnet ef migrations add ... --project
+   OnlineExamSystem.User.Infrastructure --startup-project
+   OnlineExamSystem.User.API -o Persistence/Migrations`).
+2. `CreateTenantCommand`/`CreateTenantRequest`/`CreateTenantHandler`: two
+   new trailing optional params, `IsTrial = false`, `TrialEndsAtUtc = null`
+   - non-breaking for existing callers. `CreateTenantValidator` gains a
+   rule: `IsTrial` true requires `TrialEndsAtUtc` set and in the future.
+3. New `SetTenantTrialCommand(TenantId, IsTrial, TrialEndsAtUtc)` /
+   `SetTenantTrialHandler` / `SetTenantTrialResult` (mirrors
+   `SetTenantActiveStatus`, reuses `ITenantRepository` as-is - no interface
+   change). Same future-date rule as Create; ending a trial (`IsTrial =
+   false`) always clears `TrialEndsAtUtc` to null regardless of what's
+   passed. New `PUT /api/tenants/{id}/trial` action on `TenantsController`
+   (`SetTenantTrialRequest` contract), Super Admin only, records a
+   `Security` audit entry via the existing `RecordSecurityEventAsync`
+   helper - "Trial started" (`details` = end date) or "Trial ended" - same
+   pattern as Plan changed/Deactivate/Reactivate. Creation itself stays
+   unaudited, matching Create's existing (also unaudited) behavior - not
+   introducing audit-on-create as new scope here.
+4. `TenantResponse` gains trailing `IsTrial = false, TrialEndsAtUtc = null`
+   so the frontend can render it - update the controller's `ToResponse`.
+
+FRONTEND
+
+5. `types/tenant.ts`/`tenantsApi.ts`: `isTrial`, `trialEndsAtUtc` on
+   `Tenant`; `isTrial`/`trialEndsAtUtc` optional on `CreateTenantRequest`;
+   new `setTenantTrial(tenantId, isTrial, trialEndsAtUtc)` API call.
+6. `ManageTenants.tsx` gains a 4th tab, `statusFilter="trial"` (filters
+   `tenant.isTrial`, independent of Active/Suspended - an org can be both),
+   a "Trial Ends" column (days remaining / "Expired" badge) shown only on
+   that tab, and a 4th summary card, all reusing the exact same
+   list/actions/query pattern as Active/Suspended. Routed at
+   `/platform/organizations/trial` (`active="org-trial"`), removed from
+   `platformComingSoonRoutes.ts`.
+7. New `StartTrialButton`/toggle in `OrganizationDetails.tsx`'s Actions
+   panel (mirrors `DeactivateTenantButton`'s confirm-modal pattern for
+   starting a trial - needs a date input; ending one is a direct action
+   like `ReactivateTenantButton`, non-destructive/reversible).
+8. `CreateOrganization.tsx`: "Mark as trial" checkbox + end-date field in
+   the create form; its own already-existing "Trial Organizations" side
+   card (currently hardcoded "Not connected yet") now shows real trial
+   tenants, same list style as the Active/Suspended cards beside it.
+
+VERIFICATION
+
+9. Full solution build + full backend test suite + frontend build + test
+   suite, all green. Live: create a real test org marked as trial with a
+   future end date, confirm it appears on `/platform/organizations/trial`
+   with the correct days-remaining; end its trial via Organization Details,
+   confirm it drops off that list and a "Trial ended" Security audit row
+   appears (visible on Subscription History's sibling Security Events
+   page); confirm CreateOrganization's Trial Organizations card now shows
+   real data. Sequential Docker rebuild of `user-api` + `frontend` only.
+   Commit, push, confirm CD deploy via `az containerapp show --query
+   properties.template.containers[0].image`.

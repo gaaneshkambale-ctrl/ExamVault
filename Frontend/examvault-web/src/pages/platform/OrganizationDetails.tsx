@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
 import ReactivateTenantButton from '../../components/ReactivateTenantButton';
+import StartTrialButton from '../../components/StartTrialButton';
+import EndTrialButton from '../../components/EndTrialButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
 import {
@@ -191,6 +193,7 @@ export default function OrganizationDetails() {
             <div className="d-flex align-items-center gap-2">
               <h1 className="h5 fw-bold mb-0">{tenant.name}</h1>
               <Badge bg={tenant.isActive ? 'success' : 'secondary'}>{tenant.isActive ? 'Active' : 'Inactive'}</Badge>
+              {tenant.isTrial && <Badge bg="info">Trial</Badge>}
             </div>
             <div className="text-muted small">{tenant.slug}.examvaults.in</div>
             <div className="text-muted small">Tenant ID: {tenant.id}</div>
@@ -247,6 +250,14 @@ export default function OrganizationDetails() {
                   <InfoRow label="Organization Type" value="—" />
                   <InfoRow label="Plan / Subscription" value={currentPlan?.name ?? '—'} />
                   <InfoRow label="Status" value={tenant.isActive ? 'Active' : 'Inactive'} />
+                  <InfoRow
+                    label="Trial"
+                    value={
+                      tenant.isTrial && tenant.trialEndsAtUtc
+                        ? `Yes - ends ${new Date(tenant.trialEndsAtUtc).toLocaleDateString()}`
+                        : 'No'
+                    }
+                  />
                   <InfoRow label="Registration Date" value={new Date(tenant.createdAtUtc).toLocaleString()} />
                   <InfoRow label="Description" value="—" />
                 </Card.Body>
@@ -456,6 +467,11 @@ export default function OrganizationDetails() {
                   <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />
                 ) : (
                   <ReactivateTenantButton tenantId={tenant.id} />
+                )}
+                {tenant.isTrial ? (
+                  <EndTrialButton tenantId={tenant.id} />
+                ) : (
+                  <StartTrialButton tenantId={tenant.id} tenantName={tenant.name} />
                 )}
                 <Button
                   variant="outline-secondary"

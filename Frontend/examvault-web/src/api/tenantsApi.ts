@@ -40,3 +40,8 @@ export async function resetTenantAdminPassword(tenantId: string, adminUserId: st
   );
   return data.temporaryPassword;
 }
+
+export async function setTenantTrial(tenantId: string, isTrial: boolean, trialEndsAtUtc?: string | null): Promise<Tenant> {
+  const { data } = await apiClient.put<Tenant>(`/api/tenants/${tenantId}/trial`, { isTrial, trialEndsAtUtc });
+  return data;
+}
