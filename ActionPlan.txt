@@ -5664,3 +5664,71 @@ VERIFICATION
 
 2. `npm run build`. Confirm Plan/Exams match ManageTenants.tsx for the same
    org, and Students only counts Student-role users (not Admins).
+
+NEW ORGANIZATIONS START INACTIVE, ACTIVATE ON ADMIN'S FIRST LOGIN
+------------------------------------------------------------------------
+Explicit ask (2026-08-28): a newly created org should not be Active
+immediately - it should stay Inactive until its admin actually logs in
+with the temp password and completes the forced first password change.
+
+Real conflict this runs into, found before writing any code: the admin's
+invite email links to `<slug>.examvaults.in/login` (TenantUrlBuilder). If
+that tenant is Inactive, the Gateway's TenantResolutionMiddleware 404s the
+ENTIRE request before it ever reaches User Service - the admin could never
+even load the login page, let alone log in, at the exact subdomain their
+invite email sends them to. Fixing only LoginUserHandler would not be
+enough; the Gateway gate happens first and doesn't know anything about
+"this specific login is a legitimate pending-activation attempt."
+
+Resolution, verified against the actual login code path (not assumed):
+`AuthProvider.login()` only sends `TenantSlug` when
+`extractTenantSlug(window.location.hostname)` returns something - the
+apex domain (`examvaults.in`, no subdomain) yields `undefined`, and
+`LoginUserHandler` skips its tenant-active check ENTIRELY when no slug is
+given (existing "today's single-tenant Azure setup" behavior, not new).
+So: send a pending (not-yet-active) tenant's invite email to the APEX
+login URL instead of its own subdomain - this never touches the Gateway's
+subdomain gate at all, no change needed to TenantResolutionMiddleware or
+LoginUserHandler's tenant check. `GetByEmailAsync` with no tenant scope
+already matches by email globally, exactly the "no slug yet" behavior this
+codebase already relies on elsewhere.
+
+(Side finding, out of scope for this ask, flagged not fixed: this same
+apex-domain no-slug path means ANY inactive tenant's admin - including one
+Deactivated by a Super Admin, not just a pending new one - can already log
+in via the apex domain today, bypassing the subdomain-level suspension.
+Pre-existing, unrelated to this feature, not touched here.)
+
+BACKEND
+
+1. `CreateTenantHandler`: new `Tenant { IsActive = false, ... }` instead of
+   relying on the entity's `IsActive = true` default. Applies to every new
+   org regardless of whether an admin is added at creation time or later -
+   an org created with no admin yet just stays Inactive until a Super
+   Admin either adds one (who then logs in) or manually clicks Reactivate.
+2. `ITenantUrlBuilder.GetLoginUrl(string? tenantSlug, bool isActive)` - new
+   `isActive` param, same special-case shape as the existing Default/
+   Platform-slug branch: `!isActive` also returns the apex login URL. All
+   3 call sites (`CreateTenantAdminHandler`, `ResetTenantAdminPasswordHandler`,
+   `CreateUserHandler`) pass `tenant.IsActive` (or `tenant?.IsActive ?? true`
+   where tenant is nullable).
+3. `ChangePasswordHandler` (the self-service forced-first-login flow):
+   after the existing `user.MustChangePassword = false; user.IsActive =
+   true;`, if `user.Role == UserRole.Admin`, fetch their tenant via the
+   newly-injected `ITenantRepository` and if `!tenant.IsActive`, set it
+   true. No extra `SaveChangesAsync` call needed - `ITenantRepository` and
+   `IUserRepository` share the same scoped `UserDbContext`, so the
+   handler's existing single save call persists both changes in one
+   transaction (confirmed: `TenantRepository.GetByIdAsync` doesn't
+   `AsNoTracking()`, so the mutation is tracked).
+
+VERIFICATION
+
+4. Rebuild + restart `user-api`. Create a real throwaway org (with an
+   admin), confirm it shows Inactive immediately; confirm the invite
+   email's login URL is the apex one, not the subdomain; log in as that
+   admin from the apex URL with the temp password, confirm the forced
+   change-password flow fires; complete it; confirm the org now shows
+   Active in All Organizations without touching Reactivate manually; THEN
+   confirm the admin's own subdomain (`<slug>.examvaults.in`) now resolves
+   correctly for their next login.

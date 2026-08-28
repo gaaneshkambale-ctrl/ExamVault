@@ -74,7 +74,7 @@ public class CreateUserHandler
         await _userRepository.SaveChangesAsync(cancellationToken);
 
         var tenant = await _tenantRepository.GetByIdAsync(command.TenantId, cancellationToken);
-        var loginUrl = _tenantUrlBuilder.GetLoginUrl(tenant?.Slug);
+        var loginUrl = _tenantUrlBuilder.GetLoginUrl(tenant?.Slug, tenant?.IsActive ?? true);
         var orgName = tenant?.Name;
 
         var emailSent = await _emailDispatcher.SendAsync(

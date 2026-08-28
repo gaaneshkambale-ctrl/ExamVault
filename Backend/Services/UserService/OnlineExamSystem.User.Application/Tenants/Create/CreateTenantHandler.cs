@@ -37,6 +37,10 @@ public class CreateTenantHandler
             Name = command.Name,
             Slug = command.Slug,
             PlanId = command.PlanId ?? TenantConstants.FullAccessPlanId,
+            // Starts Inactive - activated automatically once its admin
+            // completes their forced first password change
+            // (ChangePasswordHandler), or manually via Reactivate.
+            IsActive = false,
         };
         await _tenantRepository.AddAsync(tenant, cancellationToken);
         await _tenantRepository.SaveChangesAsync(cancellationToken);

@@ -66,7 +66,7 @@ public class ResetTenantAdminPasswordHandler
         user.MustChangePassword = true;
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        var loginUrl = _tenantUrlBuilder.GetLoginUrl(tenant.Slug);
+        var loginUrl = _tenantUrlBuilder.GetLoginUrl(tenant.Slug, tenant.IsActive);
         var emailSent = await _emailDispatcher.SendAsync(
             toEmail: user.Email,
             toName: user.FullName,

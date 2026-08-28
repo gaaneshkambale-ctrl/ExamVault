@@ -13,9 +13,10 @@ public class TenantUrlBuilder : ITenantUrlBuilder
         _settings = settings.Value;
     }
 
-    public string GetLoginUrl(string? tenantSlug)
+    public string GetLoginUrl(string? tenantSlug, bool isActive = true)
     {
         if (string.IsNullOrWhiteSpace(tenantSlug) ||
+            !isActive ||
             tenantSlug.Equals(TenantConstants.DefaultTenantSlug, StringComparison.OrdinalIgnoreCase) ||
             tenantSlug.Equals(TenantConstants.PlatformTenantSlug, StringComparison.OrdinalIgnoreCase))
         {
