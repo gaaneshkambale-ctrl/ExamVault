@@ -15,7 +15,6 @@ const initialFormState: CreateUserFormState = {
   fullName: '',
   email: '',
   role: 'Student',
-  isActive: true,
   phoneNumber: '',
   rollNumber: '',
 };
@@ -224,19 +223,12 @@ export default function CreateUser() {
                       </Form.Select>
                     </Form.Group>
                   </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-4" controlId="createUserStatus">
-                      <Form.Label className="fw-bold">Status</Form.Label>
-                      <Form.Select
-                        value={form.isActive ? 'Active' : 'Inactive'}
-                        onChange={(e) => updateField('isActive', e.target.value === 'Active')}
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </Form.Select>
-                    </Form.Group>
-                  </Col>
                 </Row>
+
+                <Alert variant="info" className="py-2 small mb-4">
+                  New accounts always start Inactive - they'll be flipped to Active automatically once this
+                  person logs in with their temporary password and sets their own.
+                </Alert>
 
                 <Alert variant="secondary" className="py-2 small">
                   Only Admin and Student actually control access in ExamVault today. The permission checklist
@@ -290,10 +282,6 @@ export default function CreateUser() {
                   <Col xs={6} md={4} className="mb-3">
                     <div className="text-muted small mb-1">Role</div>
                     <Badge bg={form.role === 'Admin' ? 'primary' : 'secondary'}>{form.role}</Badge>
-                  </Col>
-                  <Col xs={6} md={4} className="mb-3">
-                    <div className="text-muted small mb-1">Status</div>
-                    <Badge bg={form.isActive ? 'success' : 'secondary'}>{form.isActive ? 'Active' : 'Inactive'}</Badge>
                   </Col>
                   <Col xs={6} md={4} className="mb-3">
                     <div className="text-muted small mb-1">Roll No.</div>

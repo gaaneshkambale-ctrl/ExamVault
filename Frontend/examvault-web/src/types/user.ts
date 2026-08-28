@@ -107,7 +107,6 @@ export interface CreateUserRequest {
   fullName: string;
   email: string;
   role: UserRole;
-  isActive: boolean;
   phoneNumber: string;
   rollNumber?: string | null;
 }

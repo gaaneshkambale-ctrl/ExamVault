@@ -130,7 +130,6 @@ export default function ImportUsers() {
           fullName: row.fullName,
           email: row.email,
           role: row.role as UserRole,
-          isActive: false,
           phoneNumber: row.phoneNumber,
         };
         return createUser(request);

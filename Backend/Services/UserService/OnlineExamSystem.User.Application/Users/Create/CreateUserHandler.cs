@@ -63,7 +63,10 @@ public class CreateUserHandler
             FullName = command.FullName,
             Email = command.Email,
             Role = Enum.Parse<UserRole>(command.Role, ignoreCase: true),
-            IsActive = command.IsActive,
+            // Always starts Inactive - ChangePasswordHandler activates it
+            // automatically on this user's own forced first password
+            // change, same policy as new organizations.
+            IsActive = false,
             PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim(),
             RollNumber = string.IsNullOrWhiteSpace(command.RollNumber) ? null : command.RollNumber.Trim(),
             MustChangePassword = true,

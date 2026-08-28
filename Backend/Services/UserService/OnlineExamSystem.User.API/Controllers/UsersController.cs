@@ -235,7 +235,6 @@ public class UsersController : ControllerBase
             request.FullName,
             request.Email,
             request.Role,
-            request.IsActive,
             request.PhoneNumber,
             request.RollNumber);
         var result = await _createUserHandler.HandleAsync(command, cancellationToken);

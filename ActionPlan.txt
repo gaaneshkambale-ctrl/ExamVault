@@ -5732,3 +5732,51 @@ VERIFICATION
    Active in All Organizations without touching Reactivate manually; THEN
    confirm the admin's own subdomain (`<slug>.examvaults.in`) now resolves
    correctly for their next login.
+
+SAME PATTERN, ONE LEVEL DOWN: ADMIN'S "ADD USER" (STUDENTS)
+------------------------------------------------------------------------
+Explicit ask (2026-08-28): same policy as the org-activation feature above,
+applied to an Admin creating a User (Student/Admin) within their own
+tenant - new users should always start Inactive, activating automatically
+on their own forced first password change. Remove the manual Status
+picker from Add User entirely (no longer a real choice).
+
+Good news found before writing code: the activation trigger already
+exists and needs no changes - `ChangePasswordHandler` already sets
+`user.IsActive = true` unconditionally on a successful password change
+(this predates today's org-activation work, it just wasn't being exercised
+consistently because `CreateUserHandler` let the caller pick `IsActive` at
+creation, often defaulting to `true`). Also found: `ImportUsers.tsx` (Bulk
+Import) already hardcodes `isActive: false` for every imported row - this
+already-established convention is now made the ONLY behavior for Add User
+too, not the exception.
+
+BACKEND
+
+1. `CreateUserRequest`/`CreateUserCommand`: remove the `IsActive` parameter
+   entirely (not just default it) - it's no longer a real, caller-
+   controlled choice.
+2. `UsersController.Create`: stop passing `request.IsActive` into the
+   command.
+3. `CreateUserHandler`: hardcode `IsActive = false` on the new `AppUser`
+   instead of `command.IsActive`.
+
+FRONTEND
+
+4. `types/user.ts` `CreateUserRequest`: remove `isActive`.
+5. `CreateUser.tsx`: remove the "Status" `Form.Select` from the Role &
+   Access tab, the "Status" badge from the Additional Details review tab,
+   and `isActive` from `CreateUserFormState`/`initialFormState`.
+6. `ImportUsers.tsx`: remove the now-nonexistent `isActive: false` line
+   from its `CreateUserRequest` object literal (behavior unchanged - the
+   backend enforces it unconditionally now regardless of what's sent).
+
+VERIFICATION
+
+7. `dotnet build ExamVault.sln` (full solution, not just User.API - past
+   lesson in this session: a shared contract change can break a test fake
+   in a project never built in isolation) + `dotnet test` + `npm run
+   build`. Through the real UI: create a Student via Add User, confirm
+   Inactive immediately with no Status picker shown; log in as that
+   student with the temp password, complete the forced change, confirm
+   they now show Active in Manage Users.
