@@ -14,6 +14,7 @@ public class LoginUserHandler
     private readonly IValidator<LoginUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly IAuditClient _auditClient;
 
     public LoginUserHandler(
         IUserRepository userRepository,
@@ -21,7 +22,8 @@ public class LoginUserHandler
         IPlanRepository planRepository,
         IValidator<LoginUserCommand> validator,
         IPasswordHasher<AppUser> passwordHasher,
-        IJwtTokenService jwtTokenService)
+        IJwtTokenService jwtTokenService,
+        IAuditClient auditClient)
     {
         _userRepository = userRepository;
         _tenantRepository = tenantRepository;
@@ -29,6 +31,7 @@ public class LoginUserHandler
         _validator = validator;
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
+        _auditClient = auditClient;
     }
 
     public async Task<LoginUserResult> HandleAsync(
@@ -69,11 +72,17 @@ public class LoginUserHandler
         var verification = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, command.Password);
         if (verification == PasswordVerificationResult.Failed)
         {
+            // Only auditable failure case with a real identity to attach -
+            // unknown tenant/email above deliberately stays unaudited too,
+            // same "never reveal whether it exists" principle already
+            // documented there.
+            await RecordLoginAuditAsync(user, "Failed login", command.IpAddress, cancellationToken);
             return LoginUserResult.InvalidCredentials();
         }
 
         if (!user.IsActive && !user.MustChangePassword)
         {
+            await RecordLoginAuditAsync(user, "Failed login", command.IpAddress, cancellationToken);
             return LoginUserResult.AccountDeactivated();
         }
 
@@ -92,6 +101,27 @@ public class LoginUserHandler
         user.LastLoginAtUtc = DateTime.UtcNow;
         await _userRepository.SaveChangesAsync(cancellationToken);
 
+        await RecordLoginAuditAsync(user, "User login", command.IpAddress, cancellationToken);
         return LoginUserResult.Ok(user, accessToken, refreshToken);
     }
+
+    // Moved here from UsersController.Login (which only ever had the
+    // success case) - only the handler has a resolved `user` at the exact
+    // point a wrong password or a deactivated account gets rejected, which
+    // is what makes Failed Login Attempts auditable at all.
+    private Task RecordLoginAuditAsync(
+        AppUser user,
+        string activity,
+        string? ipAddress,
+        CancellationToken cancellationToken) =>
+        _auditClient.RecordAsync(
+            user.TenantId,
+            "Auth",
+            activity,
+            null,
+            null,
+            user.Id,
+            user.FullName,
+            ipAddress,
+            cancellationToken);
 }

@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
+using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Tenants.AssignPlan;
 using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
@@ -29,6 +31,7 @@ public class TenantsController : ControllerBase
     private readonly UpdateTenantHandler _updateTenantHandler;
     private readonly DeleteTenantHandler _deleteTenantHandler;
     private readonly ResetTenantAdminPasswordHandler _resetTenantAdminPasswordHandler;
+    private readonly IAuditClient _auditClient;
     private readonly ILogger<TenantsController> _logger;
 
     public TenantsController(
@@ -40,6 +43,7 @@ public class TenantsController : ControllerBase
         UpdateTenantHandler updateTenantHandler,
         DeleteTenantHandler deleteTenantHandler,
         ResetTenantAdminPasswordHandler resetTenantAdminPasswordHandler,
+        IAuditClient auditClient,
         ILogger<TenantsController> logger)
     {
         _createTenantHandler = createTenantHandler;
@@ -50,6 +54,7 @@ public class TenantsController : ControllerBase
         _updateTenantHandler = updateTenantHandler;
         _deleteTenantHandler = deleteTenantHandler;
         _resetTenantAdminPasswordHandler = resetTenantAdminPasswordHandler;
+        _auditClient = auditClient;
         _logger = logger;
     }
 
@@ -99,6 +104,7 @@ public class TenantsController : ControllerBase
         }
 
         _logger.LogInformation("Tenant {TenantId} deactivated.", id);
+        await RecordSecurityEventAsync(id, "Organization deactivated", cancellationToken);
         return Ok(ToResponse(result.Tenant!));
     }
 
@@ -115,6 +121,7 @@ public class TenantsController : ControllerBase
         }
 
         _logger.LogInformation("Tenant {TenantId} reactivated.", id);
+        await RecordSecurityEventAsync(id, "Organization reactivated", cancellationToken);
         return Ok(ToResponse(result.Tenant!));
     }
 
@@ -226,6 +233,7 @@ public class TenantsController : ControllerBase
         }
 
         _logger.LogInformation("Tenant {TenantId} deleted.", id);
+        await RecordSecurityEventAsync(id, "Organization deleted", cancellationToken);
         return NoContent();
     }
 
@@ -246,9 +254,34 @@ public class TenantsController : ControllerBase
         }
 
         _logger.LogInformation("Password reset for tenant {TenantId} admin {AdminUserId}.", id, adminUserId);
+        await RecordSecurityEventAsync(id, "Admin password reset", cancellationToken, entityId: adminUserId.ToString());
         return Ok(new ResetTenantAdminPasswordResponse(result.TemporaryPassword!));
     }
 
     private static TenantResponse ToResponse(Tenant tenant) =>
         new(tenant.Id, tenant.Name, tenant.Slug, tenant.IsActive, tenant.CreatedAtUtc, tenant.PlanId);
+
+    // Gives AuditModule.Security (defined but never written anywhere until
+    // now) a real purpose - the Super Admin's own tenant-lifecycle actions.
+    // TenantId is the AFFECTED org (what this event is about); UserId/
+    // UserName are the acting Super Admin (who did it) - same "subject vs.
+    // actor" split RecordAsync already uses for a regular login entry.
+    private Task RecordSecurityEventAsync(
+        Guid targetTenantId,
+        string activity,
+        CancellationToken cancellationToken,
+        string? entityId = null)
+    {
+        var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return _auditClient.RecordAsync(
+            targetTenantId,
+            "Security",
+            activity,
+            null,
+            entityId,
+            actorId is not null ? Guid.Parse(actorId) : null,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
+    }
 }

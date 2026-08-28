@@ -81,6 +81,8 @@ import OrganizationsAndPlans from '../pages/platform/OrganizationsAndPlans';
 import PlatformUsage from '../pages/platform/PlatformUsage';
 import SecurityAuditLogs from '../pages/platform/SecurityAuditLogs';
 import LoginActivity from '../pages/platform/LoginActivity';
+import SecurityEvents from '../pages/platform/SecurityEvents';
+import FailedLoginAttempts from '../pages/platform/FailedLoginAttempts';
 import OrganizationReport from '../pages/platform/OrganizationReport';
 import UserReport from '../pages/platform/UserReport';
 import ExamUsageReport from '../pages/platform/ExamUsageReport';
@@ -853,6 +855,30 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <LoginActivity />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/security"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SecurityEvents />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/security/events"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SecurityEvents />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/security/failed-logins"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <FailedLoginAttempts />
           </ProtectedRoute>
         }
       />

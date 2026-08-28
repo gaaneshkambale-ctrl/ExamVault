@@ -21,8 +21,4 @@ export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
   { path: '/platform/subscriptions/history', active: 'subs-history', parent: 'Subscriptions', title: 'Subscription History' },
 
   { path: '/platform/monitoring/api-health', active: 'mon-api-health', parent: 'System Monitoring', title: 'API Health' },
-
-  { path: '/platform/security', active: 'sec-events', parent: 'Security', title: 'Security Events' },
-  { path: '/platform/security/events', active: 'sec-events', parent: 'Security', title: 'Security Events' },
-  { path: '/platform/security/failed-logins', active: 'sec-failed-logins', parent: 'Security', title: 'Failed Login Attempts' },
 ];

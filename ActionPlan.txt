@@ -5870,3 +5870,66 @@ VERIFICATION
    both return real cross-tenant rows with correct `tenantId`/`examTitle`
    joins; a regular Admin's JWT gets 403 from both new endpoints (the
    SuperAdmin-only gate actually works, not just present in source).
+
+SUPER ADMIN SECURITY: SECURITY EVENTS + FAILED LOGIN ATTEMPTS
+------------------------------------------------------------------------
+Explicit ask (2026-08-28): implement the 2 remaining `PlatformComingSoon`
+placeholders under the Security menu (`sec-events`, `sec-failed-logins`) -
+Login Activity and Audit Logs were already real. Researched both first:
+failed-login auditing didn't exist ANYWHERE (only a successful login wrote
+an `Auth`/`"User login"` entry - `UsersController.Login`'s two failure
+branches did nothing but log a warning), and `AuditModule.Security` was
+defined in the enum but never written to by anything, ever - "Security
+Events" had no real concept behind it at all, not just a missing UI.
+
+BACKEND
+
+1. Moved login auditing from `UsersController.Login` into `LoginUserHandler`
+   itself (the controller's original success-only `RecordAsync` call is
+   gone) - only the handler has a resolved `user` at the exact moment a
+   wrong password or a deactivated-account attempt gets rejected, which is
+   what makes failures auditable at all. New `RecordLoginAuditAsync`
+   private helper records `Auth`/`"Failed login"` on both failure branches
+   with known identity (wrong password for a real user; a real user whose
+   account is deactivated) and `Auth`/`"User login"` on success (same
+   Activity string as before, unchanged for Login Activity's own filter).
+   Deliberately NOT audited: unknown tenant slug and unknown email/user -
+   no real identity to attach, and would start approaching probe-detection
+   rather than "a real account had a failed attempt," matching the
+   handler's own pre-existing "never reveal whether it exists" principle.
+2. `TenantsController` gained a `RecordSecurityEventAsync` helper (new
+   `IAuditClient` dependency) - gives `AuditModule.Security` a first real
+   purpose. Records `TenantId` = the affected org, `UserId`/`UserName` =
+   the acting Super Admin (from their own JWT claims), on: Deactivate
+   ("Organization deactivated"), Reactivate ("Organization reactivated"),
+   Delete ("Organization deleted" - recorded after removal, using the
+   already-known `id`, since the row is gone by then), and Reset Admin
+   Password ("Admin password reset", `entityId` = the target admin's own
+   user id).
+3. New `FakeAuditClient` test double (`Tests/UserService/.../Fakes/`) -
+   `LoginUserHandlerTests` needed one now that the handler takes a real
+   `IAuditClient` dependency.
+
+FRONTEND
+
+4. `FailedLoginAttempts.tsx` - same shape/query key as `LoginActivity.tsx`
+   (dedupes the fetch), filtered to `activity === 'Failed login'` instead
+   of `'User login'`.
+5. `SecurityEvents.tsx` - `getAuditLogs(from, to, 'Security')`, a
+   genuinely different server-side-filtered query (own query key, not
+   deduped against the other Security pages' unfiltered fetch). Table:
+   Time/Event badge/Organization/Performed By.
+6. Both routed for real in `AppRoutes.tsx` (including the Security group's
+   own base path `/platform/security`, which also pointed at `sec-events`)
+   and removed from `platformComingSoonRoutes.ts`.
+
+VERIFICATION
+
+7. Full solution build + all 335 backend tests + frontend build + all 60
+   frontend tests, all green. Verified live: a wrong-password attempt
+   against a real local account produced a real `Failed login` row (real
+   name/IP/timestamp, confirmed via direct SQL); deactivating then
+   reactivating a real test org produced both `Security`-module rows with
+   the correct actor (Super Admin) and target org; `GET /api/audit-logs?
+   module=Security` returns exactly those 2 rows in the shape
+   `SecurityEvents.tsx` expects.

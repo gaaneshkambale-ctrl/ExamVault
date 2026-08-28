@@ -172,16 +172,6 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} logged in successfully.", user.Id);
-        await _auditClient.RecordAsync(
-            user.TenantId,
-            "Auth",
-            "User login",
-            null,
-            null,
-            user.Id,
-            user.FullName,
-            HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
         var profile = ToProfileResponse(user);
         var response = new LoginResponse(profile, result.AccessToken!, result.RefreshToken!);
         return Ok(response);
