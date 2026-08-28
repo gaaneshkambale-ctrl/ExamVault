@@ -57,8 +57,11 @@ const navItems: NavItem[] = [
       { label: 'User Groups', path: '/admin/users/groups' },
     ],
   },
-  { label: 'Exams', path: '/admin/exams' },
-  { label: 'Exam Types', path: '/admin/exam-types' },
+  {
+    label: 'Exams',
+    path: '/admin/exams',
+    children: [{ label: 'Exam Types', path: '/admin/exam-types' }],
+  },
   {
     label: 'Live Monitoring',
     path: '/admin/live-monitoring/active-exams',
