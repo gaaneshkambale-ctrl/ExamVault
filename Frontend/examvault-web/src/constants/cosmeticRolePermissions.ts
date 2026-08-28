@@ -35,5 +35,8 @@ export const COSMETIC_ROLE_PERMISSIONS: Record<CosmeticRole | 'Super Admin', Cos
   Viewer: ['Dashboard - View', 'Results - View', 'Reports - View'],
 };
 
-export const ADMIN_PERMISSIONS: CosmeticPermission[] = [...COSMETIC_PERMISSIONS];
+// Everything except Certificates - that's a student-only feature
+// (pages/student/MyCertificates.tsx) with no admin-facing equivalent
+// anywhere in AdminSidebar's real nav.
+export const ADMIN_PERMISSIONS: CosmeticPermission[] = COSMETIC_PERMISSIONS.filter((p) => p !== 'Certificates - View');
 export const STUDENT_PERMISSIONS: CosmeticPermission[] = ['Dashboard - View', 'Results - View', 'Certificates - View'];
