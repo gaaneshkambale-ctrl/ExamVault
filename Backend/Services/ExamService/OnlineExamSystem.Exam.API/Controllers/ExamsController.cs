@@ -225,8 +225,11 @@ public class ExamsController : ControllerBase
         ExamStatus targetStatus,
         CancellationToken cancellationToken)
     {
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+
         var result = await _changeExamStatusHandler.HandleAsync(
-            new ChangeExamStatusCommand(id, targetStatus),
+            new ChangeExamStatusCommand(id, targetStatus, bearerToken),
             cancellationToken);
 
         if (result.IsNotFound)

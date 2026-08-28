@@ -48,7 +48,19 @@ public interface ISubmissionRepository
         IReadOnlyList<Guid> attemptIds,
         CancellationToken cancellationToken = default);
 
-    Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default);
+    // Atomic insert-or-update, keyed on the unique (AttemptId, QuestionId)
+    // index - two near-simultaneous saves for the same question (autosave
+    // racing "Save & Next") must never lose one to an unhandled unique-
+    // constraint violation.
+    Task<AttemptAnswer> UpsertAnswerAsync(
+        Guid attemptId,
+        Guid questionId,
+        Guid? selectedOptionId,
+        string? selectedOptionIdsJson,
+        bool isMarkedForReview,
+        string? answerText,
+        DateTime answeredAtUtc,
+        CancellationToken cancellationToken = default);
 
     Task<AttemptSectionState?> GetSectionStateAsync(
         Guid attemptId,

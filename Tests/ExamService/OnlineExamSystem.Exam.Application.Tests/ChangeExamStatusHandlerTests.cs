@@ -29,12 +29,40 @@ public class ChangeExamStatusHandlerTests
             Marks = 20,
             DurationMinutes = 20,
         });
-        var handler = new ChangeExamStatusHandler(repository);
+        var questionServiceClient = new FakeQuestionServiceClient();
+        questionServiceClient.QuestionCountsByExamId[exam.Id] = 10;
+        var handler = new ChangeExamStatusHandler(repository, questionServiceClient);
 
         var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Published));
 
         Assert.True(result.Success);
         Assert.Equal(ExamStatus.Published, result.Exam!.Status);
+    }
+
+    [Fact]
+    public async Task Publish_is_blocked_when_exam_has_no_real_questions()
+    {
+        // Even a non-sectioned exam (which skips the section-totals check entirely) must
+        // still be blocked from publishing with zero real questions in Question Service.
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper
+        {
+            Title = "Empty Exam",
+            Status = ExamStatus.Draft,
+            ContainsSections = false,
+            DurationMinutes = 30,
+            TotalMarks = 10,
+            PassingMarks = 4,
+        };
+        await repository.AddAsync(exam);
+        var questionServiceClient = new FakeQuestionServiceClient();
+        var handler = new ChangeExamStatusHandler(repository, questionServiceClient);
+
+        var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Published));
+
+        Assert.False(result.Success);
+        Assert.NotEmpty(result.ValidationErrors);
+        Assert.Equal(ExamStatus.Draft, exam.Status);
     }
 
     [Fact]
@@ -58,7 +86,7 @@ public class ChangeExamStatusHandlerTests
             Marks = 20,
             DurationMinutes = 20,
         });
-        var handler = new ChangeExamStatusHandler(repository);
+        var handler = new ChangeExamStatusHandler(repository, new FakeQuestionServiceClient());
 
         var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Published));
 
@@ -75,7 +103,7 @@ public class ChangeExamStatusHandlerTests
         var repository = new FakeExamRepository();
         var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Draft, ContainsSections = true };
         await repository.AddAsync(exam);
-        var handler = new ChangeExamStatusHandler(repository);
+        var handler = new ChangeExamStatusHandler(repository, new FakeQuestionServiceClient());
 
         var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Published));
 
@@ -101,7 +129,9 @@ public class ChangeExamStatusHandlerTests
         };
         await repository.AddAsync(exam);
         await repository.AddSectionAsync(new Section { ExamId = exam.Id, Name = "General", DurationMinutes = 60 });
-        var handler = new ChangeExamStatusHandler(repository);
+        var questionServiceClient = new FakeQuestionServiceClient();
+        questionServiceClient.QuestionCountsByExamId[exam.Id] = 1;
+        var handler = new ChangeExamStatusHandler(repository, questionServiceClient);
 
         var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Published));
 
@@ -123,7 +153,7 @@ public class ChangeExamStatusHandlerTests
             PassingMarks = 40,
         };
         await repository.AddAsync(exam);
-        var handler = new ChangeExamStatusHandler(repository);
+        var handler = new ChangeExamStatusHandler(repository, new FakeQuestionServiceClient());
 
         var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Draft));
 
@@ -137,7 +167,7 @@ public class ChangeExamStatusHandlerTests
         var repository = new FakeExamRepository();
         var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Archived };
         await repository.AddAsync(exam);
-        var handler = new ChangeExamStatusHandler(repository);
+        var handler = new ChangeExamStatusHandler(repository, new FakeQuestionServiceClient());
 
         var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Published));
 
@@ -150,7 +180,7 @@ public class ChangeExamStatusHandlerTests
     public async Task Unknown_exam_returns_not_found()
     {
         var repository = new FakeExamRepository();
-        var handler = new ChangeExamStatusHandler(repository);
+        var handler = new ChangeExamStatusHandler(repository, new FakeQuestionServiceClient());
 
         var result = await handler.HandleAsync(new ChangeExamStatusCommand(Guid.NewGuid(), ExamStatus.Published));
 

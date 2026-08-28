@@ -6108,3 +6108,78 @@ show - if there is one, it stays on the page instead. Same gap existed
 consistency. Verified live: bad email now disables the button with a red
 inline message; fixing the email re-enables it and creates the org with a
 real, Active admin visible on the Admins tab.
+
+================================================================================
+BUG FIXES: 3-ROLE END-TO-END TEST FINDINGS (SuperAdmin/Admin/Student)
+================================================================================
+Explicit ask (2026-08-28): "test dev superadmin,admin,student end to end
+every functionality" then "fix four bug" from the findings. Ran 3 parallel/
+sequential fork agents against the local Docker `dev` stack (same code as
+Azure `dev`) covering every sidebar route + real interactive flows per
+role. Full findings already reported to the user. 4 real bugs identified;
+1 (duplicate `<svg height="auto">` report) was already fixed as part of
+the SuperAdmin pass's `Home.tsx` fix - confirmed via grep no second
+instance exists in source, so nothing further needed there. The other 3:
+
+1. SCORING BUG (most severe) - `TakeExam.tsx`'s `sectionGroups` useMemo
+   (lines ~423-444) recomputes `shuffle()` (unseeded `Math.random()`)
+   whenever `questions` gets a new array reference from a React Query
+   refetch (window refocus, background poll) - reshuffling mid-attempt
+   desyncs `displayQuestions[currentIndex]` from the "Question X of Y"
+   header, and one save landed with `selectedOptionId: null` for a
+   question the student actually answered correctly, corrupting the
+   score. Fix: lock `sectionGroups` into a ref once per `attemptId`, only
+   after `questions` AND (if `exam.containsSections`) `sections` have
+   both loaded - never recompute again for that attempt regardless of
+   later refetches.
+
+2. RACE CONDITION / 500 - `SaveAnswerHandler.cs:46-69` (Submission
+   service) does check-then-insert on `AttemptAnswers`, which has a
+   unique index on `(AttemptId, QuestionId)`. Two near-simultaneous saves
+   for the same question (autosave racing "Save & Next") can both pass
+   the `GetAnswerAsync` check as "no existing row," then collide on
+   insert - second one throws an unhandled `SqlException`. Fix: move the
+   insert-or-update into a new `ISubmissionRepository.UpsertAnswerAsync`
+   at the Infrastructure layer (where EF Core types belong), catching
+   `DbUpdateException` on the insert attempt, detaching the failed
+   tracked entity, and falling back to updating the row that won the
+   race - so the racing save is never silently lost.
+
+3. VALIDATION GAP - an exam with zero real questions can be published.
+   `ChangeExamStatusHandler.cs`'s existing publish-time validation only
+   runs `if (exam.ContainsSections)` and only cross-checks
+   admin-*declared* section question-count totals against each other -
+   it never checks the REAL question count in Question Service (a
+   different microservice/DB), and non-sectioned exams get no check at
+   all. Fix: call the already-existing `IQuestionServiceClient` (used by
+   `DeleteSectionHandler` for the same cross-service pattern) with a new
+   `GetQuestionCountAsync` method that hits Question Service's existing
+   internal `answer-key` endpoint and takes the count - block publishing
+   (for both sectioned and non-sectioned exams) when it's 0, same
+   `ValidationFailed` result path as the existing section-totals checks.
+   `ChangeExamStatusCommand` gains a `BearerToken` field, same pattern
+   `DeleteSectionCommand` already uses to call across services.
+
+NOT touched here (separate, smaller finding, not one of the 4 selected):
+`GET /api/exams/{id}` returning a stale `totalQuestions` - already a
+long-documented, deliberately-accepted architectural limit (every other
+consuming page already works around it with a real per-exam question
+count fetched from Question Service, e.g. `useQuestionCountsByExam` -
+comments to this effect exist in `useQuestions.ts`,
+`AdminDashboard.tsx`, `ExamDetails.tsx` x2). The one place that doesn't
+follow this established pattern, `PlatformAllExams.tsx:97`, is an easy
+one-line fix reusing the existing shared hook - doing it now for
+consistency since it's the same bug class and trivially cheap, not
+starting new scope.
+
+VERIFICATION: full solution build + full backend test suite (update
+`FakeSubmissionRepository` for the new `UpsertAnswerAsync` method) +
+frontend build + frontend test suite, all green. Live: reproduce the
+original shuffle-desync and race-condition failures against the local
+Docker stack pre-fix if feasible, confirm they're gone post-fix; confirm
+publishing a 0-question exam is now rejected with a clear message for
+both a sectioned and a non-sectioned exam; confirm `PlatformAllExams.tsx`
+now shows the real question count. Sequential Docker rebuild of the
+affected services only (submission-api, exam-api, question-api if
+touched, frontend). Commit, push, confirm CD deploy via `az containerapp
+show --query properties.template.containers[0].image` per service.

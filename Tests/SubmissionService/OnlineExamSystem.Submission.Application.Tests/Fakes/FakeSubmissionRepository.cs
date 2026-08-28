@@ -93,10 +93,39 @@ public class FakeSubmissionRepository : ISubmissionRepository
         CancellationToken cancellationToken = default) =>
         Task.FromResult(_answers.Where(a => attemptIds.Contains(a.AttemptId)).ToLookup(a => a.AttemptId));
 
-    public Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default)
+    public Task<AttemptAnswer> UpsertAnswerAsync(
+        Guid attemptId,
+        Guid questionId,
+        Guid? selectedOptionId,
+        string? selectedOptionIdsJson,
+        bool isMarkedForReview,
+        string? answerText,
+        DateTime answeredAtUtc,
+        CancellationToken cancellationToken = default)
     {
+        var existing = _answers.FirstOrDefault(a => a.AttemptId == attemptId && a.QuestionId == questionId);
+        if (existing is not null)
+        {
+            existing.SelectedOptionId = selectedOptionId;
+            existing.SelectedOptionIdsJson = selectedOptionIdsJson;
+            existing.IsMarkedForReview = isMarkedForReview;
+            existing.AnsweredAtUtc = answeredAtUtc;
+            existing.AnswerText = answerText;
+            return Task.FromResult(existing);
+        }
+
+        var answer = new AttemptAnswer
+        {
+            AttemptId = attemptId,
+            QuestionId = questionId,
+            SelectedOptionId = selectedOptionId,
+            SelectedOptionIdsJson = selectedOptionIdsJson,
+            IsMarkedForReview = isMarkedForReview,
+            AnsweredAtUtc = answeredAtUtc,
+            AnswerText = answerText,
+        };
         _answers.Add(answer);
-        return Task.CompletedTask;
+        return Task.FromResult(answer);
     }
 
     public Task<AttemptSectionState?> GetSectionStateAsync(

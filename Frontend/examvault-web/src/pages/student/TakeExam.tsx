@@ -420,28 +420,56 @@ export default function TakeExam() {
   // is scoped to whichever section is currently open.
   const allQuestions = questions ?? [];
 
+  // Locks the shuffled order in once per attempt (sectionGroupsCacheRef),
+  // rather than recomputing on every `questions`/`sections` refetch (window
+  // refocus, background poll) - `shuffle()` is unseeded, so recomputing mid-
+  // attempt used to produce a NEW random order, desyncing the "Question X of
+  // Y" header/navigator from the actually-displayed question and silently
+  // saving answers against the wrong one. Only locks once `questions` (and
+  // `sections`, if this exam has any) have actually loaded, so an early
+  // computation before sections arrive doesn't get stuck ungrouped.
+  const sectionGroupsCacheRef = useRef<{ attemptId: string | null; groups: SectionGroup[] } | null>(null);
   const sectionGroups = useMemo<SectionGroup[]>(() => {
+    if (sectionGroupsCacheRef.current?.attemptId === attemptId) {
+      return sectionGroupsCacheRef.current.groups;
+    }
     if (!questions) {
       return [];
     }
+
+    let groups: SectionGroup[];
     if (!isSectioned) {
       const ordered = exam?.shuffleQuestions ? shuffle(questions) : questions;
       const withOptions = exam?.shuffleOptions
         ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
         : ordered;
-      return [{ section: null, questions: withOptions }];
+      groups = [{ section: null, questions: withOptions }];
+    } else {
+      groups = orderedSections.map((section) => {
+        const sectionQuestions = questions.filter((q) => q.sectionId === section.id);
+        const ordered = section.shuffleQuestions ? shuffle(sectionQuestions) : sectionQuestions;
+        const withOptions = section.shuffleOptions
+          ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
+          : ordered;
+        return { section, questions: withOptions };
+      });
     }
-    return orderedSections.map((section) => {
-      const sectionQuestions = questions.filter((q) => q.sectionId === section.id);
-      const ordered = section.shuffleQuestions ? shuffle(sectionQuestions) : sectionQuestions;
-      const withOptions = section.shuffleOptions
-        ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
-        : ordered;
-      return { section, questions: withOptions };
-    });
-    // Deliberately keyed on the shuffle flags rather than the whole `exam`
-    // object, so the layout doesn't reshuffle on unrelated exam refetches.
-  }, [questions, isSectioned, orderedSections, exam?.shuffleQuestions, exam?.shuffleOptions]);
+
+    const sectionsReady = !exam?.containsSections || sections !== undefined;
+    if (sectionsReady) {
+      sectionGroupsCacheRef.current = { attemptId, groups };
+    }
+    return groups;
+  }, [
+    attemptId,
+    questions,
+    isSectioned,
+    orderedSections,
+    sections,
+    exam?.containsSections,
+    exam?.shuffleQuestions,
+    exam?.shuffleOptions,
+  ]);
 
   const currentGroup = sectionIndex >= 0 ? sectionGroups[sectionIndex] : undefined;
   const displayQuestions = useMemo(() => currentGroup?.questions ?? [], [currentGroup]);

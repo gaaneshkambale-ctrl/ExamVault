@@ -147,7 +147,7 @@ const banner: Chip[] = [
 function HeroVisual() {
   return (
     <div className="position-relative">
-      <svg width="100%" height="auto" viewBox="0 0 420 340" fill="none" aria-hidden="true">
+      <svg width="100%" viewBox="0 0 420 340" fill="none" aria-hidden="true">
         <circle cx="230" cy="170" r="150" fill="#eef2ff" />
         <rect x="90" y="120" width="220" height="150" rx="14" fill="white" stroke="#e0e7ff" strokeWidth="2" />
         <rect x="90" y="120" width="220" height="28" rx="14" fill="#eef2ff" />

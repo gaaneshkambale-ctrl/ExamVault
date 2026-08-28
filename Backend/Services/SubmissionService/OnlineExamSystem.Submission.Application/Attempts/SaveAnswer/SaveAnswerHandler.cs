@@ -1,7 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
 using OnlineExamSystem.Submission.Application.Interfaces;
-using OnlineExamSystem.Submission.Domain.Entities;
 using OnlineExamSystem.Submission.Domain.Enums;
 
 namespace OnlineExamSystem.Submission.Application.Attempts.SaveAnswer;
@@ -43,39 +42,24 @@ public class SaveAnswerHandler
             return SaveAnswerResult.NotInProgress();
         }
 
-        var existingAnswer = await _repository.GetAnswerAsync(
-            command.AttemptId,
-            command.QuestionId,
-            cancellationToken);
-        var now = DateTime.UtcNow;
         var selectedOptionIdsJson = command.SelectedOptionIds is { Count: > 0 }
             ? JsonSerializer.Serialize(command.SelectedOptionIds)
             : null;
 
-        if (existingAnswer is null)
-        {
-            var answer = new AttemptAnswer
-            {
-                AttemptId = command.AttemptId,
-                QuestionId = command.QuestionId,
-                SelectedOptionId = command.SelectedOptionId,
-                SelectedOptionIdsJson = selectedOptionIdsJson,
-                IsMarkedForReview = command.IsMarkedForReview,
-                AnsweredAtUtc = now,
-                AnswerText = command.AnswerText,
-            };
-            await _repository.AddAnswerAsync(answer, cancellationToken);
-            await _repository.SaveChangesAsync(cancellationToken);
-            return SaveAnswerResult.Ok(answer);
-        }
+        // Atomic insert-or-update at the repository layer - avoids the
+        // check-then-insert race this used to do inline here, which could
+        // lose a save to an unhandled unique-constraint violation when two
+        // saves for the same question landed near-simultaneously.
+        var answer = await _repository.UpsertAnswerAsync(
+            command.AttemptId,
+            command.QuestionId,
+            command.SelectedOptionId,
+            selectedOptionIdsJson,
+            command.IsMarkedForReview,
+            command.AnswerText,
+            DateTime.UtcNow,
+            cancellationToken);
 
-        existingAnswer.SelectedOptionId = command.SelectedOptionId;
-        existingAnswer.SelectedOptionIdsJson = selectedOptionIdsJson;
-        existingAnswer.IsMarkedForReview = command.IsMarkedForReview;
-        existingAnswer.AnsweredAtUtc = now;
-        existingAnswer.AnswerText = command.AnswerText;
-        await _repository.SaveChangesAsync(cancellationToken);
-
-        return SaveAnswerResult.Ok(existingAnswer);
+        return SaveAnswerResult.Ok(answer);
     }
 }

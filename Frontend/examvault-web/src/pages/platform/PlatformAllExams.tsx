@@ -3,6 +3,7 @@ import { Badge, Card, Form, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import { useTenants } from '../../hooks/useTenants';
+import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { listExams } from '../../api/examApi';
 
 // Real, cross-tenant - ExamsController.List already accepts a SuperAdmin
@@ -11,6 +12,10 @@ import { listExams } from '../../api/examApi';
 export default function PlatformAllExams() {
   const { data: exams, isLoading, isError } = useQuery({ queryKey: ['platform-exams'], queryFn: listExams });
   const { data: tenants } = useTenants();
+  // exam.totalQuestions is a legacy field never kept in sync with Question
+  // Service (see useQuestions.ts) - compute the real count like every other
+  // exam list in the app already does.
+  const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
 
   const [searchText, setSearchText] = useState('');
 
@@ -94,7 +99,7 @@ export default function PlatformAllExams() {
                         {exam.status}
                       </Badge>
                     </td>
-                    <td className="text-muted">{exam.totalQuestions}</td>
+                    <td className="text-muted">{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                     <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
                   </tr>
                 ))}
