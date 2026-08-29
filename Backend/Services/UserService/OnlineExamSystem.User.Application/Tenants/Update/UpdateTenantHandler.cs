@@ -38,6 +38,8 @@ public class UpdateTenantHandler
 
         tenant.Name = command.Name;
         tenant.Slug = command.Slug;
+        tenant.OrganizationCode = string.IsNullOrWhiteSpace(command.OrganizationCode) ? null : command.OrganizationCode.Trim();
+        tenant.OrganizationType = string.IsNullOrWhiteSpace(command.OrganizationType) ? null : command.OrganizationType.Trim();
         await _tenantRepository.SaveChangesAsync(cancellationToken);
 
         return UpdateTenantResult.Ok(tenant);

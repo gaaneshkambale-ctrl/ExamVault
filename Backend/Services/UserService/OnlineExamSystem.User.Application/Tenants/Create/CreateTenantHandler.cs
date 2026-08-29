@@ -43,6 +43,8 @@ public class CreateTenantHandler
             IsActive = false,
             IsTrial = command.IsTrial,
             TrialEndsAtUtc = command.IsTrial ? command.TrialEndsAtUtc : null,
+            OrganizationCode = string.IsNullOrWhiteSpace(command.OrganizationCode) ? null : command.OrganizationCode.Trim(),
+            OrganizationType = string.IsNullOrWhiteSpace(command.OrganizationType) ? null : command.OrganizationType.Trim(),
         };
         await _tenantRepository.AddAsync(tenant, cancellationToken);
         await _tenantRepository.SaveChangesAsync(cancellationToken);

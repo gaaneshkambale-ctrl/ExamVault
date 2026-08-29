@@ -9,16 +9,17 @@ import { createTenant, createTenantAdmin } from '../../api/tenantsApi';
 import { listPlans } from '../../api/plansApi';
 import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
+import { ORGANIZATION_TYPES } from '../../types/tenant';
 
 // Matches org_submenu.png's Create Organization page. Real fields: Name,
-// Subdomain, and Admin Full Name/Email/Phone Number/Designation - if
-// Full Name and Email are filled, this page makes a second real API call
-// (createTenantAdmin) right after the tenant is created, so creating an
-// org and its first admin is one step instead of the old
-// create-then-separately-add-admin flow. Every other field in the mockup
-// (Org Code, Org Type, the whole Address section, the 3 toggles) has no
-// backing field anywhere in this codebase - shown disabled with a "not
-// saved yet" hint rather than silently accepting and discarding input.
+// Subdomain, Organization Code/Type, and Admin Full Name/Email/Phone
+// Number/Designation - if Full Name and Email are filled, this page makes
+// a second real API call (createTenantAdmin) right after the tenant is
+// created, so creating an org and its first admin is one step instead of
+// the old create-then-separately-add-admin flow. Every other field in the
+// mockup (the whole Address section, the 3 toggles) has no backing field
+// anywhere in this codebase - shown disabled with a "not saved yet" hint
+// rather than silently accepting and discarding input.
 export default function CreateOrganization() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -27,6 +28,8 @@ export default function CreateOrganization() {
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [orgCode, setOrgCode] = useState('');
+  const [orgType, setOrgType] = useState('');
   const [planId, setPlanId] = useState('');
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
@@ -44,6 +47,8 @@ export default function CreateOrganization() {
         planId: planId || undefined,
         isTrial,
         trialEndsAtUtc: isTrial && trialEndDate ? new Date(trialEndDate).toISOString() : undefined,
+        organizationCode: orgCode.trim() || undefined,
+        organizationType: orgType || undefined,
       });
       let adminError: string | null = null;
       if (adminFullName.trim() && adminEmail.trim()) {
@@ -105,8 +110,7 @@ export default function CreateOrganization() {
                 <Col md={6}>
                   <Form.Group controlId="orgCode">
                     <Form.Label>Organization Code</Form.Label>
-                    <Form.Control disabled placeholder="e.g. GFU2026" />
-                    <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
+                    <Form.Control value={orgCode} onChange={(e) => setOrgCode(e.target.value)} placeholder="e.g. GFU2026" />
                   </Form.Group>
                 </Col>
               </Row>
@@ -124,10 +128,14 @@ export default function CreateOrganization() {
                 <Col md={6}>
                   <Form.Group controlId="orgType">
                     <Form.Label>Organization Type</Form.Label>
-                    <Form.Select disabled>
-                      <option>Select type</option>
+                    <Form.Select value={orgType} onChange={(e) => setOrgType(e.target.value)}>
+                      <option value="">Select type</option>
+                      {ORGANIZATION_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
                     </Form.Select>
-                    <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
                   </Form.Group>
                 </Col>
               </Row>

@@ -66,7 +66,14 @@ public class TenantsController : ControllerBase
     public async Task<IActionResult> Create(CreateTenantRequest request, CancellationToken cancellationToken)
     {
         var result = await _createTenantHandler.HandleAsync(
-            new CreateTenantCommand(request.Name, request.Slug, request.PlanId, request.IsTrial, request.TrialEndsAtUtc),
+            new CreateTenantCommand(
+                request.Name,
+                request.Slug,
+                request.PlanId,
+                request.IsTrial,
+                request.TrialEndsAtUtc,
+                request.OrganizationCode,
+                request.OrganizationType),
             cancellationToken);
 
         if (result.SlugAlreadyExists)
@@ -205,7 +212,8 @@ public class TenantsController : ControllerBase
     public async Task<IActionResult> Update(Guid id, UpdateTenantRequest request, CancellationToken cancellationToken)
     {
         var result = await _updateTenantHandler.HandleAsync(
-            new UpdateTenantCommand(id, request.Name, request.Slug), cancellationToken);
+            new UpdateTenantCommand(id, request.Name, request.Slug, request.OrganizationCode, request.OrganizationType),
+            cancellationToken);
 
         if (result.TenantNotFound)
         {
@@ -297,7 +305,17 @@ public class TenantsController : ControllerBase
     }
 
     private static TenantResponse ToResponse(Tenant tenant) =>
-        new(tenant.Id, tenant.Name, tenant.Slug, tenant.IsActive, tenant.CreatedAtUtc, tenant.PlanId, tenant.IsTrial, tenant.TrialEndsAtUtc);
+        new(
+            tenant.Id,
+            tenant.Name,
+            tenant.Slug,
+            tenant.IsActive,
+            tenant.CreatedAtUtc,
+            tenant.PlanId,
+            tenant.IsTrial,
+            tenant.TrialEndsAtUtc,
+            tenant.OrganizationCode,
+            tenant.OrganizationType);
 
     // Gives AuditModule.Security (defined but never written anywhere until
     // now) a real purpose - the Super Admin's own tenant-lifecycle actions.

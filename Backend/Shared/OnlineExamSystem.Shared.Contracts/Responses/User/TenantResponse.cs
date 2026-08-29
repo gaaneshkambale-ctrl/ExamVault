@@ -8,4 +8,6 @@ public record TenantResponse(
     DateTime CreatedAtUtc,
     Guid PlanId = default,
     bool IsTrial = false,
-    DateTime? TrialEndsAtUtc = null);
+    DateTime? TrialEndsAtUtc = null,
+    string? OrganizationCode = null,
+    string? OrganizationType = null);

@@ -21,17 +21,19 @@ import { getAuditLogs } from '../../api/auditApi';
 import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
 import { PLAN_FEATURE_LABELS } from '../../types/plan';
+import { ORGANIZATION_TYPES } from '../../types/tenant';
 
 const ACTIVITY_LOG_FROM = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
 const ACTIVITY_LOG_TO = new Date().toISOString();
 
 // Matches org_submenu.png's Organization Details page - all 8 tabs from
 // the mockup exist as real nav. Overview/Admins/Subscriptions/Activity Log
-// have real data behind them; Usage/Users/Exams/Settings still show the
-// mockup's Organization Code/Type/Billing/Address/Quick Stats fields with
-// no backing field anywhere in this codebase - honest placeholders,
-// matching every other "not connected yet" surface in this console. Add
-// Admin (real) lives on the Admins tab; Suspend/Edit/Reset Admin Password/
+// have real data behind them (Organization Code/Type included, editable
+// via the Actions panel's Edit Organization); Usage/Users/Exams/Settings
+// still show the mockup's Billing/Address/Quick Stats fields with no
+// backing field anywhere in this codebase - honest placeholders, matching
+// every other "not connected yet" surface in this console. Add Admin
+// (real) lives on the Admins tab; Suspend/Edit/Reset Admin Password/
 // Delete (all real) live in the Actions panel.
 const TABS = ['Overview', 'Usage', 'Admins', 'Users', 'Exams', 'Subscriptions', 'Activity Log', 'Settings'] as const;
 type DetailTab = (typeof TABS)[number];
@@ -109,9 +111,17 @@ export default function OrganizationDetails() {
   const [showEditOrg, setShowEditOrg] = useState(false);
   const [editName, setEditName] = useState('');
   const [editSlug, setEditSlug] = useState('');
+  const [editOrgCode, setEditOrgCode] = useState('');
+  const [editOrgType, setEditOrgType] = useState('');
 
   const updateTenantMutation = useMutation({
-    mutationFn: () => updateTenant(tenant!.id, { name: editName.trim(), slug: editSlug.trim() }),
+    mutationFn: () =>
+      updateTenant(tenant!.id, {
+        name: editName.trim(),
+        slug: editSlug.trim(),
+        organizationCode: editOrgCode.trim() || null,
+        organizationType: editOrgType || null,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tenants'] });
       setShowEditOrg(false);
@@ -122,6 +132,8 @@ export default function OrganizationDetails() {
     updateTenantMutation.reset();
     setEditName(tenant?.name ?? '');
     setEditSlug(tenant?.slug ?? '');
+    setEditOrgCode(tenant?.organizationCode ?? '');
+    setEditOrgType(tenant?.organizationType ?? '');
     setShowEditOrg(true);
   };
 
@@ -246,9 +258,9 @@ export default function OrganizationDetails() {
                 <Card.Body>
                   <h2 className="h6 fw-bold mb-3">Organization Information</h2>
                   <InfoRow label="Organization Name" value={tenant.name} />
-                  <InfoRow label="Organization Code" value="—" />
+                  <InfoRow label="Organization Code" value={tenant.organizationCode ?? '—'} />
                   <InfoRow label="Subdomain" value={`${tenant.slug}.examvaults.in`} />
-                  <InfoRow label="Organization Type" value="—" />
+                  <InfoRow label="Organization Type" value={tenant.organizationType ?? '—'} />
                   <InfoRow label="Plan / Subscription" value={currentPlan?.name ?? '—'} />
                   <InfoRow label="Status" value={tenant.isActive ? 'Active' : 'Inactive'} />
                   <InfoRow
@@ -589,12 +601,27 @@ export default function OrganizationDetails() {
             <Form.Label>Organization Name</Form.Label>
             <Form.Control value={editName} onChange={(e) => setEditName(e.target.value)} />
           </Form.Group>
-          <Form.Group controlId="editOrgSlug">
+          <Form.Group className="mb-3" controlId="editOrgSlug">
             <Form.Label>Subdomain</Form.Label>
             <Form.Control value={editSlug} onChange={(e) => setEditSlug(e.target.value.toLowerCase())} />
             <Form.Text className="text-muted">
               {editSlug || 'slug'}.examvaults.in - changing this changes the organization's login URL immediately.
             </Form.Text>
+          </Form.Group>
+          <Form.Group className="mb-3" controlId="editOrgCode">
+            <Form.Label>Organization Code</Form.Label>
+            <Form.Control value={editOrgCode} onChange={(e) => setEditOrgCode(e.target.value)} placeholder="e.g. GFU2026" />
+          </Form.Group>
+          <Form.Group controlId="editOrgType">
+            <Form.Label>Organization Type</Form.Label>
+            <Form.Select value={editOrgType} onChange={(e) => setEditOrgType(e.target.value)}>
+              <option value="">Select type</option>
+              {ORGANIZATION_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </Form.Select>
           </Form.Group>
         </Modal.Body>
         <Modal.Footer>

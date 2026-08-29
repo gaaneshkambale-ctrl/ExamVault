@@ -17,5 +17,8 @@ public class UpdateTenantValidator : AbstractValidator<UpdateTenantCommand>
             .MaximumLength(100)
             .Matches("^[a-z0-9]+(-[a-z0-9]+)*$")
             .WithMessage("Slug must be lowercase letters, numbers, and hyphens only (e.g. \"stanford\").");
+
+        RuleFor(x => x.OrganizationCode).MaximumLength(50);
+        RuleFor(x => x.OrganizationType).MaximumLength(100);
     }
 }

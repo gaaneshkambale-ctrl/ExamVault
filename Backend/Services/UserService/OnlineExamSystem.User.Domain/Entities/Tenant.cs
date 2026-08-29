@@ -23,4 +23,10 @@ public class Tenant : BaseEntity
     // while IsTrial is true; ending a trial always clears it.
     public bool IsTrial { get; set; } = false;
     public DateTime? TrialEndsAtUtc { get; set; }
+
+    // Free-text organization identifiers - OrganizationType is dropdown-
+    // driven on the frontend but stored as plain text here, same precedent
+    // as ExamPaper.Category (classification, not a hardcoded backend enum).
+    public string? OrganizationCode { get; set; }
+    public string? OrganizationType { get; set; }
 }

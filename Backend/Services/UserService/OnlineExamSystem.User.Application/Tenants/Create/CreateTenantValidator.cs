@@ -23,5 +23,8 @@ public class CreateTenantValidator : AbstractValidator<CreateTenantCommand>
             .GreaterThan(_ => DateTime.UtcNow)
             .When(x => x.IsTrial)
             .WithMessage("Trial end date must be set and in the future.");
+
+        RuleFor(x => x.OrganizationCode).MaximumLength(50);
+        RuleFor(x => x.OrganizationType).MaximumLength(100);
     }
 }

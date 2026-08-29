@@ -6230,3 +6230,56 @@ persist (visible via the admin's own My Profile page and/or a direct API
 check); confirm the self-service Personal Info edit path also saves
 Designation correctly. Sequential Docker rebuild of `user-api` + `frontend`
 only. Commit, push, confirm CD deploy.
+
+================================================================================
+CREATE ORGANIZATION: ORGANIZATION CODE + ORGANIZATION TYPE
+================================================================================
+Explicit ask (2026-08-29): "please implement the organization code and
+organization type as well" - the last 2 disabled Create Organization
+fields ("Not saved yet - no backend field exists"). Note: `ExamVault
+Super Admin Menu.txt` (line 246-248) records that in an earlier pass the
+user explicitly chose NOT to add these to the Tenant backend. This ask
+is a deliberate reversal of that - proceeding since it's unambiguous
+("implement... as well"), not re-litigating the old decision.
+
+Design: `OrganizationType` stored as a free string (not a fixed backend
+enum) with a fixed dropdown of options on the frontend - same precedent
+as `ExamPaper.Category` (dropdown-driven classification stored as plain
+string, not a hardcoded backend enum). `OrganizationCode` is a plain
+optional free-text field, no auto-generation. Both wired into BOTH
+Create Organization AND Edit Organization (Organization Details), plus
+the Organization Information card's real display - not just settable
+once at creation with no way to view/edit again (same principle applied
+to Designation last pass).
+
+BACKEND
+
+1. `Tenant.cs`: `string? OrganizationCode`, `string? OrganizationType`.
+   New EF Core migration `AddOrganizationCodeAndTypeToTenant`.
+2. `CreateTenantRequest`/`Command`/`Handler`/`Validator`: two new trailing
+   optional params (max length 50/100), set on the new Tenant.
+3. `UpdateTenantRequest`/`Command`/`Handler`/`Validator`: same two fields,
+   settable on an existing org via the real Edit Organization flow.
+4. `TenantResponse` gains both fields; `TenantsController.ToResponse`
+   updated (both `Create` and `Update` actions already return via it).
+
+FRONTEND
+
+5. `CreateOrganization.tsx`: Organization Code (text) and Organization
+   Type (real `<Form.Select>` with a fixed option list - University,
+   School, Coaching Institute, Corporate Training, Government, Other)
+   enabled, wired into `createTenant`.
+6. `types/tenant.ts`: `Tenant`, `CreateTenantRequest`, `UpdateTenantRequest`
+   gain `organizationCode`/`organizationType`.
+7. `OrganizationDetails.tsx`: Organization Information card's "Organization
+   Code"/"Organization Type" rows show real values instead of "—"; Edit
+   Organization modal gains the same two fields (text + select) so they're
+   editable after creation too.
+
+VERIFICATION: full solution build + backend test suite + frontend build +
+test suite, all green. Live: create a real test org with a real code and
+type, confirm both persist and display correctly on its Organization
+Details page; edit an existing org's code/type via Edit Organization,
+confirm the update persists. Sequential Docker rebuild of `user-api` +
+`frontend`. Commit, push, confirm CD deploy (this includes a schema
+migration, same as last pass).

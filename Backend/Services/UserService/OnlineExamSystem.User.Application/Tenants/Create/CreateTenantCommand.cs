@@ -5,4 +5,6 @@ public record CreateTenantCommand(
     string Slug,
     Guid? PlanId = null,
     bool IsTrial = false,
-    DateTime? TrialEndsAtUtc = null);
+    DateTime? TrialEndsAtUtc = null,
+    string? OrganizationCode = null,
+    string? OrganizationType = null);
