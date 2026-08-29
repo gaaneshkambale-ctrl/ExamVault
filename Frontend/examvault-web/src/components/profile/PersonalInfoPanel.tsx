@@ -23,6 +23,7 @@ export default function PersonalInfoPanel() {
   const [dateOfBirth, setDateOfBirth] = useState(toDateInputValue(user?.dateOfBirth ?? null));
   const [location, setLocation] = useState(user?.location ?? '');
   const [department, setDepartment] = useState(user?.department ?? '');
+  const [designation, setDesignation] = useState(user?.designation ?? '');
   const [saved, setSaved] = useState(false);
 
   const updateMutation = useMutation({
@@ -36,6 +37,7 @@ export default function PersonalInfoPanel() {
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth).toISOString() : null,
         location: location || null,
         department: department || null,
+        designation: designation || null,
       }),
     onSuccess: async () => {
       await refreshUser();
@@ -155,6 +157,19 @@ export default function PersonalInfoPanel() {
           <Form.Group className="mb-4">
             <Form.Label className="fw-bold">Department</Form.Label>
             <Form.Control value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Optional" />
+          </Form.Group>
+        </Col>
+      </Row>
+
+      <Row>
+        <Col md={6}>
+          <Form.Group className="mb-4">
+            <Form.Label className="fw-bold">Designation</Form.Label>
+            <Form.Control
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+              placeholder="Optional"
+            />
           </Form.Group>
         </Col>
       </Row>

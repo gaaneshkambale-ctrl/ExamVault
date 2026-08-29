@@ -73,6 +73,8 @@ public class CreateTenantAdminHandler
             Role = UserRole.Admin,
             IsActive = true,
             MustChangePassword = true,
+            PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim(),
+            Designation = string.IsNullOrWhiteSpace(command.Designation) ? null : command.Designation.Trim(),
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, temporaryPassword);
 

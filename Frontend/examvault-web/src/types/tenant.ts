@@ -20,6 +20,8 @@ export interface CreateTenantRequest {
 export interface CreateTenantAdminRequest {
   fullName: string;
   email: string;
+  phoneNumber?: string | null;
+  designation?: string | null;
 }
 
 export interface UpdateTenantRequest {

@@ -491,7 +491,8 @@ public class UsersController : ControllerBase
             request.Gender,
             request.DateOfBirth,
             request.Location,
-            request.Department);
+            request.Department,
+            request.Designation);
         var result = await _updateMyProfileHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
@@ -746,6 +747,7 @@ public class UsersController : ControllerBase
             user.DateOfBirth,
             user.Location,
             user.Department,
+            user.Designation,
             user.LastLoginAtUtc,
             user.CreatedAtUtc,
             FormatUserId(user),

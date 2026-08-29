@@ -26,6 +26,7 @@ export interface UserProfile {
   dateOfBirth: string | null;
   location: string | null;
   department: string | null;
+  designation: string | null;
   lastLoginAtUtc: string | null;
   joinedOnUtc: string | null;
   formattedUserId: string | null;
@@ -41,6 +42,7 @@ export interface UpdateMyProfileRequest {
   dateOfBirth?: string | null;
   location?: string | null;
   department?: string | null;
+  designation?: string | null;
 }
 
 export type TimeFormat = 'Hour12' | 'Hour24';

@@ -136,7 +136,7 @@ public class TenantsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _createTenantAdminHandler.HandleAsync(
-            new CreateTenantAdminCommand(id, request.FullName, request.Email),
+            new CreateTenantAdminCommand(id, request.FullName, request.Email, request.PhoneNumber, request.Designation),
             cancellationToken);
 
         if (result.TenantNotFound)

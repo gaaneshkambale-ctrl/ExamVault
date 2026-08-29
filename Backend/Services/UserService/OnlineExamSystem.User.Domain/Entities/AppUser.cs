@@ -33,6 +33,7 @@ public class AppUser : BaseEntity
     public DateTime? DateOfBirth { get; set; }
     public string? Location { get; set; }
     public string? Department { get; set; }
+    public string? Designation { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
 
     // Real auto-increment counter (same UseIdentityColumn() pattern as

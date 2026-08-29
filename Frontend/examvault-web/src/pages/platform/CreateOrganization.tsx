@@ -11,14 +11,14 @@ import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
 
 // Matches org_submenu.png's Create Organization page. Real fields: Name,
-// Subdomain, and (new this pass) Admin Full Name/Email - if both are
-// filled, this page makes a second real API call (createTenantAdmin)
-// right after the tenant is created, so creating an org and its first
-// admin is one step instead of the old create-then-separately-add-admin
-// flow. Every other field in the mockup (Org Code, Org Type, Phone,
-// Designation, the whole Address section, the 3 toggles) has no backing
-// field anywhere in this codebase - shown disabled with a "not saved
-// yet" hint rather than silently accepting and discarding input.
+// Subdomain, and Admin Full Name/Email/Phone Number/Designation - if
+// Full Name and Email are filled, this page makes a second real API call
+// (createTenantAdmin) right after the tenant is created, so creating an
+// org and its first admin is one step instead of the old
+// create-then-separately-add-admin flow. Every other field in the mockup
+// (Org Code, Org Type, the whole Address section, the 3 toggles) has no
+// backing field anywhere in this codebase - shown disabled with a "not
+// saved yet" hint rather than silently accepting and discarding input.
 export default function CreateOrganization() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -30,6 +30,8 @@ export default function CreateOrganization() {
   const [planId, setPlanId] = useState('');
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
+  const [adminPhoneNumber, setAdminPhoneNumber] = useState('');
+  const [adminDesignation, setAdminDesignation] = useState('');
   const [adminWarning, setAdminWarning] = useState('');
   const [isTrial, setIsTrial] = useState(false);
   const [trialEndDate, setTrialEndDate] = useState('');
@@ -46,7 +48,12 @@ export default function CreateOrganization() {
       let adminError: string | null = null;
       if (adminFullName.trim() && adminEmail.trim()) {
         try {
-          await createTenantAdmin(tenant.id, { fullName: adminFullName, email: adminEmail });
+          await createTenantAdmin(tenant.id, {
+            fullName: adminFullName,
+            email: adminEmail,
+            phoneNumber: adminPhoneNumber.trim() || undefined,
+            designation: adminDesignation.trim() || undefined,
+          });
         } catch (error) {
           adminError = `${tenant.name} was created, but the admin account couldn't be added: ${extractServerError(error)}`;
         }
@@ -192,15 +199,21 @@ export default function CreateOrganization() {
                 <Col md={6}>
                   <Form.Group controlId="adminPhone">
                     <Form.Label>Phone Number</Form.Label>
-                    <Form.Control disabled placeholder="+1 202-555-0198" />
-                    <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
+                    <Form.Control
+                      value={adminPhoneNumber}
+                      onChange={(e) => setAdminPhoneNumber(e.target.value)}
+                      placeholder="+1 202-555-0198"
+                    />
                   </Form.Group>
                 </Col>
                 <Col md={6}>
                   <Form.Group controlId="adminDesignation">
                     <Form.Label>Designation</Form.Label>
-                    <Form.Control disabled placeholder="System Administrator" />
-                    <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
+                    <Form.Control
+                      value={adminDesignation}
+                      onChange={(e) => setAdminDesignation(e.target.value)}
+                      placeholder="System Administrator"
+                    />
                   </Form.Group>
                 </Col>
               </Row>

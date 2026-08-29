@@ -14,6 +14,7 @@ public record UserProfileResponse(
     DateTime? DateOfBirth = null,
     string? Location = null,
     string? Department = null,
+    string? Designation = null,
     DateTime? LastLoginAtUtc = null,
     DateTime? JoinedOnUtc = null,
     string? FormattedUserId = null,

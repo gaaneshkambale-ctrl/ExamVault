@@ -6183,3 +6183,50 @@ now shows the real question count. Sequential Docker rebuild of the
 affected services only (submission-api, exam-api, question-api if
 touched, frontend). Commit, push, confirm CD deploy via `az containerapp
 show --query properties.template.containers[0].image` per service.
+
+================================================================================
+CREATE ORGANIZATION: ADMIN PHONE NUMBER + DESIGNATION
+================================================================================
+Explicit ask (2026-08-29): "create organizations phone number, designatation
+implement" - the 2 disabled Admin Information fields on Create Organization
+("Not saved yet - no backend field exists"). `PhoneNumber` already exists on
+`AppUser` (used by the Admin console's own Add User flow) but was never
+threaded through `CreateTenantAdminHandler`. `Designation` doesn't exist
+anywhere - a genuinely new field, added the same way `Department` was
+(nullable, self-editable via My Profile) so it isn't a write-only value with
+no way to ever view/edit it again after org creation.
+
+BACKEND
+
+1. `AppUser.cs`: new `string? Designation` (mirrors `Department`). New EF
+   Core migration `AddDesignationToAppUser`.
+2. `CreateTenantAdminRequest`/`CreateTenantAdminCommand`/
+   `CreateTenantAdminHandler`: two new optional params, `PhoneNumber` and
+   `Designation`, set on the created `AppUser` (trimmed, null if blank).
+   `CreateTenantAdminValidator` gains the same phone-format rule
+   `UpdateMyProfileValidator` already uses, plus a `Designation` max-length.
+3. `Designation` also wired into the existing self-service profile path for
+   consistency with `Department` (same field class, same precedent):
+   `UpdateMyProfileRequest`/`Command`/`Handler`/`Validator`,
+   `UserProfileResponse`, and `UsersController`'s `UpdateMyProfile`/
+   `ToProfileResponse` mappings.
+
+FRONTEND
+
+4. `CreateOrganization.tsx`: Admin Phone Number and Designation fields
+   enabled (no longer disabled with "no backend field" hint), wired into
+   state and the `createTenantAdmin` call.
+5. `types/tenant.ts` (`CreateTenantAdminRequest`) and `types/user.ts`
+   (`UserProfile`, `UpdateMyProfileRequest`) gain the new fields.
+6. `PersonalInfoPanel.tsx`: Designation field added next to Department,
+   same self-edit pattern - otherwise Designation would be settable only
+   at org-creation time with no way to ever change it again.
+
+VERIFICATION: full solution build + backend test suite (update
+`CreateTenantAdminHandlerTests`-equivalent if any exist, plus profile
+handler tests) + frontend build + test suite, all green. Live: create a
+real test org with an admin including phone/designation, confirm both
+persist (visible via the admin's own My Profile page and/or a direct API
+check); confirm the self-service Personal Info edit path also saves
+Designation correctly. Sequential Docker rebuild of `user-api` + `frontend`
+only. Commit, push, confirm CD deploy.
