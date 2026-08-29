@@ -455,7 +455,17 @@ export default function TakeExam() {
       });
     }
 
-    const sectionsReady = !exam?.containsSections || sections !== undefined;
+    // `exam` itself (not just `sections`) must have loaded before deciding
+    // whether sections are "ready" - while `exam` is still undefined,
+    // `exam?.containsSections` is also undefined, which made this true
+    // regardless of whether the exam actually has sections. That let a
+    // race (attemptId resolving before the exam metadata fetch finishes)
+    // permanently cache every question into one ungrouped section for a
+    // real sectioned exam - the sections query itself is gated on
+    // `exam?.containsSections` (see useSections below) so it never even
+    // starts until `exam` loads, meaning `sections !== undefined` alone
+    // was never a safe proxy for "this exam's real sections are known."
+    const sectionsReady = exam !== undefined && (!exam.containsSections || sections !== undefined);
     if (sectionsReady) {
       sectionGroupsCacheRef.current = { attemptId, groups };
     }
@@ -868,7 +878,15 @@ export default function TakeExam() {
             const isCurrent = index === sectionIndex;
             const isCompleted = Boolean(sectionStates[section.id]?.isCompleted);
             const isOpenable = canOpenSection(index);
-            const isLocked = !isOpenable && !isCurrent && !isCompleted;
+            // A completed non-Free section can only be re-entered while
+            // it's still the current one - clicking back into it later
+            // used to hit the server's own completed-section rejection
+            // (Sequential/Locked sections lock once finished), surfacing
+            // as a raw error. Same rule the Review screen's own section
+            // list already applies via `canReturn`.
+            const canReenterCompleted = section.navigationType === 'Free' || isCurrent;
+            const isClickable = isCurrent || (isCompleted ? canReenterCompleted : isOpenable);
+            const isLocked = !isClickable;
             const sectionQuestions = sectionGroups[index]?.questions ?? [];
             const total = sectionQuestions.length;
             const answered = sectionQuestions.filter((q) => navState(q) === 'answered').length;
@@ -881,7 +899,7 @@ export default function TakeExam() {
               <button
                 key={section.id}
                 type="button"
-                disabled={sectionEntering || (!isOpenable && !isCurrent)}
+                disabled={sectionEntering || !isClickable}
                 onClick={() => void switchToSection(index)}
                 className="text-start border-0 bg-transparent p-0 flex-shrink-0"
                 style={{ width: 216, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'pointer' }}

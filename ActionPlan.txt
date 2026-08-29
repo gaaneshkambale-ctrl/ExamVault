@@ -6283,3 +6283,72 @@ Details page; edit an existing org's code/type via Edit Organization,
 confirm the update persists. Sequential Docker rebuild of `user-api` +
 `frontend`. Commit, push, confirm CD deploy (this includes a schema
 migration, same as last pass).
+
+================================================================================
+BUG FIX: CLICKING BACK INTO A COMPLETED SECTION THROWS AN ERROR
+================================================================================
+User report (2026-08-29): "when exam started and section first completed
+then second started then i have clicked on first section then getting
+error." Reproduced by reading the code path (not live, but root-caused
+exactly): `TakeExam.tsx`'s live "Sections" navigator bar (during 'take'
+mode, as opposed to the Review screen's own section list further down the
+same file) computes whether a section button is clickable via
+`canOpenSection(index)`, which only checks that EARLIER sections are
+completed - it never checks whether the TARGET section itself has already
+been completed and uses a non-Free (Sequential/Locked) navigation type.
+So once section 1 (Sequential) is completed and section 2 becomes current,
+section 1's button stays enabled - clicking it fires `switchToSection(0)`
+-> `enterSection()` -> the backend correctly rejects re-entry into a
+completed gated section (`EnterSectionHandler`'s own
+`existingState.IsCompleted && isGated` check), surfacing as a raw
+`attemptError` to the student. The Review screen's own section list
+already has the correct rule for this exact case (`canReturn =
+section.navigationType === 'Free' || index === sectionIndex`) - the live
+Sections bar just never applied the same rule.
+
+Also noticed while root-causing: the backend's `EnterSectionResult.
+IsSectionLocked` flag (and its controller message, "This section is
+locked until earlier sections are completed.") is shared between two
+different situations - earlier sections not done yet, AND the target
+section itself already being completed-and-gated - the message is
+actively wrong/confusing for the second case. Fixing this too as
+defense-in-depth even though the frontend fix should make it
+unreachable through normal use.
+
+FIX
+
+1. `TakeExam.tsx`'s Sections navigator: block re-entry into an already-
+   completed non-Free section (same rule as the Review screen's
+   `canReturn`) - a completed section stays clickable only if it's Free-
+   navigation or still the current section.
+2. `EnterSectionResult`/`EnterSectionHandler`: split `IsSectionLocked`
+   into two distinct flags so the controller can give an accurate message
+   for "already completed, can't re-enter" vs. "earlier sections not done
+   yet."
+
+VERIFICATION: full solution build + backend test suite (update
+EnterSectionHandler tests if any exist for the new result shape) +
+frontend build + test suite, all green. Live: create a real sectioned
+exam with a Sequential-navigation first section, take it as a student,
+complete section 1, advance to section 2, click back on section 1 -
+confirm the button is now disabled/non-clickable instead of throwing.
+Sequential Docker rebuild of `submission-api` + `frontend`. Commit, push,
+confirm CD deploy.
+
+ADDENDUM (found while live-verifying the fix above): reproducing the exact
+scenario live (sectioned exam, Sequential section 1, complete it, resume
+into section 2) surfaced a SECOND, more severe bug in the SAME
+`sectionGroupsCacheRef` mechanism added earlier this session (the shuffle-
+desync fix) - `sectionsReady = !exam?.containsSections || sections !==
+undefined` evaluated `true` before `exam` itself had loaded (since
+`exam?.containsSections` is `undefined` while `exam` is undefined, and
+`!undefined` is `true`), regardless of whether `sections` had actually
+arrived. If `attemptId` resolved in that same window, the WRONG single-
+group computation (every question merged into one ungrouped section) got
+PERMANENTLY cached for the rest of the attempt - confirmed live via direct
+API checks proving the server's per-question `sectionId` data was correct
+the whole time; the corruption was 100% client-side. Fixed by requiring
+`exam !== undefined` before ever deciding sections are "ready":
+`sectionsReady = exam !== undefined && (!exam.containsSections || sections
+!== undefined)`. Re-verified live after the fix - correct 1-question-per-
+section grouping, Section 1 correctly locked/disabled after completion.

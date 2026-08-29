@@ -478,6 +478,11 @@ public class SubmissionsController : ControllerBase
             return Conflict(new { message = "This section is locked until earlier sections are completed." });
         }
 
+        if (result.IsSectionAlreadyCompleted)
+        {
+            return Conflict(new { message = "This section has already been completed and can't be re-entered." });
+        }
+
         return Ok(ToResponse(result.State!));
     }
 
