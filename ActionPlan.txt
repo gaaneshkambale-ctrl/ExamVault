@@ -6352,3 +6352,53 @@ the whole time; the corruption was 100% client-side. Fixed by requiring
 `sectionsReady = exam !== undefined && (!exam.containsSections || sections
 !== undefined)`. Re-verified live after the fix - correct 1-question-per-
 section grouping, Section 1 correctly locked/disabled after completion.
+
+================================================================================
+BUG FIX: PROGRAMMING EXAM CODE AUTO-GRADING WAS COMPLETELY BROKEN
+================================================================================
+User report (2026-08-29): "when programming exam created then debugger not
+working expected." Investigated live, found TWO separate real bugs:
+
+1. INFRA: `examvault-execution-worker-1` had crashed 3 days ago
+   (RabbitMQ connection refused - likely a startup-order race after an
+   uncontrolled Docker Desktop/host restart, since `depends_on: rabbitmq:
+   condition: service_healthy` isn't re-evaluated outside `docker compose
+   up`) and had NO restart policy anywhere in `docker-compose.yml` (only
+   the third-party `piston` image has one) - it silently stayed dead with
+   nothing auto-grading any code submission this whole time. Fixed:
+   restarted it, and added `restart: unless-stopped` to it AND
+   `notification-worker` (the only other RabbitMQ-consumer background
+   service, same vulnerability) in docker-compose.yml.
+
+2. AUTH (the real, deeper bug - present regardless of #1): once the
+   worker WAS running and correctly picked up a `CodeAnswerSubmitted`
+   event, ran the code via Execution Service, and tried to PUT the grade
+   back to Submission Service's `/api/submissions/{attemptId}/answers/
+   {questionId}/grade` endpoint - that call was rejected with 403.
+   Root cause: the endpoint requires BOTH `[Authorize(Roles = "Admin")]`
+   AND `[Authorize(Policy = Exams)]` (a per-tenant plan-feature gate).
+   `SystemTokenProvider` (the worker's own service-to-service JWT minter)
+   set role="Admin" but included NO feature claims at all - only
+   "SuperAdmin" bypasses feature policies, so this token failed the
+   Exams feature check on every single call, unconditionally, regardless
+   of the calling tenant's real plan. This means code-question
+   auto-grading has likely never worked correctly since this pattern was
+   built - not a recent regression. Fixed: added a `Feature:Exams` claim
+   to the minted token.
+
+VERIFICATION: interactive "Run Code" (test-case checking during the
+exam) was independently confirmed working correctly the whole time (a
+separate, synchronous execution-api call unaffected by either bug) -
+live browser test showed 2/2 test cases passing with real Piston
+execution. The auto-grading fix was verified with a real, live,
+end-to-end run: submitted a real Programming exam answer twice (once
+pre-fix, confirming the 403; once post-fix, rebuilt execution-worker
+image, bumped the assignment's maxAttempts to allow a retry) - the
+second submission's grade PUT returned 200 (not 403), and the student's
+own `GET /api/submissions/mine` confirmed `marksAwarded: 10`,
+`gradedByUserId` set to the system sentinel id, `gradedAtUtc` populated.
+Full solution build green (no existing unit tests cover the Worker
+project directly - this is infra/service-to-service auth, verified via
+live integration testing instead). Sequential Docker rebuild of
+execution-worker done as part of verification. Test exam archived and
+deleted afterward.

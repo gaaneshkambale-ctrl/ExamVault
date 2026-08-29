@@ -190,6 +190,15 @@ services:
     build:
       context: .
       dockerfile: Backend/Services/ExecutionService/OnlineExamSystem.Execution.Worker/Dockerfile
+    # A RabbitMQ consumer background service - .NET's default
+    # BackgroundServiceExceptionBehavior (StopHost) makes any transient
+    # RabbitMQ connection hiccup (e.g. depends_on's health-gating isn't
+    # re-evaluated after an uncontrolled Docker Desktop/host restart) fatal
+    # to the whole process, with no built-in retry. Silently stayed dead
+    # for days once before this was added - auto-restart so a later
+    # successful reconnect actually happens instead of requiring someone
+    # to notice and run `docker compose up` manually.
+    restart: unless-stopped
     environment:
       <<: [*jwt-env, *rabbitmq-env]
       DOTNET_ENVIRONMENT: Docker
@@ -231,6 +240,10 @@ services:
     build:
       context: .
       dockerfile: Backend/Services/NotificationService/OnlineExamSystem.NotificationService.Worker/Dockerfile
+    # Same RabbitMQ-consumer-background-service vulnerability as
+    # execution-worker (see its own comment) - auto-restart for the same
+    # reason.
+    restart: unless-stopped
     environment:
       <<: [*rabbitmq-env]
       DOTNET_ENVIRONMENT: Docker

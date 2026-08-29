@@ -40,6 +40,13 @@ public class SystemTokenProvider
             new Claim(ClaimTypes.Role, "Admin"),
             new Claim(TenantClaimTypes.TenantId, tenantId.ToString()),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            // The grade endpoint is also gated behind [Authorize(Policy =
+            // Exams)] (per-tenant plan feature check) on top of the role
+            // check - role="Admin" alone doesn't bypass that (only
+            // "SuperAdmin" does), so without this claim every auto-grade
+            // call was rejected with 403 regardless of the tenant's actual
+            // plan, since this token isn't tied to one.
+            new Claim(FeatureClaimTypes.Feature, PlanFeature.Exams.ToString()),
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SigningKey));
