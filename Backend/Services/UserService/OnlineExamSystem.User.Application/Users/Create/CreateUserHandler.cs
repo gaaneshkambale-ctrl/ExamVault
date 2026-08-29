@@ -84,8 +84,9 @@ public class CreateUserHandler
             toEmail: user.Email,
             toName: user.FullName,
             subject: orgName != null ? $"Your ExamVault account for {orgName}" : "Your ExamVault account",
-            body: $"Hello {user.FullName},\n\n" +
-                  (orgName != null ? $"An ExamVault account has been created for you at {orgName}.\n\n" : "An ExamVault account has been created for you.\n\n") +
+            // No leading "Hello {name}," here - the n8n email template
+            // already renders its own greeting from toName.
+            body: (orgName != null ? $"An ExamVault account has been created for you at {orgName}.\n\n" : "An ExamVault account has been created for you.\n\n") +
                   $"Login URL: {loginUrl}\n" +
                   $"Email: {user.Email}\n" +
                   $"Temporary password: {temporaryPassword}\n\n" +

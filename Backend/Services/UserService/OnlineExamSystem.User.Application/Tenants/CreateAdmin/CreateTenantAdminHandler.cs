@@ -85,8 +85,9 @@ public class CreateTenantAdminHandler
             toEmail: user.Email,
             toName: user.FullName,
             subject: $"Your ExamVault admin account for {tenant.Name}",
-            body: $"Hello {user.FullName},\n\n" +
-                  $"An ExamVault Admin account has been created for you at {tenant.Name}.\n\n" +
+            // No leading "Hello {name}," here - the n8n email template
+            // already renders its own greeting from toName.
+            body: $"An ExamVault Admin account has been created for you at {tenant.Name}.\n\n" +
                   $"Login URL: {loginUrl}\n" +
                   $"Email: {user.Email}\n" +
                   $"Temporary password: {temporaryPassword}\n\n" +

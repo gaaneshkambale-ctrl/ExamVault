@@ -71,8 +71,9 @@ public class ResetTenantAdminPasswordHandler
             toEmail: user.Email,
             toName: user.FullName,
             subject: $"Your ExamVault admin password was reset for {tenant.Name}",
-            body: $"Hello {user.FullName},\n\n" +
-                  $"Your ExamVault Admin password for {tenant.Name} was reset by a platform administrator.\n\n" +
+            // No leading "Hello {name}," here - the n8n email template
+            // already renders its own greeting from toName.
+            body: $"Your ExamVault Admin password for {tenant.Name} was reset by a platform administrator.\n\n" +
                   $"Login URL: {loginUrl}\n" +
                   $"Email: {user.Email}\n" +
                   $"Temporary password: {temporaryPassword}\n\n" +
