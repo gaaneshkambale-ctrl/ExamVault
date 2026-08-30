@@ -1,0 +1,29 @@
+name: CD - Hostinger VPS
+
+# Only fires after the "CI" workflow (ci.yml) finishes successfully on
+# dev - gates deployment on backend+frontend build/test passing, rather
+# than deploying in parallel with (and possibly ahead of) test results.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [dev]
+
+jobs:
+  deploy:
+    name: Deploy to Hostinger VPS
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/ExamVault
+            git pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build
+            docker image prune -f
