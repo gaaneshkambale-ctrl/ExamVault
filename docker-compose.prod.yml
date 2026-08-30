@@ -1,0 +1,57 @@
+# Production override for the Hostinger VPS - merges on top of
+# docker-compose.yml (which stays as-is for local dev, unchanged).
+# Usage on the VPS: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# What this does: removes every internal service's host port publishing
+# (sqlserver, rabbitmq, piston, and every *-api service) so they're only
+# reachable container-to-container on the Docker network, not from the
+# public IP - and removes gateway/frontend's direct host port publishing
+# too, since Traefik fronts them instead (see docker-compose.traefik.yml,
+# added once Step 7/9's Traefik specifics are confirmed).
+#
+# An empty `ports: []` here overrides (fully replaces, not merges) the
+# base file's ports list for that service - this is standard Compose
+# override behavior, not a bug.
+
+services:
+  sqlserver:
+    ports: []
+
+  rabbitmq:
+    ports: []
+
+  piston:
+    ports: []
+
+  user-api:
+    ports: []
+
+  exam-api:
+    ports: []
+
+  question-api:
+    ports: []
+
+  ai-api:
+    ports: []
+
+  submission-api:
+    ports: []
+
+  result-api:
+    ports: []
+
+  execution-api:
+    ports: []
+
+  notification-api:
+    ports: []
+
+  gateway:
+    ports: []
+
+  frontend:
+    ports: []
+    build:
+      args:
+        VITE_API_BASE_URL: https://api.examvaults.in

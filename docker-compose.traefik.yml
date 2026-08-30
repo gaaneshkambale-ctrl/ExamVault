@@ -1,0 +1,39 @@
+# Traefik routing labels for the Hostinger VPS - use alongside
+# docker-compose.yml + docker-compose.prod.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+#
+# CONFIRMED against the VPS's actual Traefik setup (Hostinger's "Docker
+# and Traefik" template, deployed via its Docker Manager as an app named
+# "traefik" - container traefik-traefik-1):
+#   - network_mode: host - Traefik is NOT on a custom Docker network, so
+#     no `traefik.docker.network` label or external network join is
+#     needed here at all. It discovers labeled containers via the Docker
+#     socket (--providers.docker=true, exposedbydefault=false) regardless
+#     of which network they're on - a host-mode Traefik can always reach
+#     a container's bridge-network IP directly.
+#   - certresolver name: "letsencrypt" (confirmed, matches this file)
+#   - entrypoint for HTTPS: "websecure" (confirmed, matches this file)
+#   - challenge type: HTTP-01 (httpchallenge=true), NOT DNS-01 - so there
+#     is no wildcard certificate and no GoDaddy/Hostinger API key needed.
+#     Traefik will automatically obtain a separate cert per hostname the
+#     first time it receives a real request for that hostname - this
+#     works fine for per-tenant subdomains too since the wildcard DNS A
+#     record already routes every subdomain to this VPS; each new tenant
+#     subdomain just gets its own cert issued lazily on first visit.
+
+services:
+  gateway:
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.examvault-api.rule: "Host(`api.examvaults.in`)"
+      traefik.http.routers.examvault-api.entrypoints: "websecure"
+      traefik.http.routers.examvault-api.tls.certresolver: "letsencrypt"
+      traefik.http.services.examvault-api.loadbalancer.server.port: "8080"
+
+  frontend:
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.examvault-frontend.rule: "Host(`examvaults.in`) || HostRegexp(`{subdomain:[a-z0-9-]+}.examvaults.in`)"
+      traefik.http.routers.examvault-frontend.entrypoints: "websecure"
+      traefik.http.routers.examvault-frontend.tls.certresolver: "letsencrypt"
+      traefik.http.services.examvault-frontend.loadbalancer.server.port: "80"
