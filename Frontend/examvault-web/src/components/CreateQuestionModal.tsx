@@ -442,7 +442,7 @@ export default function CreateQuestionModal({
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="outline-secondary" onClick={handleClose}>
+          <Button type="button" variant="outline-secondary" onClick={handleClose}>
             {mode === 'import' ? 'Close' : 'Cancel'}
           </Button>
           {mode === 'manual' && (

@@ -61,8 +61,16 @@ public class Program
             .AddDbContextCheck<SubmissionDbContext>("database");
         builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
 
-        builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
-        builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
+        {
+            builder.Services.Configure<ServiceBusSettings>(builder.Configuration.GetSection("ServiceBus"));
+            builder.Services.AddSingleton<IEventPublisher, ServiceBusEventPublisher>();
+        }
+        else
+        {
+            builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+            builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        }
 
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
