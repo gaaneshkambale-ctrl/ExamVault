@@ -28,6 +28,15 @@ services:
 
   user-api:
     ports: !reset []
+    environment:
+      # TenantUrlBuilder (Backend/Services/UserService/.../Email/
+      # TenantUrlBuilder.cs) builds every invite/reset email's login URL
+      # from these three - left at the base file's local-dev values
+      # (localhost:5173/http), every such email was linking to
+      # http://<slug>.localhost:5173/login instead of the real domain.
+      App__FrontendBaseUrl: https://examvaults.in
+      App__BaseDomain: examvaults.in
+      App__Scheme: https
 
   exam-api:
     ports: !reset []
