@@ -33,7 +33,16 @@ services:
   frontend:
     labels:
       traefik.enable: "true"
-      traefik.http.routers.examvault-frontend.rule: "Host(`examvaults.in`) || HostRegexp(`{subdomain:[a-z0-9-]+}.examvaults.in`)"
+      # HostRegexp's syntax changed in Traefik v3 (this VPS runs v3.7,
+      # confirmed via its logs) - v2's mux-style placeholder syntax
+      # ({subdomain:[a-z0-9-]+}.examvaults.in) silently fails to match
+      # anything in v3, which uses plain Go regex instead. Confirmed live:
+      # examvaults.in/api.examvaults.in (both literal Host() matches)
+      # got real Let's Encrypt certs fine, but a brand-new tenant
+      # subdomain kept getting served Traefik's own default self-signed
+      # cert - meaning this rule never matched it at all, so Traefik never
+      # knew to request one.
+      traefik.http.routers.examvault-frontend.rule: "Host(`examvaults.in`) || HostRegexp(`^[a-z0-9-]+.examvaults.in$`)"
       traefik.http.routers.examvault-frontend.entrypoints: "websecure"
       traefik.http.routers.examvault-frontend.tls.certresolver: "letsencrypt"
       traefik.http.services.examvault-frontend.loadbalancer.server.port: "80"
