@@ -5,6 +5,29 @@ India - Mumbai 2, VPS image "Docker and Traefik" (Ubuntu + Docker Engine +
 Compose + Traefik reverse proxy, pre-installed). Domain: examvaults.in
 (GoDaddy). This file is the full walkthrough - follow it top to bottom.
 
+STATUS as of 2026-08-30: Steps 1-11 DONE. Full stack (15 containers) is
+live - https://examvaults.in (frontend) and https://api.examvaults.in
+(gateway) both load over HTTPS with valid Let's Encrypt certs, no browser
+warnings. Two real bugs hit and fixed along the way, both worth knowing
+about if something looks broken later:
+  1. `examvault-admin` user silently failed to get created the first time
+     (adduser/usermod commands appeared to run but the user didn't exist)
+     - always verify with `id examvault-admin` or `su - examvault-admin`
+     rather than trusting that earlier commands "worked".
+  2. docker-compose.prod.yml's `ports: []` did NOT clear the base file's
+     published ports - Compose merges sequence fields across -f files by
+     concatenation, not replacement. Fixed using the `!reset` tag
+     (`ports: !reset []`), confirmed via `docker compose config`. If you
+     ever add a new service or new port mapping later, remember this -
+     plain `ports: []` in an override file is silently a no-op.
+Login also confirmed working end to end (bootstrap Super Admin account,
+real DB/migrations came up clean). Step 12 (firewall) DONE - ufw active,
+only OpenSSH/80/443 allowed, confirmed via `ufw status`.
+Remaining: Step 13 (backups), and broader functional testing beyond login
+(create an exam end to end, Run Code, exam submission - the same features
+that had bugs on the old Azure environment, worth re-checking here since
+this is a fresh, independent deployment).
+
 Wherever you see <ALL_CAPS_LIKE_THIS>, that's a value YOU generate/choose,
 not something already decided. Nothing in this file is a real secret -
 every password/key below is a placeholder for you to replace with your own
@@ -231,3 +254,4 @@ ONGOING - WHAT TO WATCH
     upgrade the VPS plan if so.
   - To deploy a code update later: `git pull`, `docker compose build`,
     `docker compose up -d` (only rebuilds/restarts what changed).
+
