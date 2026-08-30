@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using OnlineExamSystem.User.Application.Tests.Fakes;
 using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 using Xunit;
 
 namespace OnlineExamSystem.User.Application.Tests;
@@ -16,7 +17,9 @@ public class LoginUserHandlerTests
         string email,
         string password,
         bool isActive = true,
-        bool mustChangePassword = false)
+        bool mustChangePassword = false,
+        Guid? tenantId = null,
+        UserRole role = UserRole.Student)
     {
         var user = new AppUser
         {
@@ -24,20 +27,39 @@ public class LoginUserHandlerTests
             Email = email,
             IsActive = isActive,
             MustChangePassword = mustChangePassword,
+            Role = role,
         };
+        if (tenantId is not null)
+        {
+            user.TenantId = tenantId.Value;
+        }
         user.PasswordHash = new PasswordHasher<AppUser>().HashPassword(user, password);
         await repository.AddAsync(user);
         return user;
     }
 
+    // Most tests below need a real tenant + matching TenantSlug now that
+    // bare-domain login (no TenantSlug) is rejected for anyone but
+    // SuperAdmin - this seeds one so those tests keep exercising the
+    // behavior they're actually about (account state, password checks),
+    // not the subdomain restriction itself.
+    private static async Task<Tenant> SeedTenant(FakeTenantRepository repository, string slug = "stanford")
+    {
+        var tenant = new Tenant { Name = "Stanford", Slug = slug, IsActive = true };
+        await repository.AddAsync(tenant);
+        return tenant;
+    }
+
     [Fact]
     public async Task Correct_email_and_password_returns_the_user()
     {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
         var repository = new FakeUserRepository();
-        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!");
-        var handler = CreateHandler(repository);
+        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id);
+        var handler = CreateHandler(repository, tenantRepository);
 
-        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!"));
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
 
         Assert.True(result.Success);
         Assert.Equal(user.Id, result.User!.Id);
@@ -60,11 +82,13 @@ public class LoginUserHandlerTests
     [Fact]
     public async Task Wrong_password_returns_invalid_credentials()
     {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
         var repository = new FakeUserRepository();
-        await SeedUser(repository, "jane@example.com", "Passw0rd!");
-        var handler = CreateHandler(repository);
+        await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id);
+        var handler = CreateHandler(repository, tenantRepository);
 
-        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "WrongPassword1"));
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "WrongPassword1", TenantSlug: tenant.Slug));
 
         Assert.False(result.Success);
     }
@@ -72,11 +96,13 @@ public class LoginUserHandlerTests
     [Fact]
     public async Task Deactivated_user_with_correct_credentials_is_rejected_as_account_deactivated()
     {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
         var repository = new FakeUserRepository();
-        await SeedUser(repository, "jane@example.com", "Passw0rd!", isActive: false);
-        var handler = CreateHandler(repository);
+        await SeedUser(repository, "jane@example.com", "Passw0rd!", isActive: false, tenantId: tenant.Id);
+        var handler = CreateHandler(repository, tenantRepository);
 
-        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!"));
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
 
         Assert.False(result.Success);
         Assert.True(result.IsAccountDeactivated);
@@ -86,15 +112,43 @@ public class LoginUserHandlerTests
     [Fact]
     public async Task Inactive_user_who_still_must_change_password_can_log_in_to_reach_the_reset_screen()
     {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
         var repository = new FakeUserRepository();
-        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!", isActive: false, mustChangePassword: true);
-        var handler = CreateHandler(repository);
+        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!", isActive: false, mustChangePassword: true, tenantId: tenant.Id);
+        var handler = CreateHandler(repository, tenantRepository);
 
-        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!"));
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
 
         Assert.True(result.Success);
         Assert.Equal(user.Id, result.User!.Id);
         Assert.False(string.IsNullOrEmpty(result.AccessToken));
+    }
+
+    [Fact]
+    public async Task Bare_domain_login_is_rejected_for_a_regular_tenant_user()
+    {
+        var repository = new FakeUserRepository();
+        await SeedUser(repository, "jane@example.com", "Passw0rd!", role: UserRole.Admin);
+        var handler = CreateHandler(repository);
+
+        // No TenantSlug - the bare-domain path.
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!"));
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task Bare_domain_login_succeeds_for_super_admin()
+    {
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(repository, "superadmin@examvault.local", "Passw0rd!", role: UserRole.SuperAdmin);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("superadmin@examvault.local", "Passw0rd!"));
+
+        Assert.True(result.Success);
+        Assert.Equal(user.Id, result.User!.Id);
     }
 
     [Fact]

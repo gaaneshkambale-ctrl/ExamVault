@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.Common;
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 
 namespace OnlineExamSystem.User.Application.Users.Login;
 
@@ -65,6 +66,17 @@ public class LoginUserHandler
 
         var user = await _userRepository.GetByEmailAsync(command.Email, tenantId, cancellationToken);
         if (user is null)
+        {
+            return LoginUserResult.InvalidCredentials();
+        }
+
+        // Bare-domain login (no subdomain, tenantId still null here) is
+        // reserved for the Super Admin's own platform-level account - every
+        // tenant user must log in via their org's subdomain, which is what
+        // actually scopes the lookup above to one tenant. Same generic
+        // error as an unknown email/tenant, to avoid revealing whether a
+        // non-SuperAdmin account exists for this email.
+        if (tenantId is null && user.Role != UserRole.SuperAdmin)
         {
             return LoginUserResult.InvalidCredentials();
         }
