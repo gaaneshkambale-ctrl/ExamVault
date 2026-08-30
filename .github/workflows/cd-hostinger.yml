@@ -34,7 +34,15 @@ jobs:
         # container-based action step actually share.
         run: |
           echo "${{ secrets.VPS_SSH_PRIVATE_KEY }}" | base64 -d > "${{ github.workspace }}/deploy_key"
-          chmod 600 "${{ github.workspace }}/deploy_key"
+          # 644 not 600: ssh-action's container runs as a different UID
+          # than the runner user that just created this file (confirmed
+          # live: 600 caused "permission denied" reading it from inside
+          # the container). This action talks SSH via Go's crypto/ssh
+          # library directly, not the OpenSSH CLI, so it doesn't enforce
+          # the usual "private key must not be group/world readable"
+          # rejection the way a real `ssh` binary would - safe here, and
+          # the runner VM is destroyed immediately after this job anyway.
+          chmod 644 "${{ github.workspace }}/deploy_key"
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
