@@ -15,12 +15,25 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
+      # VPS_SSH_PRIVATE_KEY is stored base64-encoded (one unbroken line,
+      # produced on the VPS with `base64 -w0 ~/.ssh/github_deploy_key`) and
+      # decoded back to a real multi-line key file here - five straight
+      # attempts pasting the raw multi-line key directly into the secret
+      # box all failed with "ssh: no key found" (the multi-line PEM format
+      # kept getting corrupted somewhere between terminal copy and
+      # GitHub's textarea, across both direct terminal copy and a
+      # scp+Notepad copy). Base64 has no newlines to lose, so this
+      # sidesteps the corruption entirely regardless of its cause.
+      - name: Decode deploy key
+        run: |
+          echo "${{ secrets.VPS_SSH_PRIVATE_KEY }}" | base64 -d > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          key_path: /tmp/deploy_key
           script: |
             set -e
             cd ~/ExamVault
