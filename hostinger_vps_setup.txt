@@ -28,6 +28,48 @@ Remaining: Step 13 (backups), and broader functional testing beyond login
 that had bugs on the old Azure environment, worth re-checking here since
 this is a fresh, independent deployment).
 
+CI/CD (2026-08-30): DONE and confirmed working end to end. Push to dev ->
+CI (ci.yml, pre-existing) runs backend/frontend build+test -> on success,
+CD (.github/workflows/cd-hostinger.yml, new) SSHes into the VPS and runs
+git pull + docker compose up -d --build automatically. Replaced the old
+cd-dev.yml (auto-deployed to Azure Container Apps on every dev push -
+deleted, since it was still silently redeploying to Azure throughout this
+whole migration without anyone noticing).
+
+Getting the SSH auth working took 8 attempts - real issues hit, in order,
+worth knowing if this ever needs touching again:
+  1. Secrets (VPS_HOST/VPS_USER/VPS_SSH_PRIVATE_KEY) were never actually
+     created the first few times despite being reported as done - always
+     verify the actual secrets list on GitHub, don't trust "added" alone.
+  2. Pasting the raw multi-line private key directly into the secret box
+     failed every time ("ssh: no key found") regardless of copy method
+     (terminal copy, scp+Notepad) - the multi-line PEM format kept
+     getting corrupted somewhere in the copy/paste/textarea chain. Fixed
+     by base64-encoding the key (`base64 -w0 ~/.ssh/github_deploy_key`,
+     one unbroken line - can't suffer the same corruption) and decoding
+     it back to a file in a workflow step before ssh-action uses it.
+  3. That decoded key file needs to live inside `${{ github.workspace }}`,
+     not /tmp - ssh-action runs as an isolated Docker container that only
+     shares the workspace with the runner, not /tmp.
+  4. That file needs chmod 644, not 600 - ssh-action's container reads it
+     as a different UID than the runner user that created it; 600 caused
+     "permission denied". Safe to loosen since this action uses Go's
+     crypto/ssh library directly (no OpenSSH-CLI permission strictness
+     involved) and the runner VM is destroyed right after the job.
+  5. The deploy key's PUBLIC half was never actually added to the VPS's
+     ~/.ssh/authorized_keys either (same "reported done, wasn't" pattern
+     as #1) - `cat ~/.ssh/github_deploy_key.pub >> ~/.ssh/authorized_keys`
+     fixed it for real.
+  6. One transient "dial tcp: i/o timeout" from GitHub's runner that
+     resolved on retry alone - VPS was directly reachable at the time, so
+     likely either a runner-side blip or fail2ban briefly reacting to the
+     many rapid connection attempts during this same debugging session.
+
+Ongoing test commits made to hostinger_vps_setup.txt itself while
+debugging this (blank lines appended, commits like "Trigger CD pipeline
+test (attempt N)") are harmless but visible in git log - fine to leave,
+not worth a history rewrite.
+
 Wherever you see <ALL_CAPS_LIKE_THIS>, that's a value YOU generate/choose,
 not something already decided. Nothing in this file is a real secret -
 every password/key below is a placeholder for you to replace with your own
