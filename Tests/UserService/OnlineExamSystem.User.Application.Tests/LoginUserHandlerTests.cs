@@ -152,6 +152,47 @@ public class LoginUserHandlerTests
     }
 
     [Fact]
+    public async Task Bare_domain_login_succeeds_for_a_new_tenant_admin_completing_their_first_login()
+    {
+        // Mirrors TenantUrlBuilder.GetLoginUrl: a brand-new tenant starts
+        // IsActive=false and its admin is deliberately emailed a
+        // bare-domain login URL, since the subdomain 404s until this very
+        // login activates the tenant - must stay allowed.
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = new Tenant { Name = "New Org", Slug = "neworg", IsActive = false };
+        await tenantRepository.AddAsync(tenant);
+
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(
+            repository, "admin@neworg.com", "Passw0rd!",
+            isActive: false, mustChangePassword: true, tenantId: tenant.Id, role: UserRole.Admin);
+        var handler = CreateHandler(repository, tenantRepository);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("admin@neworg.com", "Passw0rd!"));
+
+        Assert.True(result.Success);
+        Assert.Equal(user.Id, result.User!.Id);
+    }
+
+    [Fact]
+    public async Task Bare_domain_login_is_rejected_for_an_admin_of_an_already_active_tenant()
+    {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = new Tenant { Name = "Stanford", Slug = "stanford", IsActive = true };
+        await tenantRepository.AddAsync(tenant);
+
+        var repository = new FakeUserRepository();
+        await SeedUser(repository, "admin@stanford.edu", "Passw0rd!", tenantId: tenant.Id, role: UserRole.Admin);
+        var handler = CreateHandler(repository, tenantRepository);
+
+        // No TenantSlug - once the tenant is active, bare-domain login is
+        // no longer exempted; must use the subdomain.
+        var result = await handler.HandleAsync(new LoginUserCommand("admin@stanford.edu", "Passw0rd!"));
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
     public async Task Empty_credentials_return_invalid_credentials_without_hitting_the_repository()
     {
         var repository = new FakeUserRepository();

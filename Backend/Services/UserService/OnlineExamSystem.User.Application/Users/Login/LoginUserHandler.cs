@@ -71,14 +71,23 @@ public class LoginUserHandler
         }
 
         // Bare-domain login (no subdomain, tenantId still null here) is
-        // reserved for the Super Admin's own platform-level account - every
-        // tenant user must log in via their org's subdomain, which is what
-        // actually scopes the lookup above to one tenant. Same generic
-        // error as an unknown email/tenant, to avoid revealing whether a
-        // non-SuperAdmin account exists for this email.
+        // reserved for the Super Admin's own platform-level account, with
+        // one deliberate exception: a brand-new tenant's first admin is
+        // emailed a bare-domain login URL (TenantUrlBuilder.GetLoginUrl)
+        // while their tenant is still IsActive=false, before its subdomain
+        // is usable at all (Gateway 404s an inactive tenant's subdomain) -
+        // the same condition must be honored here, or that first login
+        // (which is what activates the tenant) can never happen. Every
+        // other tenant user must log in via their org's subdomain. Same
+        // generic error as an unknown email/tenant either way, to avoid
+        // revealing whether a non-SuperAdmin account exists for this email.
         if (tenantId is null && user.Role != UserRole.SuperAdmin)
         {
-            return LoginUserResult.InvalidCredentials();
+            var userTenant = await _tenantRepository.GetByIdAsync(user.TenantId, cancellationToken);
+            if (userTenant is null || userTenant.IsActive)
+            {
+                return LoginUserResult.InvalidCredentials();
+            }
         }
 
         var verification = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, command.Password);
