@@ -31,12 +31,25 @@
 #     Go regex - v2's mux-style placeholder syntax
 #     ({subdomain:[a-z0-9-]+}.examvaults.in) silently matches nothing in
 #     v3. The rule below already uses v3's syntax.
+#   - ROUTER PRIORITY (added after a real live bug): frontend's
+#     HostRegexp(`^[a-z0-9-]+.examvaults.in$`) also matches
+#     "api.examvaults.in" - "api" is just another string satisfying
+#     [a-z0-9-]+, and Go's RE2 (which v3 uses) has no negative-lookahead
+#     to exclude it. Without an explicit priority, Traefik was routing
+#     api.examvaults.in to the FRONTEND (nginx) instead of the gateway -
+#     confirmed live: a CORS preflight to api.examvaults.in/api/users/login
+#     came back 405 from nginx, not the Gateway's own CORS-aware pipeline,
+#     which silently broke every browser API call (a plain curl to the
+#     bare root wrongly looked healthy, since nginx's SPA fallback serves
+#     200 for any path too). Explicit priority forces the exact-match
+#     api router to win whenever both match.
 
 services:
   gateway:
     labels:
       traefik.enable: "true"
       traefik.http.routers.examvault-api.rule: "Host(`api.examvaults.in`)"
+      traefik.http.routers.examvault-api.priority: "100"
       traefik.http.routers.examvault-api.entrypoints: "websecure"
       traefik.http.routers.examvault-api.tls.certresolver: "letsencrypt"
       traefik.http.services.examvault-api.loadbalancer.server.port: "8080"
@@ -45,6 +58,7 @@ services:
     labels:
       traefik.enable: "true"
       traefik.http.routers.examvault-frontend.rule: "Host(`examvaults.in`) || HostRegexp(`^[a-z0-9-]+.examvaults.in$`)"
+      traefik.http.routers.examvault-frontend.priority: "1"
       traefik.http.routers.examvault-frontend.entrypoints: "websecure"
       traefik.http.routers.examvault-frontend.tls.certresolver: "letsencrypt"
       traefik.http.routers.examvault-frontend.tls.domains[0].main: "examvaults.in"
