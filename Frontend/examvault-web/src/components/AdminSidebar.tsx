@@ -27,6 +27,7 @@ export type AdminNavItem =
   | 'Student Reports'
   | 'Performance Reports'
   | 'Audit Reports'
+  | 'Exam Type Wise Report'
   | 'Notifications'
   | 'Create Notification'
   | 'History'
@@ -90,6 +91,7 @@ const navItems: NavItem[] = [
       { label: 'Student Reports', path: '/admin/reports/students' },
       { label: 'Performance Reports', path: '/admin/reports/performance' },
       { label: 'Audit Reports', path: '/admin/reports/audit' },
+      { label: 'Exam Type Wise Report', path: '/admin/reports/exam-type-wise' },
     ],
   },
   {

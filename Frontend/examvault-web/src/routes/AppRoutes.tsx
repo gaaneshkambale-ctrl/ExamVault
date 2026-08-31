@@ -45,6 +45,7 @@ import AdminReports from '../pages/admin/AdminReports';
 import StudentReports from '../pages/admin/StudentReports';
 import PerformanceReports from '../pages/admin/PerformanceReports';
 import AuditReports from '../pages/admin/AuditReports';
+import ExamTypeWiseReport from '../pages/admin/ExamTypeWiseReport';
 import AdminSettings from '../pages/admin/AdminSettings';
 import GeneralSettingsPage from '../pages/admin/settings/GeneralSettingsPage';
 import ExamSettingsPage from '../pages/admin/settings/ExamSettingsPage';
@@ -432,6 +433,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <AuditReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type-wise"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamTypeWiseReport />
           </ProtectedRoute>
         }
       />
