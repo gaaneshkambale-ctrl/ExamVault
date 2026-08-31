@@ -70,6 +70,70 @@ debugging this (blank lines appended, commits like "Trigger CD pipeline
 test (attempt N)") are harmless but visible in git log - fine to leave,
 not worth a history rewrite.
 
+WILDCARD CERTIFICATE (2026-08-30/31): DONE and CONFIRMED - test.examvaults.in
+(and by extension every current/future tenant subdomain) now gets a real
+Let's Encrypt cert automatically, issuer "Let's Encrypt" (CN=YR2), SAN
+covering both examvaults.in and *.examvaults.in. No per-tenant action
+needed going forward. Real journey, in order (each step below was tested
+live and failed before the next fix - skipping any one of them reproduces
+the original "TRAEFIK DEFAULT CERT" / browser privacy-error symptom):
+
+  0. STARTING POINT: HTTP-01 challenge (the original Step 7 setup) can
+     NEVER issue wildcard certs - this isn't a config bug, it's a hard
+     ACME/Let's Encrypt rule (wildcards require DNS-01). Confirmed via
+     Traefik's own log: "No available solvers were found for the
+     challenge ... solvers=http-01 type=dns-01" whenever it tried the
+     *.examvaults.in SAN. Had to switch challenge types entirely, not
+     just fix syntax.
+  1. Switched Traefik's own static config (its Docker Manager app, NOT
+     this repo) from acme.httpchallenge to acme.dnschallenge with
+     provider=hostinger - lego (Traefik's ACME library) supports
+     Hostinger's DNS API natively. This edit silently didn't save the
+     first time (same "reported done, wasn't" pattern as the SSH saga) -
+     always verify via Traefik's own "Static configuration loaded" DEBUG
+     log line after redeploying, not just by re-opening the yaml editor.
+  2. Added HOSTINGER_API_TOKEN to Traefik's "Environment" box in Docker
+     Manager - but that box ONLY provides ${VAR} substitution values for
+     the main yaml, it does NOT automatically become a real environment
+     variable inside the running container. Confirmed via error:
+     "cannot get ACME client hostinger: some credentials information are
+     missing: HOSTINGER_API_TOKEN" despite the token clearly being in
+     that box. Fix: added an explicit `environment:` block to the
+     traefik service in the MAIN yaml (not the Environment box) with
+     `HOSTINGER_API_TOKEN=${HOSTINGER_API_TOKEN}` - that's what actually
+     passes it into the container.
+  3. Got past auth, DNS-01 actually created the challenge TXT record via
+     Hostinger's API - but then timed out (60s default) verifying it
+     propagated, because lego was checking via the HOST's own local
+     resolver (127.0.0.53, inherited since Traefik runs network_mode:
+     host) instead of a real public one. Fixed with
+     --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=8.8.8.8:53,1.1.1.1:53.
+  4. STILL timed out even against Google's 8.8.8.8 - a genuinely slow
+     first-propagation delay for a brand-new TXT record on Hostinger's
+     DNS (unrelated to the resolver choice; A records added hours
+     earlier were already fully propagated and unaffected). Fixed by
+     raising the timeout well past the 60s default: added
+     HOSTINGER_PROPAGATION_TIMEOUT=300 and HOSTINGER_POLLING_INTERVAL=5
+     as two more ${VAR}-substituted environment: entries (same
+     Environment-box-plus-main-yaml-environment-block pattern as step 2).
+     This is what finally worked.
+
+Final working traefik command block (Docker Manager's own app, not this
+repo) needs, relative to the original HTTP-01 setup:
+  - REMOVED: --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+    and .httpchallenge.entrypoint=web
+  - ADDED: --certificatesresolvers.letsencrypt.acme.dnschallenge=true,
+    .dnschallenge.provider=hostinger,
+    .dnschallenge.resolvers=8.8.8.8:53,1.1.1.1:53
+  - traefik service's `environment:` block: HOSTINGER_API_TOKEN,
+    HOSTINGER_PROPAGATION_TIMEOUT=${...} (300),
+    HOSTINGER_POLLING_INTERVAL=${...} (5), each also mirrored as a plain
+    KEY=value line in the separate "Environment" substitution box.
+This repo's docker-compose.traefik.yml only needed the tls.domains
+override (main=examvaults.in, sans=*.examvaults.in) on the frontend
+router - everything else above lives on the VPS's Traefik app config,
+outside this repo.
+
 Wherever you see <ALL_CAPS_LIKE_THIS>, that's a value YOU generate/choose,
 not something already decided. Nothing in this file is a real secret -
 every password/key below is a placeholder for you to replace with your own
