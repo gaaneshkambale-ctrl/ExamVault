@@ -13,13 +13,24 @@
 #     a container's bridge-network IP directly.
 #   - certresolver name: "letsencrypt" (confirmed, matches this file)
 #   - entrypoint for HTTPS: "websecure" (confirmed, matches this file)
-#   - challenge type: HTTP-01 (httpchallenge=true), NOT DNS-01 - so there
-#     is no wildcard certificate and no GoDaddy/Hostinger API key needed.
-#     Traefik will automatically obtain a separate cert per hostname the
-#     first time it receives a real request for that hostname - this
-#     works fine for per-tenant subdomains too since the wildcard DNS A
-#     record already routes every subdomain to this VPS; each new tenant
-#     subdomain just gets its own cert issued lazily on first visit.
+#   - challenge type: DNS-01 via HOSTINGER_API_TOKEN (switched from HTTP-01
+#     - HTTP-01 only requests certs for domains Traefik can extract
+#     literally from a Host() rule; it cannot enumerate a HostRegexp()
+#     pattern into concrete domains, so a brand-new tenant subdomain never
+#     got a cert at all under HTTP-01, confirmed live via Traefik's own
+#     debug log: "Trying to challenge certificate for domain
+#     [examvaults.in] found in HostSNI rule" - only the two literal Host()
+#     domains were ever attempted, never anything matching just the regex
+#     part). DNS-01 can issue a genuine wildcard instead - the
+#     tls.domains override below asks for one cert covering both
+#     examvaults.in and *.examvaults.in, so every current and future
+#     tenant subdomain is already covered by the same cert, no per-tenant
+#     action ever needed.
+#   - HostRegexp syntax note (still relevant for routing, separate from
+#     certs): Traefik v3 (this VPS runs v3.7) changed HostRegexp to plain
+#     Go regex - v2's mux-style placeholder syntax
+#     ({subdomain:[a-z0-9-]+}.examvaults.in) silently matches nothing in
+#     v3. The rule below already uses v3's syntax.
 
 services:
   gateway:
@@ -33,16 +44,9 @@ services:
   frontend:
     labels:
       traefik.enable: "true"
-      # HostRegexp's syntax changed in Traefik v3 (this VPS runs v3.7,
-      # confirmed via its logs) - v2's mux-style placeholder syntax
-      # ({subdomain:[a-z0-9-]+}.examvaults.in) silently fails to match
-      # anything in v3, which uses plain Go regex instead. Confirmed live:
-      # examvaults.in/api.examvaults.in (both literal Host() matches)
-      # got real Let's Encrypt certs fine, but a brand-new tenant
-      # subdomain kept getting served Traefik's own default self-signed
-      # cert - meaning this rule never matched it at all, so Traefik never
-      # knew to request one.
       traefik.http.routers.examvault-frontend.rule: "Host(`examvaults.in`) || HostRegexp(`^[a-z0-9-]+.examvaults.in$`)"
       traefik.http.routers.examvault-frontend.entrypoints: "websecure"
       traefik.http.routers.examvault-frontend.tls.certresolver: "letsencrypt"
+      traefik.http.routers.examvault-frontend.tls.domains[0].main: "examvaults.in"
+      traefik.http.routers.examvault-frontend.tls.domains[0].sans: "*.examvaults.in"
       traefik.http.services.examvault-frontend.loadbalancer.server.port: "80"
