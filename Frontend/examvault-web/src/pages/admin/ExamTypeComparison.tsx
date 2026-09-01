@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react';
 import { Card, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportTabs from '../../components/reports/ReportTabs';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
+import { TargetIcon } from '../../components/reports/ReportIcons';
 import { DownloadIcon } from '../../components/icons/ActionIcons';
 import { useExamTypeSummaryRows } from '../../hooks/useExamTypeSummaryRows';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
@@ -104,9 +106,7 @@ export default function ExamTypeComparison() {
 
           <Card className="border-0 shadow-sm mb-3">
             <Card.Body>
-              <h2 className="h6 fw-bold mb-3">
-                {tab} by Exam Type
-              </h2>
+              <SectionHeader icon={<TargetIcon />} title={`${tab} by Exam Type`} />
               <ScoreDistributionChart data={chartData} />
             </Card.Body>
           </Card>

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import LineTrendChart from '../../components/charts/LineTrendChart';
@@ -196,7 +197,7 @@ export default function PerformanceReports() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Performance Trend</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><TrendingUpIcon /></span>} title="Performance Trend" />
                   <LineTrendChart
                     series={[
                       { name: 'Average Score', color: '#4f46e5', data: trend.avgSeries, isPercent: true },
@@ -209,7 +210,7 @@ export default function PerformanceReports() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Score Range Analysis</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><TargetIcon /></span>} title="Score Range Analysis" />
                   <ScoreDistributionChart data={scoreRangeAnalysis} />
                 </Card.Body>
               </Card>
@@ -218,7 +219,9 @@ export default function PerformanceReports() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Performance by Exam</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<span className="text-primary d-flex"><ArrowUpIcon /></span>} title="Performance by Exam" />
+              </div>
               {performanceByExam.length === 0 ? (
                 <div className="text-center text-muted py-5">No attempts match your filters.</div>
               ) : (

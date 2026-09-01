@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import LineTrendChart from '../../components/charts/LineTrendChart';
@@ -219,7 +220,7 @@ export default function AuditReports() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Activity Overview</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><ActivityIcon /></span>} title="Activity Overview" />
                   <LineTrendChart
                     series={[{ name: 'Activities', color: '#4f46e5', data: activityOverview.map((b) => ({ label: b.label, value: b.count })) }]}
                   />
@@ -229,7 +230,7 @@ export default function AuditReports() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Activity by Type</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><DatabaseIcon /></span>} title="Activity by Type" />
                   <DonutChart data={activityByType} centerLabel="Activities" />
                 </Card.Body>
               </Card>
@@ -238,7 +239,9 @@ export default function AuditReports() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Recent Activities</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<span className="text-primary d-flex"><BookIcon /></span>} title="Recent Activities" />
+              </div>
               {filteredRows.length === 0 ? (
                 <div className="text-center text-muted py-5">No activity in this range yet.</div>
               ) : (

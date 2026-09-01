@@ -3,8 +3,10 @@ import { Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
 import DonutChart from '../../components/charts/DonutChart';
+import { BookIcon, TargetIcon, CheckCircleIcon, UserCheckIcon } from '../../components/reports/ReportIcons';
 import { DownloadIcon } from '../../components/icons/ActionIcons';
 import { useExam } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
@@ -13,6 +15,16 @@ import { getExamResultScheme } from '../../utils/examResultScheme';
 import { buildAdvanceExamReport } from '../../utils/advanceExamReport';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
 import { exportAdvanceExamReportExcel } from '../../utils/exportAdvanceExamReportExcel';
+
+function BulbIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+      <path d="M12 2a7 7 0 0 0-4 12.7c.5.4.9 1.1.9 1.8v.5h6.2v-.5c0-.7.4-1.4.9-1.8A7 7 0 0 0 12 2Z" />
+    </svg>
+  );
+}
 
 export default function AdvanceExamReport() {
   const { examId } = useParams<{ examId: string }>();
@@ -99,7 +111,7 @@ export default function AdvanceExamReport() {
         <>
           <Card className="border-0 shadow-sm mb-4">
             <Card.Body>
-              <h2 className="h6 fw-bold mb-3">Exam Overview</h2>
+              <SectionHeader icon={<BookIcon />} title="Exam Overview" />
               <Row className="g-3">
                 <Col md={6}>
                   <Row className="g-2">
@@ -157,7 +169,7 @@ export default function AdvanceExamReport() {
             <Col md={scheme.hasPassFailConcept ? 7 : 12}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Score Distribution</h2>
+                  <SectionHeader icon={<TargetIcon />} title="Score Distribution" />
                   <ScoreDistributionChart data={report.distribution} />
                 </Card.Body>
               </Card>
@@ -166,7 +178,7 @@ export default function AdvanceExamReport() {
               <Col md={5}>
                 <Card className="border-0 shadow-sm h-100">
                   <Card.Body>
-                    <h2 className="h6 fw-bold mb-3">{scheme.outcomeLabels.pass} / {scheme.outcomeLabels.fail} Summary</h2>
+                    <SectionHeader icon={<CheckCircleIcon />} title={`${scheme.outcomeLabels.pass} / ${scheme.outcomeLabels.fail} Summary`} />
                     <DonutChart data={donutSlices} centerLabel={`${report.presentCount} Total`} />
                   </Card.Body>
                 </Card>
@@ -177,7 +189,7 @@ export default function AdvanceExamReport() {
           <Card className="border-0 shadow-sm mb-4">
             <Card.Body className="p-0">
               <div className="p-4 pb-3">
-                <h2 className="h6 fw-bold mb-0">Student Performance Details</h2>
+                <SectionHeader icon={<UserCheckIcon />} title="Student Performance Details" />
               </div>
 
               {report.studentRows.length === 0 && report.absentStudents.length === 0 && (
@@ -260,7 +272,7 @@ export default function AdvanceExamReport() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body>
-              <h2 className="h6 fw-bold mb-3">Exam Insights</h2>
+              <SectionHeader icon={<BulbIcon />} title="Exam Insights" />
               <ul className="mb-0 small">
                 {report.highest && (
                   <li>

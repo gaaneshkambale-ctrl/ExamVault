@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import BarLineComboChart from '../../components/charts/BarLineComboChart';
@@ -130,7 +131,7 @@ export default function ExamTypeWiseReport() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Exams and Participants by Exam Type</h2>
+                  <SectionHeader icon={<BookIcon />} title="Exams and Participants by Exam Type" />
                   <BarLineComboChart
                     labels={rows.map((r) => r.type.name.replace(' Exam', ''))}
                     bars={{ name: 'Exams', color: '#4f46e5', data: rows.map((r) => r.examsCount) }}
@@ -142,7 +143,7 @@ export default function ExamTypeWiseReport() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Participants Distribution by Exam Type</h2>
+                  <SectionHeader icon={<UserCheckIcon />} title="Participants Distribution by Exam Type" />
                   <DonutChart
                     data={rows
                       .filter((r) => r.participantsCount > 0)
@@ -156,7 +157,9 @@ export default function ExamTypeWiseReport() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Exam Type Wise Performance Summary</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<TargetIcon />} title="Exam Type Wise Performance Summary" />
+              </div>
               {rows.length === 0 ? (
                 <div className="text-center text-muted py-5">No exam types match your filters.</div>
               ) : (

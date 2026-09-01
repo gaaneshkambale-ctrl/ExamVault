@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card, Col, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import ReportTabs from '../../components/reports/ReportTabs';
 import DonutChart from '../../components/charts/DonutChart';
@@ -171,7 +172,7 @@ export default function ExamTypeQuestionAnalysis() {
               <Col lg={6}>
                 <Card className="border-0 shadow-sm h-100">
                   <Card.Body>
-                    <h2 className="h6 fw-bold mb-3">Overall Question Performance</h2>
+                    <SectionHeader icon={<BookIcon />} title="Overall Question Performance" />
                     <DonutChart
                       data={[
                         { label: 'Correct', value: totals.correct, color: '#22c55e' },
@@ -185,7 +186,7 @@ export default function ExamTypeQuestionAnalysis() {
               <Col lg={6}>
                 <Card className="border-0 shadow-sm h-100">
                   <Card.Body>
-                    <h2 className="h6 fw-bold mb-3">Question Performance Summary</h2>
+                    <SectionHeader icon={<CheckCircleIcon />} title="Question Performance Summary" />
                     <div className="d-flex justify-content-between small mb-2">
                       <span className="text-muted">Average Correct Rate</span>
                       <span className="fw-medium">{summary.averageDifficultyPercent.toFixed(2)}%</span>
@@ -219,7 +220,9 @@ export default function ExamTypeQuestionAnalysis() {
           {tab === 'Most Difficult Questions' && (
             <Card className="border-0 shadow-sm">
               <Card.Body className="p-0">
-                <h2 className="h6 fw-bold p-3 pb-2 mb-0">Top {WORST_LIMIT} Most Difficult Questions</h2>
+                <div className="p-3 pb-0">
+                  <SectionHeader icon={<XCircleIcon />} title={`Top ${WORST_LIMIT} Most Difficult Questions`} />
+                </div>
                 {mostDifficult.length === 0 ? (
                   <div className="text-center text-muted py-5">No attempts yet.</div>
                 ) : (
@@ -262,7 +265,9 @@ export default function ExamTypeQuestionAnalysis() {
           {tab === 'Most Skipped Questions' && (
             <Card className="border-0 shadow-sm">
               <Card.Body className="p-0">
-                <h2 className="h6 fw-bold p-3 pb-2 mb-0">Top {WORST_LIMIT} Most Skipped Questions</h2>
+                <div className="p-3 pb-0">
+                  <SectionHeader icon={<MinusCircleIcon />} title={`Top ${WORST_LIMIT} Most Skipped Questions`} />
+                </div>
                 {mostSkipped.length === 0 ? (
                   <div className="text-center text-muted py-5">No skipped questions.</div>
                 ) : (
