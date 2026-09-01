@@ -10,6 +10,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Exam.API.Authorization;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
+using OnlineExamSystem.Exam.Application.Assignments.Cancel;
 using OnlineExamSystem.Exam.Application.Assignments.Create;
 using OnlineExamSystem.Exam.Application.Assignments.Delete;
 using OnlineExamSystem.Exam.Application.Assignments.GetById;
@@ -134,6 +135,7 @@ public class Program
         builder.Services.AddScoped<ListAssignmentsForExamHandler>();
         builder.Services.AddScoped<GetAssignmentHandler>();
         builder.Services.AddScoped<DeleteAssignmentHandler>();
+        builder.Services.AddScoped<CancelAssignmentHandler>();
         builder.Services.AddScoped<GetMyAssignmentForExamHandler>();
 
         builder.Services.AddScoped<GetReminderSettingsHandler>();

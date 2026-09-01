@@ -42,6 +42,13 @@ export async function deleteAssignment(id: string): Promise<void> {
   await apiClient.delete(`/api/assignments/${id}`);
 }
 
+// Distinct from deleteAssignment: keeps the row (delete hard-removes it
+// and cascades its targets) so a cancelled sitting still shows on the
+// Exam Scheduled list.
+export async function cancelAssignment(id: string): Promise<void> {
+  await apiClient.post(`/api/assignments/${id}/cancel`);
+}
+
 export async function getMyAssignmentForExam(examId: string): Promise<MyAssignmentResponse | null> {
   try {
     const { data } = await apiClient.get<MyAssignmentResponse>('/api/assignments/mine', {

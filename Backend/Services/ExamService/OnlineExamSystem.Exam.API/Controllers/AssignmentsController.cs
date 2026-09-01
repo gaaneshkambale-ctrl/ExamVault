@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Exam.Application.Assignments;
+using OnlineExamSystem.Exam.Application.Assignments.Cancel;
 using OnlineExamSystem.Exam.Application.Assignments.Create;
 using OnlineExamSystem.Exam.Application.Assignments.Delete;
 using OnlineExamSystem.Exam.Application.Assignments.GetById;
@@ -26,6 +27,7 @@ public class AssignmentsController : ControllerBase
     private readonly ListAssignmentsForExamHandler _listAssignmentsForExamHandler;
     private readonly GetAssignmentHandler _getAssignmentHandler;
     private readonly DeleteAssignmentHandler _deleteAssignmentHandler;
+    private readonly CancelAssignmentHandler _cancelAssignmentHandler;
     private readonly GetMyAssignmentForExamHandler _getMyAssignmentForExamHandler;
     private readonly ILogger<AssignmentsController> _logger;
 
@@ -36,6 +38,7 @@ public class AssignmentsController : ControllerBase
         ListAssignmentsForExamHandler listAssignmentsForExamHandler,
         GetAssignmentHandler getAssignmentHandler,
         DeleteAssignmentHandler deleteAssignmentHandler,
+        CancelAssignmentHandler cancelAssignmentHandler,
         GetMyAssignmentForExamHandler getMyAssignmentForExamHandler,
         ILogger<AssignmentsController> logger)
     {
@@ -45,6 +48,7 @@ public class AssignmentsController : ControllerBase
         _listAssignmentsForExamHandler = listAssignmentsForExamHandler;
         _getAssignmentHandler = getAssignmentHandler;
         _deleteAssignmentHandler = deleteAssignmentHandler;
+        _cancelAssignmentHandler = cancelAssignmentHandler;
         _getMyAssignmentForExamHandler = getMyAssignmentForExamHandler;
         _logger = logger;
     }
@@ -229,6 +233,25 @@ public class AssignmentsController : ControllerBase
         return NoContent();
     }
 
+    // Distinct from Delete: keeps the row (Delete hard-removes it and
+    // cascades its targets) so the Exam Scheduled list can still show a
+    // cancelled sitting rather than making it disappear.
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Exams)]
+    public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _cancelAssignmentHandler.HandleAsync(new CancelAssignmentCommand(id), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Assignment not found." });
+        }
+
+        _logger.LogInformation("Assignment {AssignmentId} cancelled.", id);
+        return NoContent();
+    }
+
     private static ExamAssignmentResponse ToResponse(ExamAssignment assignment, IReadOnlyList<Guid> targetUserIds) =>
         new(
             assignment.Id,
@@ -250,7 +273,8 @@ public class AssignmentsController : ControllerBase
             assignment.AutoSubmitOnTimeOver,
             assignment.EnableProctoring,
             assignment.EnableLiveVideo,
-            assignment.CreatedAtUtc);
+            assignment.CreatedAtUtc,
+            assignment.CancelledAtUtc);
 
     private static MyAssignmentResponse ToMyResponse(ExamAssignment assignment) =>
         new(
@@ -281,5 +305,6 @@ public class AssignmentsController : ControllerBase
             item.TargetCount,
             item.Assignment.StartAtUtc,
             item.Assignment.EndAtUtc,
-            item.Assignment.CreatedAtUtc);
+            item.Assignment.CreatedAtUtc,
+            item.Assignment.CancelledAtUtc);
 }

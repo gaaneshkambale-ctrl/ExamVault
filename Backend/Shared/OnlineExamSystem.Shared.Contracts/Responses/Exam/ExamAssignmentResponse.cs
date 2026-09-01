@@ -20,4 +20,5 @@ public record ExamAssignmentResponse(
     bool AutoSubmitOnTimeOver,
     bool EnableProctoring,
     bool EnableLiveVideo,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    DateTime? CancelledAtUtc);

@@ -15,6 +15,7 @@ import ResetPassword from '../pages/admin/ResetPassword';
 import RolesPermissions from '../pages/admin/RolesPermissions';
 import ManageExams from '../pages/admin/ManageExams';
 import ManageExamTypes from '../pages/admin/ManageExamTypes';
+import ExamScheduled from '../pages/admin/ExamScheduled';
 import CreateExam from '../pages/admin/CreateExam';
 import ExamDetails from '../pages/admin/ExamDetails';
 import EditExam from '../pages/admin/EditExam';
@@ -253,6 +254,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ManageExamTypes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/scheduled"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamScheduled />
           </ProtectedRoute>
         }
       />

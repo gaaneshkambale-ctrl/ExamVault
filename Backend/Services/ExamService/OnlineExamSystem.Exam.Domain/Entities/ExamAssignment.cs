@@ -29,4 +29,10 @@ public class ExamAssignment : TenantScopedEntity
     // to Metered at all - JoinRecordingHandler in SubmissionService checks
     // it before creating a room, so it's meaningless without proctoring on.
     public bool EnableLiveVideo { get; set; }
+
+    // Cancelling a scheduled sitting is distinct from deleting it (Delete
+    // hard-removes the row and cascades its targets - cancel keeps the
+    // record so the Exam Scheduled list can still show it happened).
+    // Non-null = cancelled.
+    public DateTime? CancelledAtUtc { get; set; }
 }

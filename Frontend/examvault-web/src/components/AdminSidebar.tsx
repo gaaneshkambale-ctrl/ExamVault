@@ -12,6 +12,7 @@ export type AdminNavItem =
   | 'User Groups'
   | 'Exams'
   | 'Exam Types'
+  | 'Exam Scheduled'
   | 'Live Monitoring'
   | 'Active Exams'
   | 'Student Attempts'
@@ -61,7 +62,10 @@ const navItems: NavItem[] = [
   {
     label: 'Exams',
     path: '/admin/exams',
-    children: [{ label: 'Exam Types', path: '/admin/exam-types' }],
+    children: [
+      { label: 'Exam Types', path: '/admin/exam-types' },
+      { label: 'Exam Scheduled', path: '/admin/exams/scheduled' },
+    ],
   },
   {
     label: 'Live Monitoring',
