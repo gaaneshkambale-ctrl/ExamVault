@@ -48,6 +48,12 @@ services:
     build:
       context: .
       dockerfile: Backend/Services/UserService/OnlineExamSystem.User.API/Dockerfile
+    # EF Core's Database.Migrate() on startup can race against SQL Server
+    # right after a full `docker compose up --build` recreates every
+    # container at once, throwing an unhandled SqlException and crashing
+    # the process before Kestrel binds - with no restart policy this left
+    # the service dead while gateway/frontend still reported "Up".
+    restart: unless-stopped
     environment:
       <<: [*jwt-env, *rabbitmq-env]
       ASPNETCORE_ENVIRONMENT: Docker
@@ -69,6 +75,8 @@ services:
     build:
       context: .
       dockerfile: Backend/Services/ExamService/OnlineExamSystem.Exam.API/Dockerfile
+    # Same EF Core migration startup race as user-api (see its comment).
+    restart: unless-stopped
     environment:
       <<: [*jwt-env, *rabbitmq-env]
       ASPNETCORE_ENVIRONMENT: Docker
@@ -90,6 +98,8 @@ services:
     build:
       context: .
       dockerfile: Backend/Services/QuestionService/OnlineExamSystem.Question.API/Dockerfile
+    # Same EF Core migration startup race as user-api (see its comment).
+    restart: unless-stopped
     environment:
       <<: [*jwt-env]
       ASPNETCORE_ENVIRONMENT: Docker
@@ -117,6 +127,8 @@ services:
     build:
       context: .
       dockerfile: Backend/Services/SubmissionService/OnlineExamSystem.Submission.API/Dockerfile
+    # Same EF Core migration startup race as user-api (see its comment).
+    restart: unless-stopped
     environment:
       <<: [*jwt-env, *rabbitmq-env]
       ASPNETCORE_ENVIRONMENT: Docker
@@ -219,6 +231,8 @@ services:
     build:
       context: .
       dockerfile: Backend/Services/NotificationService/OnlineExamSystem.Notification.API/Dockerfile
+    # Same EF Core migration startup race as user-api (see its comment).
+    restart: unless-stopped
     environment:
       <<: [*jwt-env]
       ASPNETCORE_ENVIRONMENT: Docker
