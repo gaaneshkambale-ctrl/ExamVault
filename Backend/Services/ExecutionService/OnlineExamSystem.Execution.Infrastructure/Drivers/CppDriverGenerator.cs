@@ -23,6 +23,7 @@ public class CppDriverGenerator : IDriverGenerator
         // service. Main still needs to #include the Solution file directly
         // (its class methods are implicitly inline within the class body, so
         // this doesn't violate one-definition-rule across translation units).
+        SolutionClassRequirement.EnsurePresent(studentCode, functionName, "C++");
         var args = string.Join(", ", arguments
             .Zip(parameters, (arg, param) => CppLiteral.Render(arg, param.Type)));
 

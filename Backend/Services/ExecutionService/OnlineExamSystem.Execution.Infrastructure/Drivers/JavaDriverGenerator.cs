@@ -26,6 +26,7 @@ public class JavaDriverGenerator : IDriverGenerator
         // so Main goes first, and the student's class (always named "Solution"
         // by convention, matching coder.png) goes second, with its "public"
         // modifier stripped since only one public type is allowed per file.
+        SolutionClassRequirement.EnsurePresent(studentCode, functionName, "Java");
         var solutionClass = studentCode.Replace("public class Solution", "class Solution");
 
         var args = string.Join(", ", arguments
