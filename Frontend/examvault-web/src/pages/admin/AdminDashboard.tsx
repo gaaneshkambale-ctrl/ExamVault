@@ -131,6 +131,150 @@ function DateIcon() {
   );
 }
 
+function ActivityIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  );
+}
+
+function DonutIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function BoltIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function TodoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
+function UserGroupIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function ExamsSmallIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <line x1="8" y1="8" x2="16" y2="8" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="8" y1="16" x2="12" y2="16" />
+    </svg>
+  );
+}
+
+function UsersSmallIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function ResultsSmallIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+function ReportsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" />
+    </svg>
+  );
+}
+
+function ServerIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="7" rx="1" /><rect x="2" y="14" width="20" height="7" rx="1" />
+      <line x1="6" y1="6.5" x2="6.01" y2="6.5" /><line x1="6" y1="17.5" x2="6.01" y2="17.5" />
+    </svg>
+  );
+}
+
+interface SectionHeaderProps {
+  icon: ReactNode;
+  title: string;
+  action?: ReactNode;
+}
+
+function SectionHeader({ icon, title, action }: SectionHeaderProps) {
+  return (
+    <div className="d-flex justify-content-between align-items-center mb-3">
+      <div className="d-flex align-items-center gap-2">
+        <div
+          className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+          style={{ width: 32, height: 32, background: '#eef2ff' }}
+        >
+          {icon}
+        </div>
+        <h2 className="h6 fw-bold mb-0">{title}</h2>
+      </div>
+      {action}
+    </div>
+  );
+}
+
 function monthKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}`;
 }
@@ -238,13 +382,16 @@ function StatCard({ label, value, icon, variant, isLoading, deltaPercent, captio
   );
 }
 
-function QuickActionRow({ to, label }: { to: string; label: string }) {
+function QuickActionRow({ to, label, icon }: { to: string; label: string; icon: ReactNode }) {
   return (
     <Link
       to={to}
       className="d-flex justify-content-between align-items-center w-100 py-2 px-3 rounded-2 text-decoration-none text-body border mb-2"
     >
-      <span className="small fw-medium">{label}</span>
+      <span className="d-flex align-items-center gap-2 small fw-medium">
+        <span className="text-primary">{icon}</span>
+        {label}
+      </span>
       <ChevronRightIcon />
     </Link>
   );
@@ -449,12 +596,15 @@ export default function AdminDashboard() {
             <Col xs={12} lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h2 className="h6 fw-bold mb-0">Exam Activity (Last 7 Days)</h2>
-                    <Badge bg="light" text="dark" className="border fw-normal">
-                      Last 7 Days
-                    </Badge>
-                  </div>
+                  <SectionHeader
+                    icon={<ActivityIcon />}
+                    title="Exam Activity (Last 7 Days)"
+                    action={
+                      <Badge bg="light" text="dark" className="border fw-normal">
+                        Last 7 Days
+                      </Badge>
+                    }
+                  />
 
                   {isLoadingResults ? (
                     <div className="d-flex justify-content-center py-5">
@@ -473,7 +623,7 @@ export default function AdminDashboard() {
             <Col xs={12} lg={4}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Creation Method Distribution</h2>
+                  <SectionHeader icon={<DonutIcon />} title="Creation Method Distribution" />
                   {isLoadingExams ? (
                     <div className="d-flex justify-content-center py-5">
                       <Spinner animation="border" size="sm" />
@@ -519,12 +669,12 @@ export default function AdminDashboard() {
             <Col xs={12} lg={3}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Quick Actions</h2>
-                  <QuickActionRow to="/admin/exams/create" label="Create New Exam" />
-                  <QuickActionRow to="/admin/exams" label="Manage Exams" />
-                  <QuickActionRow to="/admin/users" label="Manage Users" />
-                  <QuickActionRow to="/admin/results/exams" label="View All Results" />
-                  <QuickActionRow to="/admin/reports" label="System Reports" />
+                  <SectionHeader icon={<BoltIcon />} title="Quick Actions" />
+                  <QuickActionRow to="/admin/exams/create" label="Create New Exam" icon={<PlusIcon />} />
+                  <QuickActionRow to="/admin/exams" label="Manage Exams" icon={<ExamsSmallIcon />} />
+                  <QuickActionRow to="/admin/users" label="Manage Users" icon={<UsersSmallIcon />} />
+                  <QuickActionRow to="/admin/results/exams" label="View All Results" icon={<ResultsSmallIcon />} />
+                  <QuickActionRow to="/admin/reports" label="System Reports" icon={<ReportsIcon />} />
                 </Card.Body>
               </Card>
             </Col>
@@ -534,11 +684,16 @@ export default function AdminDashboard() {
             <Col xs={12} lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className={pagedRecentExams.length === 0 ? '' : 'p-0'}>
-                  <div className="d-flex justify-content-between align-items-center p-4 pb-3">
-                    <h2 className="h6 fw-bold mb-0">Recent Exams</h2>
-                    <Link to="/admin/exams" className="small">
-                      View all
-                    </Link>
+                  <div className="p-4 pb-0">
+                    <SectionHeader
+                      icon={<ListIcon />}
+                      title="Recent Exams"
+                      action={
+                        <Link to="/admin/exams" className="small">
+                          View all
+                        </Link>
+                      }
+                    />
                   </div>
 
                   {isLoadingExams && (
@@ -638,11 +793,16 @@ export default function AdminDashboard() {
             <Col xs={12} lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className={upcomingAssignments.length === 0 ? '' : 'p-0'}>
-                  <div className="d-flex justify-content-between align-items-center p-4 pb-3">
-                    <h2 className="h6 fw-bold mb-0">Upcoming Exams</h2>
-                    <Link to="/admin/exams" className="small">
-                      View all
-                    </Link>
+                  <div className="p-4 pb-0">
+                    <SectionHeader
+                      icon={<ClockIcon />}
+                      title="Upcoming Exams"
+                      action={
+                        <Link to="/admin/exams" className="small">
+                          View all
+                        </Link>
+                      }
+                    />
                   </div>
 
                   {isLoadingAssignments && (
@@ -688,8 +848,8 @@ export default function AdminDashboard() {
             <Col xs={12} lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className="p-0">
-                  <div className="p-4 pb-3">
-                    <h2 className="h6 fw-bold mb-0">Pending Actions</h2>
+                  <div className="p-4 pb-0">
+                    <SectionHeader icon={<TodoIcon />} title="Pending Actions" />
                   </div>
                   <Table hover className="mb-0 align-middle">
                     <tbody>
@@ -736,13 +896,18 @@ export default function AdminDashboard() {
             <Col xs={12} lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className={(notificationHistory?.items.length ?? 0) === 0 ? '' : 'p-0'}>
-                  <div className="d-flex justify-content-between align-items-center p-4 pb-3">
-                    <h2 className="h6 fw-bold mb-0">Recent Notifications</h2>
-                    {!isNotificationsError && (
-                      <Link to="/admin/notifications/history" className="small">
-                        View all
-                      </Link>
-                    )}
+                  <div className="p-4 pb-0">
+                    <SectionHeader
+                      icon={<BellIcon />}
+                      title="Recent Notifications"
+                      action={
+                        !isNotificationsError && (
+                          <Link to="/admin/notifications/history" className="small">
+                            View all
+                          </Link>
+                        )
+                      }
+                    />
                   </div>
 
                   {isLoadingNotifications && (
@@ -787,7 +952,7 @@ export default function AdminDashboard() {
             <Col xs={12} lg={8}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">User Overview</h2>
+                  <SectionHeader icon={<UserGroupIcon />} title="User Overview" />
                   <Row className="g-4 align-items-center">
                     <Col xs={12} md={4}>
                       <div className="d-flex justify-content-between border-bottom py-2">
@@ -821,7 +986,7 @@ export default function AdminDashboard() {
             <Col xs={12} lg={4}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-1">System Overview</h2>
+                  <SectionHeader icon={<ServerIcon />} title="System Overview" />
                   <p className="text-muted small mb-0">
                     Server storage, database health, uptime, and active-session metrics aren't wired up to any
                     backend yet - this section is a placeholder rather than fabricated numbers.
