@@ -3,8 +3,10 @@ import { Alert, Badge, Button, Card, Col, Row, Spinner, Table } from 'react-boot
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import DeleteAssignmentButton from '../../components/DeleteAssignmentButton';
 import { EditIcon } from '../../components/icons/ActionIcons';
+import { UserCheckIcon } from '../../components/reports/ReportIcons';
 import { archiveExam, publishExam, unpublishExam } from '../../api/examApi';
 import { getOrCreateDefaultSection } from '../../api/sectionApi';
 import { useExam } from '../../hooks/useExams';
@@ -243,7 +245,10 @@ export default function ExamDetails() {
       {exam && (
         <Card className="border-0 shadow-sm mt-4">
           <Card.Body className="p-4">
-            <h3 className="h6 fw-bold mb-3">Assigned Students ({assignments?.length ?? 0})</h3>
+            <SectionHeader
+              icon={<span style={{ color: '#4f46e5' }}><UserCheckIcon /></span>}
+              title={`Assigned Students (${assignments?.length ?? 0})`}
+            />
 
             {isLoadingAssignments && (
               <div className="d-flex justify-content-center py-4">
