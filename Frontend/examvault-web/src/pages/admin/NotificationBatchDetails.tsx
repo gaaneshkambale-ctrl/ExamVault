@@ -3,9 +3,21 @@ import { Badge, Button, Card, Col, Modal, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import { useNotificationBatchDetails } from '../../hooks/useNotifications';
 import { deleteNotificationBatch, resendNotificationBatch } from '../../api/notificationApi';
 import NotificationTypeBadge from '../../components/notifications/NotificationTypeBadge';
+
+function UsersSummaryIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
 
 export default function NotificationBatchDetails() {
   const { batchId } = useParams<{ batchId: string }>();
@@ -74,7 +86,7 @@ export default function NotificationBatchDetails() {
             </Card.Body>
           </Card>
 
-          <h2 className="h6 fw-bold mb-3">Recipients Summary</h2>
+          <SectionHeader icon={<UsersSummaryIcon />} title="Recipients Summary" />
           <Row className="g-3 mb-4">
             <Col md={4} lg>
               <Card className="border-0 shadow-sm h-100">

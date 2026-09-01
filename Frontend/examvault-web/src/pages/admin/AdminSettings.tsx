@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import SettingsCard from '../../components/settings/SettingsCard';
 import type { SettingsCardRow } from '../../components/settings/SettingsCard';
 import {
@@ -328,11 +329,11 @@ export default function AdminSettings() {
               <Card.Body className="p-4">
                 <Row className="align-items-center g-4">
                   <Col xs={12} lg={4}>
-                    <h2 className="h6 fw-bold mb-1">Settings Overview</h2>
-                    <p className="text-muted small mb-0">
-                      These settings apply globally to the entire system. Changes take effect immediately after
-                      saving.
-                    </p>
+                    <SectionHeader
+                      icon={<span style={{ color: '#4f46e5' }}>{icon.system}</span>}
+                      title="Settings Overview"
+                      subtitle="These settings apply globally to the entire system. Changes take effect immediately after saving."
+                    />
                   </Col>
                   <Col xs={6} lg={2}>
                     <div className="h4 fw-bold mb-0">{stats.totalConfigurations}</div>
