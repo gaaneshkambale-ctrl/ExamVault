@@ -19,6 +19,148 @@ function stepFromParam(value: string | null): 1 | 2 | 3 {
   return value === '2' ? 2 : value === '3' ? 3 : 1;
 }
 
+const NAME_MAX = 200;
+const DESCRIPTION_MAX = 2000;
+const INSTRUCTIONS_MAX = 2000;
+
+const STEP_META: { step: 1 | 2 | 3; label: string; sublabel: string }[] = [
+  { step: 1, label: 'Information', sublabel: 'Section details' },
+  { step: 2, label: 'Rules', sublabel: 'Set section rules' },
+  { step: 3, label: 'Question Assignment', sublabel: 'Add questions' },
+];
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function DocumentIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function BulbIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+      <path d="M12 2a7 7 0 0 0-4 12.7c.5.4.9 1.1.9 1.8v.5h6.2v-.5c0-.7.4-1.4.9-1.8A7 7 0 0 0 12 2Z" />
+    </svg>
+  );
+}
+
+function TipCheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function QuestionIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function OrderIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
+const QUICK_TIPS = [
+  'Keep section names short and meaningful',
+  'Set appropriate time and marks',
+  'Organize sections in logical order',
+  'You can reorder sections later',
+];
+
+interface NumberFieldProps {
+  icon: React.ReactNode;
+  iconBg: string;
+  label: string;
+  required?: boolean;
+  hint: string;
+  footnote?: string;
+  value: number;
+  min: number;
+  step?: number;
+  onChange: (value: number) => void;
+}
+
+function NumberField({ icon, iconBg, label, required, hint, footnote, value, min, step, onChange }: NumberFieldProps) {
+  return (
+    <Card className="border shadow-none h-100">
+      <Card.Body className="p-3">
+        <div className="d-flex align-items-start gap-2 mb-2">
+          <div
+            className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+            style={{ width: 32, height: 32, background: iconBg }}
+          >
+            {icon}
+          </div>
+          <div>
+            <div className="fw-bold small">
+              {label} {required && <span className="text-danger">*</span>}
+            </div>
+            <div className="text-muted" style={{ fontSize: '0.75rem' }}>{hint}</div>
+          </div>
+        </div>
+        <Form.Control
+          type="number"
+          min={min}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        {footnote && <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>{footnote}</div>}
+      </Card.Body>
+    </Card>
+  );
+}
+
 const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   MultipleChoice: 'Single Choice',
   MultiSelect: 'Multiple Choice',
@@ -233,114 +375,238 @@ export default function SectionForm() {
     );
   }
 
+  const cancelTarget = fromWizard ? `/admin/exams/${examId}/wizard/sections` : `/admin/exams/${examId}/sections`;
+
   return (
     <AdminLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">{isEdit ? 'Edit Section' : 'Add Section'}</h1>
+        <p className="text-muted mb-0">
+          {isEdit ? "Update this section's details and rules" : 'Organize your exam by adding sections'}
+        </p>
       </div>
 
-      <div className="d-flex gap-2 mb-4">
-        {(['Information', 'Rules', 'Question Assignment'] as const).map((label, index) => {
-          const stepNumber = (index + 1) as 1 | 2 | 3;
+      <div className="d-flex align-items-start mb-4">
+        {STEP_META.map(({ step: s, label, sublabel }, i) => {
+          const isDone = s < step;
+          const isActive = s === step;
           return (
-            <Button
-              key={label}
-              variant={step === stepNumber ? 'primary' : 'outline-secondary'}
-              size="sm"
-              onClick={() => setStep(stepNumber)}
-            >
-              {stepNumber}. {label}
-            </Button>
+            <div key={s} className="d-flex align-items-center" style={{ flex: i === STEP_META.length - 1 ? '0 0 auto' : '1 1 auto' }}>
+              <button
+                type="button"
+                onClick={() => setStep(s)}
+                className="btn p-0 border-0 bg-transparent d-flex flex-column align-items-center text-center"
+                style={{ minWidth: 140 }}
+              >
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-circle fw-bold"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    fontSize: 14,
+                    background: isDone ? '#198754' : isActive ? '#4f46e5' : '#e9ecef',
+                    color: isDone || isActive ? 'white' : '#6c757d',
+                  }}
+                >
+                  {isDone ? <CheckIcon /> : s}
+                </div>
+                <div className="small mt-2" style={{ color: isActive ? '#4f46e5' : isDone ? '#198754' : '#6c757d', fontWeight: isActive ? 600 : 400 }}>
+                  {label}
+                </div>
+                <div className="text-muted" style={{ fontSize: '0.75rem' }}>{sublabel}</div>
+              </button>
+              {i < STEP_META.length - 1 && (
+                <div className="flex-grow-1" style={{ height: 2, background: isDone ? '#198754' : '#e9ecef', marginBottom: 30 }} />
+              )}
+            </div>
           );
         })}
       </div>
 
       {submitError && <Alert variant="danger">{submitError}</Alert>}
 
+      {step === 1 ? (
+        <Row className="g-4">
+          <Col lg={8}>
+            <Card className="border-0 shadow-sm">
+              <Card.Body className="p-4">
+                <div className="d-flex align-items-center gap-2 mb-4">
+                  <div
+                    className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                    style={{ width: 36, height: 36, background: '#eef2ff' }}
+                  >
+                    <DocumentIcon />
+                  </div>
+                  <div>
+                    <div className="fw-bold">Section Information</div>
+                    <div className="text-muted small">Enter the basic details for this section</div>
+                  </div>
+                </div>
+
+                <Form.Group className="mb-3" controlId="sectionName">
+                  <Form.Label className="fw-bold">
+                    Section Name <span className="text-danger">*</span>
+                  </Form.Label>
+                  <Form.Control
+                    value={form.name}
+                    maxLength={NAME_MAX}
+                    onChange={(e) => updateField('name', e.target.value)}
+                    placeholder="E.g. C# Fundamentals"
+                  />
+                  <div className="d-flex justify-content-between">
+                    <Form.Text className="text-muted">Give a clear and descriptive name for this section</Form.Text>
+                    <div className="text-muted small ms-auto">{form.name.length}/{NAME_MAX}</div>
+                  </div>
+                </Form.Group>
+                <Form.Group className="mb-3" controlId="sectionDescription">
+                  <Form.Label className="fw-bold">Description</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={2}
+                    maxLength={DESCRIPTION_MAX}
+                    value={form.description}
+                    onChange={(e) => updateField('description', e.target.value)}
+                  />
+                  <div className="d-flex justify-content-between">
+                    <Form.Text className="text-muted">Describe the topics or purpose of this section</Form.Text>
+                    <div className="text-muted small ms-auto">{form.description.length}/{DESCRIPTION_MAX}</div>
+                  </div>
+                </Form.Group>
+                <Form.Group className="mb-4" controlId="sectionInstructions">
+                  <Form.Label className="fw-bold">Instructions (Optional)</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={2}
+                    maxLength={INSTRUCTIONS_MAX}
+                    value={form.instructions}
+                    onChange={(e) => updateField('instructions', e.target.value)}
+                    placeholder="Enter special instructions for students in this section"
+                  />
+                  <div className="d-flex justify-content-between">
+                    <Form.Text className="text-muted">&nbsp;</Form.Text>
+                    <div className="text-muted small ms-auto">{form.instructions.length}/{INSTRUCTIONS_MAX}</div>
+                  </div>
+                </Form.Group>
+
+                <Row className="g-3 mb-4">
+                  <Col md={3}>
+                    <NumberField
+                      icon={<QuestionIcon />}
+                      iconBg="#dbeafe"
+                      label="Question Count"
+                      required
+                      hint="Total questions in this section"
+                      value={form.questionCount}
+                      min={0}
+                      onChange={(v) => updateField('questionCount', v)}
+                    />
+                  </Col>
+                  <Col md={3}>
+                    <NumberField
+                      icon={<StarIcon />}
+                      iconBg="#fef3c7"
+                      label="Marks"
+                      required
+                      hint="Total marks for this section"
+                      value={form.marks}
+                      min={0}
+                      onChange={(v) => updateField('marks', v)}
+                    />
+                  </Col>
+                  <Col md={3}>
+                    <NumberField
+                      icon={<ClockIcon />}
+                      iconBg="#d1fae5"
+                      label="Duration (minutes)"
+                      required
+                      hint="Time allocated for this section"
+                      value={form.durationMinutes}
+                      min={1}
+                      onChange={(v) => updateField('durationMinutes', v)}
+                    />
+                  </Col>
+                  <Col md={3}>
+                    <NumberField
+                      icon={<OrderIcon />}
+                      iconBg="#dbeafe"
+                      label="Display Order"
+                      required
+                      hint="Order of this section"
+                      footnote="Lower numbers appear first"
+                      value={form.displayOrder}
+                      min={0}
+                      onChange={(v) => updateField('displayOrder', v)}
+                    />
+                  </Col>
+                </Row>
+
+                <div className="d-flex justify-content-between">
+                  <Link to={cancelTarget} className="btn btn-outline-secondary">
+                    Cancel
+                  </Link>
+                  <Button variant="primary" onClick={() => setStep(2)}>
+                    Next: Rules &rarr;
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col lg={4}>
+            <Card className="border-0 shadow-sm mb-3">
+              <Card.Body>
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <EyeIcon />
+                  <div>
+                    <div className="fw-bold small">Section Preview</div>
+                    <div className="text-muted" style={{ fontSize: '0.75rem' }}>This is how the section will appear</div>
+                  </div>
+                </div>
+                {form.name.trim() ? (
+                  <div>
+                    <div className="fw-bold mb-1">{form.name}</div>
+                    {form.description && <div className="text-muted small mb-2">{form.description}</div>}
+                    <div className="d-flex flex-wrap gap-2">
+                      <Badge bg="light" text="dark" className="border">{form.questionCount} questions</Badge>
+                      <Badge bg="light" text="dark" className="border">{form.marks} marks</Badge>
+                      <Badge bg="light" text="dark" className="border">{form.durationMinutes} min</Badge>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-3">
+                    <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#c7d2fe" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-2">
+                      <rect x="5" y="3" width="14" height="18" rx="2" />
+                      <path d="M9 3v-.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 2.5V3" />
+                      <line x1="8" y1="9" x2="16" y2="9" />
+                      <line x1="8" y1="13" x2="16" y2="13" />
+                      <line x1="8" y1="17" x2="13" y2="17" />
+                    </svg>
+                    <div className="fw-bold small">No section created yet</div>
+                    <div className="text-muted small">Fill in the section details to see preview</div>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
+
+            <Card className="border-0 shadow-sm">
+              <Card.Body>
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <BulbIcon />
+                  <div className="fw-bold small">Quick Tips</div>
+                </div>
+                {QUICK_TIPS.map((tip) => (
+                  <div key={tip} className="d-flex align-items-start gap-2 mb-2">
+                    <div className="mt-1"><TipCheckIcon /></div>
+                    <div className="small text-muted">{tip}</div>
+                  </div>
+                ))}
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      ) : (
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-4">
-          {step === 1 && (
-            <>
-              <Form.Group className="mb-3" controlId="sectionName">
-                <Form.Label className="fw-bold">Section Name</Form.Label>
-                <Form.Control
-                  value={form.name}
-                  onChange={(e) => updateField('name', e.target.value)}
-                  placeholder="e.g. C# Fundamentals"
-                />
-              </Form.Group>
-              <Form.Group className="mb-3" controlId="sectionDescription">
-                <Form.Label className="fw-bold">Description</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={2}
-                  value={form.description}
-                  onChange={(e) => updateField('description', e.target.value)}
-                />
-              </Form.Group>
-              <Form.Group className="mb-3" controlId="sectionInstructions">
-                <Form.Label className="fw-bold">Instructions (Optional)</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={2}
-                  value={form.instructions}
-                  onChange={(e) => updateField('instructions', e.target.value)}
-                />
-              </Form.Group>
-              <Row>
-                <Col md={3}>
-                  <Form.Group className="mb-3" controlId="sectionQuestionCount">
-                    <Form.Label className="fw-bold">Question Count</Form.Label>
-                    <Form.Control
-                      type="number"
-                      min={0}
-                      value={form.questionCount}
-                      onChange={(e) => updateField('questionCount', Number(e.target.value))}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group className="mb-3" controlId="sectionMarks">
-                    <Form.Label className="fw-bold">Marks</Form.Label>
-                    <Form.Control
-                      type="number"
-                      min={0}
-                      value={form.marks}
-                      onChange={(e) => updateField('marks', Number(e.target.value))}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group className="mb-3" controlId="sectionDuration">
-                    <Form.Label className="fw-bold">Duration (minutes)</Form.Label>
-                    <Form.Control
-                      type="number"
-                      min={1}
-                      value={form.durationMinutes}
-                      onChange={(e) => updateField('durationMinutes', Number(e.target.value))}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group className="mb-3" controlId="sectionDisplayOrder">
-                    <Form.Label className="fw-bold">Display Order</Form.Label>
-                    <Form.Control
-                      type="number"
-                      min={0}
-                      value={form.displayOrder}
-                      onChange={(e) => updateField('displayOrder', Number(e.target.value))}
-                    />
-                  </Form.Group>
-                </Col>
-              </Row>
-              <div className="d-flex justify-content-end">
-                <Button variant="primary" onClick={() => setStep(2)}>
-                  Next: Rules
-                </Button>
-              </div>
-            </>
-          )}
-
           {step === 2 && (
             <>
               <div className="mb-4">
@@ -587,6 +853,7 @@ export default function SectionForm() {
           )}
         </Card.Body>
       </Card>
+      )}
 
       {examId && (
         <CreateQuestionModal
