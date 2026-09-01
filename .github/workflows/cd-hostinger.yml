@@ -49,9 +49,21 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key_path: ${{ github.workspace }}/deploy_key
+          # Default is 10m - too short once Compose Bake mode is disabled
+          # below and a deploy needs a real (not fully cached) rebuild.
+          command_timeout: 40m
           script: |
             set -e
             cd ~/ExamVault
             git pull
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build
+            # Compose Bake mode rebuilds every service defined across all
+            # three compose files in one combined buildx invocation
+            # regardless of which actually changed, ignoring each
+            # service's own Docker layer cache - confirmed locally: a
+            # frontend-only change took 40+ minutes instead of the ~1
+            # minute a properly-cached scoped build takes, which is what
+            # blew past this step's (previously default 10m) timeout.
+            # Disabling it restores normal per-service layer caching, so
+            # only what actually changed rebuilds.
+            COMPOSE_BAKE=false docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build
             docker image prune -f
