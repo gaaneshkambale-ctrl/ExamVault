@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, InputGroup, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import CreateQuestionModal from '../../components/CreateQuestionModal';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { EditIcon } from '../../components/icons/ActionIcons';
@@ -168,10 +169,98 @@ const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   CodeProgram: 'Code / Programming',
 };
 
+const QUESTION_TYPE_BADGE: Record<QuestionType, string> = {
+  MultipleChoice: 'primary',
+  MultiSelect: 'info',
+  TrueFalse: 'secondary',
+  CodeProgram: 'success',
+};
+
+const DIFFICULTY_BADGE: Record<'Easy' | 'Medium' | 'Hard', string> = {
+  Easy: 'success',
+  Medium: 'warning',
+  Hard: 'danger',
+};
+
+function CompassIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+    </svg>
+  );
+}
+
+function SequentialIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+const NAV_ICONS: Record<NavigationType, React.ReactNode> = {
+  Free: <CompassIcon />,
+  Sequential: <SequentialIcon />,
+  Locked: <LockIcon />,
+};
+
+interface SummaryRowProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}
+
+function SummaryRow({ icon, label, value }: SummaryRowProps) {
+  return (
+    <div className="d-flex justify-content-between align-items-center py-1">
+      <div className="d-flex align-items-center gap-2 text-muted small">
+        {icon}
+        {label}
+      </div>
+      <span className="small fw-bold text-end">{value}</span>
+    </div>
+  );
+}
+
 const NAVIGATION_TYPES: { value: NavigationType; label: string; description: string }[] = [
-  { value: 'Free', label: 'Free Navigation', description: 'Students can go to any question in this section.' },
-  { value: 'Sequential', label: 'Sequential Navigation', description: 'Students must complete questions in order.' },
-  { value: 'Locked', label: 'Locked Navigation', description: 'Once answered, questions cannot be revisited.' },
+  { value: 'Free', label: 'Free Navigation', description: 'Students can go to any question in this section at any time.' },
+  { value: 'Sequential', label: 'Sequential Navigation', description: 'Students must answer questions in the specified order.' },
+  { value: 'Locked', label: 'Locked Navigation', description: 'Once a question is answered, it cannot be revisited.' },
+];
+
+const RULES_QUICK_TIPS = [
+  'Free Navigation gives flexibility to students.',
+  'Sequential Navigation ensures step-by-step progress.',
+  'Locked Navigation prevents revisiting answered questions.',
+  'Review option lets students check answers before final submission.',
 ];
 
 const initialForm: SectionRequest = {
@@ -214,6 +303,7 @@ export default function SectionForm() {
   const [typeFilter, setTypeFilter] = useState<'All' | QuestionType>('All');
   const [difficultyFilter, setDifficultyFilter] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [searchText, setSearchText] = useState('');
+  const [questionPage, setQuestionPage] = useState(1);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showCreateQuestion, setShowCreateQuestion] = useState(false);
@@ -235,6 +325,10 @@ export default function SectionForm() {
     }
   }, [sectionQuestions]);
 
+  useEffect(() => {
+    setQuestionPage(1);
+  }, [typeFilter, difficultyFilter, searchText]);
+
   const availableQuestions = [
     ...(unassignedQuestions ?? []),
     ...(sectionQuestions ?? []),
@@ -253,6 +347,16 @@ export default function SectionForm() {
   const totalMarksSelected = selectedQuestions.reduce((sum, q) => sum + q.marks, 0);
   const allFilteredSelected =
     filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id));
+
+  const QUESTIONS_PAGE_SIZE = 10;
+  const questionTotalPages = Math.max(1, Math.ceil(filteredQuestions.length / QUESTIONS_PAGE_SIZE));
+  const questionCurrentPage = Math.min(questionPage, questionTotalPages);
+  const pagedQuestions = filteredQuestions.slice(
+    (questionCurrentPage - 1) * QUESTIONS_PAGE_SIZE,
+    questionCurrentPage * QUESTIONS_PAGE_SIZE,
+  );
+  const questionRangeStart = filteredQuestions.length === 0 ? 0 : (questionCurrentPage - 1) * QUESTIONS_PAGE_SIZE + 1;
+  const questionRangeEnd = Math.min(questionCurrentPage * QUESTIONS_PAGE_SIZE, filteredQuestions.length);
 
   // AI-generated exams get the multi-step AI generator instead of the manual form.
   const useAiGenerate = exam?.creationMethod === 'AiGenerated';
@@ -377,13 +481,20 @@ export default function SectionForm() {
 
   const cancelTarget = fromWizard ? `/admin/exams/${examId}/wizard/sections` : `/admin/exams/${examId}/sections`;
 
+  const stepSubtitle =
+    step === 1
+      ? isEdit
+        ? "Update this section's details and rules"
+        : 'Organize your exam by adding sections'
+      : step === 2
+        ? 'Configure rules and behavior for this section'
+        : 'Add questions to this section';
+
   return (
     <AdminLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">{isEdit ? 'Edit Section' : 'Add Section'}</h1>
-        <p className="text-muted mb-0">
-          {isEdit ? "Update this section's details and rules" : 'Organize your exam by adding sections'}
-        </p>
+        <p className="text-muted mb-0">{stepSubtitle}</p>
       </div>
 
       <div className="d-flex align-items-start mb-4">
@@ -604,100 +715,186 @@ export default function SectionForm() {
             </Card>
           </Col>
         </Row>
-      ) : (
-      <Card className="border-0 shadow-sm">
-        <Card.Body className="p-4">
-          {step === 2 && (
-            <>
-              <div className="mb-4">
+      ) : step === 2 ? (
+        <Row className="g-4">
+          <Col lg={8}>
+            <Card className="border-0 shadow-sm">
+              <Card.Body className="p-4">
+                <div className="mb-4">
+                  <div className="fw-bold">Section Rules &amp; Behavior</div>
+                  <div className="text-muted small">
+                    Set how students will navigate and interact with questions in this section
+                  </div>
+                </div>
+
                 <div className="fw-bold mb-2">Navigation Type</div>
-                {NAVIGATION_TYPES.map((nav) => (
-                  <Form.Check
-                    key={nav.value}
-                    type="radio"
-                    id={`nav-${nav.value}`}
-                    name="navigationType"
-                    className="mb-2"
-                    checked={form.navigationType === nav.value}
-                    onChange={() => updateField('navigationType', nav.value)}
-                    label={
-                      <>
-                        <div className="fw-medium">{nav.label}</div>
-                        <div className="text-muted small">{nav.description}</div>
-                      </>
-                    }
-                  />
+                <Row className="g-3 mb-4">
+                  {NAVIGATION_TYPES.map((nav) => {
+                    const selected = form.navigationType === nav.value;
+                    return (
+                      <Col md={4} key={nav.value}>
+                        <Card
+                          role="button"
+                          onClick={() => updateField('navigationType', nav.value)}
+                          className="h-100"
+                          style={{
+                            cursor: 'pointer',
+                            borderColor: selected ? '#4f46e5' : undefined,
+                            borderWidth: selected ? 2 : 1,
+                            background: selected ? '#f5f3ff' : undefined,
+                          }}
+                        >
+                          <Card.Body className="p-3">
+                            <div
+                              className="d-flex align-items-center justify-content-center rounded-2 mb-2"
+                              style={{ width: 36, height: 36, background: '#eef2ff' }}
+                            >
+                              {NAV_ICONS[nav.value]}
+                            </div>
+                            <div className="fw-bold small mb-1">{nav.label}</div>
+                            <div className="text-muted" style={{ fontSize: '0.75rem' }}>{nav.description}</div>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+                    );
+                  })}
+                </Row>
+
+                <hr />
+
+                <div className="fw-bold mb-3">Scoring &amp; Display Options</div>
+
+                <Form.Check
+                  type="switch"
+                  id="sectionNegativeMarking"
+                  className="mb-1"
+                  label="Negative Marking"
+                  checked={form.negativeMarkingEnabled}
+                  onChange={(e) => updateField('negativeMarkingEnabled', e.target.checked)}
+                />
+                <div className="text-muted small mb-2" style={{ marginLeft: '2.5rem' }}>
+                  Deduct marks for incorrect answers in this section.
+                </div>
+                {form.negativeMarkingEnabled && (
+                  <Form.Group className="mb-3" style={{ maxWidth: 200, marginLeft: '2.5rem' }} controlId="sectionNegativeMarks">
+                    <Form.Label className="small text-muted">Marks deducted for wrong answer</Form.Label>
+                    <Form.Control
+                      type="number"
+                      min={0}
+                      step={0.25}
+                      value={form.negativeMarks}
+                      onChange={(e) => updateField('negativeMarks', Number(e.target.value))}
+                    />
+                  </Form.Group>
+                )}
+
+                <Form.Check
+                  type="switch"
+                  id="sectionShuffleQuestions"
+                  className="mb-1 mt-3"
+                  label="Shuffle Questions"
+                  checked={form.shuffleQuestions}
+                  onChange={(e) => updateField('shuffleQuestions', e.target.checked)}
+                />
+                <div className="text-muted small mb-2" style={{ marginLeft: '2.5rem' }}>
+                  Randomize the order of questions for each student.
+                </div>
+
+                <Form.Check
+                  type="switch"
+                  id="sectionShuffleOptions"
+                  className="mb-1"
+                  label="Shuffle Options"
+                  checked={form.shuffleOptions}
+                  onChange={(e) => updateField('shuffleOptions', e.target.checked)}
+                />
+                <div className="text-muted small mb-2" style={{ marginLeft: '2.5rem' }}>
+                  Randomize the order of options for each question.
+                </div>
+
+                <Form.Check
+                  type="switch"
+                  id="sectionAllowReview"
+                  className="mb-1"
+                  label="Students can review questions in this section"
+                  checked={form.allowReview}
+                  onChange={(e) => updateField('allowReview', e.target.checked)}
+                />
+                <div className="text-muted small mb-2" style={{ marginLeft: '2.5rem' }}>
+                  Allow students to review their answers before submitting.
+                </div>
+
+                <div className="d-flex justify-content-between mt-4">
+                  <Button variant="outline-secondary" onClick={() => setStep(1)}>
+                    Back
+                  </Button>
+                  <Button variant="primary" onClick={() => setStep(3)}>
+                    Next: Question Assignment &rarr;
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col lg={4}>
+            <Card className="border-0 shadow-sm mb-3">
+              <Card.Body>
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <div
+                    className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                    style={{ width: 32, height: 32, background: '#eef2ff' }}
+                  >
+                    <OrderIcon />
+                  </div>
+                  <div className="fw-bold small">Section Summary</div>
+                </div>
+                <SummaryRow icon={<OrderIcon />} label="Section Name" value={form.name || '—'} />
+                <SummaryRow icon={<QuestionIcon />} label="Total Questions" value={String(form.questionCount)} />
+                <SummaryRow icon={<StarIcon />} label="Total Marks" value={String(form.marks)} />
+                <SummaryRow icon={<ClockIcon />} label="Duration" value={`${form.durationMinutes} min`} />
+                <SummaryRow
+                  icon={NAV_ICONS[form.navigationType]}
+                  label="Navigation"
+                  value={NAVIGATION_TYPES.find((n) => n.value === form.navigationType)?.label ?? form.navigationType}
+                />
+                <SummaryRow
+                  icon={<LockIcon />}
+                  label="Negative Marking"
+                  value={form.negativeMarkingEnabled ? 'Enabled' : 'Disabled'}
+                />
+              </Card.Body>
+            </Card>
+
+            <Card className="border-0 shadow-sm">
+              <Card.Body>
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <BulbIcon />
+                  <div className="fw-bold small">Quick Tips</div>
+                </div>
+                {RULES_QUICK_TIPS.map((tip) => (
+                  <div key={tip} className="d-flex align-items-start gap-2 mb-2">
+                    <div className="mt-1"><TipCheckIcon /></div>
+                    <div className="small text-muted">{tip}</div>
+                  </div>
                 ))}
-              </div>
-
-              <Form.Check
-                type="switch"
-                id="sectionNegativeMarking"
-                className="mb-2"
-                label="Negative Marking"
-                checked={form.negativeMarkingEnabled}
-                onChange={(e) => updateField('negativeMarkingEnabled', e.target.checked)}
-              />
-              {form.negativeMarkingEnabled && (
-                <Form.Group className="mb-3" style={{ maxWidth: 200 }} controlId="sectionNegativeMarks">
-                  <Form.Label className="small text-muted">Marks deducted for wrong answer</Form.Label>
-                  <Form.Control
-                    type="number"
-                    min={0}
-                    step={0.25}
-                    value={form.negativeMarks}
-                    onChange={(e) => updateField('negativeMarks', Number(e.target.value))}
-                  />
-                </Form.Group>
-              )}
-
-              <Form.Check
-                type="switch"
-                id="sectionShuffleQuestions"
-                className="mb-2 mt-3"
-                label="Shuffle Questions"
-                checked={form.shuffleQuestions}
-                onChange={(e) => updateField('shuffleQuestions', e.target.checked)}
-              />
-              <Form.Check
-                type="switch"
-                id="sectionShuffleOptions"
-                className="mb-2"
-                label="Shuffle Options"
-                checked={form.shuffleOptions}
-                onChange={(e) => updateField('shuffleOptions', e.target.checked)}
-              />
-              <Form.Check
-                type="switch"
-                id="sectionAllowReview"
-                className="mb-2"
-                label="Students can review questions in this section"
-                checked={form.allowReview}
-                onChange={(e) => updateField('allowReview', e.target.checked)}
-              />
-
-              <div className="d-flex justify-content-between mt-4">
-                <Button variant="outline-secondary" onClick={() => setStep(1)}>
-                  Back
-                </Button>
-                <Button variant="primary" onClick={() => setStep(3)}>
-                  Next: Question Assignment
-                </Button>
-              </div>
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <Row className="g-4">
-                <Col md={3}>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      ) : (
+        <>
+          <Row className="g-4">
+            <Col lg={3}>
+              <Card className="border-0 shadow-sm mb-3">
+                <Card.Body>
+                  <div className="fw-bold small text-uppercase text-muted mb-3">Filter Questions</div>
                   <Form.Group className="mb-3" controlId="sectionQuestionTypeFilter">
                     <Form.Label className="fw-bold small">Question Type</Form.Label>
                     <Form.Select
                       value={typeFilter}
                       onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
                     >
-                      <option value="All">All</option>
+                      <option value="All">All Types</option>
                       <option value="MultipleChoice">Single Choice</option>
                       <option value="MultiSelect">Multiple Choice</option>
                       <option value="TrueFalse">True/False</option>
@@ -710,7 +907,7 @@ export default function SectionForm() {
                       value={difficultyFilter}
                       onChange={(e) => setDifficultyFilter(e.target.value as typeof difficultyFilter)}
                     >
-                      <option value="All">All</option>
+                      <option value="All">All Difficulties</option>
                       <option value="Easy">Easy</option>
                       <option value="Medium">Medium</option>
                       <option value="Hard">Hard</option>
@@ -718,18 +915,39 @@ export default function SectionForm() {
                   </Form.Group>
                   <Form.Group controlId="sectionQuestionSearch">
                     <Form.Label className="fw-bold small">Search Question</Form.Label>
-                    <Form.Control
-                      type="search"
-                      placeholder="Search by keyword..."
-                      value={searchText}
-                      onChange={(e) => setSearchText(e.target.value)}
-                    />
+                    <InputGroup>
+                      <InputGroup.Text><SearchIcon /></InputGroup.Text>
+                      <Form.Control
+                        type="search"
+                        placeholder="Search by keyword..."
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                      />
+                    </InputGroup>
                   </Form.Group>
-                </Col>
+                </Card.Body>
+              </Card>
 
-                <Col md={9}>
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <div className="fw-bold">Available Questions</div>
+              <Card className="border-0 shadow-sm" style={{ background: '#f5f3ff' }}>
+                <Card.Body>
+                  <div className="d-flex gap-2">
+                    <BulbIcon />
+                    <div>
+                      <div className="fw-bold small mb-1" style={{ color: '#5b21b6' }}>Tip</div>
+                      <div className="small" style={{ color: '#5b21b6' }}>
+                        Use filters to find the most relevant questions quickly.
+                      </div>
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col lg={9}>
+              <Card className="border-0 shadow-sm">
+                <Card.Body className="p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <div className="fw-bold small text-uppercase text-muted">Available Questions</div>
                     <div className="d-flex align-items-center gap-2">
                       <Button
                         variant="outline-primary"
@@ -770,89 +988,122 @@ export default function SectionForm() {
                   )}
 
                   {!isLoadingUnassigned && filteredQuestions.length > 0 && (
-                    <Table responsive hover className="align-middle">
-                      <thead className="text-muted small text-uppercase table-light">
-                        <tr>
-                          <th style={{ width: 40 }}></th>
-                          <th>Question</th>
-                          <th>Type</th>
-                          <th>Difficulty</th>
-                          <th>Marks</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredQuestions.map((q) => (
-                          <tr
-                            key={q.id}
-                            role="button"
-                            onClick={() => toggleQuestion(q.id)}
-                            className={selectedIds.has(q.id) ? 'table-primary' : undefined}
-                          >
-                            <td onClick={(e) => e.stopPropagation()}>
-                              <Form.Check
-                                type="checkbox"
-                                checked={selectedIds.has(q.id)}
-                                onChange={() => toggleQuestion(q.id)}
-                              />
-                            </td>
-                            <td>{q.questionText}</td>
-                            <td>{QUESTION_TYPE_LABELS[q.questionType]}</td>
-                            <td>
-                              <Badge bg="secondary">{q.difficulty}</Badge>
-                            </td>
-                            <td>{q.marks}</td>
-                            <td onClick={(e) => e.stopPropagation()}>
-                              <div className="d-flex gap-2">
-                                <Link
-                                  to={`/admin/questions/${q.id}/edit`}
-                                  className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
-                                  style={{ width: 32, height: 32 }}
-                                  title="Edit"
-                                  aria-label="Edit question"
-                                >
-                                  <EditIcon />
-                                </Link>
-                                <DeleteQuestionButton
-                                  questionId={q.id}
-                                  examId={q.examId}
-                                  iconOnly
-                                  onDeleted={() =>
-                                    setSelectedIds((prev) => {
-                                      const next = new Set(prev);
-                                      next.delete(q.id);
-                                      return next;
-                                    })
-                                  }
-                                />
-                              </div>
-                            </td>
+                    <>
+                      <Table responsive hover className="align-middle">
+                        <thead className="text-muted small text-uppercase table-light">
+                          <tr>
+                            <th style={{ width: 40 }}></th>
+                            <th>Question</th>
+                            <th>Type</th>
+                            <th>Difficulty</th>
+                            <th>Marks</th>
+                            <th>Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </Table>
+                        </thead>
+                        <tbody>
+                          {pagedQuestions.map((q) => (
+                            <tr
+                              key={q.id}
+                              role="button"
+                              onClick={() => toggleQuestion(q.id)}
+                              className={selectedIds.has(q.id) ? 'table-primary' : undefined}
+                            >
+                              <td onClick={(e) => e.stopPropagation()}>
+                                <Form.Check
+                                  type="checkbox"
+                                  checked={selectedIds.has(q.id)}
+                                  onChange={() => toggleQuestion(q.id)}
+                                />
+                              </td>
+                              <td>{q.questionText}</td>
+                              <td>
+                                <Badge bg={QUESTION_TYPE_BADGE[q.questionType]}>{QUESTION_TYPE_LABELS[q.questionType]}</Badge>
+                              </td>
+                              <td>
+                                <Badge bg={DIFFICULTY_BADGE[q.difficulty]}>{q.difficulty}</Badge>
+                              </td>
+                              <td>{q.marks}</td>
+                              <td onClick={(e) => e.stopPropagation()}>
+                                <div className="d-flex gap-2">
+                                  <Link
+                                    to={`/admin/questions/${q.id}/edit`}
+                                    className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                                    style={{ width: 32, height: 32 }}
+                                    title="Edit"
+                                    aria-label="Edit question"
+                                  >
+                                    <EditIcon />
+                                  </Link>
+                                  <DeleteQuestionButton
+                                    questionId={q.id}
+                                    examId={q.examId}
+                                    iconOnly
+                                    onDeleted={() =>
+                                      setSelectedIds((prev) => {
+                                        const next = new Set(prev);
+                                        next.delete(q.id);
+                                        return next;
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                      <TablePagination
+                        page={questionCurrentPage}
+                        totalPages={questionTotalPages}
+                        rangeStart={questionRangeStart}
+                        rangeEnd={questionRangeEnd}
+                        totalCount={filteredQuestions.length}
+                        onPageChange={setQuestionPage}
+                      />
+                    </>
                   )}
-                </Col>
-              </Row>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
 
-              <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
-                <div className="text-muted small">
-                  Selected Questions: <strong>{selectedIds.size}</strong> &nbsp;|&nbsp; Total Marks:{' '}
-                  <strong>{totalMarksSelected}</strong>
+          <div className="d-flex justify-content-between align-items-center mt-4">
+            <div className="d-flex gap-4">
+              <div className="d-flex align-items-center gap-2">
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-2"
+                  style={{ width: 36, height: 36, background: '#eef2ff' }}
+                >
+                  <PencilIcon />
                 </div>
-                <div className="d-flex gap-2">
-                  <Button variant="outline-secondary" onClick={() => setStep(2)}>
-                    Back
-                  </Button>
-                  <Button variant="primary" disabled={submitting} onClick={handleSubmit}>
-                    {submitting ? 'Saving...' : isEdit ? 'Save Section' : 'Add Section'}
-                  </Button>
+                <div>
+                  <div className="fw-bold">{selectedIds.size}</div>
+                  <div className="text-muted small">Selected Questions</div>
                 </div>
               </div>
-            </>
-          )}
-        </Card.Body>
-      </Card>
+              <div className="d-flex align-items-center gap-2">
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-2"
+                  style={{ width: 36, height: 36, background: '#fef3c7' }}
+                >
+                  <StarIcon />
+                </div>
+                <div>
+                  <div className="fw-bold">{totalMarksSelected}</div>
+                  <div className="text-muted small">Total Marks</div>
+                </div>
+              </div>
+            </div>
+            <div className="d-flex gap-2">
+              <Button variant="outline-secondary" onClick={() => setStep(2)}>
+                Back
+              </Button>
+              <Button variant="primary" disabled={submitting} onClick={handleSubmit}>
+                {submitting ? 'Saving...' : isEdit ? 'Save Section' : 'Add Section'}
+              </Button>
+            </div>
+          </div>
+        </>
       )}
 
       {examId && (

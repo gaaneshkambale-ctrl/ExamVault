@@ -1,10 +1,10 @@
 export type WizardStep = 1 | 2 | 3 | 4;
 
-const STEPS: { step: WizardStep; label: string }[] = [
-  { step: 1, label: 'Basic Information' },
-  { step: 2, label: 'Sections & Questions' },
-  { step: 3, label: 'Exam Configuration' },
-  { step: 4, label: 'Review & Publish' },
+const STEPS: { step: WizardStep; label: string; sublabel: string }[] = [
+  { step: 1, label: 'Basic Information', sublabel: 'Exam details' },
+  { step: 2, label: 'Sections & Questions', sublabel: 'Add sections & questions' },
+  { step: 3, label: 'Exam Configuration', sublabel: 'Set preferences' },
+  { step: 4, label: 'Review & Publish', sublabel: 'Finalize exam' },
 ];
 
 interface ExamWizardStepperProps {
@@ -25,12 +25,12 @@ export default function ExamWizardStepper({ currentStep, containsSections }: Exa
 
   return (
     <div className="d-flex align-items-start mb-4">
-      {steps.map(({ step, label }, i) => {
+      {steps.map(({ step, label, sublabel }, i) => {
         const isDone = step < currentStep;
         const isActive = step === currentStep;
         return (
           <div key={step} className="d-flex align-items-center" style={{ flex: i === steps.length - 1 ? '0 0 auto' : '1 1 auto' }}>
-            <div className="d-flex flex-column align-items-center text-center" style={{ minWidth: 90 }}>
+            <div className="d-flex flex-column align-items-center text-center" style={{ minWidth: 120 }}>
               <div
                 className="d-flex align-items-center justify-content-center rounded-circle fw-bold"
                 style={{
@@ -50,9 +50,10 @@ export default function ExamWizardStepper({ currentStep, containsSections }: Exa
               >
                 {label}
               </div>
+              <div className="text-muted" style={{ fontSize: '0.75rem' }}>{sublabel}</div>
             </div>
             {i < steps.length - 1 && (
-              <div className="flex-grow-1" style={{ height: 2, background: isDone ? '#198754' : '#e9ecef', marginBottom: 22 }} />
+              <div className="flex-grow-1" style={{ height: 2, background: isDone ? '#198754' : '#e9ecef', marginBottom: 30 }} />
             )}
           </div>
         );

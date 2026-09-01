@@ -20,6 +20,8 @@ import SqlTestCaseEditor from './SqlTestCaseEditor';
 import type { SqlTestCaseRow } from './SqlTestCaseEditor';
 import { parseTypedValue } from '../utils/typedValue';
 
+const QUESTION_TEXT_MAX = 2000;
+
 let nextOptionKey = 0;
 
 interface OptionFormState extends CreateQuestionOptionRequest {
@@ -273,15 +275,19 @@ export default function CreateQuestionModal({
             <Form.Control
               as="textarea"
               rows={3}
+              maxLength={QUESTION_TEXT_MAX}
               placeholder="Enter your question here"
               value={questionText}
               onChange={(e) => setQuestionText(e.target.value)}
               isInvalid={!!errors.questionText}
             />
-            <Form.Control.Feedback type="invalid">{errors.questionText}</Form.Control.Feedback>
+            <div className="d-flex justify-content-between">
+              <Form.Control.Feedback type="invalid">{errors.questionText}</Form.Control.Feedback>
+              <div className="text-muted small ms-auto">{questionText.length}/{QUESTION_TEXT_MAX}</div>
+            </div>
           </Form.Group>
 
-          <Form.Group className="mb-4" controlId="modalQuestionMarks" style={{ maxWidth: 160 }}>
+          <Form.Group className="mb-2" controlId="modalQuestionMarks" style={{ maxWidth: 160 }}>
             <Form.Label className="fw-bold">Marks</Form.Label>
             <Form.Control
               type="number"
@@ -292,6 +298,11 @@ export default function CreateQuestionModal({
             />
             <Form.Control.Feedback type="invalid">{errors.marks}</Form.Control.Feedback>
           </Form.Group>
+          {marks > 0 && (
+            <Alert variant="info" className="py-2 px-3 small d-inline-block mb-4">
+              This question will carry <strong>{marks}</strong> mark{marks === 1 ? '' : 's'}.
+            </Alert>
+          )}
 
           {questionType === 'CodeProgram' ? (
             <>
@@ -388,6 +399,16 @@ export default function CreateQuestionModal({
                     disabled={questionType === 'TrueFalse'}
                     onChange={(e) => updateOptionText(option.key, e.target.value)}
                   />
+                  {(questionType === 'MultipleChoice' || questionType === 'TrueFalse') && (
+                    <Form.Check
+                      type="radio"
+                      name="modalInlineCorrect"
+                      checked={option.isCorrect}
+                      onChange={() => markCorrect(option.key)}
+                      title="Mark as correct answer"
+                      className="flex-shrink-0"
+                    />
+                  )}
                   {(questionType === 'MultipleChoice' || questionType === 'MultiSelect') && options.length > 2 && (
                     <Button variant="link" className="text-danger" onClick={() => removeOption(option.key)}>
                       Remove
@@ -434,6 +455,9 @@ export default function CreateQuestionModal({
                       </option>
                     ))}
                   </Form.Select>
+                  <Alert variant="success" className="py-2 px-3 small mt-2 mb-0">
+                    Select the correct option that represents the right answer.
+                  </Alert>
                 </Form.Group>
               )}
             </>
