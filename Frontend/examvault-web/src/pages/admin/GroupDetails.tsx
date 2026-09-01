@@ -4,10 +4,29 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import { useGroup } from '../../hooks/useGroups';
 import { useUsers } from '../../hooks/useUsers';
 import { addGroupMember, removeGroupMember } from '../../api/groupApi';
 import { RemoveIcon } from '../../components/icons/ActionIcons';
+
+function PersonAddIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" />
+      <line x1="20" y1="8" x2="20" y2="14" /><line x1="17" y1="11" x2="23" y2="11" />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
 
 function extractError(error: unknown): string {
   if (isAxiosError(error) && typeof error.response?.data?.message === 'string') {
@@ -77,7 +96,7 @@ export default function GroupDetails() {
 
           <Card className="border-0 shadow-sm mb-4">
             <Card.Body>
-              <h2 className="h6 fw-bold mb-3">Add Student</h2>
+              <SectionHeader icon={<PersonAddIcon />} title="Add Student" />
               <Row className="g-2">
                 <Col md={8}>
                   <Form.Select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}>
@@ -107,8 +126,8 @@ export default function GroupDetails() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className={members.length === 0 ? '' : 'p-0'}>
-              <div className="p-4 pb-3">
-                <h2 className="h6 fw-bold mb-0">Members ({members.length})</h2>
+              <div className="p-4 pb-0">
+                <SectionHeader icon={<PeopleIcon />} title={`Members (${members.length})`} />
               </div>
 
               {members.length === 0 && (

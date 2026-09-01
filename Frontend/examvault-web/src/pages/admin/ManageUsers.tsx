@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import type { ReactNode } from 'react';
+import { Alert, Badge, Button, Card, Col, Dropdown, Form, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
@@ -7,8 +8,9 @@ import UserAvatar from '../../components/UserAvatar';
 import DeleteUserButton from '../../components/DeleteUserButton';
 import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useUsers } from '../../hooks/useUsers';
-import { deactivateUser, deleteUser } from '../../api/userApi';
+import { activateUser, deactivateUser, deleteUser } from '../../api/userApi';
 import { extractServerError } from '../../utils/apiError';
+import { bucketByDay } from '../../utils/dateRange';
 import type { UserListItem, UserRole } from '../../types/user';
 
 const roleVariant: Record<UserRole, string> = {
@@ -54,6 +56,42 @@ function ActiveIcon() {
   );
 }
 
+function KebabIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="12" cy="19" r="1.5" />
+    </svg>
+  );
+}
+
+// Small last-7-days trend line, driven by real user signup dates - same
+// day-bucketing pattern ManageExams uses for its stat card sparklines.
+function Sparkline({ dates, color }: { dates: string[]; color: string }) {
+  const buckets = bucketByDay(dates, {
+    from: new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10),
+    to: new Date().toISOString().slice(0, 10),
+  });
+  const width = 72;
+  const height = 28;
+  const max = Math.max(1, ...buckets.map((b) => b.count));
+  const stepX = width / Math.max(1, buckets.length - 1);
+  const points = buckets
+    .map((b, i) => `${i * stepX},${height - (b.count / max) * (height - 4) - 2}`)
+    .join(' ');
+
+  if (buckets.every((b) => b.count === 0)) {
+    return null;
+  }
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="flex-shrink-0">
+      <polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function monthKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}`;
 }
@@ -77,30 +115,39 @@ interface StatCardProps {
   label: string;
   value: number;
   variant: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   deltaPercent?: number | null;
+  percent?: string | null;
+  trendDates: string[];
+  trendColor: string;
 }
 
-function StatCard({ label, value, variant, icon, deltaPercent }: StatCardProps) {
+function StatCard({ label, value, variant, icon, deltaPercent, percent, trendDates, trendColor }: StatCardProps) {
   return (
     <Col xs={12} sm={6} lg={3}>
       <Card className="border-0 shadow-sm h-100">
-        <Card.Body className="d-flex align-items-center gap-3">
-          <div
-            className={`rounded-3 bg-${variant}-subtle text-${variant}-emphasis d-flex align-items-center justify-content-center flex-shrink-0`}
-            style={{ width: 44, height: 44 }}
-          >
-            {icon}
+        <Card.Body className="d-flex align-items-center justify-content-between gap-2">
+          <div className="d-flex align-items-center gap-3">
+            <div
+              className={`rounded-3 bg-${variant}-subtle text-${variant}-emphasis d-flex align-items-center justify-content-center flex-shrink-0`}
+              style={{ width: 44, height: 44 }}
+            >
+              {icon}
+            </div>
+            <div>
+              <div className="text-muted small">{label}</div>
+              <div className="h4 fw-bold mb-0">{value}</div>
+              {deltaPercent != null && (
+                <div className={`small ${deltaPercent >= 0 ? 'text-success' : 'text-danger'}`}>
+                  {deltaPercent >= 0 ? '▲' : '▼'} {Math.abs(deltaPercent).toFixed(1)}% this month
+                </div>
+              )}
+              {deltaPercent == null && percent && (
+                <div className="text-muted" style={{ fontSize: 11 }}>{percent}</div>
+              )}
+            </div>
           </div>
-          <div>
-            <div className="text-muted small">{label}</div>
-            <div className="h4 fw-bold mb-0">{value}</div>
-            {deltaPercent != null && (
-              <div className={`small ${deltaPercent >= 0 ? 'text-success' : 'text-danger'}`}>
-                {deltaPercent >= 0 ? '▲' : '▼'} {Math.abs(deltaPercent).toFixed(1)}% this month
-              </div>
-            )}
-          </div>
+          <Sparkline dates={trendDates} color={trendColor} />
         </Card.Body>
       </Card>
     </Col>
@@ -156,6 +203,10 @@ export default function ManageUsers() {
   const adminsDelta = users
     ? percentChangeVsLastMonth(users.filter((u) => u.role === 'Admin').map((u) => u.createdAtUtc))
     : null;
+
+  const activeDatesFor = () => (users ?? []).filter((u) => u.isActive).map((u) => u.createdAtUtc);
+  const activePct =
+    counts.total === 0 ? null : `${((counts.active / counts.total) * 100).toFixed(1)}% of total`;
 
   const filteredUsers: UserListItem[] = (users ?? []).filter((user) => {
     if (roleFilter !== 'All' && user.role !== roleFilter) {
@@ -236,6 +287,12 @@ export default function ManageUsers() {
 
   const bulkError = bulkDeleteMutation.isError ? extractServerError(bulkDeleteMutation.error) : '';
 
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({ id, activate }: { id: string; activate: boolean }) =>
+      activate ? activateUser(id) : deactivateUser(id),
+    onSuccess: invalidateUsers,
+  });
+
   return (
     <AdminLayout active="All Users">
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -254,10 +311,42 @@ export default function ManageUsers() {
       </div>
 
       <Row className="g-3 mb-4">
-        <StatCard label="Total Users" value={counts.total} variant="primary" icon={<TotalUsersIcon />} deltaPercent={totalDelta} />
-        <StatCard label="Students" value={counts.students} variant="warning" icon={<StudentIcon />} deltaPercent={studentsDelta} />
-        <StatCard label="Admins" value={counts.admins} variant="info" icon={<AdminIcon />} deltaPercent={adminsDelta} />
-        <StatCard label="Active Users" value={counts.active} variant="success" icon={<ActiveIcon />} />
+        <StatCard
+          label="Total Users"
+          value={counts.total}
+          variant="primary"
+          icon={<TotalUsersIcon />}
+          deltaPercent={totalDelta}
+          trendDates={(users ?? []).map((u) => u.createdAtUtc)}
+          trendColor="#4f46e5"
+        />
+        <StatCard
+          label="Students"
+          value={counts.students}
+          variant="warning"
+          icon={<StudentIcon />}
+          deltaPercent={studentsDelta}
+          trendDates={(users ?? []).filter((u) => u.role === 'Student').map((u) => u.createdAtUtc)}
+          trendColor="#f59e0b"
+        />
+        <StatCard
+          label="Admins"
+          value={counts.admins}
+          variant="info"
+          icon={<AdminIcon />}
+          deltaPercent={adminsDelta}
+          trendDates={(users ?? []).filter((u) => u.role === 'Admin').map((u) => u.createdAtUtc)}
+          trendColor="#0dcaf0"
+        />
+        <StatCard
+          label="Active Users"
+          value={counts.active}
+          variant="success"
+          icon={<ActiveIcon />}
+          percent={activePct}
+          trendDates={activeDatesFor()}
+          trendColor="#22c55e"
+        />
       </Row>
 
       <Row className="g-2 mb-2">
@@ -417,6 +506,27 @@ export default function ManageUsers() {
                             <EditIcon />
                           </Link>
                           <DeleteUserButton userId={user.id} userName={user.fullName} iconOnly />
+                          <Dropdown>
+                            <Dropdown.Toggle
+                              as="button"
+                              bsPrefix="btn"
+                              className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                              style={{ width: 32, height: 32 }}
+                              aria-label={`More actions for ${user.fullName}`}
+                            >
+                              <KebabIcon />
+                            </Dropdown.Toggle>
+                            <Dropdown.Menu align="end">
+                              <Dropdown.Item
+                                disabled={toggleActiveMutation.isPending}
+                                onClick={() =>
+                                  toggleActiveMutation.mutate({ id: user.id, activate: !user.isActive })
+                                }
+                              >
+                                {user.isActive ? 'Deactivate' : 'Activate'}
+                              </Dropdown.Item>
+                            </Dropdown.Menu>
+                          </Dropdown>
                         </div>
                       </td>
                     </tr>

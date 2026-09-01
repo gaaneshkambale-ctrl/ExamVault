@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import readXlsxFile from 'read-excel-file/browser';
 import writeXlsxFile from 'write-excel-file/browser';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import { createUser } from '../../api/userApi';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
@@ -21,6 +22,33 @@ interface ImportRow {
 }
 
 const TEMPLATE_HEADERS = ['Full Name', 'Email', 'Role', 'Phone Number'];
+
+function UploadIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  );
+}
+
+function ListCheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
 
 const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
 
@@ -195,8 +223,7 @@ export default function ImportUsers() {
         <Col xs={12} md={7}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body className="p-4">
-              <h2 className="h6 fw-bold mb-1">Upload File</h2>
-              <p className="text-muted small mb-3">Upload an Excel file with user details.</p>
+              <SectionHeader icon={<UploadIcon />} title="Upload File" subtitle="Upload an Excel file with user details." />
 
               <div
                 className="border border-2 border-dashed rounded-3 text-center py-5 px-3"
@@ -253,7 +280,7 @@ export default function ImportUsers() {
         <Col xs={12} md={5}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body className="p-4">
-              <h2 className="h6 fw-bold mb-3">File Guidelines</h2>
+              <SectionHeader icon={<InfoIcon />} title="File Guidelines" />
               <ul className="small text-muted ps-3 mb-0">
                 <li className="mb-2">Download the sample file and follow the format.</li>
                 <li className="mb-2">
@@ -271,10 +298,10 @@ export default function ImportUsers() {
       {rows.length > 0 && (
         <Card className="border-0 shadow-sm mt-3">
           <Card.Body className="p-4">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h2 className="h6 fw-bold mb-0">
-                Preview &amp; Validate ({validRows.length} of {rows.length} rows ready to import)
-              </h2>
+            <SectionHeader
+              icon={<ListCheckIcon />}
+              title={`Preview & Validate (${validRows.length} of ${rows.length} rows ready to import)`}
+              action={
               <div className="d-flex gap-2">
                 <Link to="/admin/users" className="btn btn-outline-secondary">
                   Cancel
@@ -290,7 +317,8 @@ export default function ImportUsers() {
                   )}
                 </Button>
               </div>
-            </div>
+              }
+            />
 
             {createError && <Alert variant="danger">{createError}</Alert>}
             {createdCount > 0 && (

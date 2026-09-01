@@ -1,5 +1,6 @@
 import { Alert, Badge, Button, Card, Col, Row, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import { useUsers } from '../../hooks/useUsers';
 import { EditIcon } from '../../components/icons/ActionIcons';
 import {
@@ -9,6 +10,15 @@ import {
   STUDENT_PERMISSIONS,
 } from '../../constants/cosmeticRolePermissions';
 import type { UserRole } from '../../types/user';
+
+function ShieldCheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
+      <path d="M9 12.5l2 2 4-4.5" />
+    </svg>
+  );
+}
 
 interface RoleRow {
   role: string;
@@ -126,7 +136,7 @@ export default function RolesPermissions() {
 
       <Card className="border-0 shadow-sm mt-3">
         <Card.Body className="p-4">
-          <h2 className="h6 fw-bold mb-3">Permissions Overview</h2>
+          <SectionHeader icon={<ShieldCheckIcon />} title="Permissions Overview" />
           <Row className="g-4 text-center">
             <Col xs={6} md={3}>
               <div className="text-muted small mb-1">Total Roles</div>

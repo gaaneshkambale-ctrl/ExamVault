@@ -4,6 +4,7 @@ import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-boots
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
 import { updateUser } from '../../api/userApi';
 import { useUser } from '../../hooks/useUsers';
@@ -11,6 +12,22 @@ import type { UpdateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
 
 const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
+
+function UserIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
+    </svg>
+  );
+}
 
 export default function EditUser() {
   const { id } = useParams<{ id: string }>();
@@ -96,7 +113,7 @@ export default function EditUser() {
         <Card className="border-0 shadow-sm">
           <Card.Body className="p-4">
             <Form noValidate onSubmit={handleSubmit}>
-              <h2 className="h6 fw-bold mb-3">Basic Information</h2>
+              <SectionHeader icon={<UserIcon />} title="Basic Information" />
               <Row>
                 <Col md={6}>
                   <Form.Group className="mb-3" controlId="editUserFullName">
@@ -161,7 +178,7 @@ export default function EditUser() {
                 </Col>
               </Row>
 
-              <h2 className="h6 fw-bold mb-3">Account Status</h2>
+              <SectionHeader icon={<ShieldIcon />} title="Account Status" />
               <div className="d-flex align-items-center justify-content-between border rounded-3 p-3 mb-4">
                 <div className="d-flex align-items-center gap-3">
                   <Badge bg={user.isActive ? 'success' : 'secondary'}>
