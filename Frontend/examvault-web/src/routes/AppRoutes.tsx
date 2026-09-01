@@ -59,6 +59,7 @@ import ProctoringSettingsPage from '../pages/admin/settings/ProctoringSettingsPa
 import NotificationSettingsPage from '../pages/admin/settings/NotificationSettingsPage';
 import SystemSettingsPage from '../pages/admin/settings/SystemSettingsPage';
 import ExamReportDetails from '../pages/admin/ExamReportDetails';
+import AdvanceExamReport from '../pages/admin/AdvanceExamReport';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import MyExams from '../pages/student/MyExams';
 import StudentExamDetails from '../pages/student/ExamDetails';
@@ -494,6 +495,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ExamReportDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/:examId/advance"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <AdvanceExamReport />
           </ProtectedRoute>
         }
       />

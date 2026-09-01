@@ -243,15 +243,24 @@ export default function ExamTypeDetails() {
                         {scheme.hasPassFailConcept && <td>{Math.round(r.passPercentage)}%</td>}
                         <td>{Math.round(r.topScore)}%</td>
                         <td className="pe-4">
-                          <Link
-                            to={`/admin/reports/${r.exam.id}`}
-                            className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
-                            style={{ width: 32, height: 32 }}
-                            title="View exam report"
-                            aria-label="View exam report"
-                          >
-                            <ViewIcon />
-                          </Link>
+                          <div className="d-flex gap-2">
+                            <Link
+                              to={`/admin/reports/${r.exam.id}`}
+                              className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                              style={{ width: 32, height: 32 }}
+                              title="View exam report"
+                              aria-label="View exam report"
+                            >
+                              <ViewIcon />
+                            </Link>
+                            <Link
+                              to={`/admin/reports/${r.exam.id}/advance`}
+                              className="btn btn-outline-primary btn-sm"
+                              title="View advance report"
+                            >
+                              Advance Report
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     ))}
