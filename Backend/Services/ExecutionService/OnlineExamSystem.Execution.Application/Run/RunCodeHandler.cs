@@ -43,25 +43,12 @@ public class RunCodeHandler
         var outcomes = new List<TestCaseExecutionOutcome>(command.TestCases.Count);
         foreach (var testCase in command.TestCases)
         {
-            IReadOnlyList<PistonFile> files;
-            try
-            {
-                files = driverGenerator.BuildFiles(
-                    command.StudentCode,
-                    command.FunctionName,
-                    command.Parameters,
-                    command.ReturnType,
-                    testCase.Arguments);
-            }
-            catch (DriverGenerationException ex)
-            {
-                outcomes.Add(new TestCaseExecutionOutcome(
-                    false,
-                    string.Empty,
-                    testCase.ExpectedOutput.GetRawText(),
-                    ex.Message));
-                continue;
-            }
+            var files = driverGenerator.BuildFiles(
+                command.StudentCode,
+                command.FunctionName,
+                command.Parameters,
+                command.ReturnType,
+                testCase.Arguments);
 
             PistonExecutionResult executionResult;
             try

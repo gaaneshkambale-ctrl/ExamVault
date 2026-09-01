@@ -22,7 +22,6 @@ public class CSharpDriverGenerator : IDriverGenerator
         // against the real service. The driver file must NOT be named
         // "Program" - that collides with dotnet's own scaffolded Program.cs
         // and the whole build fails before either file compiles.
-        SolutionClassRequirement.EnsurePresent(studentCode, functionName, "C#");
         var args = string.Join(", ", arguments
             .Zip(parameters, (arg, param) => CSharpLiteral.Render(arg, param.Type)));
 

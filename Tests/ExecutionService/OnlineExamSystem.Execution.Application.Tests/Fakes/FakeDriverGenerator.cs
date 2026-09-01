@@ -15,12 +15,9 @@ public class FakeDriverGenerator : IDriverGenerator
 
     public List<IReadOnlyList<JsonElement>> ReceivedArguments { get; } = [];
 
-    private readonly string? _throwMessage;
-
-    public FakeDriverGenerator(string language = "Python", string? throwMessage = null)
+    public FakeDriverGenerator(string language = "Python")
     {
         Language = language;
-        _throwMessage = throwMessage;
     }
 
     public IReadOnlyList<PistonFile> BuildFiles(
@@ -30,11 +27,6 @@ public class FakeDriverGenerator : IDriverGenerator
         ParameterType returnType,
         IReadOnlyList<JsonElement> arguments)
     {
-        if (_throwMessage is not null)
-        {
-            throw new DriverGenerationException(_throwMessage);
-        }
-
         ReceivedArguments.Add(arguments);
         return [new PistonFile("main", studentCode)];
     }

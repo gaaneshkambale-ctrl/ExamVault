@@ -144,24 +144,6 @@ public class RunCodeHandlerTests
     }
 
     [Fact]
-    public async Task Driver_generation_failure_fails_with_clear_error_without_calling_piston()
-    {
-        var piston = new FakePistonClient(new PistonExecutionResult(null, null, null, "34", "", 0));
-        var handler = new RunCodeHandler(
-            [new FakeDriverGenerator(throwMessage: "This question's starter code must define a class named 'Solution'.")],
-            piston,
-            new RunCodeValidator(),
-            NullLogger<RunCodeHandler>.Instance);
-
-        var result = await handler.HandleAsync(Command(new TestCaseInput([Json("[1,2,3]")], Json("34"))));
-
-        Assert.True(result.Success);
-        Assert.False(result.Outcomes[0].Passed);
-        Assert.Equal("This question's starter code must define a class named 'Solution'.", result.Outcomes[0].Error);
-        Assert.Empty(piston.ReceivedFiles);
-    }
-
-    [Fact]
     public async Task Unknown_language_returns_invalid_without_calling_piston()
     {
         var piston = new FakePistonClient(new PistonExecutionResult(null, null, null, "34", "", 0));
