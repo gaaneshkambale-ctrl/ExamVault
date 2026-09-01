@@ -6402,3 +6402,62 @@ project directly - this is infra/service-to-service auth, verified via
 live integration testing instead). Sequential Docker rebuild of
 execution-worker done as part of verification. Test exam archived and
 deleted afterward.
+
+================================================================================
+PLAN: EXAM TYPE WISE REPORT DRILL-DOWN PAGES (2026-09-01)
+================================================================================
+User supplied `Exam-type-subscreen.png`, a 6-screen wireframe for the
+existing "Exam Type Wise Report" (added earlier today, commit c4690ce) -
+that page was screen 1 (Overview) only, with its row Action icon dead-
+linking to the generic Exam Reports list. This plan adds the other 5
+screens as real drill-down pages, all client-side aggregation over
+already-loaded data (useExams/useExamTypes/useAdminResultsForAllExams/
+useAttemptsByExam) - no backend changes, same pattern as c4690ce.
+
+New shared hook `hooks/useExamTypeReportData.ts`: given a typeId, returns
+{ examType, examsOfType, resultsOfType, attemptsOfType, isLoading } -
+factors out the "filter everything down to one exam type" join that all
+4 new type-scoped pages need, avoiding 4x duplication.
+
+New pages (all `active="Exam Type Wise Report"` in AdminLayout, all
+Admin-only routes under /admin/reports/...):
+1. ExamTypeDetails.tsx (/exam-type/:typeId) - type header (icon/name/
+   purpose), 4 stat cards, search+status+export, paginated table of the
+   type's exams (row action -> existing ExamReportDetails per-exam page,
+   reused as-is), plus 3 link-buttons to the pages below.
+2. ExamTypePerformanceAnalysis.tsx (/exam-type/:typeId/performance) - 5
+   stat cards, tab strip (Score Distribution/Pass vs Fail/Average Score
+   Trend/Completion Rate/Top Performing Exams). Completion Rate reuses
+   useAttemptsByExam's status!=='InProgress' pattern already established
+   in AdminReports.tsx.
+3. ExamTypeStudentPerformance.tsx (/exam-type/:typeId/students) - same
+   per-student aggregation as StudentReports.tsx, scoped to this type's
+   exams only.
+4. ExamTypeComparison.tsx (/exam-type-wise/comparison, reached from the
+   Overview page's new header button, not type-scoped) - tab strip
+   (Average Score/Pass %/Participants/Completion Rate/Attempts) each
+   rendered as a bar chart across all exam types via a new shared
+   `useExamTypeSummaryRows()` hook extracted from ExamTypeWiseReport.tsx's
+   existing `rows` useMemo (so Overview and Comparison compute identical
+   numbers), plus a dynamic "highest/lowest" insight line.
+5. ExamTypeQuestionAnalysis.tsx (/exam-type/:typeId/questions) - 5 stat
+   cards, tab strip (Overall Analysis/Most Difficult/Most Skipped),
+   reuses ExamReportDetails.tsx's per-question correct/incorrect/
+   unanswered aggregation generalized across every exam of the type.
+
+New small shared component `components/reports/ReportTabs.tsx` (a plain
+underline tab strip) - no tab pattern existed yet in Reports.
+
+Two wireframe fields are NOT implemented as fabricated data, per this
+project's no-dead-UI convention: Question Analysis's "Average Difficulty"
+and "Avg Time per Question" have no backing data anywhere in this
+codebase (questions carry no numeric difficulty score, no per-question
+timing is tracked) - substituted with two numbers that ARE real
+("Total Attempts Analyzed", "Questions with 100% Correct"). Most
+Difficult/Skipped Questions tables drop the wireframe's per-row eye-icon
+Action column - no per-question detail page exists in this app and
+adding one is out of scope for this ask.
+
+Existing ExamTypeWiseReport.tsx (Overview) changes: row Action ->
+`/admin/reports/exam-type/{id}` instead of `/admin/reports/exams`; new
+"Compare Exam Types" button next to Export Report -> Comparison page.

@@ -46,6 +46,11 @@ import StudentReports from '../pages/admin/StudentReports';
 import PerformanceReports from '../pages/admin/PerformanceReports';
 import AuditReports from '../pages/admin/AuditReports';
 import ExamTypeWiseReport from '../pages/admin/ExamTypeWiseReport';
+import ExamTypeDetails from '../pages/admin/ExamTypeDetails';
+import ExamTypePerformanceAnalysis from '../pages/admin/ExamTypePerformanceAnalysis';
+import ExamTypeStudentPerformance from '../pages/admin/ExamTypeStudentPerformance';
+import ExamTypeComparison from '../pages/admin/ExamTypeComparison';
+import ExamTypeQuestionAnalysis from '../pages/admin/ExamTypeQuestionAnalysis';
 import AdminSettings from '../pages/admin/AdminSettings';
 import GeneralSettingsPage from '../pages/admin/settings/GeneralSettingsPage';
 import ExamSettingsPage from '../pages/admin/settings/ExamSettingsPage';
@@ -441,6 +446,46 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ExamTypeWiseReport />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type-wise/comparison"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamTypeComparison />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamTypeDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId/performance"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamTypePerformanceAnalysis />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId/students"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamTypeStudentPerformance />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId/questions"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamTypeQuestionAnalysis />
           </ProtectedRoute>
         }
       />
