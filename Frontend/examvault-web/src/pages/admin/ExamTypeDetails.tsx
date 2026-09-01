@@ -7,6 +7,7 @@ import { ViewIcon, DownloadIcon } from '../../components/icons/ActionIcons';
 import { BookIcon } from '../../components/reports/ReportIcons';
 import { useExamTypeReportData } from '../../hooks/useExamTypeReportData';
 import { exportRowsToCsv } from '../../utils/exportCsv';
+import { getExamResultScheme } from '../../utils/examResultScheme';
 import type { AdminAttemptResultResponse } from '../../types/result';
 import type { ExamResponse } from '../../types/exam';
 
@@ -19,6 +20,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50];
 export default function ExamTypeDetails() {
   const { typeId } = useParams<{ typeId: string }>();
   const { examType, examsOfType, resultsOfType, isLoading } = useExamTypeReportData(typeId);
+  const scheme = getExamResultScheme(examType?.name);
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'All' | ExamResponse['status']>('All');
@@ -126,10 +128,12 @@ export default function ExamTypeDetails() {
                   <div className="text-muted small">Average Score</div>
                   <div className="h5 fw-bold mb-0">{overallAverageScore.toFixed(2)}%</div>
                 </div>
-                <div>
-                  <div className="text-muted small">Pass Percentage</div>
-                  <div className="h5 fw-bold mb-0">{overallPassPercentage.toFixed(2)}%</div>
-                </div>
+                {scheme.hasPassFailConcept && (
+                  <div>
+                    <div className="text-muted small">{scheme.outcomeLabels.pass} Percentage</div>
+                    <div className="h5 fw-bold mb-0">{overallPassPercentage.toFixed(2)}%</div>
+                  </div>
+                )}
               </div>
             </Card.Body>
           </Card>
@@ -189,13 +193,20 @@ export default function ExamTypeDetails() {
                   onClick={() =>
                     exportRowsToCsv(
                       `exam-type-${examType.name}-details`,
-                      ['Exam Name', 'Date', 'Participants', 'Average Score %', 'Pass %', 'Top Score %'],
+                      [
+                        'Exam Name',
+                        'Date',
+                        'Participants',
+                        'Average Score %',
+                        ...(scheme.hasPassFailConcept ? [`${scheme.outcomeLabels.pass} %`] : []),
+                        'Top Score %',
+                      ],
                       rows.map((r) => [
                         r.exam.title,
                         new Date(r.exam.createdOn).toLocaleDateString(),
                         r.participants,
                         Math.round(r.averageScore),
-                        Math.round(r.passPercentage),
+                        ...(scheme.hasPassFailConcept ? [Math.round(r.passPercentage)] : []),
                         Math.round(r.topScore),
                       ]),
                     )
@@ -216,7 +227,7 @@ export default function ExamTypeDetails() {
                       <th>Date</th>
                       <th>Participants</th>
                       <th>Average Score</th>
-                      <th>Pass %</th>
+                      {scheme.hasPassFailConcept && <th>{scheme.outcomeLabels.pass} %</th>}
                       <th>Top Score</th>
                       <th className="pe-4">Action</th>
                     </tr>
@@ -229,7 +240,7 @@ export default function ExamTypeDetails() {
                         <td>{new Date(r.exam.createdOn).toLocaleDateString()}</td>
                         <td>{r.participants.toLocaleString()}</td>
                         <td>{Math.round(r.averageScore)}%</td>
-                        <td>{Math.round(r.passPercentage)}%</td>
+                        {scheme.hasPassFailConcept && <td>{Math.round(r.passPercentage)}%</td>}
                         <td>{Math.round(r.topScore)}%</td>
                         <td className="pe-4">
                           <Link

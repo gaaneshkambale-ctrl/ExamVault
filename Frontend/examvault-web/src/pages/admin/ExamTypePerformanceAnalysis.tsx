@@ -9,6 +9,7 @@ import DonutChart from '../../components/charts/DonutChart';
 import LineTrendChart from '../../components/charts/LineTrendChart';
 import { BookIcon, UserCheckIcon, TargetIcon, CheckCircleIcon, FlagIcon } from '../../components/reports/ReportIcons';
 import { useExamTypeReportData } from '../../hooks/useExamTypeReportData';
+import { getExamResultScheme } from '../../utils/examResultScheme';
 import type { AdminAttemptResultResponse } from '../../types/result';
 
 function percentOf(r: AdminAttemptResultResponse): number {
@@ -22,8 +23,6 @@ const DISTRIBUTION_BUCKETS = [
   { label: '61-80', min: 60, max: 80 },
   { label: '81-100', min: 80, max: 101 },
 ];
-
-const TABS = ['Score Distribution', 'Pass vs Fail', 'Average Score Trend', 'Completion Rate', 'Top Performing Exams'];
 
 function median(values: number[]): number {
   if (values.length === 0) return 0;
@@ -42,7 +41,19 @@ function standardDeviation(values: number[]): number {
 export default function ExamTypePerformanceAnalysis() {
   const { typeId } = useParams<{ typeId: string }>();
   const { examType, examsOfType, resultsOfType, attemptsOfType, isLoading } = useExamTypeReportData(typeId);
-  const [tab, setTab] = useState(TABS[0]);
+  const scheme = getExamResultScheme(examType?.name);
+  const outcomeTabLabel = `${scheme.outcomeLabels.pass} vs ${scheme.outcomeLabels.fail}`;
+  const tabs = useMemo(
+    () => [
+      'Score Distribution',
+      ...(scheme.hasPassFailConcept ? [outcomeTabLabel] : []),
+      'Average Score Trend',
+      'Completion Rate',
+      'Top Performing Exams',
+    ],
+    [scheme.hasPassFailConcept, outcomeTabLabel],
+  );
+  const [tab, setTab] = useState(tabs[0]);
 
   const percentages = useMemo(() => (resultsOfType ?? []).map(percentOf), [resultsOfType]);
   const passCount = useMemo(() => (resultsOfType ?? []).filter((r) => r.passed).length, [resultsOfType]);
@@ -178,15 +189,21 @@ export default function ExamTypePerformanceAnalysis() {
             <Col md={4} lg>
               <ReportStatCard icon={<TargetIcon />} label="Average Score" value={`${stats.averageScore.toFixed(2)}%`} />
             </Col>
-            <Col md={4} lg>
-              <ReportStatCard icon={<CheckCircleIcon />} label="Pass Percentage" value={`${stats.passPercentage.toFixed(2)}%`} />
-            </Col>
+            {scheme.hasPassFailConcept && (
+              <Col md={4} lg>
+                <ReportStatCard
+                  icon={<CheckCircleIcon />}
+                  label={`${scheme.outcomeLabels.pass} Percentage`}
+                  value={`${stats.passPercentage.toFixed(2)}%`}
+                />
+              </Col>
+            )}
             <Col md={4} lg>
               <ReportStatCard icon={<FlagIcon />} label="Completion Rate" value={`${stats.completionRate.toFixed(2)}%`} />
             </Col>
           </Row>
 
-          <ReportTabs tabs={TABS} active={tab} onChange={setTab} />
+          <ReportTabs tabs={tabs} active={tab} onChange={setTab} />
 
           {tab === 'Score Distribution' && (
             <Row className="g-3">
@@ -240,14 +257,14 @@ export default function ExamTypePerformanceAnalysis() {
             </Row>
           )}
 
-          {tab === 'Pass vs Fail' && (
+          {tab === outcomeTabLabel && (
             <Card className="border-0 shadow-sm">
               <Card.Body>
-                <h2 className="h6 fw-bold mb-3">Pass vs Fail</h2>
+                <h2 className="h6 fw-bold mb-3">{outcomeTabLabel}</h2>
                 <DonutChart
                   data={[
-                    { label: 'Passed', value: passCount, color: '#22c55e' },
-                    { label: 'Failed', value: failCount, color: '#ef4444' },
+                    { label: scheme.outcomeLabels.pass, value: passCount, color: '#22c55e' },
+                    { label: scheme.outcomeLabels.fail, value: failCount, color: '#ef4444' },
                   ]}
                   centerLabel="Attempts"
                 />
@@ -292,7 +309,7 @@ export default function ExamTypePerformanceAnalysis() {
                         <th className="ps-4">Exam</th>
                         <th>Average Score</th>
                         <th>Participants</th>
-                        <th className="pe-4">Pass %</th>
+                        {scheme.hasPassFailConcept && <th className="pe-4">{scheme.outcomeLabels.pass} %</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -301,7 +318,7 @@ export default function ExamTypePerformanceAnalysis() {
                           <td className="ps-4 fw-medium">{r.exam.title}</td>
                           <td>{Math.round(r.averageScore)}%</td>
                           <td>{r.participants.toLocaleString()}</td>
-                          <td className="pe-4">{Math.round(r.passPercentage)}%</td>
+                          {scheme.hasPassFailConcept && <td className="pe-4">{Math.round(r.passPercentage)}%</td>}
                         </tr>
                       ))}
                     </tbody>
