@@ -79,8 +79,8 @@ export default function AdvanceExamReport() {
     <AdminLayout active="Exam Type Wise Report">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
-          <p className="text-muted small mb-1">Reports / Exam Type Wise Report / Advance Report</p>
-          <h1 className="h4 fw-bold mb-1 text-primary">{exam?.title ?? 'Advance Report'}</h1>
+          <p className="text-muted small mb-1">Reports / Exam Type Wise Report / Advanced Report</p>
+          <h1 className="h4 fw-bold mb-1 text-primary">{exam?.title ?? 'Advanced Report'}</h1>
         </div>
         <div className="d-flex gap-2">
           <Link to={backTo} className="btn btn-outline-secondary btn-sm">

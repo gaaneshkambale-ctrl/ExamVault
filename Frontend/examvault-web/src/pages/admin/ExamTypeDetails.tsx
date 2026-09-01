@@ -256,9 +256,9 @@ export default function ExamTypeDetails() {
                             <Link
                               to={`/admin/reports/${r.exam.id}/advance`}
                               className="btn btn-outline-primary btn-sm"
-                              title="View advance report"
+                              title="View advanced report"
                             >
-                              Advance Report
+                              Advanced Report
                             </Link>
                           </div>
                         </td>

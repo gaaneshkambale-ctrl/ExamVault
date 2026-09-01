@@ -124,5 +124,5 @@ export async function exportAdvanceExamReportExcel(
     { sheet: 'Summary', data: summarySheet },
     { sheet: 'Student Details', data: studentDetailSheet },
     { sheet: 'Score Distribution', data: distributionSheet },
-  ]).toFile(`${sanitizeFilename(exam.title)}-advance-report.xlsx`);
+  ]).toFile(`${sanitizeFilename(exam.title)}-advanced-report.xlsx`);
 }
