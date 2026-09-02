@@ -1,6 +1,6 @@
 import { Badge, Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import ExamWizardStepper from '../../components/ExamWizardStepper';
 import DeleteSectionButton from '../../components/DeleteSectionButton';
 import { EditIcon } from '../../components/icons/ActionIcons';
@@ -132,7 +132,7 @@ export default function ExamWizardSections() {
   );
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-1">
         <p className="text-muted small mb-1">Create Exam / {exam?.title ?? '...'}</p>
         <div className="d-flex justify-content-between align-items-center mb-2">
@@ -298,6 +298,6 @@ export default function ExamWizardSections() {
           Next: Exam Configuration &rarr;
         </Button>
       </div>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

@@ -10,6 +10,7 @@ import {
   COSMETIC_ROLE_PERMISSIONS,
   ADMIN_PERMISSIONS,
   STUDENT_PERMISSIONS,
+  INSTRUCTOR_PERMISSIONS,
 } from '../../constants/cosmeticRolePermissions';
 import type { UserRole } from '../../types/user';
 
@@ -58,8 +59,8 @@ const roles: RoleRow[] = [
     role: 'Instructor',
     description: 'Create exams, manage questions and view results.',
     variant: 'warning',
-    isReal: false,
-    defaultPermissions: COSMETIC_ROLE_PERMISSIONS.Instructor,
+    isReal: true,
+    defaultPermissions: INSTRUCTOR_PERMISSIONS,
   },
   {
     role: 'Student',
@@ -132,11 +133,12 @@ export default function RolesPermissions() {
       </div>
 
       <Alert variant="secondary" className="small mt-3">
-        ExamVault currently supports three authorization roles - <strong>Admin</strong>, <strong>Student</strong>,
-        and <strong>Super Admin</strong> - enforced by the app's route protections. Super Admin is used for
-        platform and tenant management and isn't assignable from this screen. The permission checklist below
-        can be edited and is saved per role, but it's informational only - it isn't checked anywhere yet, so
-        editing it doesn't change what a Student or Admin can actually do in the app.
+        ExamVault currently supports four authorization roles - <strong>Admin</strong>, <strong>Student</strong>,{' '}
+        <strong>Instructor</strong>, and <strong>Super Admin</strong> - enforced by the app's route protections.
+        Super Admin is used for platform and tenant management and isn't assignable from this screen. The
+        permission checklist below can be edited and is saved per role. Some permissions are now genuinely
+        enforced server-side - unchecking one, saving, and logging the affected role back in will actually
+        block that action. Others remain informational only until their own backend enforcement is wired up.
       </Alert>
 
       <Card className="border-0 shadow-sm mt-3">
@@ -220,8 +222,8 @@ export default function RolesPermissions() {
         </Modal.Header>
         <Modal.Body>
           <p className="text-muted small">
-            Informational only for now - saving this doesn't change what {editingRole} can actually do in the
-            app.
+            Saving updates {editingRole}'s permission set. Some of these permissions are already enforced
+            server-side; others remain informational until their own backend enforcement is wired up.
           </p>
           <Row>
             {COSMETIC_PERMISSIONS.map((perm) => (

@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react';
 import { Alert, Badge, Button, Card, Col, Row, Spinner, Tab, Tabs } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../layouts/AdminLayout';
+import InstructorLayout from '../layouts/InstructorLayout';
 import StudentLayout from '../layouts/StudentLayout';
 import ProfileAvatarIllustration from '../components/illustrations/ProfileAvatarIllustration';
 import PersonalInfoPanel from '../components/profile/PersonalInfoPanel';
@@ -16,6 +17,7 @@ import NotificationPreferencesPanel from '../components/NotificationPreferencesP
 import { fetchMyPhotoObjectUrl, updateMyPhoto } from '../api/userApi';
 import { useAuth } from '../hooks/useAuth';
 import { extractServerError } from '../utils/apiError';
+import { dashboardPathForRole } from '../utils/roleRouting';
 
 const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_PHOTO_SIZE_BYTES = 2 * 1024 * 1024;
@@ -123,8 +125,8 @@ export default function Profile() {
     return null;
   }
 
-  const Layout = user.role === 'Admin' ? AdminLayout : StudentLayout;
-  const dashboardPath = user.role === 'Admin' ? '/admin/dashboard' : '/dashboard';
+  const Layout = user.role === 'Admin' ? AdminLayout : user.role === 'Instructor' ? InstructorLayout : StudentLayout;
+  const dashboardPath = dashboardPathForRole(user.role);
 
   return (
     <Layout active="Profile">

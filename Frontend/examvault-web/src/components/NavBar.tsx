@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import BrandMark from './BrandMark';
 import UserAvatar from './UserAvatar';
 import { useAuth } from '../hooks/useAuth';
+import { dashboardPathForRole } from '../utils/roleRouting';
 
 export default function NavBar() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -48,7 +49,7 @@ export default function NavBar() {
                 <span className="fw-medium">{user.fullName}</span>
               </Dropdown.Toggle>
               <Dropdown.Menu>
-                <Dropdown.Item as={Link} to={user.role === 'Admin' ? '/admin/dashboard' : '/dashboard'}>
+                <Dropdown.Item as={Link} to={dashboardPathForRole(user.role)}>
                   {user.role === 'Admin' ? 'Admin Panel' : 'Dashboard'}
                 </Dropdown.Item>
                 <Dropdown.Item onClick={() => void logout()}>Logout</Dropdown.Item>

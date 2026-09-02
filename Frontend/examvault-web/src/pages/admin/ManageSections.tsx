@@ -1,6 +1,6 @@
 import { Alert, Badge, Card, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import DeleteSectionButton from '../../components/DeleteSectionButton';
 import { EditIcon } from '../../components/icons/ActionIcons';
 import { useExam } from '../../hooks/useExams';
@@ -27,7 +27,7 @@ export default function ManageSections() {
   const showMismatchWarning = marksMismatch || durationMismatch || passingMarksUnreachable;
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-1">
         <p className="text-muted small mb-1">
           Exams / {exam?.title ?? '...'} / Sections
@@ -160,6 +160,6 @@ export default function ManageSections() {
           Back to Exam
         </Link>
       </div>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

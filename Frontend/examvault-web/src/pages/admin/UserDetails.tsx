@@ -9,13 +9,14 @@ import { useExams } from '../../hooks/useExams';
 import { useUserAttempts } from '../../hooks/useSubmissions';
 import { useUser, useUserSessions } from '../../hooks/useUsers';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
-import { ADMIN_PERMISSIONS, STUDENT_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
+import { ADMIN_PERMISSIONS, STUDENT_PERMISSIONS, INSTRUCTOR_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
 import type { UserListItem, UserRole, UserSession, UserSessionStatus } from '../../types/user';
 import type { ExamAttemptResponse } from '../../types/submission';
 
 const roleVariant: Record<UserRole, string> = {
   Admin: 'primary',
   Student: 'secondary',
+  Instructor: 'info',
 };
 
 const sessionStatusVariant: Record<UserSessionStatus, string> = {
@@ -125,7 +126,8 @@ export default function UserDetails() {
     (a, b) => new Date(b.issuedAtUtc).getTime() - new Date(a.issuedAtUtc).getTime(),
   )[0];
 
-  const defaultPermissions = user?.role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS;
+  const defaultPermissions =
+    user?.role === 'Admin' ? ADMIN_PERMISSIONS : user?.role === 'Instructor' ? INSTRUCTOR_PERMISSIONS : STUDENT_PERMISSIONS;
   const permissions =
     liveRolePermissions?.find((r) => r.role === user?.role)?.permissions ?? defaultPermissions;
 

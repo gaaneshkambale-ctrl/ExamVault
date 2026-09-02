@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import { createExam } from '../../api/examApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import { EXAM_CATEGORIES } from '../../types/exam';
@@ -139,7 +139,7 @@ export default function CreateExam() {
   const selectedExamTypeName = examTypes?.find((t) => t.id === form.examTypeId)?.name;
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Create Exam</h1>
         <p className="text-muted mb-0">Basic Information</p>
@@ -414,6 +414,6 @@ export default function CreateExam() {
           </Card>
         </Col>
       </Row>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

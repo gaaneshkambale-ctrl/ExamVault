@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, InputGroup, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import TablePagination from '../../components/reports/TablePagination';
 import CreateQuestionModal from '../../components/CreateQuestionModal';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
@@ -471,11 +471,11 @@ export default function SectionForm() {
 
   if (isEdit && isLoadingSection) {
     return (
-      <AdminLayout active="Exams">
+      <RoleAwareLayout active="Exams">
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
@@ -491,7 +491,7 @@ export default function SectionForm() {
         : 'Add questions to this section';
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">{isEdit ? 'Edit Section' : 'Add Section'}</h1>
         <p className="text-muted mb-0">{stepSubtitle}</p>
@@ -1117,6 +1117,6 @@ export default function SectionForm() {
           onCreated={handleQuestionCreated}
         />
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

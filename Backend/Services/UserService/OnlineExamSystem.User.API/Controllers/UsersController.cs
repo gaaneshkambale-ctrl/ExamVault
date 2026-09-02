@@ -736,6 +736,7 @@ public class UsersController : ControllerBase
         {
             UserRole.Admin => "ADM",
             UserRole.SuperAdmin => "SUP",
+            UserRole.Instructor => "INS",
             _ => "STU",
         };
         return $"EV-{roleCode}-{user.UserNumber:D4}";

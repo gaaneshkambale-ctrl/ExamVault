@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/examApi';
 import { useExam, useExamTypes } from '../../hooks/useExams';
@@ -277,7 +277,7 @@ export default function EditExam() {
     publishMutation.isPending || unpublishMutation.isPending || archiveMutation.isPending;
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="h4 fw-bold mb-0 text-primary">Edit Exam</h1>
@@ -687,6 +687,6 @@ export default function EditExam() {
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

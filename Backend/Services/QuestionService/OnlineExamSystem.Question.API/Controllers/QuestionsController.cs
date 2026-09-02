@@ -16,6 +16,7 @@ using OnlineExamSystem.Question.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Question;
 using OnlineExamSystem.Shared.Contracts.Responses.Question;
 using static OnlineExamSystem.Question.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Question.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Question.API.Controllers;
 
@@ -60,8 +61,9 @@ public class QuestionsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = QuestionsCreate)]
     public async Task<IActionResult> Create(CreateQuestionRequest request, CancellationToken cancellationToken)
     {
         var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -184,8 +186,9 @@ public class QuestionsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = QuestionsEdit)]
     public async Task<IActionResult> Update(Guid id, UpdateQuestionRequest request, CancellationToken cancellationToken)
     {
         var command = new UpdateQuestionCommand(

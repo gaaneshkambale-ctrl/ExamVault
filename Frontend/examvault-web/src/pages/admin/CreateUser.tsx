@@ -8,7 +8,12 @@ import { createUser } from '../../api/userApi';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
-import { COSMETIC_ROLES, ADMIN_PERMISSIONS, STUDENT_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
+import {
+  COSMETIC_ROLES,
+  ADMIN_PERMISSIONS,
+  STUDENT_PERMISSIONS,
+  INSTRUCTOR_PERMISSIONS,
+} from '../../constants/cosmeticRolePermissions';
 
 type CreateUserFormState = CreateUserRequest;
 
@@ -35,14 +40,14 @@ export default function CreateUser() {
   const [serverError, setServerError] = useState('');
   const { data: liveRolePermissions } = useRolePermissions();
 
-  // Only Admin/Student are real, selectable roles (the rest are disabled
-  // "not available" options) - same per-role permission sets UserDetails.tsx
-  // already uses for its own (read-only) permissions display. Falls back to
-  // the static defaults while the live (editable, persisted on the Roles &
-  // Permissions page) set is still loading.
+  // Admin/Student/Instructor are real, selectable roles (the rest are
+  // disabled "not available" options) - same per-role permission sets
+  // UserDetails.tsx already uses for its own (read-only) permissions
+  // display. Falls back to the static defaults while the live (editable,
+  // persisted on the Roles & Permissions page) set is still loading.
   const permissionsForRole = (role: UserRole) =>
     liveRolePermissions?.find((r) => r.role === role)?.permissions ??
-    (role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS);
+    (role === 'Admin' ? ADMIN_PERMISSIONS : role === 'Instructor' ? INSTRUCTOR_PERMISSIONS : STUDENT_PERMISSIONS);
 
   const [checkedPermissions, setCheckedPermissions] = useState<Set<string>>(
     () => new Set(permissionsForRole('Student')),
@@ -237,6 +242,7 @@ export default function CreateUser() {
                       <Form.Select value={form.role} onChange={(e) => updateRole(e.target.value as UserRole)}>
                         <option value="Student">Student</option>
                         <option value="Admin">Admin</option>
+                        <option value="Instructor">Instructor</option>
                         {COSMETIC_ROLES.map((r) => (
                           <option key={r} value={r} disabled>
                             {r} (not available)

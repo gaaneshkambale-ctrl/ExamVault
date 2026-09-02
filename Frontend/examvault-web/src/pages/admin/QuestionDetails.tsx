@@ -1,6 +1,6 @@
 import { Badge, Card, ListGroup, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { useQuestion } from '../../hooks/useQuestions';
 import type { QuestionDifficulty, QuestionType } from '../../types/question';
@@ -38,7 +38,7 @@ export default function QuestionDetails() {
     : '/admin/exams';
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Question Details</h1>
         {question && (
@@ -128,6 +128,6 @@ export default function QuestionDetails() {
           )}
         </Card.Body>
       </Card>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

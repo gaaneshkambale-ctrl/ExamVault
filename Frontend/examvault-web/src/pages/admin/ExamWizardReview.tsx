@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert, Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import ExamWizardStepper from '../../components/ExamWizardStepper';
 import { publishExam } from '../../api/examApi';
 import { useExam } from '../../hooks/useExams';
@@ -151,7 +151,7 @@ export default function ExamWizardReview() {
   });
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-1">
         <p className="text-muted small mb-1">Create Exam / {exam?.title ?? '...'}</p>
         <h1 className="h4 fw-bold mb-0 text-primary">Review &amp; Publish</h1>
@@ -296,6 +296,6 @@ export default function ExamWizardReview() {
           </div>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

@@ -13,6 +13,7 @@ using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Exam.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -54,8 +55,9 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Create(Guid examId, SectionRequest request, CancellationToken cancellationToken)
     {
         var command = new CreateSectionCommand(
@@ -123,8 +125,9 @@ public class SectionsController : ControllerBase
     }
 
     [HttpGet("default")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> GetOrCreateDefault(Guid examId, CancellationToken cancellationToken)
     {
         var section = await _getOrCreateDefaultSectionHandler.HandleAsync(
@@ -152,8 +155,9 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Update(
         Guid examId,
         Guid id,
@@ -203,8 +207,9 @@ public class SectionsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Delete(Guid examId, Guid id, CancellationToken cancellationToken)
     {
         var existing = await _getSectionHandler.HandleAsync(new GetSectionQuery(id), cancellationToken);
@@ -223,8 +228,9 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPut("reorder")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Reorder(
         Guid examId,
         ReorderSectionsRequest request,

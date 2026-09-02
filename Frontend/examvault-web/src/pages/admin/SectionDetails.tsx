@@ -1,6 +1,6 @@
 import { Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useSection } from '../../hooks/useSections';
@@ -29,7 +29,7 @@ export default function SectionDetails() {
   const { data: questions } = useQuestionsBySection(examId, sectionId);
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Section Details</h1>
         <div className="d-flex gap-2">
@@ -138,6 +138,6 @@ export default function SectionDetails() {
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

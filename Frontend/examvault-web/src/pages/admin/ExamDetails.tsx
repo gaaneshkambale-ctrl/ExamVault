@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import DeleteAssignmentButton from '../../components/DeleteAssignmentButton';
 import { EditIcon } from '../../components/icons/ActionIcons';
@@ -109,7 +109,7 @@ export default function ExamDetails() {
     publishMutation.isPending || unpublishMutation.isPending || archiveMutation.isPending;
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Exam Review &amp; Publish</h1>
         <div className="d-flex gap-2">
@@ -315,6 +315,6 @@ export default function ExamDetails() {
           </Card.Body>
         </Card>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

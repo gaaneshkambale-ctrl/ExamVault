@@ -3,9 +3,9 @@ import type { ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Dropdown, Form, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import DeleteExamButton from '../../components/DeleteExamButton';
-import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
+import { EditIcon, ViewIcon, BarChartIcon } from '../../components/icons/ActionIcons';
 import { useExams, useExamTypes } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { archiveExam, deleteExam } from '../../api/examApi';
@@ -297,7 +297,7 @@ export default function ManageExams() {
   const bulkError = bulkDeleteMutation.isError ? extractServerError(bulkDeleteMutation.error) : '';
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="h4 fw-bold mb-0 text-primary">Exams</h1>
@@ -546,6 +546,15 @@ export default function ManageExams() {
                             >
                               <EditIcon />
                             </Link>
+                            <Link
+                              to={`/admin/reports/${exam.id}`}
+                              className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                              style={{ width: 32, height: 32 }}
+                              title="View Results"
+                              aria-label={`View results for ${exam.title}`}
+                            >
+                              <BarChartIcon />
+                            </Link>
                             <DeleteExamButton examId={exam.id} />
                             <Dropdown>
                               <Dropdown.Toggle
@@ -639,6 +648,6 @@ export default function ManageExams() {
           </Button>
         </Modal.Footer>
       </Modal>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

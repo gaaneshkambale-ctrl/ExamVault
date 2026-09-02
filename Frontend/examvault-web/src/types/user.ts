@@ -16,7 +16,7 @@ export interface UserProfile {
   id: string;
   fullName: string;
   email: string;
-  role: 'Student' | 'Admin' | 'SuperAdmin';
+  role: 'Student' | 'Admin' | 'SuperAdmin' | 'Instructor';
   mustChangePassword: boolean;
   phoneNumber: string | null;
   hasPhoto: boolean;
@@ -76,7 +76,7 @@ export interface RefreshTokenResponse {
   refreshToken: string;
 }
 
-export type UserRole = 'Admin' | 'Student';
+export type UserRole = 'Admin' | 'Student' | 'Instructor';
 
 export interface UserListItem {
   id: string;

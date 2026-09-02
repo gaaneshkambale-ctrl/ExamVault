@@ -61,6 +61,7 @@ import NotificationSettingsPage from '../pages/admin/settings/NotificationSettin
 import SystemSettingsPage from '../pages/admin/settings/SystemSettingsPage';
 import ExamReportDetails from '../pages/admin/ExamReportDetails';
 import AdvanceExamReport from '../pages/admin/AdvanceExamReport';
+import InstructorDashboard from '../pages/instructor/InstructorDashboard';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import MyExams from '../pages/student/MyExams';
 import StudentExamDetails from '../pages/student/ExamDetails';
@@ -244,7 +245,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ManageExams />
           </ProtectedRoute>
         }
@@ -268,7 +269,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/create"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <CreateExam />
           </ProtectedRoute>
         }
@@ -276,7 +277,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:id/edit"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <EditExam />
           </ProtectedRoute>
         }
@@ -284,7 +285,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:id"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamDetails />
           </ProtectedRoute>
         }
@@ -292,7 +293,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ManageSections />
           </ProtectedRoute>
         }
@@ -300,7 +301,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/wizard/sections"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamWizardSections />
           </ProtectedRoute>
         }
@@ -308,7 +309,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/wizard/configuration"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamWizardConfiguration />
           </ProtectedRoute>
         }
@@ -316,7 +317,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/wizard/review"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamWizardReview />
           </ProtectedRoute>
         }
@@ -324,7 +325,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections/reorder"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ReorderSections />
           </ProtectedRoute>
         }
@@ -332,7 +333,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections/create"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <SectionForm />
           </ProtectedRoute>
         }
@@ -340,7 +341,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections/:sectionId/edit"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <SectionForm />
           </ProtectedRoute>
         }
@@ -348,7 +349,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections/:sectionId"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <SectionDetails />
           </ProtectedRoute>
         }
@@ -502,7 +503,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/:examId"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamReportDetails />
           </ProtectedRoute>
         }
@@ -510,7 +511,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/:examId/advance"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AdvanceExamReport />
           </ProtectedRoute>
         }
@@ -550,7 +551,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/questions/:id"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <QuestionDetails />
           </ProtectedRoute>
         }
@@ -558,8 +559,16 @@ export default function AppRoutes() {
       <Route
         path="/admin/questions/:id/edit"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <EditQuestion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/instructor/dashboard"
+        element={
+          <ProtectedRoute roles={['Instructor']}>
+            <InstructorDashboard />
           </ProtectedRoute>
         }
       />

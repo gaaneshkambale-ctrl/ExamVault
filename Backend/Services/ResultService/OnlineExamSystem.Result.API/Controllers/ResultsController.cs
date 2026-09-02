@@ -75,8 +75,9 @@ public class ResultsController : ControllerBase
     }
 
     [HttpGet("by-exam/{examId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = ResultsOrReports)]
+    [Authorize(Policy = ResultsView)]
     public async Task<IActionResult> ByExam(Guid examId, CancellationToken cancellationToken)
     {
         if (examId == Guid.Empty)

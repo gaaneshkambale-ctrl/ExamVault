@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import { updateQuestion } from '../../api/questionApi';
 import { useQuestion } from '../../hooks/useQuestions';
 import { validateCreateQuestion } from '../../utils/createQuestionValidation';
@@ -224,7 +224,7 @@ export default function EditQuestion() {
     : '/admin/exams';
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Edit Question</h1>
       </div>
@@ -480,6 +480,6 @@ export default function EditQuestion() {
           </Card.Body>
         </Card>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

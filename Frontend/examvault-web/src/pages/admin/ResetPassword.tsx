@@ -13,6 +13,7 @@ import type { UserRole } from '../../types/user';
 const roleVariant: Record<UserRole, string> = {
   Admin: 'primary',
   Student: 'secondary',
+  Instructor: 'info',
 };
 
 function KeyIcon() {
