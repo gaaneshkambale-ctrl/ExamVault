@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.Common;
+using OnlineExamSystem.User.Application.Users.RolePermissions;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Domain.Enums;
 
@@ -12,6 +13,7 @@ public class LoginUserHandler
     private readonly IUserRepository _userRepository;
     private readonly ITenantRepository _tenantRepository;
     private readonly IPlanRepository _planRepository;
+    private readonly IRolePermissionRepository _rolePermissionRepository;
     private readonly IValidator<LoginUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IJwtTokenService _jwtTokenService;
@@ -21,6 +23,7 @@ public class LoginUserHandler
         IUserRepository userRepository,
         ITenantRepository tenantRepository,
         IPlanRepository planRepository,
+        IRolePermissionRepository rolePermissionRepository,
         IValidator<LoginUserCommand> validator,
         IPasswordHasher<AppUser> passwordHasher,
         IJwtTokenService jwtTokenService,
@@ -29,6 +32,7 @@ public class LoginUserHandler
         _userRepository = userRepository;
         _tenantRepository = tenantRepository;
         _planRepository = planRepository;
+        _rolePermissionRepository = rolePermissionRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
@@ -108,7 +112,9 @@ public class LoginUserHandler
         }
 
         var enabledFeatures = await _planRepository.GetFeaturesForTenantAsync(user.TenantId, cancellationToken);
-        var accessToken = _jwtTokenService.GenerateAccessToken(user, enabledFeatures);
+        var grantedPermissions = await _rolePermissionRepository.GetForRoleAsync(
+            user.TenantId, RolePermissionCatalog.CatalogRoleName(user.Role), cancellationToken);
+        var accessToken = _jwtTokenService.GenerateAccessToken(user, enabledFeatures, grantedPermissions);
         var refreshToken = _jwtTokenService.GenerateRefreshToken();
 
         await _userRepository.AddRefreshTokenAsync(new RefreshToken

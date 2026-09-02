@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Application.Users.RolePermissions;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Infrastructure.Persistence;
 
@@ -45,6 +46,26 @@ public class RolePermissionRepository : IRolePermissionRepository
         await _dbContext.RolePermissions.AddRangeAsync(
             toAdd.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key }),
             cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<string>> GetForRoleAsync(
+        Guid tenantId,
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        var tenantHasAnyRows = await _dbContext.RolePermissions
+            .IgnoreQueryFilters()
+            .AnyAsync(rp => rp.TenantId == tenantId, cancellationToken);
+        if (!tenantHasAnyRows)
+        {
+            return RolePermissionCatalog.DefaultsForRole(role);
+        }
+
+        return await _dbContext.RolePermissions
+            .IgnoreQueryFilters()
+            .Where(rp => rp.TenantId == tenantId && rp.Role == role)
+            .Select(rp => rp.PermissionKey)
+            .ToListAsync(cancellationToken);
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>

@@ -1,5 +1,6 @@
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.Common;
+using OnlineExamSystem.User.Application.Users.RolePermissions;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.Application.Users.TokenRefresh;
@@ -8,12 +9,18 @@ public class RefreshTokenHandler
 {
     private readonly IUserRepository _userRepository;
     private readonly IPlanRepository _planRepository;
+    private readonly IRolePermissionRepository _rolePermissionRepository;
     private readonly IJwtTokenService _jwtTokenService;
 
-    public RefreshTokenHandler(IUserRepository userRepository, IPlanRepository planRepository, IJwtTokenService jwtTokenService)
+    public RefreshTokenHandler(
+        IUserRepository userRepository,
+        IPlanRepository planRepository,
+        IRolePermissionRepository rolePermissionRepository,
+        IJwtTokenService jwtTokenService)
     {
         _userRepository = userRepository;
         _planRepository = planRepository;
+        _rolePermissionRepository = rolePermissionRepository;
         _jwtTokenService = jwtTokenService;
     }
 
@@ -41,7 +48,9 @@ public class RefreshTokenHandler
         // already-logged-in Admin, within one refresh cycle rather than
         // requiring a fresh login.
         var enabledFeatures = await _planRepository.GetFeaturesForTenantAsync(user.TenantId, cancellationToken);
-        var newAccessToken = _jwtTokenService.GenerateAccessToken(user, enabledFeatures);
+        var grantedPermissions = await _rolePermissionRepository.GetForRoleAsync(
+            user.TenantId, RolePermissionCatalog.CatalogRoleName(user.Role), cancellationToken);
+        var newAccessToken = _jwtTokenService.GenerateAccessToken(user, enabledFeatures, grantedPermissions);
         var newRefreshToken = _jwtTokenService.GenerateRefreshToken();
 
         await _userRepository.AddRefreshTokenAsync(new RefreshToken

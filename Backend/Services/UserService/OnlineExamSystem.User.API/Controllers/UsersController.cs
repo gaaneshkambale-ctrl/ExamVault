@@ -27,6 +27,7 @@ using OnlineExamSystem.User.Application.Users.UpdateMyPreferences;
 using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Domain.Enums;
+using static OnlineExamSystem.User.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.User.API.Controllers;
 
@@ -208,6 +209,7 @@ public class UsersController : ControllerBase
     // regular Admin still only ever sees their own tenant's users through
     // it (see UserRepository.GetAllAsync's own comment).
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = UsersView)]
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
@@ -216,6 +218,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost]
     public async Task<IActionResult> Create(CreateUserRequest request, CancellationToken cancellationToken)
     {
@@ -254,6 +257,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateUserRequest request, CancellationToken cancellationToken)
     {
@@ -305,6 +309,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
@@ -326,6 +331,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
     {
@@ -349,6 +355,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken)
     {
@@ -366,6 +373,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPut("{id:guid}/reset-password")]
     public async Task<IActionResult> ResetPassword(
         Guid id,
@@ -425,6 +433,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersView)]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {

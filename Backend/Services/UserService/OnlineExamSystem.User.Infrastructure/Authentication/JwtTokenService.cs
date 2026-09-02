@@ -19,7 +19,7 @@ public class JwtTokenService : IJwtTokenService
         _settings = settings.Value;
     }
 
-    public string GenerateAccessToken(AppUser user, IReadOnlyList<PlanFeature> enabledFeatures)
+    public string GenerateAccessToken(AppUser user, IReadOnlyList<PlanFeature> enabledFeatures, IReadOnlyList<string> grantedPermissions)
     {
         var claims = new List<Claim>
         {
@@ -35,6 +35,11 @@ public class JwtTokenService : IJwtTokenService
         // "Exams")` directly. Resolved by the caller from the user's Tenant's
         // current Plan - this class stays a pure token-crafter, no DB access.
         claims.AddRange(enabledFeatures.Distinct().Select(f => new Claim(FeatureClaimTypes.Feature, f.ToString())));
+
+        // Same shape, different axis - one claim per granted RolePermission
+        // key (Phase 1: only a couple of these are actually checked by any
+        // policy yet, see PermissionPolicies).
+        claims.AddRange(grantedPermissions.Distinct().Select(p => new Claim(PermissionClaimTypes.Permission, p)));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SigningKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
