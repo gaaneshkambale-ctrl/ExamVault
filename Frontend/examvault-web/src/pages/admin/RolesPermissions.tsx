@@ -25,15 +25,21 @@ interface RoleRow {
   description: string;
   variant: string;
   isReal: boolean;
+  // Real but not a member of any single tenant's user list (managed from
+  // the separate platform console) - this tenant-scoped page can't report
+  // an accurate user count for it, so the Users column shouldn't claim 0.
+  notTenantScoped?: boolean;
   permissions: string[];
 }
 
 const roles: RoleRow[] = [
   {
     role: 'Super Admin',
-    description: 'Full access to all modules and settings.',
+    description:
+      'Platform-level access for managing tenants, subscriptions, and cross-tenant settings. Not assignable from this tenant’s user management.',
     variant: 'dark',
-    isReal: false,
+    isReal: true,
+    notTenantScoped: true,
     permissions: COSMETIC_ROLE_PERMISSIONS['Super Admin'],
   },
   {
@@ -88,9 +94,11 @@ export default function RolesPermissions() {
       </div>
 
       <Alert variant="secondary" className="small mt-3">
-        ExamVault's real authorization only has two roles - <strong>Admin</strong> and <strong>Student</strong> -
-        enforced by the app's route protections. The other roles and the permission breakdown below are a
-        static preview of a fuller permissions system, not something the backend actually enforces yet.
+        ExamVault currently supports three authorization roles - <strong>Admin</strong>, <strong>Student</strong>,
+        and <strong>Super Admin</strong> - enforced by the app's route protections. Super Admin is used for
+        platform and tenant management and isn't assignable from this screen. The remaining roles and the
+        permission breakdown below are a static preview of a fuller permissions system, not something the
+        backend actually enforces yet.
       </Alert>
 
       <Card className="border-0 shadow-sm mt-3">
@@ -106,13 +114,23 @@ export default function RolesPermissions() {
               </tr>
             </thead>
             <tbody>
-              {roles.map(({ role, description, variant, isReal }) => (
+              {roles.map(({ role, description, variant, isReal, notTenantScoped }) => (
                 <tr key={role}>
                   <td className="ps-4">
                     <Badge bg={variant}>{role}</Badge>
                   </td>
                   <td>{description}</td>
-                  <td className="fw-medium">{isReal ? countFor(role) : 0}</td>
+                  <td className="fw-medium">
+                    {notTenantScoped ? (
+                      <span className="text-muted" title="Managed outside this tenant - not visible here.">
+                        —
+                      </span>
+                    ) : isReal ? (
+                      countFor(role)
+                    ) : (
+                      0
+                    )}
+                  </td>
                   <td>
                     <Badge bg={isReal ? 'success' : 'secondary'}>{isReal ? 'Active' : 'Not Available'}</Badge>
                   </td>

@@ -1,7 +1,11 @@
 // Static, non-persisted preview data for a role/permission system that
-// doesn't exist in the backend yet - ExamVault's real UserRole is just
-// Admin | Student (see types/user.ts), enforced by [Authorize(Roles=...)]
-// on every endpoint. Nothing here is read from or written to the API;
+// doesn't exist in the backend yet - ExamVault's real UserRole (within a
+// tenant's own Users management) is just Admin | Student (see
+// types/user.ts), enforced by [Authorize(Roles=...)] on every endpoint.
+// SuperAdmin is also real and enforced, but it's a platform-level role
+// managed outside any tenant's own user list, so it isn't assignable from
+// here - see pages/platform/* for its actual console. Nothing here is
+// read from or written to the API;
 // it exists purely so the admin Users pages can show what a fuller RBAC
 // UI would look like, per an explicit request to build the wireframe's
 // role/permission visuals as a static preview rather than omit them.
