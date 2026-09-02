@@ -5,6 +5,7 @@ using OnlineExamSystem.Result.Application.GetResult;
 using OnlineExamSystem.Result.Domain;
 using OnlineExamSystem.Shared.Contracts.Responses.Result;
 using static OnlineExamSystem.Result.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Result.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Result.API.Controllers;
 
@@ -28,6 +29,7 @@ public class ResultsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = ResultsView)]
     public async Task<IActionResult> Get([FromQuery] Guid examId, CancellationToken cancellationToken)
     {
         if (examId == Guid.Empty)
