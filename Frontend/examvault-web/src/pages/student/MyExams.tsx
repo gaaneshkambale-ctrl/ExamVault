@@ -14,13 +14,14 @@ const creationMethodLabel: Record<CreationMethod, string> = {
   AiGenerated: 'AI Generated',
 };
 
-type Tab = 'All' | 'Upcoming' | 'In Progress' | 'Completed' | 'Expired';
-const TABS: Tab[] = ['All', 'Upcoming', 'In Progress', 'Completed', 'Expired'];
+type Tab = 'All' | 'Upcoming' | 'Live' | 'In Progress' | 'Completed' | 'Expired';
+const TABS: Tab[] = ['All', 'Upcoming', 'Live', 'In Progress', 'Completed', 'Expired'];
 
-type RowStatus = 'Upcoming' | 'In Progress' | 'Completed' | 'Expired';
+type RowStatus = 'Upcoming' | 'Live' | 'In Progress' | 'Completed' | 'Expired';
 
 const statusVariant: Record<RowStatus, string> = {
   Upcoming: 'primary',
+  Live: 'info',
   'In Progress': 'warning',
   Completed: 'success',
   Expired: 'danger',
@@ -112,7 +113,7 @@ export default function MyExams() {
   // Exam wizard) overrides the exam's default - matches StartAttemptHandler's
   // `assignment?.MaxAttempts ?? exam.MaxAttempts` fallback on the backend.
   // Its start/end window also drives Start Date/Due Date and the
-  // Upcoming-vs-Expired split below, same reasoning Active Exams already
+  // Upcoming/Live/Expired split below, same reasoning Active Exams already
   // applies on the admin side (an exam's own startAtUtc/endAtUtc are rarely
   // set - the real window lives on the assignment).
   const assignmentQueries = useQueries({
@@ -134,8 +135,13 @@ export default function MyExams() {
 
     let rowStatus: RowStatus;
     if (!attempt) {
-      const windowExpired = !!(startAtUtc && endAtUtc) && getAssignmentStatus(startAtUtc, endAtUtc) === 'Expired';
-      rowStatus = windowExpired ? 'Expired' : 'Upcoming';
+      if (startAtUtc && endAtUtc) {
+        const windowStatus = getAssignmentStatus(startAtUtc, endAtUtc);
+        rowStatus = windowStatus === 'Expired' ? 'Expired' : windowStatus === 'Active' ? 'Live' : 'Upcoming';
+      } else {
+        // No scheduled window at all - nothing to wait for, so it's available now.
+        rowStatus = 'Live';
+      }
     } else if (attempt.attempt.status === 'InProgress') {
       rowStatus = 'In Progress';
     } else {
@@ -158,6 +164,7 @@ export default function MyExams() {
   const counts = {
     total: rows.length,
     upcoming: rows.filter((r) => r.rowStatus === 'Upcoming').length,
+    live: rows.filter((r) => r.rowStatus === 'Live').length,
     inProgress: rows.filter((r) => r.rowStatus === 'In Progress').length,
     completed: rows.filter((r) => r.rowStatus === 'Completed').length,
   };
@@ -193,7 +200,7 @@ export default function MyExams() {
       <p className="text-muted mb-4">View and start your assigned exams.</p>
 
       <Row className="g-3 mb-4">
-        <Col md={3}>
+        <Col md={4} lg>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Total Exams</div>
@@ -202,16 +209,25 @@ export default function MyExams() {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4} lg>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Upcoming</div>
               <div className="h4 fw-bold mb-0 text-primary">{counts.upcoming}</div>
-              <div className="text-muted small">Not started</div>
+              <div className="text-muted small">Not started yet</div>
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4} lg>
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small mb-1">Live</div>
+              <div className="h4 fw-bold mb-0 text-info">{counts.live}</div>
+              <div className="text-muted small">Ready to start</div>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col md={4} lg>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">In Progress</div>
@@ -220,7 +236,7 @@ export default function MyExams() {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4} lg>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Completed</div>
@@ -274,6 +290,7 @@ export default function MyExams() {
               <Form.Select value={tab} onChange={(e) => setTab(e.target.value as Tab)}>
                 <option value="All">All Status</option>
                 <option value="Upcoming">Upcoming</option>
+                <option value="Live">Live</option>
                 <option value="In Progress">In Progress</option>
                 <option value="Completed">Completed</option>
                 <option value="Expired">Expired</option>
@@ -316,7 +333,7 @@ export default function MyExams() {
                 {pagedExams.map((exam) => {
                   const start = formatDateTime(exam.startAtUtc);
                   const due = formatDateTime(exam.endAtUtc);
-                  const dueUrgent = exam.rowStatus === 'Upcoming' || exam.rowStatus === 'In Progress';
+                  const dueUrgent = exam.rowStatus === 'Live' || exam.rowStatus === 'In Progress';
                   return (
                     <tr key={exam.id}>
                       <td className="ps-4">
@@ -346,6 +363,14 @@ export default function MyExams() {
                       </td>
                       <td className="pe-4">
                         {exam.rowStatus === 'Upcoming' && (
+                          <div className="d-flex flex-column align-items-start gap-1">
+                            <span className="text-muted small">Not started yet</span>
+                            <Link to={`/exams/${exam.id}`} className="btn btn-link btn-sm p-0">
+                              View Details →
+                            </Link>
+                          </div>
+                        )}
+                        {exam.rowStatus === 'Live' && (
                           <div className="d-flex align-items-center gap-2">
                             <Link to={`/exams/${exam.id}`} className="btn btn-outline-primary btn-sm">
                               Start Exam
