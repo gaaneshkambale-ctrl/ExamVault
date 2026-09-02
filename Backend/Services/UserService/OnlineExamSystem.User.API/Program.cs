@@ -23,6 +23,8 @@ using OnlineExamSystem.User.Application.Groups.Delete;
 using OnlineExamSystem.User.Application.Groups.GetById;
 using OnlineExamSystem.User.Application.Groups.List;
 using OnlineExamSystem.User.Application.Groups.RemoveMember;
+using OnlineExamSystem.User.Application.Users.RolePermissions.GetAll;
+using OnlineExamSystem.User.Application.Users.RolePermissions.Update;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
@@ -88,6 +90,7 @@ public class Program
             .AddDbContextCheck<UserDbContext>("database");
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<IGroupRepository, GroupRepository>();
+        builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
         builder.Services.AddScoped<ITenantRepository, TenantRepository>();
         builder.Services.AddScoped<IPlanRepository, PlanRepository>();
 
@@ -143,6 +146,10 @@ public class Program
         builder.Services.AddScoped<DeleteGroupHandler>();
         builder.Services.AddScoped<AddGroupMemberHandler>();
         builder.Services.AddScoped<RemoveGroupMemberHandler>();
+
+        builder.Services.AddScoped<GetAllRolePermissionsHandler>();
+        builder.Services.AddScoped<IValidator<UpdateRolePermissionsCommand>, UpdateRolePermissionsValidator>();
+        builder.Services.AddScoped<UpdateRolePermissionsHandler>();
 
         builder.Services.AddScoped<IValidator<CreateTenantCommand>, CreateTenantValidator>();
         builder.Services.AddScoped<CreateTenantHandler>();

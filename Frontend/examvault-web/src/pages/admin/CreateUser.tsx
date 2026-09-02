@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createUser } from '../../api/userApi';
+import { useRolePermissions } from '../../hooks/useRolePermissions';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
 import { COSMETIC_ROLES, ADMIN_PERMISSIONS, STUDENT_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
@@ -32,12 +33,22 @@ export default function CreateUser() {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateUserFormState, string>>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
-  const [checkedPermissions, setCheckedPermissions] = useState<Set<string>>(() => new Set(STUDENT_PERMISSIONS));
+  const { data: liveRolePermissions } = useRolePermissions();
 
   // Only Admin/Student are real, selectable roles (the rest are disabled
   // "not available" options) - same per-role permission sets UserDetails.tsx
-  // already uses for its own (read-only) permissions display.
-  const rolePermissions = form.role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS;
+  // already uses for its own (read-only) permissions display. Falls back to
+  // the static defaults while the live (editable, persisted on the Roles &
+  // Permissions page) set is still loading.
+  const permissionsForRole = (role: UserRole) =>
+    liveRolePermissions?.find((r) => r.role === role)?.permissions ??
+    (role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS);
+
+  const [checkedPermissions, setCheckedPermissions] = useState<Set<string>>(
+    () => new Set(permissionsForRole('Student')),
+  );
+
+  const rolePermissions = permissionsForRole(form.role);
 
   const updateField = <K extends keyof CreateUserFormState>(field: K, value: CreateUserFormState[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -47,8 +58,8 @@ export default function CreateUser() {
     updateField('role', role);
     // Irrelevant-to-the-new-role permissions (e.g. "Exams - Create" for a
     // Student) shouldn't stay checked, or even stay visible - reset to
-    // that role's own full set, matching its own default-granted list.
-    setCheckedPermissions(new Set(role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS));
+    // that role's own current set.
+    setCheckedPermissions(new Set(permissionsForRole(role)));
   };
 
   const togglePermission = (perm: string) => {

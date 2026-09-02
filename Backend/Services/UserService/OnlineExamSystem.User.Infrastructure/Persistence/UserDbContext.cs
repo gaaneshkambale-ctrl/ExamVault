@@ -22,6 +22,7 @@ public class UserDbContext : DbContext
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Plan> Plans => Set<Plan>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -181,6 +182,25 @@ public class UserDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(m => m.GroupId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // One row per (tenant, role, permission) granted - purely a
+        // persisted preview for the admin Roles & Permissions page, not
+        // enforced by any [Authorize] check. Same tenant guardrail as
+        // Group above - only ever touched by an authenticated Admin.
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.HasKey(rp => rp.Id);
+            entity.Property(rp => rp.Role).IsRequired().HasMaxLength(100);
+            entity.Property(rp => rp.PermissionKey).IsRequired().HasMaxLength(100);
+            entity.HasIndex(rp => new { rp.TenantId, rp.Role, rp.PermissionKey }).IsUnique();
+            entity.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(rp => rp.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(rp =>
+                _currentTenant.IsSuperAdmin || (_currentTenant.IsAuthenticated && rp.TenantId == _currentTenant.TenantId));
         });
     }
 }

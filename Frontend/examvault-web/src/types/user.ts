@@ -130,6 +130,11 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+export interface RolePermissionsEntry {
+  role: string;
+  permissions: string[];
+}
+
 export type UserSessionStatus = 'Active' | 'Expired' | 'Revoked';
 
 export interface UserSession {

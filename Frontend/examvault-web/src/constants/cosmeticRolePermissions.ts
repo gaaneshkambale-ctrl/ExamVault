@@ -1,14 +1,21 @@
-// Static, non-persisted preview data for a role/permission system that
-// doesn't exist in the backend yet - ExamVault's real UserRole (within a
-// tenant's own Users management) is just Admin | Student (see
-// types/user.ts), enforced by [Authorize(Roles=...)] on every endpoint.
-// SuperAdmin is also real and enforced, but it's a platform-level role
-// managed outside any tenant's own user list, so it isn't assignable from
-// here - see pages/platform/* for its actual console. Nothing here is
-// read from or written to the API;
-// it exists purely so the admin Users pages can show what a fuller RBAC
-// UI would look like, per an explicit request to build the wireframe's
-// role/permission visuals as a static preview rather than omit them.
+// Default/fallback data for the role/permission preview system - ExamVault's
+// real UserRole (within a tenant's own Users management) is just
+// Admin | Student (see types/user.ts), enforced by [Authorize(Roles=...)]
+// on every endpoint. SuperAdmin is also real and enforced, but it's a
+// platform-level role managed outside any tenant's own user list, so it
+// isn't assignable from here - see pages/platform/* for its actual console.
+//
+// The Roles & Permissions page's checkbox grid IS now real and persisted
+// (see hooks/useRolePermissions.ts, backed by RolesController on the
+// backend) - an Admin can edit and save a role's permission set. What
+// remains true: nothing here is *enforced* - editing a role's permissions
+// doesn't change what that role can actually do, only [Authorize(Roles=...)]
+// does that. The constants below now serve two purposes: (1) the initial/
+// loading-state fallback shown before the live data resolves, mirrored
+// server-side in RolePermissionCatalog.cs as the one-time seed for a new
+// tenant, and (2) COSMETIC_ROLES still drives the disabled "(not available)"
+// dropdown options on Create User, since custom-role creation and
+// assignment remain unimplemented.
 // Kept as one shared source so every page quoting a permission count
 // (Add User, Roles & Permissions) agrees with the others.
 

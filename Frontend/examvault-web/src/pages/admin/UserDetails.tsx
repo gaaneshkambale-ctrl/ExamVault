@@ -8,6 +8,7 @@ import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
 import { useExams } from '../../hooks/useExams';
 import { useUserAttempts } from '../../hooks/useSubmissions';
 import { useUser, useUserSessions } from '../../hooks/useUsers';
+import { useRolePermissions } from '../../hooks/useRolePermissions';
 import { ADMIN_PERMISSIONS, STUDENT_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
 import type { UserListItem, UserRole, UserSession, UserSessionStatus } from '../../types/user';
 import type { ExamAttemptResponse } from '../../types/submission';
@@ -104,6 +105,7 @@ export default function UserDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: user, isLoading, isError } = useUser(id);
+  const { data: liveRolePermissions } = useRolePermissions();
   const [activeTab, setActiveTab] = useState<Tab>('Profile Information');
   const { data: sessions, isLoading: sessionsLoading, isError: sessionsError } = useUserSessions(id);
   const {
@@ -123,7 +125,9 @@ export default function UserDetails() {
     (a, b) => new Date(b.issuedAtUtc).getTime() - new Date(a.issuedAtUtc).getTime(),
   )[0];
 
-  const permissions = user?.role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS;
+  const defaultPermissions = user?.role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS;
+  const permissions =
+    liveRolePermissions?.find((r) => r.role === user?.role)?.permissions ?? defaultPermissions;
 
   return (
     <AdminLayout active="Users">

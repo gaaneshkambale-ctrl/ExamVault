@@ -1,7 +1,9 @@
-import { Alert, Badge, Button, Card, Col, Row, Table } from 'react-bootstrap';
+import { useState } from 'react';
+import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
 import SectionHeader from '../../components/SectionHeader';
 import { useUsers } from '../../hooks/useUsers';
+import { useRolePermissions, useUpdateRolePermissions } from '../../hooks/useRolePermissions';
 import { EditIcon } from '../../components/icons/ActionIcons';
 import {
   COSMETIC_PERMISSIONS,
@@ -29,7 +31,10 @@ interface RoleRow {
   // the separate platform console) - this tenant-scoped page can't report
   // an accurate user count for it, so the Users column shouldn't claim 0.
   notTenantScoped?: boolean;
-  permissions: string[];
+  // Shown while the live permission set is still loading, so nothing
+  // flashes empty - once useRolePermissions() resolves, the live set
+  // (persisted server-side) takes over as the actual source of truth.
+  defaultPermissions: string[];
 }
 
 const roles: RoleRow[] = [
@@ -40,45 +45,78 @@ const roles: RoleRow[] = [
     variant: 'dark',
     isReal: true,
     notTenantScoped: true,
-    permissions: COSMETIC_ROLE_PERMISSIONS['Super Admin'],
+    defaultPermissions: COSMETIC_ROLE_PERMISSIONS['Super Admin'],
   },
   {
     role: 'Admin',
     description: 'Manage exams, questions, AI generation, and users.',
     variant: 'primary',
     isReal: true,
-    permissions: ADMIN_PERMISSIONS,
+    defaultPermissions: ADMIN_PERMISSIONS,
   },
   {
     role: 'Instructor',
     description: 'Create exams, manage questions and view results.',
     variant: 'warning',
     isReal: false,
-    permissions: COSMETIC_ROLE_PERMISSIONS.Instructor,
+    defaultPermissions: COSMETIC_ROLE_PERMISSIONS.Instructor,
   },
   {
     role: 'Student',
     description: 'Take exams and view their own results.',
     variant: 'secondary',
     isReal: true,
-    permissions: STUDENT_PERMISSIONS,
+    defaultPermissions: STUDENT_PERMISSIONS,
   },
   {
     role: 'Viewer',
     description: 'View-only access to reports and results.',
     variant: 'info',
     isReal: false,
-    permissions: COSMETIC_ROLE_PERMISSIONS.Viewer,
+    defaultPermissions: COSMETIC_ROLE_PERMISSIONS.Viewer,
   },
 ];
 
 export default function RolesPermissions() {
   const { data: users } = useUsers();
+  const { data: liveRolePermissions } = useRolePermissions();
+  const updateRolePermissions = useUpdateRolePermissions();
+
+  const [editingRole, setEditingRole] = useState<string | null>(null);
+  const [draftPermissions, setDraftPermissions] = useState<Set<string>>(new Set());
 
   const countFor = (role: string) => users?.filter((u) => u.role === (role as UserRole)).length ?? 0;
 
-  const assignedPermissions = new Set(roles.flatMap((r) => r.permissions));
+  const permissionsFor = (role: string, fallback: string[]) =>
+    liveRolePermissions?.find((r) => r.role === role)?.permissions ?? fallback;
+
+  const assignedPermissions = new Set(roles.flatMap((r) => permissionsFor(r.role, r.defaultPermissions)));
   const unassignedCount = COSMETIC_PERMISSIONS.length - assignedPermissions.size;
+
+  const openEdit = (role: string, fallback: string[]) => {
+    setDraftPermissions(new Set(permissionsFor(role, fallback)));
+    setEditingRole(role);
+  };
+
+  const togglePermission = (perm: string) => {
+    setDraftPermissions((prev) => {
+      const next = new Set(prev);
+      if (next.has(perm)) {
+        next.delete(perm);
+      } else {
+        next.add(perm);
+      }
+      return next;
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editingRole) return;
+    updateRolePermissions.mutate(
+      { role: editingRole, permissions: [...draftPermissions] },
+      { onSuccess: () => setEditingRole(null) },
+    );
+  };
 
   return (
     <AdminLayout active="Roles & Permissions">
@@ -96,9 +134,9 @@ export default function RolesPermissions() {
       <Alert variant="secondary" className="small mt-3">
         ExamVault currently supports three authorization roles - <strong>Admin</strong>, <strong>Student</strong>,
         and <strong>Super Admin</strong> - enforced by the app's route protections. Super Admin is used for
-        platform and tenant management and isn't assignable from this screen. The remaining roles and the
-        permission breakdown below are a static preview of a fuller permissions system, not something the
-        backend actually enforces yet.
+        platform and tenant management and isn't assignable from this screen. The permission checklist below
+        can be edited and is saved per role, but it's informational only - it isn't checked anywhere yet, so
+        editing it doesn't change what a Student or Admin can actually do in the app.
       </Alert>
 
       <Card className="border-0 shadow-sm mt-3">
@@ -114,7 +152,7 @@ export default function RolesPermissions() {
               </tr>
             </thead>
             <tbody>
-              {roles.map(({ role, description, variant, isReal, notTenantScoped }) => (
+              {roles.map(({ role, description, variant, isReal, notTenantScoped, defaultPermissions }) => (
                 <tr key={role}>
                   <td className="ps-4">
                     <Badge bg={variant}>{role}</Badge>
@@ -139,8 +177,8 @@ export default function RolesPermissions() {
                       type="button"
                       className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
                       style={{ width: 32, height: 32 }}
-                      disabled
-                      title="Role editing isn't available yet"
+                      title={`Edit ${role} permissions`}
+                      onClick={() => openEdit(role, defaultPermissions)}
                     >
                       <EditIcon />
                     </button>
@@ -175,6 +213,39 @@ export default function RolesPermissions() {
           </Row>
         </Card.Body>
       </Card>
+
+      <Modal show={editingRole !== null} onHide={() => setEditingRole(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="h6">Edit {editingRole} Permissions</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-muted small">
+            Informational only for now - saving this doesn't change what {editingRole} can actually do in the
+            app.
+          </p>
+          <Row>
+            {COSMETIC_PERMISSIONS.map((perm) => (
+              <Col xs={6} key={perm} className="mb-2">
+                <Form.Check
+                  type="checkbox"
+                  id={`edit-perm-${perm}`}
+                  label={perm}
+                  checked={draftPermissions.has(perm)}
+                  onChange={() => togglePermission(perm)}
+                />
+              </Col>
+            ))}
+          </Row>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setEditingRole(null)}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={updateRolePermissions.isPending} onClick={saveEdit}>
+            {updateRolePermissions.isPending ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </AdminLayout>
   );
 }
