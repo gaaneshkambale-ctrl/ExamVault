@@ -251,10 +251,11 @@ public class QuestionsController : ControllerBase
         return NoContent();
     }
 
-    // Admin sees real IsCorrect flags; any other authenticated caller (a student
-    // taking an exam) gets them masked so the correct answer can't be read off
-    // the network response while GET /api/questions is open to any authenticated role.
-    private bool RevealAnswers => User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+    // Admin/Instructor see real IsCorrect flags (they author questions); any
+    // other authenticated caller (a student taking an exam) gets them masked
+    // so the correct answer can't be read off the network response while
+    // GET /api/questions is open to any authenticated role.
+    private bool RevealAnswers => User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || User.IsInRole("Instructor");
 
     private static QuestionTestCaseInput ToTestCaseInput(QuestionTestCaseRequest request) =>
         new(
