@@ -12,10 +12,10 @@ import { useTenants } from '../../hooks/useTenants';
 import {
   createTenantAdmin,
   deleteTenant,
-  getTenantAdminPermissions,
+  getTenantRolePermissions,
   resetTenantAdminPassword,
   updateTenant,
-  updateTenantAdminPermissions,
+  updateTenantRolePermissions,
 } from '../../api/tenantsApi';
 import { assignPlanToTenant, listPlans } from '../../api/plansApi';
 import { listAllUsers } from '../../api/userApi';
@@ -33,9 +33,10 @@ const ACTIVITY_LOG_TO = new Date().toISOString();
 // the mockup exist as real nav. Overview/Admins/Subscriptions/Activity Log
 // have real data behind them (Organization Code/Type included, editable
 // via the Actions panel's Edit Organization); Settings now hosts a real
-// Admin Role Permissions panel (Super Admin's counterpart to a tenant's own
+// Role Permissions panel (Super Admin's counterpart to a tenant's own
 // self-service Roles & Permissions page - see tenantsApi.ts's
-// getTenantAdminPermissions/updateTenantAdminPermissions). Usage/Users/Exams
+// getTenantRolePermissions/updateTenantRolePermissions), covering all 3 real
+// tenant roles (Admin/Instructor/Student) via a role selector. Usage/Users/Exams
 // still show the mockup's Billing/Quick Stats fields with no backing field
 // anywhere in this codebase - honest placeholders, matching every other
 // "not connected yet" surface in this console. Add Admin (real) lives on
@@ -43,6 +44,13 @@ const ACTIVITY_LOG_TO = new Date().toISOString();
 // in the Actions panel.
 const TABS = ['Overview', 'Usage', 'Admins', 'Users', 'Exams', 'Subscriptions', 'Activity Log', 'Settings'] as const;
 type DetailTab = (typeof TABS)[number];
+
+// The 3 real, assignable tenant roles (mirrors backend
+// RolePermissionCatalog.TenantAssignableRoles) - Super Admin and Viewer are
+// not real UserRole values within a tenant's own Users list, so they're not
+// offered here.
+const TENANT_ROLES = ['Admin', 'Instructor', 'Student'] as const;
+type TenantRole = (typeof TENANT_ROLES)[number];
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -114,19 +122,20 @@ export default function OrganizationDetails() {
   });
   const tenantActivityLogs = (activityLogs ?? []).filter((log) => log.tenantId === tenant?.id);
 
-  const { data: adminPermissions, isLoading: isLoadingAdminPermissions } = useQuery({
-    queryKey: ['tenant-admin-permissions', tenant?.id],
-    queryFn: () => getTenantAdminPermissions(tenant!.id),
+  const [selectedRole, setSelectedRole] = useState<TenantRole>('Admin');
+  const { data: rolePermissions, isLoading: isLoadingRolePermissions } = useQuery({
+    queryKey: ['tenant-role-permissions', tenant?.id, selectedRole],
+    queryFn: () => getTenantRolePermissions(tenant!.id, selectedRole),
     enabled: tab === 'Settings' && !!tenant,
   });
-  const [draftAdminPermissions, setDraftAdminPermissions] = useState<Set<string>>(new Set());
+  const [draftRolePermissions, setDraftRolePermissions] = useState<Set<string>>(new Set());
   useEffect(() => {
-    if (adminPermissions) {
-      setDraftAdminPermissions(new Set(adminPermissions));
+    if (rolePermissions) {
+      setDraftRolePermissions(new Set(rolePermissions));
     }
-  }, [adminPermissions]);
-  const toggleAdminPermission = (perm: string) => {
-    setDraftAdminPermissions((prev) => {
+  }, [rolePermissions]);
+  const toggleRolePermission = (perm: string) => {
+    setDraftRolePermissions((prev) => {
       const next = new Set(prev);
       if (next.has(perm)) {
         next.delete(perm);
@@ -136,10 +145,10 @@ export default function OrganizationDetails() {
       return next;
     });
   };
-  const updateAdminPermissionsMutation = useMutation({
-    mutationFn: () => updateTenantAdminPermissions(tenant!.id, [...draftAdminPermissions]),
+  const updateRolePermissionsMutation = useMutation({
+    mutationFn: () => updateTenantRolePermissions(tenant!.id, selectedRole, [...draftRolePermissions]),
     onSuccess: (permissions) => {
-      queryClient.setQueryData(['tenant-admin-permissions', tenant!.id], permissions);
+      queryClient.setQueryData(['tenant-role-permissions', tenant!.id, selectedRole], permissions);
     },
   });
 
@@ -476,14 +485,26 @@ export default function OrganizationDetails() {
           {tab === 'Settings' && (
             <Card className="border-0 shadow-sm">
               <Card.Body>
-                <h2 className="h6 fw-bold mb-1">Admin Role Permissions</h2>
+                <h2 className="h6 fw-bold mb-1">Role Permissions for this organization</h2>
                 <p className="text-muted small mb-3">
-                  Configure this organization's Admin role permissions directly - the same set its own Admin
-                  can edit from their own console's Roles &amp; Permissions page. Some of these are already
+                  Configure this organization's role permissions directly - the same sets its own Admin can
+                  edit from their own console's Roles &amp; Permissions page. Some of these are already
                   enforced server-side; others remain informational until their own backend enforcement is
                   wired up.
                 </p>
-                {isLoadingAdminPermissions ? (
+                <div className="btn-group mb-3" role="group" aria-label="Select role">
+                  {TENANT_ROLES.map((role) => (
+                    <Button
+                      key={role}
+                      variant={selectedRole === role ? 'primary' : 'outline-secondary'}
+                      size="sm"
+                      onClick={() => setSelectedRole(role)}
+                    >
+                      {role}
+                    </Button>
+                  ))}
+                </div>
+                {isLoadingRolePermissions ? (
                   <div className="d-flex justify-content-center py-4">
                     <Spinner animation="border" size="sm" />
                   </div>
@@ -494,26 +515,26 @@ export default function OrganizationDetails() {
                         <Col xs={6} key={perm} className="mb-2">
                           <Form.Check
                             type="checkbox"
-                            id={`org-admin-perm-${perm}`}
+                            id={`org-role-perm-${perm}`}
                             label={perm}
-                            checked={draftAdminPermissions.has(perm)}
-                            onChange={() => toggleAdminPermission(perm)}
+                            checked={draftRolePermissions.has(perm)}
+                            onChange={() => toggleRolePermission(perm)}
                           />
                         </Col>
                       ))}
                     </Row>
-                    {updateAdminPermissionsMutation.isError && (
+                    {updateRolePermissionsMutation.isError && (
                       <Alert variant="danger" className="mt-2 mb-0 py-2">
-                        {extractServerError(updateAdminPermissionsMutation.error)}
+                        {extractServerError(updateRolePermissionsMutation.error)}
                       </Alert>
                     )}
                     <div className="d-flex justify-content-end mt-3">
                       <Button
                         variant="primary"
-                        disabled={updateAdminPermissionsMutation.isPending}
-                        onClick={() => updateAdminPermissionsMutation.mutate()}
+                        disabled={updateRolePermissionsMutation.isPending}
+                        onClick={() => updateRolePermissionsMutation.mutate()}
                       >
-                        {updateAdminPermissionsMutation.isPending ? 'Saving...' : 'Save Changes'}
+                        {updateRolePermissionsMutation.isPending ? 'Saving...' : 'Save Changes'}
                       </Button>
                     </div>
                   </>

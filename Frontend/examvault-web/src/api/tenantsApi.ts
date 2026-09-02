@@ -46,16 +46,20 @@ export async function setTenantTrial(tenantId: string, isTrial: boolean, trialEn
   return data;
 }
 
-export async function getTenantAdminPermissions(tenantId: string): Promise<string[]> {
+export async function getTenantRolePermissions(tenantId: string, role: string): Promise<string[]> {
   const { data } = await apiClient.get<{ role: string; permissions: string[] }>(
-    `/api/tenants/${tenantId}/admin-permissions`,
+    `/api/tenants/${tenantId}/roles/${role}/permissions`,
   );
   return data.permissions;
 }
 
-export async function updateTenantAdminPermissions(tenantId: string, permissions: string[]): Promise<string[]> {
+export async function updateTenantRolePermissions(
+  tenantId: string,
+  role: string,
+  permissions: string[],
+): Promise<string[]> {
   const { data } = await apiClient.put<{ role: string; permissions: string[] }>(
-    `/api/tenants/${tenantId}/admin-permissions`,
+    `/api/tenants/${tenantId}/roles/${role}/permissions`,
     { permissions },
   );
   return data.permissions;

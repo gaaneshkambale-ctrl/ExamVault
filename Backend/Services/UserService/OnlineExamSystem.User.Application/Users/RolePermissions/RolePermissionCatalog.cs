@@ -31,6 +31,21 @@ public static class RolePermissionCatalog
         "Viewer",
     ];
 
+    // The subset of Roles that are real, assignable UserRole values within a
+    // tenant's own Users list (see Domain.Enums.UserRole) - "Super Admin" is
+    // platform-level (not a tenant role at all) and "Viewer" is a cosmetic
+    // catalog entry with no backing UserRole. Used to validate the `role`
+    // route parameter on the platform SuperAdmin console's tenant
+    // role-permissions endpoints (TenantsController), which must not be able
+    // to read/write permission rows for a role that doesn't actually exist
+    // within that tenant.
+    public static readonly IReadOnlyList<string> TenantAssignableRoles =
+    [
+        "Admin",
+        "Instructor",
+        "Student",
+    ];
+
     public static readonly IReadOnlyList<string> Permissions =
     [
         "Dashboard - View",

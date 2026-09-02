@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
+using OnlineExamSystem.Ai.API.Authorization;
 using OnlineExamSystem.Ai.Application.Generate;
 using OnlineExamSystem.Ai.Application.Interfaces;
 using OnlineExamSystem.Ai.Infrastructure;
@@ -64,7 +65,7 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
 
         var app = builder.Build();
 

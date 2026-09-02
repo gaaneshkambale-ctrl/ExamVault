@@ -8,13 +8,13 @@ using OnlineExamSystem.User.Application.Tenants.AssignPlan;
 using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
 using OnlineExamSystem.User.Application.Tenants.Delete;
-using OnlineExamSystem.User.Application.Tenants.GetAdminPermissions;
+using OnlineExamSystem.User.Application.Tenants.GetRolePermissions;
 using OnlineExamSystem.User.Application.Tenants.List;
 using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
 using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.SetTrial;
 using OnlineExamSystem.User.Application.Tenants.Update;
-using OnlineExamSystem.User.Application.Tenants.UpdateAdminPermissions;
+using OnlineExamSystem.User.Application.Tenants.UpdateRolePermissions;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.API.Controllers;
@@ -35,8 +35,8 @@ public class TenantsController : ControllerBase
     private readonly DeleteTenantHandler _deleteTenantHandler;
     private readonly ResetTenantAdminPasswordHandler _resetTenantAdminPasswordHandler;
     private readonly SetTenantTrialHandler _setTenantTrialHandler;
-    private readonly GetTenantAdminPermissionsHandler _getTenantAdminPermissionsHandler;
-    private readonly UpdateTenantAdminPermissionsHandler _updateTenantAdminPermissionsHandler;
+    private readonly GetTenantRolePermissionsHandler _getTenantRolePermissionsHandler;
+    private readonly UpdateTenantRolePermissionsHandler _updateTenantRolePermissionsHandler;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<TenantsController> _logger;
 
@@ -50,8 +50,8 @@ public class TenantsController : ControllerBase
         DeleteTenantHandler deleteTenantHandler,
         ResetTenantAdminPasswordHandler resetTenantAdminPasswordHandler,
         SetTenantTrialHandler setTenantTrialHandler,
-        GetTenantAdminPermissionsHandler getTenantAdminPermissionsHandler,
-        UpdateTenantAdminPermissionsHandler updateTenantAdminPermissionsHandler,
+        GetTenantRolePermissionsHandler getTenantRolePermissionsHandler,
+        UpdateTenantRolePermissionsHandler updateTenantRolePermissionsHandler,
         IAuditClient auditClient,
         ILogger<TenantsController> logger)
     {
@@ -64,8 +64,8 @@ public class TenantsController : ControllerBase
         _deleteTenantHandler = deleteTenantHandler;
         _resetTenantAdminPasswordHandler = resetTenantAdminPasswordHandler;
         _setTenantTrialHandler = setTenantTrialHandler;
-        _getTenantAdminPermissionsHandler = getTenantAdminPermissionsHandler;
-        _updateTenantAdminPermissionsHandler = updateTenantAdminPermissionsHandler;
+        _getTenantRolePermissionsHandler = getTenantRolePermissionsHandler;
+        _updateTenantRolePermissionsHandler = updateTenantRolePermissionsHandler;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -312,37 +312,48 @@ public class TenantsController : ControllerBase
         return Ok(ToResponse(result.Tenant!));
     }
 
-    [HttpGet("{id:guid}/admin-permissions")]
-    public async Task<IActionResult> GetAdminPermissions(Guid id, CancellationToken cancellationToken)
+    [HttpGet("{id:guid}/roles/{role}/permissions")]
+    public async Task<IActionResult> GetRolePermissions(Guid id, string role, CancellationToken cancellationToken)
     {
-        var result = await _getTenantAdminPermissionsHandler.HandleAsync(
-            new GetTenantAdminPermissionsQuery(id), cancellationToken);
+        var result = await _getTenantRolePermissionsHandler.HandleAsync(
+            new GetTenantRolePermissionsQuery(id, role), cancellationToken);
+
+        if (result.IsInvalidRole)
+        {
+            return BadRequest(new { message = "Unknown role." });
+        }
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Tenant not found." });
         }
 
-        return Ok(new RolePermissionsResponse("Admin", result.Permissions!));
+        return Ok(new RolePermissionsResponse(role, result.Permissions!));
     }
 
-    [HttpPut("{id:guid}/admin-permissions")]
-    public async Task<IActionResult> UpdateAdminPermissions(
+    [HttpPut("{id:guid}/roles/{role}/permissions")]
+    public async Task<IActionResult> UpdateRolePermissions(
         Guid id,
+        string role,
         UpdateRolePermissionsRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _updateTenantAdminPermissionsHandler.HandleAsync(
-            new UpdateTenantAdminPermissionsCommand(id, request.Permissions), cancellationToken);
+        var result = await _updateTenantRolePermissionsHandler.HandleAsync(
+            new UpdateTenantRolePermissionsCommand(id, role, request.Permissions), cancellationToken);
+
+        if (result.IsInvalidRole)
+        {
+            return BadRequest(new { message = "Unknown role." });
+        }
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Tenant not found." });
         }
 
-        _logger.LogInformation("Admin role permissions for tenant {TenantId} updated.", id);
-        await RecordSecurityEventAsync(id, "Admin role permissions updated", cancellationToken);
-        return Ok(new RolePermissionsResponse("Admin", result.Permissions!));
+        _logger.LogInformation("{Role} role permissions for tenant {TenantId} updated.", role, id);
+        await RecordSecurityEventAsync(id, $"{role} role permissions updated", cancellationToken);
+        return Ok(new RolePermissionsResponse(role, result.Permissions!));
     }
 
     private static TenantResponse ToResponse(Tenant tenant) =>

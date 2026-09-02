@@ -519,7 +519,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/questions/ai-generate"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AiGenerateQuestion />
           </ProtectedRoute>
         }
@@ -527,7 +527,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/questions/ai-generate"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AiGenerateQuestion />
           </ProtectedRoute>
         }
@@ -535,7 +535,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/questions/ai-generate/preview"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AiGeneratedQuestionsPreview />
           </ProtectedRoute>
         }

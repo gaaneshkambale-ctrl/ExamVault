@@ -11,6 +11,7 @@ using OnlineExamSystem.User.Application.Groups.Delete;
 using OnlineExamSystem.User.Application.Groups.GetById;
 using OnlineExamSystem.User.Application.Groups.List;
 using OnlineExamSystem.User.Application.Groups.RemoveMember;
+using static OnlineExamSystem.User.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.User.API.Controllers;
 
@@ -46,6 +47,7 @@ public class GroupsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = UsersEdit)]
     public async Task<IActionResult> Create(CreateGroupRequest request, CancellationToken cancellationToken)
     {
         var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
@@ -74,6 +76,7 @@ public class GroupsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = UsersView)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var groups = await _listGroupsHandler.HandleAsync(new ListGroupsQuery(), cancellationToken);
@@ -81,6 +84,7 @@ public class GroupsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = UsersView)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var detail = await _getGroupHandler.HandleAsync(new GetGroupQuery(id), cancellationToken);
@@ -93,6 +97,7 @@ public class GroupsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = UsersEdit)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await _deleteGroupHandler.HandleAsync(new DeleteGroupCommand(id), cancellationToken);
@@ -107,6 +112,7 @@ public class GroupsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/members")]
+    [Authorize(Policy = UsersEdit)]
     public async Task<IActionResult> AddMember(
         Guid id,
         AddGroupMemberRequest request,
@@ -141,6 +147,7 @@ public class GroupsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}/members/{userId:guid}")]
+    [Authorize(Policy = UsersEdit)]
     public async Task<IActionResult> RemoveMember(Guid id, Guid userId, CancellationToken cancellationToken)
     {
         var result = await _removeGroupMemberHandler.HandleAsync(
