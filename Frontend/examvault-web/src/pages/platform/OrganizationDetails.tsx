@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Alert, Badge, Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
@@ -12,8 +12,10 @@ import { useTenants } from '../../hooks/useTenants';
 import {
   createTenantAdmin,
   deleteTenant,
+  getTenantAdminPermissions,
   resetTenantAdminPassword,
   updateTenant,
+  updateTenantAdminPermissions,
 } from '../../api/tenantsApi';
 import { assignPlanToTenant, listPlans } from '../../api/plansApi';
 import { listAllUsers } from '../../api/userApi';
@@ -22,6 +24,7 @@ import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
 import { PLAN_FEATURE_LABELS } from '../../types/plan';
 import { ORGANIZATION_TYPES } from '../../types/tenant';
+import { COSMETIC_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
 
 const ACTIVITY_LOG_FROM = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
 const ACTIVITY_LOG_TO = new Date().toISOString();
@@ -29,12 +32,15 @@ const ACTIVITY_LOG_TO = new Date().toISOString();
 // Matches org_submenu.png's Organization Details page - all 8 tabs from
 // the mockup exist as real nav. Overview/Admins/Subscriptions/Activity Log
 // have real data behind them (Organization Code/Type included, editable
-// via the Actions panel's Edit Organization); Usage/Users/Exams/Settings
-// still show the mockup's Billing/Address/Quick Stats fields with no
-// backing field anywhere in this codebase - honest placeholders, matching
-// every other "not connected yet" surface in this console. Add Admin
-// (real) lives on the Admins tab; Suspend/Edit/Reset Admin Password/
-// Delete (all real) live in the Actions panel.
+// via the Actions panel's Edit Organization); Settings now hosts a real
+// Admin Role Permissions panel (Super Admin's counterpart to a tenant's own
+// self-service Roles & Permissions page - see tenantsApi.ts's
+// getTenantAdminPermissions/updateTenantAdminPermissions). Usage/Users/Exams
+// still show the mockup's Billing/Quick Stats fields with no backing field
+// anywhere in this codebase - honest placeholders, matching every other
+// "not connected yet" surface in this console. Add Admin (real) lives on
+// the Admins tab; Suspend/Edit/Reset Admin Password/Delete (all real) live
+// in the Actions panel.
 const TABS = ['Overview', 'Usage', 'Admins', 'Users', 'Exams', 'Subscriptions', 'Activity Log', 'Settings'] as const;
 type DetailTab = (typeof TABS)[number];
 
@@ -107,6 +113,35 @@ export default function OrganizationDetails() {
     enabled: tab === 'Activity Log',
   });
   const tenantActivityLogs = (activityLogs ?? []).filter((log) => log.tenantId === tenant?.id);
+
+  const { data: adminPermissions, isLoading: isLoadingAdminPermissions } = useQuery({
+    queryKey: ['tenant-admin-permissions', tenant?.id],
+    queryFn: () => getTenantAdminPermissions(tenant!.id),
+    enabled: tab === 'Settings' && !!tenant,
+  });
+  const [draftAdminPermissions, setDraftAdminPermissions] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (adminPermissions) {
+      setDraftAdminPermissions(new Set(adminPermissions));
+    }
+  }, [adminPermissions]);
+  const toggleAdminPermission = (perm: string) => {
+    setDraftAdminPermissions((prev) => {
+      const next = new Set(prev);
+      if (next.has(perm)) {
+        next.delete(perm);
+      } else {
+        next.add(perm);
+      }
+      return next;
+    });
+  };
+  const updateAdminPermissionsMutation = useMutation({
+    mutationFn: () => updateTenantAdminPermissions(tenant!.id, [...draftAdminPermissions]),
+    onSuccess: (permissions) => {
+      queryClient.setQueryData(['tenant-admin-permissions', tenant!.id], permissions);
+    },
+  });
 
   const [showEditOrg, setShowEditOrg] = useState(false);
   const [editName, setEditName] = useState('');
@@ -438,13 +473,66 @@ export default function OrganizationDetails() {
             </Card>
           )}
 
-          {tab !== 'Overview' && tab !== 'Admins' && tab !== 'Subscriptions' && tab !== 'Activity Log' && (
+          {tab === 'Settings' && (
             <Card className="border-0 shadow-sm">
               <Card.Body>
-                <NotConnected label={tab} />
+                <h2 className="h6 fw-bold mb-1">Admin Role Permissions</h2>
+                <p className="text-muted small mb-3">
+                  Configure this organization's Admin role permissions directly - the same set its own Admin
+                  can edit from their own console's Roles &amp; Permissions page. Some of these are already
+                  enforced server-side; others remain informational until their own backend enforcement is
+                  wired up.
+                </p>
+                {isLoadingAdminPermissions ? (
+                  <div className="d-flex justify-content-center py-4">
+                    <Spinner animation="border" size="sm" />
+                  </div>
+                ) : (
+                  <>
+                    <Row>
+                      {COSMETIC_PERMISSIONS.map((perm) => (
+                        <Col xs={6} key={perm} className="mb-2">
+                          <Form.Check
+                            type="checkbox"
+                            id={`org-admin-perm-${perm}`}
+                            label={perm}
+                            checked={draftAdminPermissions.has(perm)}
+                            onChange={() => toggleAdminPermission(perm)}
+                          />
+                        </Col>
+                      ))}
+                    </Row>
+                    {updateAdminPermissionsMutation.isError && (
+                      <Alert variant="danger" className="mt-2 mb-0 py-2">
+                        {extractServerError(updateAdminPermissionsMutation.error)}
+                      </Alert>
+                    )}
+                    <div className="d-flex justify-content-end mt-3">
+                      <Button
+                        variant="primary"
+                        disabled={updateAdminPermissionsMutation.isPending}
+                        onClick={() => updateAdminPermissionsMutation.mutate()}
+                      >
+                        {updateAdminPermissionsMutation.isPending ? 'Saving...' : 'Save Changes'}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </Card.Body>
             </Card>
           )}
+
+          {tab !== 'Overview' &&
+            tab !== 'Admins' &&
+            tab !== 'Subscriptions' &&
+            tab !== 'Activity Log' &&
+            tab !== 'Settings' && (
+              <Card className="border-0 shadow-sm">
+                <Card.Body>
+                  <NotConnected label={tab} />
+                </Card.Body>
+              </Card>
+            )}
         </div>
 
         <div className="col-lg-4">

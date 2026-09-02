@@ -6,6 +6,7 @@ using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using GeneralSettingsEntity = OnlineExamSystem.Exam.Domain.Entities.GeneralSettings;
 using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Exam.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -31,6 +32,7 @@ public class GeneralSettingsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = SettingsView)]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
         var settings = await _getGeneralSettingsHandler.HandleAsync(new GetGeneralSettingsQuery(), cancellationToken);
@@ -38,6 +40,7 @@ public class GeneralSettingsController : ControllerBase
     }
 
     [HttpPut]
+    [Authorize(Policy = SettingsEdit)]
     public async Task<IActionResult> Update(UpdateGeneralSettingsRequest request, CancellationToken cancellationToken)
     {
         var settings = await _updateGeneralSettingsHandler.HandleAsync(

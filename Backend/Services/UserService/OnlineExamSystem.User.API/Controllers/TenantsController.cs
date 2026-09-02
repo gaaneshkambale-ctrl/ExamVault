@@ -8,11 +8,13 @@ using OnlineExamSystem.User.Application.Tenants.AssignPlan;
 using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
 using OnlineExamSystem.User.Application.Tenants.Delete;
+using OnlineExamSystem.User.Application.Tenants.GetAdminPermissions;
 using OnlineExamSystem.User.Application.Tenants.List;
 using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
 using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.SetTrial;
 using OnlineExamSystem.User.Application.Tenants.Update;
+using OnlineExamSystem.User.Application.Tenants.UpdateAdminPermissions;
 using OnlineExamSystem.User.Domain.Entities;
 
 namespace OnlineExamSystem.User.API.Controllers;
@@ -33,6 +35,8 @@ public class TenantsController : ControllerBase
     private readonly DeleteTenantHandler _deleteTenantHandler;
     private readonly ResetTenantAdminPasswordHandler _resetTenantAdminPasswordHandler;
     private readonly SetTenantTrialHandler _setTenantTrialHandler;
+    private readonly GetTenantAdminPermissionsHandler _getTenantAdminPermissionsHandler;
+    private readonly UpdateTenantAdminPermissionsHandler _updateTenantAdminPermissionsHandler;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<TenantsController> _logger;
 
@@ -46,6 +50,8 @@ public class TenantsController : ControllerBase
         DeleteTenantHandler deleteTenantHandler,
         ResetTenantAdminPasswordHandler resetTenantAdminPasswordHandler,
         SetTenantTrialHandler setTenantTrialHandler,
+        GetTenantAdminPermissionsHandler getTenantAdminPermissionsHandler,
+        UpdateTenantAdminPermissionsHandler updateTenantAdminPermissionsHandler,
         IAuditClient auditClient,
         ILogger<TenantsController> logger)
     {
@@ -58,6 +64,8 @@ public class TenantsController : ControllerBase
         _deleteTenantHandler = deleteTenantHandler;
         _resetTenantAdminPasswordHandler = resetTenantAdminPasswordHandler;
         _setTenantTrialHandler = setTenantTrialHandler;
+        _getTenantAdminPermissionsHandler = getTenantAdminPermissionsHandler;
+        _updateTenantAdminPermissionsHandler = updateTenantAdminPermissionsHandler;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -302,6 +310,39 @@ public class TenantsController : ControllerBase
             cancellationToken,
             details: request.IsTrial ? $"Ends {request.TrialEndsAtUtc:yyyy-MM-dd}" : null);
         return Ok(ToResponse(result.Tenant!));
+    }
+
+    [HttpGet("{id:guid}/admin-permissions")]
+    public async Task<IActionResult> GetAdminPermissions(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _getTenantAdminPermissionsHandler.HandleAsync(
+            new GetTenantAdminPermissionsQuery(id), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Tenant not found." });
+        }
+
+        return Ok(new RolePermissionsResponse("Admin", result.Permissions!));
+    }
+
+    [HttpPut("{id:guid}/admin-permissions")]
+    public async Task<IActionResult> UpdateAdminPermissions(
+        Guid id,
+        UpdateRolePermissionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _updateTenantAdminPermissionsHandler.HandleAsync(
+            new UpdateTenantAdminPermissionsCommand(id, request.Permissions), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Tenant not found." });
+        }
+
+        _logger.LogInformation("Admin role permissions for tenant {TenantId} updated.", id);
+        await RecordSecurityEventAsync(id, "Admin role permissions updated", cancellationToken);
+        return Ok(new RolePermissionsResponse("Admin", result.Permissions!));
     }
 
     private static TenantResponse ToResponse(Tenant tenant) =>

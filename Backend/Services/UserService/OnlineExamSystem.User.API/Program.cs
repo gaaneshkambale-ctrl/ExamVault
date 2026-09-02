@@ -45,12 +45,14 @@ using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
 using OnlineExamSystem.User.Application.Tenants.Delete;
+using OnlineExamSystem.User.Application.Tenants.GetAdminPermissions;
 using OnlineExamSystem.User.Application.Tenants.GetBySlug;
 using OnlineExamSystem.User.Application.Tenants.List;
 using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
 using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.SetTrial;
 using OnlineExamSystem.User.Application.Tenants.Update;
+using OnlineExamSystem.User.Application.Tenants.UpdateAdminPermissions;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
@@ -164,6 +166,8 @@ public class Program
         builder.Services.AddScoped<DeleteTenantHandler>();
         builder.Services.AddScoped<ResetTenantAdminPasswordHandler>();
         builder.Services.AddScoped<SetTenantTrialHandler>();
+        builder.Services.AddScoped<GetTenantAdminPermissionsHandler>();
+        builder.Services.AddScoped<UpdateTenantAdminPermissionsHandler>();
 
         builder.Services.AddScoped<IValidator<CreatePlanCommand>, CreatePlanValidator>();
         builder.Services.AddScoped<CreatePlanHandler>();

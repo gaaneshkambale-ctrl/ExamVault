@@ -6,6 +6,7 @@ using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Contracts.Responses.Notification;
 using SystemSettingsEntity = OnlineExamSystem.Notification.Domain.Entities.SystemSettings;
 using static OnlineExamSystem.Notification.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Notification.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Notification.API.Controllers;
 
@@ -33,6 +34,7 @@ public class SystemSettingsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = SettingsView)]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
         var settings = await _getSystemSettingsHandler.HandleAsync(new GetSystemSettingsQuery(), cancellationToken);
@@ -40,6 +42,7 @@ public class SystemSettingsController : ControllerBase
     }
 
     [HttpPut]
+    [Authorize(Policy = SettingsEdit)]
     public async Task<IActionResult> Update(UpdateSystemSettingsRequest request, CancellationToken cancellationToken)
     {
         var result = await _updateSystemSettingsHandler.HandleAsync(

@@ -8,6 +8,7 @@ using OnlineExamSystem.Notification.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Contracts.Responses.Notification;
 using static OnlineExamSystem.Notification.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Notification.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Notification.API.Controllers;
 
@@ -59,6 +60,7 @@ public class AuditLogsController : ControllerBase
     [HttpGet]
     [Authorize(Roles = "Admin,SuperAdmin")]
     [Authorize(Policy = Reports)]
+    [Authorize(Policy = ReportsView)]
     public async Task<IActionResult> List(
         [FromQuery] DateTime fromUtc,
         [FromQuery] DateTime toUtc,
