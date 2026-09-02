@@ -32,9 +32,17 @@ public class GetAllRolePermissionsHandler
             rows = seed;
         }
 
-        return rows
-            .GroupBy(rp => rp.Role)
-            .Select(g => new RoleWithPermissions(g.Key, g.Select(rp => rp.PermissionKey).ToList()))
+        // ToLookup + iterate the full catalog role list, not GroupBy over
+        // rows - GroupBy only produces a group for roles that still have at
+        // least one row, so a role an admin has revoked down to zero
+        // permissions would be silently omitted from the response entirely.
+        // The frontend would then find no entry for that role and fall back
+        // to the hardcoded defaults, making a real "zero permissions" save
+        // look like it never persisted. ToLookup returns an empty sequence
+        // for a missing key instead of throwing or omitting it.
+        var byRole = rows.ToLookup(rp => rp.Role, rp => rp.PermissionKey);
+        return RolePermissionCatalog.Roles
+            .Select(role => new RoleWithPermissions(role, byRole[role].ToList()))
             .ToList();
     }
 }
