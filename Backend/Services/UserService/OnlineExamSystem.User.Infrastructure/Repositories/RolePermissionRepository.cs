@@ -29,10 +29,21 @@ public class RolePermissionRepository : IRolePermissionRepository
         var existing = await _dbContext.RolePermissions
             .Where(rp => rp.Role == role)
             .ToListAsync(cancellationToken);
-        _dbContext.RolePermissions.RemoveRange(existing);
+        var desiredKeys = permissionKeys.ToHashSet();
 
+        // Diff-based, not delete-all-then-reinsert-all: a permission that's
+        // unchanged across a save (still checked, or still unchecked) never
+        // gets touched, so its row is never deleted and reinserted with a
+        // new Id in the same transaction - that pattern was fragile against
+        // the (TenantId, Role, PermissionKey) unique index and is suspected
+        // to have caused an unchanged permission to occasionally vanish.
+        var toRemove = existing.Where(rp => !desiredKeys.Contains(rp.PermissionKey));
+        _dbContext.RolePermissions.RemoveRange(toRemove);
+
+        var existingKeys = existing.Select(rp => rp.PermissionKey).ToHashSet();
+        var toAdd = desiredKeys.Where(key => !existingKeys.Contains(key));
         await _dbContext.RolePermissions.AddRangeAsync(
-            permissionKeys.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key }),
+            toAdd.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key }),
             cancellationToken);
     }
 
