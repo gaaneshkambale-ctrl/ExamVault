@@ -237,8 +237,9 @@ export default function UserDetails() {
                       <span className="text-muted small">is this user's only assigned role.</span>
                     </div>
                     <p className="text-muted small">
-                      Permissions below reflect a static preview of what {user.role} grants - ExamVault doesn't
-                      have a granular, per-permission enforcement system yet, only the Admin/Student role check.
+                      Permissions below reflect {user.role}'s current permission set, editable from Roles &amp;
+                      Permissions - ExamVault doesn't have a granular, per-permission enforcement system yet,
+                      only the Admin/Student role check.
                     </p>
                     <Row>
                       {permissions.map((perm) => (
