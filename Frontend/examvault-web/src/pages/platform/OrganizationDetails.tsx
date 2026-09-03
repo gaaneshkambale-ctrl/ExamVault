@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, InputGroup, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
@@ -59,6 +59,17 @@ type DetailTab = (typeof TABS)[number];
 // offered here.
 const TENANT_ROLES = ['Admin', 'Instructor', 'Student'] as const;
 type TenantRole = (typeof TENANT_ROLES)[number];
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -160,6 +171,75 @@ export default function OrganizationDetails() {
     enabled: tab === 'Activity Log',
   });
   const tenantActivityLogs = (activityLogs ?? []).filter((log) => log.tenantId === tenant?.id);
+
+  // Search + pagination for the Users/Exams/Activity Log tabs - same
+  // PAGE_SIZE_OPTIONS + Form.Select pattern ManageExams.tsx/
+  // ManageExamTypes.tsx already use, one independent set of state per tab.
+  const [userSearch, setUserSearch] = useState('');
+  const [userPage, setUserPage] = useState(1);
+  const [userPageSize, setUserPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  useEffect(() => setUserPage(1), [userSearch, userPageSize]);
+
+  const filteredTenantUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return tenantUsers;
+    return tenantUsers.filter((u) => u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  }, [tenantUsers, userSearch]);
+  const userTotalPages = Math.max(1, Math.ceil(filteredTenantUsers.length / userPageSize));
+  const userCurrentPage = Math.min(userPage, userTotalPages);
+  const pagedTenantUsers = filteredTenantUsers.slice(
+    (userCurrentPage - 1) * userPageSize,
+    userCurrentPage * userPageSize,
+  );
+  const userRangeStart = filteredTenantUsers.length === 0 ? 0 : (userCurrentPage - 1) * userPageSize + 1;
+  const userRangeEnd = Math.min(userCurrentPage * userPageSize, filteredTenantUsers.length);
+
+  const [examSearch, setExamSearch] = useState('');
+  const [examPage, setExamPage] = useState(1);
+  const [examPageSize, setExamPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  useEffect(() => setExamPage(1), [examSearch, examPageSize]);
+
+  const filteredTenantExams = useMemo(() => {
+    const q = examSearch.trim().toLowerCase();
+    if (!q) return tenantExams;
+    return tenantExams.filter(
+      (e) => e.title.toLowerCase().includes(q) || (e.category ?? '').toLowerCase().includes(q),
+    );
+  }, [tenantExams, examSearch]);
+  const examTotalPages = Math.max(1, Math.ceil(filteredTenantExams.length / examPageSize));
+  const examCurrentPage = Math.min(examPage, examTotalPages);
+  const pagedTenantExams = filteredTenantExams.slice(
+    (examCurrentPage - 1) * examPageSize,
+    examCurrentPage * examPageSize,
+  );
+  const examRangeStart = filteredTenantExams.length === 0 ? 0 : (examCurrentPage - 1) * examPageSize + 1;
+  const examRangeEnd = Math.min(examCurrentPage * examPageSize, filteredTenantExams.length);
+
+  const [activitySearch, setActivitySearch] = useState('');
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityPageSize, setActivityPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  useEffect(() => setActivityPage(1), [activitySearch, activityPageSize]);
+
+  const filteredActivityLogs = useMemo(() => {
+    const q = activitySearch.trim().toLowerCase();
+    if (!q) return tenantActivityLogs;
+    return tenantActivityLogs.filter(
+      (log) =>
+        (log.userName ?? '').toLowerCase().includes(q) ||
+        log.activity.toLowerCase().includes(q) ||
+        log.module.toLowerCase().includes(q) ||
+        (log.details ?? '').toLowerCase().includes(q),
+    );
+  }, [tenantActivityLogs, activitySearch]);
+  const activityTotalPages = Math.max(1, Math.ceil(filteredActivityLogs.length / activityPageSize));
+  const activityCurrentPage = Math.min(activityPage, activityTotalPages);
+  const pagedActivityLogs = filteredActivityLogs.slice(
+    (activityCurrentPage - 1) * activityPageSize,
+    activityCurrentPage * activityPageSize,
+  );
+  const activityRangeStart =
+    filteredActivityLogs.length === 0 ? 0 : (activityCurrentPage - 1) * activityPageSize + 1;
+  const activityRangeEnd = Math.min(activityCurrentPage * activityPageSize, filteredActivityLogs.length);
 
   const [selectedRole, setSelectedRole] = useState<TenantRole>('Admin');
   const { data: rolePermissions, isLoading: isLoadingRolePermissions } = useQuery({
@@ -506,54 +586,110 @@ export default function OrganizationDetails() {
           )}
 
           {tab === 'Activity Log' && (
-            <Card className="border-0 shadow-sm">
-              <Card.Body className={isLoadingActivity || isActivityError || tenantActivityLogs.length === 0 ? '' : 'p-0'}>
-                <h2 className="h6 fw-bold mb-3 px-4 pt-4">Activity Log</h2>
-                {isLoadingActivity && (
-                  <div className="d-flex justify-content-center py-5">
-                    <Spinner animation="border" />
-                  </div>
-                )}
-                {isActivityError && (
-                  <div className="text-center text-danger py-5">Couldn't load activity log. Please try again.</div>
-                )}
-                {!isLoadingActivity && !isActivityError && tenantActivityLogs.length === 0 && (
-                  <div className="text-center text-muted py-5">No activity recorded for this organization yet.</div>
-                )}
-                {!isLoadingActivity && !isActivityError && tenantActivityLogs.length > 0 && (
-                  <Table responsive hover className="mb-0 align-middle">
-                    <thead className="text-muted small text-uppercase bg-light">
-                      <tr>
-                        <th className="ps-4">Time</th>
-                        <th>User</th>
-                        <th>Action</th>
-                        <th>Module</th>
-                        <th className="pe-4">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tenantActivityLogs.map((log) => (
-                        <tr key={log.id}>
-                          <td className="ps-4 text-muted" style={{ fontSize: 13 }}>
-                            {new Date(log.timestampUtc).toLocaleString()}
-                          </td>
-                          <td>{log.userName ?? '—'}</td>
-                          <td>
-                            <Badge bg="light" text="dark" className="border">
-                              {log.activity}
-                            </Badge>
-                          </td>
-                          <td className="text-muted">{log.module}</td>
-                          <td className="pe-4 text-muted" style={{ fontSize: 13 }}>
-                            {log.details ?? '—'}
-                          </td>
+            <>
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <h2 className="h6 fw-bold mb-0">Activity Log ({filteredActivityLogs.length})</h2>
+                <InputGroup style={{ width: 260 }}>
+                  <InputGroup.Text>
+                    <SearchIcon />
+                  </InputGroup.Text>
+                  <Form.Control
+                    type="search"
+                    placeholder="Search user, action, module..."
+                    value={activitySearch}
+                    onChange={(e) => setActivitySearch(e.target.value)}
+                  />
+                </InputGroup>
+              </div>
+
+              <Card className="border-0 shadow-sm">
+                <Card.Body className={isLoadingActivity || isActivityError || pagedActivityLogs.length === 0 ? '' : 'p-0'}>
+                  {isLoadingActivity && (
+                    <div className="d-flex justify-content-center py-5">
+                      <Spinner animation="border" />
+                    </div>
+                  )}
+                  {isActivityError && (
+                    <div className="text-center text-danger py-5">Couldn't load activity log. Please try again.</div>
+                  )}
+                  {!isLoadingActivity && !isActivityError && tenantActivityLogs.length === 0 && (
+                    <div className="text-center text-muted py-5">No activity recorded for this organization yet.</div>
+                  )}
+                  {!isLoadingActivity && !isActivityError && tenantActivityLogs.length > 0 && filteredActivityLogs.length === 0 && (
+                    <div className="text-center text-muted py-5">No activity matches your search.</div>
+                  )}
+                  {!isLoadingActivity && !isActivityError && pagedActivityLogs.length > 0 && (
+                    <Table responsive hover className="mb-0 align-middle">
+                      <thead className="text-muted small text-uppercase bg-light">
+                        <tr>
+                          <th className="ps-4">Time</th>
+                          <th>User</th>
+                          <th>Action</th>
+                          <th>Module</th>
+                          <th className="pe-4">Details</th>
                         </tr>
+                      </thead>
+                      <tbody>
+                        {pagedActivityLogs.map((log) => (
+                          <tr key={log.id}>
+                            <td className="ps-4 text-muted" style={{ fontSize: 13 }}>
+                              {new Date(log.timestampUtc).toLocaleString()}
+                            </td>
+                            <td>{log.userName ?? '—'}</td>
+                            <td>
+                              <Badge bg="light" text="dark" className="border">
+                                {log.activity}
+                              </Badge>
+                            </td>
+                            <td className="text-muted">{log.module}</td>
+                            <td className="pe-4 text-muted" style={{ fontSize: 13 }}>
+                              {log.details ?? '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
+                </Card.Body>
+              </Card>
+
+              {!isLoadingActivity && !isActivityError && filteredActivityLogs.length > 0 && (
+                <div className="d-flex justify-content-between align-items-center mt-3">
+                  <div className="text-muted small">
+                    Showing {activityRangeStart} to {activityRangeEnd} of {filteredActivityLogs.length} entries
+                  </div>
+                  <div className="d-flex align-items-center gap-3">
+                    <Pagination className="mb-0">
+                      <Pagination.Prev
+                        disabled={activityCurrentPage === 1}
+                        onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
+                      />
+                      {Array.from({ length: activityTotalPages }, (_, i) => i + 1).map((p) => (
+                        <Pagination.Item key={p} active={p === activityCurrentPage} onClick={() => setActivityPage(p)}>
+                          {p}
+                        </Pagination.Item>
                       ))}
-                    </tbody>
-                  </Table>
-                )}
-              </Card.Body>
-            </Card>
+                      <Pagination.Next
+                        disabled={activityCurrentPage === activityTotalPages}
+                        onClick={() => setActivityPage((p) => Math.min(activityTotalPages, p + 1))}
+                      />
+                    </Pagination>
+                    <Form.Select
+                      size="sm"
+                      style={{ width: 100 }}
+                      value={activityPageSize}
+                      onChange={(e) => setActivityPageSize(Number(e.target.value))}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size} / page
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {tab === 'Settings' && (
@@ -659,103 +795,219 @@ export default function OrganizationDetails() {
           )}
 
           {tab === 'Users' && (
-            <Card className="border-0 shadow-sm">
-              <Card.Body className={tenantUsers.length === 0 ? '' : 'p-0'}>
-                {tenantUsers.length === 0 ? (
-                  <div className="text-center text-muted small py-3">No users in this organization yet.</div>
-                ) : (
-                  <Table responsive hover className="mb-0 align-middle">
-                    <thead className="text-muted small text-uppercase bg-light">
-                      <tr>
-                        <th className="ps-4">User</th>
-                        <th>Role</th>
-                        <th>Status</th>
-                        <th>Last Login</th>
-                        <th className="pe-4">Joined On</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tenantUsers.map((user) => (
-                        <tr key={user.id}>
-                          <td className="ps-4">
-                            <div className="fw-medium">{user.fullName}</div>
-                            <div className="text-muted" style={{ fontSize: 12 }}>
-                              {user.email}
-                            </div>
-                          </td>
-                          <td>
-                            <Badge
-                              bg={
-                                user.role === 'Admin'
-                                  ? 'info'
-                                  : user.role === 'Instructor'
-                                    ? 'warning'
-                                    : 'secondary'
-                              }
-                            >
-                              {user.role}
-                            </Badge>
-                          </td>
-                          <td>
-                            <Badge bg={user.isActive ? 'success' : 'secondary'}>
-                              {user.isActive ? 'Active' : 'Inactive'}
-                            </Badge>
-                          </td>
-                          <td className="text-muted">{user.lastLoginAtUtc ? timeAgo(user.lastLoginAtUtc) : 'Never'}</td>
-                          <td className="pe-4">{new Date(user.createdAtUtc).toLocaleDateString()}</td>
+            <>
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <h2 className="h6 fw-bold mb-0">Users ({filteredTenantUsers.length})</h2>
+                <InputGroup style={{ width: 260 }}>
+                  <InputGroup.Text>
+                    <SearchIcon />
+                  </InputGroup.Text>
+                  <Form.Control
+                    type="search"
+                    placeholder="Search name or email..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                  />
+                </InputGroup>
+              </div>
+
+              <Card className="border-0 shadow-sm">
+                <Card.Body className={pagedTenantUsers.length === 0 ? '' : 'p-0'}>
+                  {tenantUsers.length === 0 && (
+                    <div className="text-center text-muted small py-3">No users in this organization yet.</div>
+                  )}
+                  {tenantUsers.length > 0 && filteredTenantUsers.length === 0 && (
+                    <div className="text-center text-muted small py-3">No users match your search.</div>
+                  )}
+                  {pagedTenantUsers.length > 0 && (
+                    <Table responsive hover className="mb-0 align-middle">
+                      <thead className="text-muted small text-uppercase bg-light">
+                        <tr>
+                          <th className="ps-4">User</th>
+                          <th>Role</th>
+                          <th>Status</th>
+                          <th>Last Login</th>
+                          <th className="pe-4">Joined On</th>
                         </tr>
+                      </thead>
+                      <tbody>
+                        {pagedTenantUsers.map((user) => (
+                          <tr key={user.id}>
+                            <td className="ps-4">
+                              <div className="fw-medium">{user.fullName}</div>
+                              <div className="text-muted" style={{ fontSize: 12 }}>
+                                {user.email}
+                              </div>
+                            </td>
+                            <td>
+                              <Badge
+                                bg={
+                                  user.role === 'Admin'
+                                    ? 'info'
+                                    : user.role === 'Instructor'
+                                      ? 'warning'
+                                      : 'secondary'
+                                }
+                              >
+                                {user.role}
+                              </Badge>
+                            </td>
+                            <td>
+                              <Badge bg={user.isActive ? 'success' : 'secondary'}>
+                                {user.isActive ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </td>
+                            <td className="text-muted">{user.lastLoginAtUtc ? timeAgo(user.lastLoginAtUtc) : 'Never'}</td>
+                            <td className="pe-4">{new Date(user.createdAtUtc).toLocaleDateString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
+                </Card.Body>
+              </Card>
+
+              {filteredTenantUsers.length > 0 && (
+                <div className="d-flex justify-content-between align-items-center mt-3">
+                  <div className="text-muted small">
+                    Showing {userRangeStart} to {userRangeEnd} of {filteredTenantUsers.length} users
+                  </div>
+                  <div className="d-flex align-items-center gap-3">
+                    <Pagination className="mb-0">
+                      <Pagination.Prev
+                        disabled={userCurrentPage === 1}
+                        onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                      />
+                      {Array.from({ length: userTotalPages }, (_, i) => i + 1).map((p) => (
+                        <Pagination.Item key={p} active={p === userCurrentPage} onClick={() => setUserPage(p)}>
+                          {p}
+                        </Pagination.Item>
                       ))}
-                    </tbody>
-                  </Table>
-                )}
-              </Card.Body>
-            </Card>
+                      <Pagination.Next
+                        disabled={userCurrentPage === userTotalPages}
+                        onClick={() => setUserPage((p) => Math.min(userTotalPages, p + 1))}
+                      />
+                    </Pagination>
+                    <Form.Select
+                      size="sm"
+                      style={{ width: 100 }}
+                      value={userPageSize}
+                      onChange={(e) => setUserPageSize(Number(e.target.value))}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size} / page
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {tab === 'Exams' && (
-            <Card className="border-0 shadow-sm">
-              <Card.Body className={tenantExams.length === 0 ? '' : 'p-0'}>
-                {tenantExams.length === 0 ? (
-                  <div className="text-center text-muted small py-3">No exams in this organization yet.</div>
-                ) : (
-                  <Table responsive hover className="mb-0 align-middle">
-                    <thead className="text-muted small text-uppercase bg-light">
-                      <tr>
-                        <th className="ps-4">Exam</th>
-                        <th>Category</th>
-                        <th>Status</th>
-                        <th>Questions</th>
-                        <th className="pe-4">Created On</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tenantExams.map((exam) => (
-                        <tr key={exam.id}>
-                          <td className="ps-4">
-                            <div className="fw-medium">{exam.title}</div>
-                            {exam.examCode && (
-                              <div className="text-muted" style={{ fontSize: 12 }}>
-                                {exam.examCode}
-                              </div>
-                            )}
-                          </td>
-                          <td className="text-muted">{exam.category || '—'}</td>
-                          <td>
-                            <Badge
-                              bg={exam.status === 'Published' ? 'success' : exam.status === 'Archived' ? 'secondary' : 'warning'}
-                            >
-                              {exam.status}
-                            </Badge>
-                          </td>
-                          <td className="text-muted">{questionCounts[exam.id] ?? exam.totalQuestions}</td>
-                          <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
+            <>
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <h2 className="h6 fw-bold mb-0">Exams ({filteredTenantExams.length})</h2>
+                <InputGroup style={{ width: 260 }}>
+                  <InputGroup.Text>
+                    <SearchIcon />
+                  </InputGroup.Text>
+                  <Form.Control
+                    type="search"
+                    placeholder="Search title or category..."
+                    value={examSearch}
+                    onChange={(e) => setExamSearch(e.target.value)}
+                  />
+                </InputGroup>
+              </div>
+
+              <Card className="border-0 shadow-sm">
+                <Card.Body className={pagedTenantExams.length === 0 ? '' : 'p-0'}>
+                  {tenantExams.length === 0 && (
+                    <div className="text-center text-muted small py-3">No exams in this organization yet.</div>
+                  )}
+                  {tenantExams.length > 0 && filteredTenantExams.length === 0 && (
+                    <div className="text-center text-muted small py-3">No exams match your search.</div>
+                  )}
+                  {pagedTenantExams.length > 0 && (
+                    <Table responsive hover className="mb-0 align-middle">
+                      <thead className="text-muted small text-uppercase bg-light">
+                        <tr>
+                          <th className="ps-4">Exam</th>
+                          <th>Category</th>
+                          <th>Status</th>
+                          <th>Questions</th>
+                          <th className="pe-4">Created On</th>
                         </tr>
+                      </thead>
+                      <tbody>
+                        {pagedTenantExams.map((exam) => (
+                          <tr key={exam.id}>
+                            <td className="ps-4">
+                              <div className="fw-medium">{exam.title}</div>
+                              {exam.examCode && (
+                                <div className="text-muted" style={{ fontSize: 12 }}>
+                                  {exam.examCode}
+                                </div>
+                              )}
+                            </td>
+                            <td className="text-muted">{exam.category || '—'}</td>
+                            <td>
+                              <Badge
+                                bg={exam.status === 'Published' ? 'success' : exam.status === 'Archived' ? 'secondary' : 'warning'}
+                              >
+                                {exam.status}
+                              </Badge>
+                            </td>
+                            <td className="text-muted">{questionCounts[exam.id] ?? exam.totalQuestions}</td>
+                            <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
+                </Card.Body>
+              </Card>
+
+              {filteredTenantExams.length > 0 && (
+                <div className="d-flex justify-content-between align-items-center mt-3">
+                  <div className="text-muted small">
+                    Showing {examRangeStart} to {examRangeEnd} of {filteredTenantExams.length} exams
+                  </div>
+                  <div className="d-flex align-items-center gap-3">
+                    <Pagination className="mb-0">
+                      <Pagination.Prev
+                        disabled={examCurrentPage === 1}
+                        onClick={() => setExamPage((p) => Math.max(1, p - 1))}
+                      />
+                      {Array.from({ length: examTotalPages }, (_, i) => i + 1).map((p) => (
+                        <Pagination.Item key={p} active={p === examCurrentPage} onClick={() => setExamPage(p)}>
+                          {p}
+                        </Pagination.Item>
                       ))}
-                    </tbody>
-                  </Table>
-                )}
-              </Card.Body>
-            </Card>
+                      <Pagination.Next
+                        disabled={examCurrentPage === examTotalPages}
+                        onClick={() => setExamPage((p) => Math.min(examTotalPages, p + 1))}
+                      />
+                    </Pagination>
+                    <Form.Select
+                      size="sm"
+                      style={{ width: 100 }}
+                      value={examPageSize}
+                      onChange={(e) => setExamPageSize(Number(e.target.value))}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size} / page
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
