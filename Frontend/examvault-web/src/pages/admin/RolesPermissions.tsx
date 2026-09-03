@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
 import SectionHeader from '../../components/SectionHeader';
+import { useAuth } from '../../hooks/useAuth';
 import { useUsers } from '../../hooks/useUsers';
 import { useRolePermissions, useUpdateRolePermissions } from '../../hooks/useRolePermissions';
 import { EditIcon } from '../../components/icons/ActionIcons';
@@ -28,26 +29,17 @@ interface RoleRow {
   description: string;
   variant: string;
   isReal: boolean;
-  // Real but not a member of any single tenant's user list (managed from
-  // the separate platform console) - this tenant-scoped page can't report
-  // an accurate user count for it, so the Users column shouldn't claim 0.
-  notTenantScoped?: boolean;
   // Shown while the live permission set is still loading, so nothing
   // flashes empty - once useRolePermissions() resolves, the live set
   // (persisted server-side) takes over as the actual source of truth.
   defaultPermissions: string[];
 }
 
+// Super Admin is deliberately not listed here - it's platform-level, never
+// assignable or editable from a tenant's own screen, so showing a row that
+// can never be interacted with was just confusing. It's still mentioned in
+// the banner below for context.
 const roles: RoleRow[] = [
-  {
-    role: 'Super Admin',
-    description:
-      'Platform-level access for managing tenants, subscriptions, and cross-tenant settings. Not assignable from this tenant’s user management.',
-    variant: 'dark',
-    isReal: true,
-    notTenantScoped: true,
-    defaultPermissions: COSMETIC_ROLE_PERMISSIONS['Super Admin'],
-  },
   {
     role: 'Admin',
     description: 'Manage exams, questions, AI generation, and users.',
@@ -79,6 +71,7 @@ const roles: RoleRow[] = [
 ];
 
 export default function RolesPermissions() {
+  const { user: currentUser } = useAuth();
   const { data: users } = useUsers();
   const { data: liveRolePermissions } = useRolePermissions();
   const updateRolePermissions = useUpdateRolePermissions();
@@ -154,44 +147,40 @@ export default function RolesPermissions() {
               </tr>
             </thead>
             <tbody>
-              {roles.map(({ role, description, variant, isReal, notTenantScoped, defaultPermissions }) => (
-                <tr key={role}>
-                  <td className="ps-4">
-                    <Badge bg={variant}>{role}</Badge>
-                  </td>
-                  <td>{description}</td>
-                  <td className="fw-medium">
-                    {notTenantScoped ? (
-                      <span className="text-muted" title="Managed outside this tenant - not visible here.">
-                        —
-                      </span>
-                    ) : isReal ? (
-                      countFor(role)
-                    ) : (
-                      0
-                    )}
-                  </td>
-                  <td>
-                    <Badge bg={isReal ? 'success' : 'secondary'}>{isReal ? 'Active' : 'Not Available'}</Badge>
-                  </td>
-                  <td className="pe-4">
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
-                      style={{ width: 32, height: 32 }}
-                      title={
-                        isReal && !notTenantScoped
-                          ? `Edit ${role} permissions`
-                          : `${role} permissions aren't editable from this screen`
-                      }
-                      disabled={!isReal || notTenantScoped}
-                      onClick={() => openEdit(role, defaultPermissions)}
-                    >
-                      <EditIcon />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {roles.map(({ role, description, variant, isReal, defaultPermissions }) => {
+                const isOwnRole = role === currentUser?.role;
+                const canEdit = isReal && !isOwnRole;
+                return (
+                  <tr key={role}>
+                    <td className="ps-4">
+                      <Badge bg={variant}>{role}</Badge>
+                    </td>
+                    <td>{description}</td>
+                    <td className="fw-medium">{isReal ? countFor(role) : 0}</td>
+                    <td>
+                      <Badge bg={isReal ? 'success' : 'secondary'}>{isReal ? 'Active' : 'Not Available'}</Badge>
+                    </td>
+                    <td className="pe-4">
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                        style={{ width: 32, height: 32 }}
+                        title={
+                          canEdit
+                            ? `Edit ${role} permissions`
+                            : isOwnRole
+                              ? "You can't edit the permissions of your own role"
+                              : `${role} permissions aren't editable from this screen`
+                        }
+                        disabled={!canEdit}
+                        onClick={() => openEdit(role, defaultPermissions)}
+                      >
+                        <EditIcon />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
         </Card.Body>

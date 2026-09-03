@@ -52,6 +52,20 @@ public class RolesController : ControllerBase
         UpdateRolePermissionsRequest request,
         CancellationToken cancellationToken)
     {
+        // Self-lockout guard: an Admin editing their own role's permissions
+        // (e.g. accidentally unchecking Users-Edit) would leave no one left
+        // in the tenant able to undo it - only a platform SuperAdmin could.
+        // This endpoint is Admin-only today, so in practice this only ever
+        // fires for role == "Admin", but the check is written generally.
+        if (User.IsInRole(role))
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                new Dictionary<string, string[]>
+                {
+                    ["request"] = ["You can't edit the permissions of your own role. Ask another Admin, or contact platform support."],
+                }));
+        }
+
         var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
         var result = await _updateRolePermissionsHandler.HandleAsync(
             new UpdateRolePermissionsCommand(tenantId, role, request.Permissions),
