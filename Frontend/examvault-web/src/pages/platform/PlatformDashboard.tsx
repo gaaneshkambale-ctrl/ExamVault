@@ -1,19 +1,38 @@
+import { useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { Card, Col, Row, Spinner } from 'react-bootstrap';
+import { Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import OrgAvatar from '../../components/OrgAvatar';
+import SegmentDonutChart from '../../components/SegmentDonutChart';
+import LineTrendChart from '../../components/charts/LineTrendChart';
 import { useTenants } from '../../hooks/useTenants';
 import { useAuth } from '../../hooks/useAuth';
+import { listAllUsers } from '../../api/userApi';
+import { listExams } from '../../api/examApi';
+import { listPlans } from '../../api/plansApi';
+import { listServiceStatus } from '../../api/monitoringApi';
 import { timeAgo } from '../../utils/timeAgo';
 import type { Tenant } from '../../types/tenant';
+import type { ExamResponse } from '../../types/exam';
 
-// Matches Super_admin_dashboard.png's stat-card row: only "Total
-// Organizations" has a real cross-tenant backend today (the existing
-// tenant list). Total Users/Exams/Submissions and Active Subscriptions
-// would each need a new cross-tenant aggregate endpoint (Users/Exams) or
-// the still-deferred Subscriptions model - shown honestly as "not
-// connected yet" rather than a fabricated number, matching this
-// project's established convention.
+const REFRESH_INTERVAL_MS = 30000;
+
+// Matches dashboard-superadmin.png. Total Organizations/Users/Exams,
+// Platform Overview's trend lines, Recent Organizations, Subscription
+// Overview and System Health are all real now - listAllUsers/listExams
+// already power the platform Users/Exams pages, Tenant.isTrial/
+// TrialEndsAtUtc is the real (non-billing) subscription-expiry model
+// OrganizationsAndPlans.tsx established, and listServiceStatus already
+// powers System Monitoring's Service Status page. Total Submissions and
+// Top Active Exams' "Attempts" stay honest "not connected yet" - there is
+// still no cross-tenant attempts endpoint anywhere (see ExamUsageReport's
+// own note on SubmissionsController) - so the mockup's Submissions line
+// is dropped from the trend chart entirely rather than faked as zero, and
+// the mockup's "Active Subscriptions" card is repointed at the platform's
+// actual real subscription-adjacent metric (Trials Expiring Soon) instead
+// of restating the Active Organizations count under a different name.
 function StatCard({
   icon,
   iconBg,
@@ -48,34 +67,142 @@ function StatCard({
   );
 }
 
-function NotConnectedCard({ title }: { title: string }) {
-  return (
-    <Card className="border-0 shadow-sm h-100">
-      <Card.Body>
-        <h2 className="h6 fw-bold mb-3">{title}</h2>
-        <div className="text-center text-muted small py-4">Not connected yet.</div>
-      </Card.Body>
-    </Card>
-  );
+const SERVICE_STATUS_VARIANT: Record<string, string> = {
+  Online: 'success',
+  Degraded: 'warning',
+  Offline: 'danger',
+};
+
+function endOfDay(d: Date): Date {
+  const copy = new Date(d);
+  copy.setHours(23, 59, 59, 999);
+  return copy;
+}
+
+function fmtDay(d: Date): string {
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+function daysRemaining(trialEndsAtUtc: string): number {
+  return Math.ceil((new Date(trialEndsAtUtc).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
 export default function PlatformDashboard() {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { data: tenants, isLoading, isError } = useTenants();
+  const { data: tenants, isLoading, isError, dataUpdatedAt } = useTenants();
+
+  const { data: allUsers, isLoading: isLoadingUsers } = useQuery({
+    queryKey: ['platform-users'],
+    queryFn: listAllUsers,
+    refetchInterval: REFRESH_INTERVAL_MS,
+  });
+  const { data: allExams, isLoading: isLoadingExams } = useQuery({
+    queryKey: ['platform-exams'],
+    queryFn: listExams,
+    refetchInterval: REFRESH_INTERVAL_MS,
+  });
+  const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
+  const { data: services, isLoading: isLoadingServices } = useQuery({
+    queryKey: ['monitoring-services'],
+    queryFn: listServiceStatus,
+    refetchInterval: REFRESH_INTERVAL_MS,
+  });
 
   const total = tenants?.length ?? 0;
   const active = tenants?.filter((t) => t.isActive).length ?? 0;
   const inactive = total - active;
   const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const createdThisWeek = tenants?.filter((t) => new Date(t.createdAtUtc).getTime() >= oneWeekAgo).length ?? 0;
+  const usersThisWeek = allUsers?.filter((u) => new Date(u.createdAtUtc).getTime() >= oneWeekAgo).length ?? 0;
+  const examsThisWeek = allExams?.filter((e) => new Date(e.createdOn).getTime() >= oneWeekAgo).length ?? 0;
+
+  const totalUsers = allUsers?.length ?? 0;
+  const totalExams = allExams?.length ?? 0;
+
+  const expiringSoonCount = (tenants ?? []).filter(
+    (t) => t.isTrial && t.trialEndsAtUtc && daysRemaining(t.trialEndsAtUtc) >= 0 && daysRemaining(t.trialEndsAtUtc) <= 30,
+  ).length;
 
   const recentOrganizations: Tenant[] = [...(tenants ?? [])]
     .sort((a, b) => new Date(b.createdAtUtc).getTime() - new Date(a.createdAtUtc).getTime())
     .slice(0, 5);
 
-  const today = new Date();
-  const weekAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
-  const dateRangeLabel = `${weekAgo.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} - ${today.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const topExams: ExamResponse[] = useMemo(() => {
+    const list = [...(allExams ?? [])];
+    list.sort((a, b) => {
+      if (a.status === 'Published' && b.status !== 'Published') return -1;
+      if (a.status !== 'Published' && b.status === 'Published') return 1;
+      return new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime();
+    });
+    return list.slice(0, 5);
+  }, [allExams]);
+
+  const tenantNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (tenants ?? []).forEach((t) => map.set(t.id, t.name));
+    return map;
+  }, [tenants]);
+
+  const subscriptionBuckets = useMemo(() => {
+    let activeCount = 0;
+    let expiringSoon = 0;
+    let expired = 0;
+    (tenants ?? []).forEach((t) => {
+      if (t.isTrial && t.trialEndsAtUtc) {
+        const remaining = daysRemaining(t.trialEndsAtUtc);
+        if (remaining < 0) expired += 1;
+        else if (remaining <= 30) expiringSoon += 1;
+        else activeCount += 1;
+      } else {
+        activeCount += 1;
+      }
+    });
+    return { active: activeCount, expiringSoon, expired };
+  }, [tenants]);
+
+  const trendDays = useMemo(() => Array.from({ length: 7 }, (_, i) => endOfDay(new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000))), []);
+
+  const overviewSeries = useMemo(
+    () => [
+      {
+        name: 'Organizations',
+        color: '#4f46e5',
+        data: trendDays.map((d) => ({
+          label: fmtDay(d),
+          value: (tenants ?? []).filter((t) => new Date(t.createdAtUtc) <= d).length,
+        })),
+      },
+      {
+        name: 'Users',
+        color: '#16a34a',
+        data: trendDays.map((d) => ({
+          label: fmtDay(d),
+          value: (allUsers ?? []).filter((u) => new Date(u.createdAtUtc) <= d).length,
+        })),
+      },
+      {
+        name: 'Exams',
+        color: '#d97706',
+        data: trendDays.map((d) => ({
+          label: fmtDay(d),
+          value: (allExams ?? []).filter((e) => new Date(e.createdOn) <= d).length,
+        })),
+      },
+    ],
+    [trendDays, tenants, allUsers, allExams],
+  );
+
+  const dateRangeLabel = `${fmtDay(trendDays[0])} - ${trendDays[6].toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const dataAsOf = dataUpdatedAt > 0 ? new Date(dataUpdatedAt).toLocaleString() : '—';
+
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['tenants'] });
+    queryClient.invalidateQueries({ queryKey: ['platform-users'] });
+    queryClient.invalidateQueries({ queryKey: ['platform-exams'] });
+    queryClient.invalidateQueries({ queryKey: ['plans'] });
+    queryClient.invalidateQueries({ queryKey: ['monitoring-services'] });
+  };
 
   return (
     <PlatformLayout active="dashboard">
@@ -122,7 +249,8 @@ export default function PlatformDashboard() {
             />
             <StatCard
               label="Total Users"
-              value="—"
+              value={isLoadingUsers ? <Spinner animation="border" size="sm" /> : totalUsers}
+              trend={usersThisWeek > 0 ? `+${usersThisWeek} this week` : undefined}
               iconBg="#dcfce7"
               icon={
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2">
@@ -133,7 +261,8 @@ export default function PlatformDashboard() {
             />
             <StatCard
               label="Total Exams"
-              value="—"
+              value={isLoadingExams ? <Spinner animation="border" size="sm" /> : totalExams}
+              trend={examsThisWeek > 0 ? `+${examsThisWeek} this week` : undefined}
               iconBg="#fef3c7"
               icon={
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2">
@@ -154,14 +283,15 @@ export default function PlatformDashboard() {
               }
             />
             <StatCard
-              label="Active Subscriptions"
-              value="—"
+              label="Trials Expiring Soon"
+              value={expiringSoonCount}
+              trend="Within next 30 days"
               iconBg="#fee2e2"
               icon={
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="16" />
-                  <line x1="8" y1="12" x2="16" y2="12" />
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
               }
             />
@@ -172,38 +302,58 @@ export default function PlatformDashboard() {
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
                   <h2 className="h6 fw-bold mb-3">Platform Overview</h2>
-                  <div className="d-flex align-items-center gap-4 flex-wrap mb-2 small">
-                    <span>
-                      <span className="d-inline-block rounded-circle bg-primary me-2" style={{ width: 8, height: 8 }} />
-                      Organizations
-                    </span>
-                    <span className="text-muted">
-                      <span className="d-inline-block rounded-circle bg-secondary-subtle me-2" style={{ width: 8, height: 8 }} />
-                      Users - not connected yet
-                    </span>
-                    <span className="text-muted">
-                      <span className="d-inline-block rounded-circle bg-secondary-subtle me-2" style={{ width: 8, height: 8 }} />
-                      Exams - not connected yet
-                    </span>
-                    <span className="text-muted">
-                      <span className="d-inline-block rounded-circle bg-secondary-subtle me-2" style={{ width: 8, height: 8 }} />
-                      Submissions - not connected yet
-                    </span>
-                  </div>
-                  <div className="text-center text-muted small py-5 border rounded-3">
-                    Organization growth trend needs more history to chart - only {total} organization{total === 1 ? '' : 's'} exist today.
-                  </div>
+                  {isLoadingUsers || isLoadingExams ? (
+                    <div className="d-flex justify-content-center py-5">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  ) : (
+                    <LineTrendChart series={overviewSeries} />
+                  )}
+                  <div className="text-muted small mt-2">Submissions - not connected yet (no cross-tenant attempts endpoint).</div>
                 </Card.Body>
               </Card>
             </Col>
             <Col lg={4}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
+                  <h2 className="h6 fw-bold mb-3">Overview (This Week)</h2>
+                  <div className="d-flex flex-column gap-3">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-muted small">Organizations</span>
+                      <span>
+                        <span className="fw-bold">{total}</span>{' '}
+                        {createdThisWeek > 0 && <span className="text-success small">+{createdThisWeek}</span>}
+                      </span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-muted small">Users</span>
+                      <span>
+                        <span className="fw-bold">{totalUsers}</span>{' '}
+                        {usersThisWeek > 0 && <span className="text-success small">+{usersThisWeek}</span>}
+                      </span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-muted small">Exams</span>
+                      <span>
+                        <span className="fw-bold">{totalExams}</span>{' '}
+                        {examsThisWeek > 0 && <span className="text-success small">+{examsThisWeek}</span>}
+                      </span>
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+
+          <Row className="g-3 mb-3">
+            <Col lg={4}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body>
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h2 className="h6 fw-bold mb-0">Recent Organizations</h2>
-                    <a href="/platform/organizations" className="small text-decoration-none">
+                    <Link to="/platform/organizations" className="small text-decoration-none">
                       View All
-                    </a>
+                    </Link>
                   </div>
                   {recentOrganizations.length === 0 && (
                     <div className="text-center text-muted small py-4">No organizations yet.</div>
@@ -232,22 +382,141 @@ export default function PlatformDashboard() {
                 </Card.Body>
               </Card>
             </Col>
+
+            <Col lg={4}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body>
+                  <h2 className="h6 fw-bold mb-3">Subscription Overview</h2>
+                  {!plans ? (
+                    <div className="d-flex justify-content-center py-4">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  ) : (
+                    <>
+                      <SegmentDonutChart
+                        centerLabel="Total"
+                        segments={[
+                          { label: 'Active', value: subscriptionBuckets.active, color: '#16a34a' },
+                          { label: 'Expiring Soon', value: subscriptionBuckets.expiringSoon, color: '#2563eb' },
+                          { label: 'Expired', value: subscriptionBuckets.expired, color: '#d97706' },
+                        ]}
+                      />
+                      <div className="d-flex flex-column gap-1 mt-2 mb-3 small">
+                        {[
+                          { label: 'Active', value: subscriptionBuckets.active, color: '#16a34a' },
+                          { label: 'Expiring Soon', value: subscriptionBuckets.expiringSoon, color: '#2563eb' },
+                          { label: 'Expired', value: subscriptionBuckets.expired, color: '#d97706' },
+                        ].map((row) => (
+                          <div key={row.label} className="d-flex justify-content-between">
+                            <span>
+                              <span className="d-inline-block rounded-circle me-2" style={{ width: 8, height: 8, background: row.color }} />
+                              {row.label}
+                            </span>
+                            <span>
+                              {row.value} ({total === 0 ? '0' : ((row.value / total) * 100).toFixed(0)}%)
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  <Link to="/platform/subscriptions/organizations" className="btn btn-outline-primary btn-sm w-100">
+                    View All Subscriptions
+                  </Link>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col lg={4}>
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h2 className="h6 fw-bold mb-0">System Health</h2>
+                    <Link to="/platform/monitoring/service-status" className="small text-decoration-none">
+                      View All
+                    </Link>
+                  </div>
+                  {isLoadingServices ? (
+                    <div className="d-flex justify-content-center py-4">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  ) : (services ?? []).length === 0 ? (
+                    <div className="text-center text-muted small py-4">No services reporting.</div>
+                  ) : (
+                    <div className="d-flex flex-column gap-3">
+                      {(services ?? []).slice(0, 5).map((service) => (
+                        <div key={service.name} className="d-flex justify-content-between align-items-center">
+                          <span className="small">{service.name}</span>
+                          <span className="d-flex align-items-center gap-2">
+                            <Badge bg={SERVICE_STATUS_VARIANT[service.status] ?? 'secondary'}>{service.status}</Badge>
+                            <span className="text-muted" style={{ fontSize: 12, minWidth: 40, textAlign: 'right' }}>
+                              {service.responseTimeMs === null ? '—' : `${service.responseTimeMs}ms`}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
           </Row>
 
-          <Row className="g-3">
-            <Col md={4}>
-              <NotConnectedCard title="Subscription Overview" />
-            </Col>
-            <Col md={4}>
-              <NotConnectedCard title="Top Active Exams" />
-            </Col>
-            <Col md={4}>
-              <NotConnectedCard title="System Health" />
-            </Col>
-          </Row>
+          <Card className="border-0 shadow-sm mb-3">
+            <Card.Body>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h2 className="h6 fw-bold mb-0">Top Active Exams</h2>
+                <Link to="/platform/exams" className="small text-decoration-none">
+                  View All Exams
+                </Link>
+              </div>
+              {isLoadingExams ? (
+                <div className="d-flex justify-content-center py-4">
+                  <Spinner animation="border" size="sm" />
+                </div>
+              ) : topExams.length === 0 ? (
+                <div className="text-center text-muted small py-4">No exams yet.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table align-middle mb-0">
+                    <thead className="text-muted small text-uppercase">
+                      <tr>
+                        <th>Exam Name</th>
+                        <th>Organization</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topExams.map((exam) => (
+                        <tr key={exam.id}>
+                          <td className="fw-medium">{exam.title}</td>
+                          <td className="text-muted">{tenantNameById.get(exam.tenantId) ?? '—'}</td>
+                          <td>
+                            <Badge
+                              bg={exam.status === 'Published' ? 'success' : exam.status === 'Draft' ? 'warning' : 'secondary'}
+                            >
+                              {exam.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card.Body>
+          </Card>
 
-          <div className="text-muted small mt-3">
-            {active} active · {inactive} inactive organization{total === 1 ? '' : 's'}
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 text-muted small">
+            <span>
+              {active} active · {inactive} inactive organization{total === 1 ? '' : 's'}
+            </span>
+            <span className="d-flex align-items-center gap-2">
+              Data as of {dataAsOf}
+              <Button variant="link" size="sm" className="p-0 text-decoration-none" onClick={refreshAll}>
+                Refresh
+              </Button>
+            </span>
           </div>
         </>
       )}
