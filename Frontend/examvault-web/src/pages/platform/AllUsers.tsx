@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Badge, Card, Form, Spinner, Table } from 'react-bootstrap';
+import { Badge, Button, Card, Form, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import OrgAvatar from '../../components/OrgAvatar';
@@ -21,6 +21,7 @@ import type { PlatformUserListItem } from '../../types/user';
 const ROLE_TABS = [
   { key: 'all', label: 'All Users' },
   { key: 'Admin', label: 'Organization Admins' },
+  { key: 'Instructor', label: 'Instructors' },
   { key: 'Student', label: 'Students' },
   { key: 'SuperAdmin', label: 'Platform Admins' },
 ] as const;
@@ -29,15 +30,38 @@ interface AllUsersProps {
   // Undefined = "All Users". Lets the sidebar's Organization Admins/
   // Students/Platform Admins links deep-link straight to that tab,
   // matching how ManageTenants' statusFilter prop works for Organizations.
-  roleFilter?: 'Admin' | 'Student' | 'SuperAdmin';
+  roleFilter?: 'Admin' | 'Instructor' | 'Student' | 'SuperAdmin';
 }
 
 const ROLE_NAV_KEYS: Record<(typeof ROLE_TABS)[number]['key'], string> = {
   all: 'users-all',
   Admin: 'users-org-admins',
+  Instructor: 'users-instructors',
   Student: 'users-students',
   SuperAdmin: 'users-platform-admins',
 };
+
+function exportUsersToCsv(users: PlatformUserListItem[], tenantNameById: Map<string, string>) {
+  const header = ['Full Name', 'Email', 'Organization', 'Role', 'Status', 'Joined On'];
+  const rows = users.map((u) => [
+    u.fullName,
+    u.email,
+    tenantNameById.get(u.tenantId) ?? '',
+    u.role,
+    u.isActive ? 'Active' : 'Inactive',
+    new Date(u.createdAtUtc).toISOString(),
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `platform-users-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function AllUsers({ roleFilter }: AllUsersProps) {
   const { data: users, isLoading, isError } = useQuery({ queryKey: ['platform-users'], queryFn: listAllUsers });
@@ -45,6 +69,7 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
 
   const [searchText, setSearchText] = useState('');
   const [roleTab, setRoleTab] = useState<(typeof ROLE_TABS)[number]['key']>(roleFilter ?? 'all');
+  const [organizationFilter, setOrganizationFilter] = useState('all');
 
   const tenantNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -52,20 +77,29 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
     return map;
   }, [tenants]);
 
+  // Organization filter scopes everything below it (counts, charts, Recent
+  // Registrations, the table) - role tab and search filter further from
+  // there, so all three combine rather than override each other.
+  const orgScopedUsers = useMemo(
+    () => (organizationFilter === 'all' ? (users ?? []) : (users ?? []).filter((u) => u.tenantId === organizationFilter)),
+    [users, organizationFilter],
+  );
+
   const counts = useMemo(() => {
-    const list = users ?? [];
+    const list = orgScopedUsers;
     return {
       all: list.length,
       Admin: list.filter((u) => u.role === 'Admin').length,
+      Instructor: list.filter((u) => u.role === 'Instructor').length,
       Student: list.filter((u) => u.role === 'Student').length,
       SuperAdmin: list.filter((u) => u.role === 'SuperAdmin').length,
       active: list.filter((u) => u.isActive).length,
       inactive: list.filter((u) => !u.isActive).length,
     };
-  }, [users]);
+  }, [orgScopedUsers]);
 
   const searchQuery = searchText.trim().toLowerCase();
-  const filteredUsers = (users ?? []).filter((user) => {
+  const filteredUsers = orgScopedUsers.filter((user) => {
     if (roleTab !== 'all' && user.role !== roleTab) return false;
     if (!searchQuery) return true;
     const orgName = tenantNameById.get(user.tenantId) ?? '';
@@ -77,7 +111,7 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
     );
   });
 
-  const recentRegistrations: PlatformUserListItem[] = [...(users ?? [])]
+  const recentRegistrations: PlatformUserListItem[] = [...orgScopedUsers]
     .sort((a, b) => new Date(b.createdAtUtc).getTime() - new Date(a.createdAtUtc).getTime())
     .slice(0, 5);
 
@@ -86,6 +120,18 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
       <p className="text-muted small mb-1">Platform Admin / Users / All Users</p>
       <h1 className="h4 fw-bold mb-1 text-primary">All Users</h1>
       <p className="text-muted mb-3">Every user across every organization on the platform.</p>
+
+      <Form.Group className="mb-3" controlId="allUsersOrgFilter" style={{ maxWidth: 320 }}>
+        <Form.Label className="small fw-bold">Organization</Form.Label>
+        <Form.Select value={organizationFilter} onChange={(e) => setOrganizationFilter(e.target.value)}>
+          <option value="all">All Organizations</option>
+          {(tenants ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </Form.Select>
+      </Form.Group>
 
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
         <div className="d-flex gap-2 flex-wrap">
@@ -100,13 +146,22 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
             </button>
           ))}
         </div>
-        <Form.Control
-          type="search"
-          placeholder="Search by name, email, phone or organization..."
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          style={{ width: 280 }}
-        />
+        <div className="d-flex gap-2">
+          <Form.Control
+            type="search"
+            placeholder="Search by name, email, phone or organization..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 280 }}
+          />
+          <Button
+            variant="outline-primary"
+            disabled={filteredUsers.length === 0}
+            onClick={() => exportUsersToCsv(filteredUsers, tenantNameById)}
+          >
+            Export
+          </Button>
+        </div>
       </div>
 
       <div className="row g-3">
@@ -148,8 +203,24 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
                         </td>
                         <td className="text-muted">{tenantNameById.get(user.tenantId) ?? '—'}</td>
                         <td>
-                          <Badge bg={user.role === 'SuperAdmin' ? 'primary' : user.role === 'Admin' ? 'info' : 'secondary'}>
-                            {user.role === 'Admin' ? 'Organization Admin' : user.role === 'SuperAdmin' ? 'Platform Admin' : 'Student'}
+                          <Badge
+                            bg={
+                              user.role === 'SuperAdmin'
+                                ? 'primary'
+                                : user.role === 'Admin'
+                                  ? 'info'
+                                  : user.role === 'Instructor'
+                                    ? 'warning'
+                                    : 'secondary'
+                            }
+                          >
+                            {user.role === 'Admin'
+                              ? 'Organization Admin'
+                              : user.role === 'SuperAdmin'
+                                ? 'Platform Admin'
+                                : user.role === 'Instructor'
+                                  ? 'Instructor'
+                                  : 'Student'}
                           </Badge>
                         </td>
                         <td>
@@ -180,6 +251,10 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
                   <div className="text-muted small">Organization Admins</div>
                 </div>
                 <div className="col-6">
+                  <div className="h5 fw-bold mb-0">{counts.Instructor}</div>
+                  <div className="text-muted small">Instructors</div>
+                </div>
+                <div className="col-6">
                   <div className="h5 fw-bold mb-0">{counts.Student}</div>
                   <div className="text-muted small">Students</div>
                 </div>
@@ -199,6 +274,7 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
                 segments={[
                   { label: 'Students', value: counts.Student, color: '#2563eb' },
                   { label: 'Organization Admins', value: counts.Admin, color: '#16a34a' },
+                  { label: 'Instructors', value: counts.Instructor, color: '#d97706' },
                   { label: 'Platform Admins', value: counts.SuperAdmin, color: '#7c3aed' },
                 ]}
               />
@@ -216,6 +292,13 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
                     Organization Admins
                   </span>
                   <span>{counts.Admin}</span>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span>
+                    <span className="d-inline-block rounded-circle me-2" style={{ width: 8, height: 8, background: '#d97706' }} />
+                    Instructors
+                  </span>
+                  <span>{counts.Instructor}</span>
                 </div>
                 <div className="d-flex justify-content-between">
                   <span>
