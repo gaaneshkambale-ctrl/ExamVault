@@ -1,12 +1,12 @@
 ExamVault — Roles & Responsibilities
 =====================================
-Last updated: 2026-09-02
+Last updated: 2026-09-03
 
 This documents what each role can actually DO in the app today, based on
-the real code (auth attributes, EF Core tenant-scoping filters, and the
-UI each role sees) — not aspirational/planned behavior. SuperAdmin, Admin,
-and Student are all live and enforced. Instructor/Teacher (bottom section)
-does not exist in the code yet — it's a proposal pending a decision.
+the real code (auth attributes, EF Core tenant-scoping filters, the
+permission-catalog checks, and the UI each role sees) — not
+aspirational/planned behavior. SuperAdmin, Admin, Instructor, and Student
+are all live and enforced.
 
 
 1. SUPER ADMIN (platform-level, not tied to any one tenant)
@@ -14,7 +14,9 @@ does not exist in the code yet — it's a proposal pending a decision.
 Backend: UserRole.SuperAdmin (enum value 2). Lives in the reserved
 "Platform" tenant. Every multi-tenant EF Core query filter has an
 IsSuperAdmin bypass, so a Super Admin's queries see data across ALL
-tenants, not just one.
+tenants, not just one. SuperAdmin also always passes every
+permission-catalog check (RequiresPermission short-circuits true for it),
+regardless of what any tenant's role-permission table says.
 
 Can do:
   - Log in on the bare domain (localhost / examvaults.in with no
@@ -29,6 +31,10 @@ Can do:
   - Bypass tenant-scoped data restrictions system-wide (the same
     IsSuperAdmin flag also unlocks entities like AuditLog/SystemSettings
     at the query level).
+  - View Audit Reports for any tenant it operates in — the audit-logs GET
+    endpoint (NotificationService AuditLogsController) is now
+    `[Authorize(Roles = "Admin,SuperAdmin")]`; a SuperAdmin claim
+    satisfies it.
 
 Cannot do / not built yet:
   - Subscriptions/billing — deliberately deferred, no functionality.
@@ -37,24 +43,27 @@ Cannot do / not built yet:
     yet" placeholder rather than real functionality — this was a
     deliberate choice (never a dead/hidden button) while those
     cross-tenant backend endpoints don't exist yet.
-  - Audit Logs / Login Activity: the backend's data-layer bypass exists,
-    but as of the last check the controller endpoints gating those were
-    `[Authorize(Roles = "Admin")]` only — a SuperAdmin role claim did not
-    satisfy that gate. (Flagged as a known, still-open gap; may have
-    changed since — verify against ExamService/NotificationService
-    controllers before relying on this.)
 
 
 2. ADMIN (tenant-level — one per organization/tenant)
 -------------------------------------------------------------
 Backend: UserRole.Admin (enum value 1). Every EF Core query filter scopes
 Admin to `entity.TenantId == CurrentTenant.TenantId` — an Admin only ever
-sees their own tenant's data, with no cross-tenant visibility.
+sees their own tenant's data, with no cross-tenant visibility. Within the
+tenant, Admin gets ExamAccessScope.All — unrestricted, tenant-wide.
 
 Can do (all scoped to their own tenant only):
   Users
-    - View/search all users in the tenant, add new users (Student or
-      Admin), edit, deactivate, reset password, view login sessions.
+    - View/search all users in the tenant, add new users (Student,
+      Instructor, or Admin), edit, deactivate, reset password, view login
+      sessions.
+    - Manage Roles & Permissions: edit the permission checklist for
+      Admin/Instructor/Student per tenant. Changing a role's permissions
+      is audit-logged (Security module) and bumps the tenant's
+      PermissionVersion, so an already-issued access token for an
+      affected user gets rejected server-side within ~30s (not just at
+      its next natural refresh) — see the JWT permission-freshness note
+      under Instructor/Student below.
     - (Historical note: the "All Users" list once had zero tenant
       scoping — a real cross-tenant leak — fixed by adding a
       tenant-scoped repository method; self-service lookups and the
@@ -68,10 +77,11 @@ Can do (all scoped to their own tenant only):
       Competitive/Entrance/Internal/Mock/Practice/Recruitment — plain
       admin-managed name+purpose records, not a fixed enum).
     - IMPORTANT: exam "ownership" is tracked (CreatedByUserId is stored
-      on every exam) but NOT enforced anywhere today — any Admin in the
-      tenant can edit or delete ANY exam in that tenant, including ones
-      created by a different Admin. There is no "my exams only" concept
-      currently.
+      on every exam) but NOT enforced for Admin — any Admin in the
+      tenant can still edit or delete ANY exam in that tenant, including
+      ones created by a different Admin or by an Instructor. There is no
+      "my exams only" concept for Admin. (Instructor, below, is the role
+      that actually gets ownership-restricted.)
   Questions
     - Create/edit/delete questions of every type, including
       auto-graded Coding Questions (Function Name, Return Type,
@@ -85,8 +95,8 @@ Can do (all scoped to their own tenant only):
     - Exam Reports, Student Reports, Performance Reports, Audit
       Reports, Exam Type Wise Report (+ its drill-downs: Details,
       Performance Analysis, Student Performance, Comparison, Question
-      Analysis, and the newer per-exam Advance Report with
-      per-exam-type result formats + Excel export).
+      Analysis, and the per-exam Advance Report with per-exam-type
+      result formats + Excel export).
   Notifications
     - Send notifications/emails to students (all students, selected
       students, or exam candidates), manage notification templates.
@@ -103,9 +113,74 @@ Cannot do:
     their tenant's own subdomain.
 
 
-3. STUDENT (tenant-level — the exam-taker)
+3. INSTRUCTOR (tenant-level — scoped exam author)
+-------------------------------------------------------------
+Backend: UserRole.Instructor. Live and enforced — built as "Option B"
+(ownership-scoped), not just a relabeled Admin: Instructor gets real
+ownership-check code across the exam-mutation endpoints, using the
+CreatedByUserId column that already existed on every exam.
+
+Default permission grant (editable per tenant via Admin's Roles &
+Permissions screen): Dashboard-View, Exams-Create, Exams-Edit,
+Questions-Create, Questions-Edit, Results-View. No Users-View/Edit,
+Settings-View/Edit, or Reports-View by default — matching Admin's ability
+to manage Users/Settings/tenant-wide Reports being withheld from
+Instructor.
+
+Can do (own exams only, own tenant only):
+  Exams
+    - Create exams; list/view/edit/delete only exams THEY personally
+      created (ExamAccessScope.OwnedOnly, enforced server-side in
+      ExamsController/SectionsController — not just hidden in the UI).
+      Attempting to edit another Instructor's or an Admin's exam via a
+      direct API call is rejected (403), not merely hidden.
+    - Manage that exam's sections, question assignment (bulk-assign to a
+      section), reorder sections.
+    - View Reports (Exam Report + Advance Report) scoped to their own
+      exams only.
+  Questions
+    - Create/edit questions, including AI-generation (Questions-Create
+      policy) and manual authoring. Editing an existing question is
+      gated by Questions-Edit specifically (separate from Exams-Edit) —
+      an Instructor can have one without the other; the UI hides
+      Edit-question affordances exactly when Questions-Edit is absent,
+      rather than showing a button that then 403s.
+    - Cannot delete questions — the delete endpoint stays Admin-only by
+      design, a role-level restriction rather than a permission-catalog
+      item (Instructor sees no delete affordance for questions at all).
+  Results
+    - View results/reports for their own exams (Results-View
+      permission), same "hidden not disabled" convention as Questions.
+
+Cannot do:
+  - See or touch another Instructor's or Admin's exams, sections, or
+    questions — ownership-enforced server-side, not just UI-hidden.
+  - Manage Users, tenant Settings, Notifications-sending, or Live
+    Monitoring — no routes exist for Instructor to reach these, and the
+    default permission grant excludes them.
+  - See the full tenant student roster — no "All Users" access.
+  - Delete questions (see above).
+
+JWT permission freshness (applies to Instructor and Student alike):
+  Access tokens carry the caller's resolved permission claims and a
+  permission_version claim. If a tenant Admin revokes a permission,
+  every downstream service checks the caller's token version against the
+  tenant's current PermissionVersion (short-TTL cached, fail-open) on
+  each request — so a revoked permission is rejected server-side within
+  about 30 seconds of the change, without waiting for the access token's
+  full ~15-minute natural expiry. The frontend separately decodes the
+  token's own permission claims (usePermissions() hook) to hide affected
+  buttons/links proactively, but the server-side check is the actual
+  enforcement; the UI hiding just avoids showing a dead button.
+
+
+4. STUDENT (tenant-level — the exam-taker)
 -------------------------------------------------------------
 Backend: UserRole.Student (enum value 0, the default for self-registration).
+Default permission grant: Dashboard-View, Results-View, Certificates-View
+— editable per tenant like any other role (e.g. an Admin could revoke a
+Student's Results-View, which would hide "My Results" everywhere in their
+UI and block the results API server-side, per the freshness note above).
 
 Can do:
   - Self-register (lands as Student in the tenant's default pool) or be
@@ -117,7 +192,9 @@ Can do:
     before submitting (informational only — the authoritative grading
     run happens again at submission time; this endpoint never assigns
     marks itself).
-  - View their own results and performance history.
+  - View their own results and performance history (Results-View
+    permission — see freshness note above; this is a real, revocable
+    permission, not a hardcoded role check).
   - Generate/download a certificate PDF for an exam they passed at
     ≥80% (client-side generated, not stored anywhere server-side — the
     certificate ID is deterministically derived from the attempt, so
@@ -130,48 +207,3 @@ Cannot do:
     create/edit exams or questions, cannot access Reports/Live
     Monitoring/Settings/Notifications-sending.
   - Access any other tenant's data.
-
-
-4. INSTRUCTOR / TEACHER — PROPOSED, NOT YET BUILT
--------------------------------------------------------------
-Nothing below this line exists in the running app. Today the system has
-exactly two tenant-level roles (Admin, Student) plus the separate
-platform-level SuperAdmin. Adding a third role is a real, non-trivial
-change: as of this doc, 84 places in the backend and ~148 in the
-frontend hard-code "Admin" as the only non-Student tenant role (route
-guards, [Authorize(Roles="Admin")] attributes, two entirely separate
-UI layout/sidebar trees). None of that touches the multi-tenant
-scoping itself (that already applies uniformly to any non-SuperAdmin
-role), only who is allowed to reach which screens/actions.
-
-Two scope options were discussed, not yet chosen between:
-
-  OPTION A — Instructor = a scoped-down Admin
-    Can do everything a tenant Admin can EXCEPT manage Users, tenant
-    Settings, or (if ever built) Billing. Effectively: full run of
-    Exams/Questions/Live Monitoring/Results/Reports/Notifications
-    inside their tenant, same as any other Admin would see today,
-    with the user/org-management pages hidden.
-    Effort: mostly relabeling existing [Authorize(Roles="Admin")]
-    checks to also accept "Instructor" where appropriate, extending
-    the frontend route guards the same way, and giving Instructor a
-    trimmed copy of the Admin sidebar. No new authorization logic
-    needed — every capability already exists and is already
-    tenant-scoped correctly.
-
-  OPTION B — Instructor = only their own exams and their own students
-    Same as Option A, further restricted: can only create/edit/publish
-    exams THEY personally created, can only view results/reports for
-    THEIR OWN exams, and cannot see the full tenant student roster —
-    only students who've taken one of their exams.
-    Effort: everything in Option A, PLUS real new ownership-check code
-    in every exam-mutating endpoint (Update, Delete, publish, sections,
-    assignments) — none of which check exam ownership today, even
-    though the CreatedByUserId column already exists and is already
-    populated on every exam. This is genuinely new logic, not just
-    relabeling.
-
-Neither option requires a database migration for exam ownership (the
-column already exists) — Option B's added cost is entirely new
-authorization code across the exam-mutation endpoints, none of which
-currently have any ownership check to build on.
