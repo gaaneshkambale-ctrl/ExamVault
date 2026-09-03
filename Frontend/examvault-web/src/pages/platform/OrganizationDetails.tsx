@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, InputGroup, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -28,7 +29,13 @@ import { isValidEmail } from '../../utils/email';
 import { timeAgo } from '../../utils/timeAgo';
 import { PLAN_FEATURE_LABELS } from '../../types/plan';
 import { ORGANIZATION_TYPES } from '../../types/tenant';
-import { COSMETIC_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
+import {
+  COSMETIC_PERMISSIONS,
+  ADMIN_PERMISSIONS,
+  INSTRUCTOR_PERMISSIONS,
+  STUDENT_PERMISSIONS,
+  type CosmeticPermission,
+} from '../../constants/cosmeticRolePermissions';
 
 const ACTIVITY_LOG_FROM = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
 const ACTIVITY_LOG_TO = new Date().toISOString();
@@ -59,6 +66,167 @@ type DetailTab = (typeof TABS)[number];
 // offered here.
 const TENANT_ROLES = ['Admin', 'Instructor', 'Student'] as const;
 type TenantRole = (typeof TENANT_ROLES)[number];
+
+// Mirrors RolePermissionCatalog.DefaultsForRole(role) server-side - used
+// only to seed "Reset to Default" below; it edits the draft, it doesn't
+// save on its own.
+const DEFAULTS_BY_ROLE: Record<TenantRole, CosmeticPermission[]> = {
+  Admin: ADMIN_PERMISSIONS,
+  Instructor: INSTRUCTOR_PERMISSIONS,
+  Student: STUDENT_PERMISSIONS,
+};
+
+// Real, as of this feature: grepped every service's PermissionPolicies.cs
+// and cross-referenced actual [Authorize(Policy = ...)] usage on real
+// controller actions. 10 of the 12 catalog keys have a real backend check
+// behind them today; only Dashboard-View and Certificates-View don't (no
+// endpoint exists to gate). Purely informational here - every permission
+// stays togglable and savable regardless, since RolePermissionCatalog
+// itself doesn't restrict which keys can be set.
+const SERVER_ENFORCED_PERMISSIONS = new Set<CosmeticPermission>([
+  'Exams - Create',
+  'Exams - Edit',
+  'Questions - Create',
+  'Questions - Edit',
+  'Results - View',
+  'Users - View',
+  'Users - Edit',
+  'Settings - View',
+  'Settings - Edit',
+  'Reports - View',
+]);
+
+function RoleGridIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+    </svg>
+  );
+}
+
+function RoleDocumentPlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" /><line x1="9" y1="15" x2="15" y2="15" /><line x1="12" y1="12" x2="12" y2="18" />
+    </svg>
+  );
+}
+
+function RolePencilIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z" />
+    </svg>
+  );
+}
+
+function RoleQuestionCircleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4" /><line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+function RoleBarChartIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="20" x2="12" y2="10" /><line x1="18" y1="20" x2="18" y2="4" /><line x1="6" y1="20" x2="6" y2="16" />
+    </svg>
+  );
+}
+
+function RoleUsersIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function RoleUserEditIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" />
+      <path d="M17.5 14.5 21 11l2 2-3.5 3.5L17 17z" />
+    </svg>
+  );
+}
+
+function RoleGearIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function RolePieChartIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" />
+    </svg>
+  );
+}
+
+function RoleAwardIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="6" /><path d="M15.5 13.5 17 22l-5-3-5 3 1.5-8.5" />
+    </svg>
+  );
+}
+
+function RoleLockIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function RoleCrownIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m2 4 5 5 5-8 5 8 5-5-2 14H4z" />
+    </svg>
+  );
+}
+
+function RolePersonIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+const ROLE_SELECTOR_STYLE: Record<TenantRole, { icon: ReactNode; iconBg: string; iconColor: string }> = {
+  Admin: { icon: <RoleCrownIcon />, iconBg: '#ede9fe', iconColor: '#7c3aed' },
+  Instructor: { icon: <RolePersonIcon />, iconBg: '#ffedd5', iconColor: '#ea580c' },
+  Student: { icon: <RolePersonIcon />, iconBg: '#dcfce7', iconColor: '#16a34a' },
+};
+
+const PERMISSION_INFO: Record<CosmeticPermission, { icon: ReactNode; iconBg: string; iconColor: string; description: string }> = {
+  'Dashboard - View': { icon: <RoleGridIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', description: 'View dashboard and analytics.' },
+  'Exams - Create': { icon: <RoleDocumentPlusIcon />, iconBg: '#dcfce7', iconColor: '#16a34a', description: 'Create new exams.' },
+  'Exams - Edit': { icon: <RolePencilIcon />, iconBg: '#ffedd5', iconColor: '#ea580c', description: 'Edit existing exams.' },
+  'Questions - Create': { icon: <RoleQuestionCircleIcon />, iconBg: '#ede9fe', iconColor: '#7c3aed', description: 'Create new questions.' },
+  'Questions - Edit': { icon: <RoleQuestionCircleIcon />, iconBg: '#dbeafe', iconColor: '#2563eb', description: 'Edit existing questions.' },
+  'Results - View': { icon: <RoleBarChartIcon />, iconBg: '#dbeafe', iconColor: '#2563eb', description: 'View exam results.' },
+  'Users - View': { icon: <RoleUsersIcon />, iconBg: '#dbeafe', iconColor: '#2563eb', description: 'View users and their details.' },
+  'Users - Edit': { icon: <RoleUserEditIcon />, iconBg: '#ffedd5', iconColor: '#ea580c', description: 'Edit user information.' },
+  'Settings - View': { icon: <RoleGearIcon />, iconBg: '#dcfce7', iconColor: '#16a34a', description: 'View organization settings.' },
+  'Settings - Edit': { icon: <RoleGearIcon />, iconBg: '#dcfce7', iconColor: '#16a34a', description: 'Edit organization settings.' },
+  'Reports - View': { icon: <RolePieChartIcon />, iconBg: '#fce7f3', iconColor: '#db2777', description: 'View reports and analytics.' },
+  'Certificates - View': { icon: <RoleAwardIcon />, iconBg: '#fef9c3', iconColor: '#ca8a04', description: 'View certificates.' },
+};
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
@@ -270,6 +438,12 @@ export default function OrganizationDetails() {
       queryClient.setQueryData(['tenant-role-permissions', tenant!.id, selectedRole], permissions);
     },
   });
+  // Resets the draft to RolePermissionCatalog's default set for the
+  // selected role - edits the checkboxes only, still requires Save Changes
+  // to actually persist, same as every other draft-then-save form here.
+  const resetRolePermissionsToDefault = () => {
+    setDraftRolePermissions(new Set(DEFAULTS_BY_ROLE[selectedRole]));
+  };
 
   const [showEditOrg, setShowEditOrg] = useState(false);
   const [editName, setEditName] = useState('');
@@ -695,57 +869,129 @@ export default function OrganizationDetails() {
           {tab === 'Settings' && (
             <Card className="border-0 shadow-sm">
               <Card.Body>
-                <h2 className="h6 fw-bold mb-1">Role Permissions for this organization</h2>
-                <p className="text-muted small mb-3">
-                  Configure this organization's role permissions directly - the same sets its own Admin can
-                  edit from their own console's Roles &amp; Permissions page. Some of these are already
-                  enforced server-side; others remain informational until their own backend enforcement is
-                  wired up.
-                </p>
-                <div className="btn-group mb-3" role="group" aria-label="Select role">
-                  {TENANT_ROLES.map((role) => (
-                    <Button
-                      key={role}
-                      variant={selectedRole === role ? 'primary' : 'outline-secondary'}
-                      size="sm"
-                      onClick={() => setSelectedRole(role)}
-                    >
-                      {role}
-                    </Button>
-                  ))}
+                <div className="d-flex align-items-start gap-3 mb-1">
+                  <div
+                    className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+                    style={{ width: 40, height: 40, background: '#eef2ff', color: '#4f46e5' }}
+                  >
+                    <RoleGearIcon />
+                  </div>
+                  <div>
+                    <h2 className="h6 fw-bold mb-1">Role Permissions for this Organization</h2>
+                    <p className="text-muted small mb-0">
+                      Configure this organization's role permissions directly - the same sets its own Admin
+                      can edit from their own console's Roles &amp; Permissions page. Permissions marked{' '}
+                      <RoleLockIcon /> Server Enforced are actively checked by the backend on every request;
+                      the rest stay informational until their own endpoint enforcement is wired up. Every
+                      permission below can still be toggled and saved either way.
+                    </p>
+                  </div>
                 </div>
+
+                <div className="d-flex flex-wrap gap-2 my-3">
+                  {TENANT_ROLES.map((role) => {
+                    const style = ROLE_SELECTOR_STYLE[role];
+                    const active = selectedRole === role;
+                    return (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => setSelectedRole(role)}
+                        className="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border"
+                        style={{
+                          background: active ? style.iconBg : '#fff',
+                          borderColor: active ? style.iconColor : '#dee2e6',
+                          borderWidth: active ? 2 : 1,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span
+                          className="d-flex align-items-center justify-content-center rounded-2"
+                          style={{ width: 28, height: 28, background: style.iconBg, color: style.iconColor }}
+                        >
+                          {style.icon}
+                        </span>
+                        <span className={active ? 'fw-semibold' : 'text-muted'}>{role}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
                 {isLoadingRolePermissions ? (
                   <div className="d-flex justify-content-center py-4">
                     <Spinner animation="border" size="sm" />
                   </div>
                 ) : (
                   <>
-                    <Row>
-                      {COSMETIC_PERMISSIONS.map((perm) => (
-                        <Col xs={6} key={perm} className="mb-2">
-                          <Form.Check
-                            type="checkbox"
-                            id={`org-role-perm-${perm}`}
-                            label={perm}
-                            checked={draftRolePermissions.has(perm)}
-                            onChange={() => toggleRolePermission(perm)}
-                          />
-                        </Col>
-                      ))}
+                    <Row className="g-2">
+                      {COSMETIC_PERMISSIONS.map((perm) => {
+                        const info = PERMISSION_INFO[perm];
+                        const enforced = SERVER_ENFORCED_PERMISSIONS.has(perm);
+                        const checked = draftRolePermissions.has(perm);
+                        return (
+                          <Col xs={12} md={6} key={perm}>
+                            <label
+                              htmlFor={`org-role-perm-${perm}`}
+                              className="d-flex align-items-start gap-2 p-2 rounded-3 border h-100"
+                              style={{ cursor: 'pointer', background: checked ? '#f8fafc' : '#fff' }}
+                            >
+                              <span
+                                className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                                style={{ width: 32, height: 32, background: info.iconBg, color: info.iconColor }}
+                              >
+                                {info.icon}
+                              </span>
+                              <span className="flex-grow-1">
+                                <span className="d-flex align-items-center gap-2">
+                                  <span className="fw-medium">{perm}</span>
+                                  {enforced && (
+                                    <Badge
+                                      bg="light"
+                                      text="dark"
+                                      className="d-inline-flex align-items-center gap-1 border"
+                                      style={{ fontSize: 10, fontWeight: 600 }}
+                                    >
+                                      <RoleLockIcon /> Server Enforced
+                                    </Badge>
+                                  )}
+                                </span>
+                                <span className="d-block text-muted" style={{ fontSize: 12.5 }}>
+                                  {info.description}
+                                </span>
+                              </span>
+                              <Form.Check
+                                type="checkbox"
+                                id={`org-role-perm-${perm}`}
+                                checked={checked}
+                                onChange={() => toggleRolePermission(perm)}
+                                className="flex-shrink-0"
+                              />
+                            </label>
+                          </Col>
+                        );
+                      })}
                     </Row>
                     {updateRolePermissionsMutation.isError && (
-                      <Alert variant="danger" className="mt-2 mb-0 py-2">
+                      <Alert variant="danger" className="mt-3 mb-0 py-2">
                         {extractServerError(updateRolePermissionsMutation.error)}
                       </Alert>
                     )}
-                    <div className="d-flex justify-content-end mt-3">
-                      <Button
-                        variant="primary"
-                        disabled={updateRolePermissionsMutation.isPending}
-                        onClick={() => updateRolePermissionsMutation.mutate()}
-                      >
-                        {updateRolePermissionsMutation.isPending ? 'Saving...' : 'Save Changes'}
-                      </Button>
+                    <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                      <p className="text-muted small mb-0">
+                        Changes apply to this organization only and do not affect other organizations.
+                      </p>
+                      <div className="d-flex gap-2">
+                        <Button variant="outline-secondary" onClick={resetRolePermissionsToDefault}>
+                          Reset to Default
+                        </Button>
+                        <Button
+                          variant="primary"
+                          disabled={updateRolePermissionsMutation.isPending}
+                          onClick={() => updateRolePermissionsMutation.mutate()}
+                        >
+                          {updateRolePermissionsMutation.isPending ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                      </div>
                     </div>
                   </>
                 )}
