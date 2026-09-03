@@ -28,3 +28,26 @@ export async function sendTestEmail(toEmail: string): Promise<{ message: string 
   const { data } = await apiClient.post<{ message: string }>('/api/platform-settings/test-email', { toEmail });
   return data;
 }
+
+export type EmailConnectionStatusValue = 'NotConfigured' | 'Reachable' | 'Unreachable';
+
+export interface EmailConnectionStatus {
+  status: EmailConnectionStatusValue;
+}
+
+export async function getEmailConnectionStatus(): Promise<EmailConnectionStatus> {
+  const { data } = await apiClient.get<EmailConnectionStatus>('/api/platform-settings/email-connection-status');
+  return data;
+}
+
+export interface EmailSummary {
+  sentToday: number;
+  deliveredToday: number;
+  failedToday: number;
+  deliveryRatePercent: number | null;
+}
+
+export async function getEmailSummary(): Promise<EmailSummary> {
+  const { data } = await apiClient.get<EmailSummary>('/api/platform-settings/email-summary');
+  return data;
+}

@@ -21,17 +21,20 @@ public class N8nEmailDispatcher : IEmailDispatcher
     private readonly HttpClient _httpClient;
     private readonly N8nSettings _settings;
     private readonly IPlatformSettingsRepository _platformSettingsRepository;
+    private readonly IEmailDeliveryLogRepository _deliveryLogRepository;
     private readonly ILogger<N8nEmailDispatcher> _logger;
 
     public N8nEmailDispatcher(
         HttpClient httpClient,
         IOptions<N8nSettings> settings,
         IPlatformSettingsRepository platformSettingsRepository,
+        IEmailDeliveryLogRepository deliveryLogRepository,
         ILogger<N8nEmailDispatcher> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
         _platformSettingsRepository = platformSettingsRepository;
+        _deliveryLogRepository = deliveryLogRepository;
         _logger = logger;
     }
 
@@ -59,15 +62,33 @@ public class N8nEmailDispatcher : IEmailDispatcher
                 _logger.LogWarning(
                     "n8n credential-email webhook returned {StatusCode} for {ToEmail}",
                     response.StatusCode, toEmail);
+                await TryLogAsync(toEmail, subject, success: false, $"HTTP {(int)response.StatusCode}", cancellationToken);
                 return false;
             }
 
+            await TryLogAsync(toEmail, subject, success: true, errorMessage: null, cancellationToken);
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "n8n credential-email webhook call failed for {ToEmail}", toEmail);
+            await TryLogAsync(toEmail, subject, success: false, ex.Message, cancellationToken);
             return false;
+        }
+    }
+
+    // The Email Summary card must never lose a real send/failure outcome, but a
+    // logging hiccup must also never look like the email itself failed - swallow
+    // and log separately rather than letting this throw back into SendAsync.
+    private async Task TryLogAsync(string toEmail, string subject, bool success, string? errorMessage, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _deliveryLogRepository.LogAsync(toEmail, subject, success, errorMessage, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to record email delivery log for {ToEmail}", toEmail);
         }
     }
 }

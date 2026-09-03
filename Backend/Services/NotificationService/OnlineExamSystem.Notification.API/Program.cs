@@ -66,6 +66,7 @@ public class Program
         builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         builder.Services.AddScoped<ISystemSettingsRepository, SystemSettingsRepository>();
         builder.Services.AddScoped<ISystemErrorLogRepository, SystemErrorLogRepository>();
+        builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
         builder.Services.AddScoped<RecordAuditLogHandler>();
         builder.Services.AddScoped<ListAuditLogsHandler>();
         builder.Services.AddScoped<GetSystemSettingsHandler>();

@@ -56,6 +56,8 @@ using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.SetTrial;
 using OnlineExamSystem.User.Application.Tenants.Update;
 using OnlineExamSystem.User.Application.Tenants.UpdateRolePermissions;
+using OnlineExamSystem.User.Application.Settings.GetEmailConnectionStatus;
+using OnlineExamSystem.User.Application.Settings.GetEmailSummary;
 using OnlineExamSystem.User.Application.Settings.GetPlatformSettings;
 using OnlineExamSystem.User.Application.Settings.UpdatePlatformSettings;
 using OnlineExamSystem.User.Application.Security;
@@ -103,6 +105,7 @@ public class Program
         builder.Services.AddScoped<IPlanRepository, PlanRepository>();
         builder.Services.AddScoped<IPlatformSettingsRepository, PlatformSettingsRepository>();
         builder.Services.AddScoped<IPasswordPolicyProvider, PasswordPolicyProvider>();
+        builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
@@ -110,6 +113,10 @@ public class Program
         builder.Services.AddSingleton<ITenantUrlBuilder, TenantUrlBuilder>();
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
+        // Short timeout - this backs a Super Admin "Check Connection" button
+        // click, it must fail fast rather than hang the request.
+        builder.Services.AddHttpClient<IEmailConnectionChecker, N8nConnectionChecker>(client =>
+            client.Timeout = TimeSpan.FromSeconds(5));
 
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
@@ -119,6 +126,11 @@ public class Program
         {
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
+        });
+        builder.Services.AddHttpClient<IEmailDeliverySummaryClient, EmailDeliverySummaryClient>(client =>
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(5);
         });
         builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
         builder.Services.AddScoped<RegisterUserHandler>();
@@ -183,6 +195,8 @@ public class Program
         builder.Services.AddScoped<GetPlatformSettingsHandler>();
         builder.Services.AddScoped<IValidator<UpdatePlatformSettingsCommand>, UpdatePlatformSettingsValidator>();
         builder.Services.AddScoped<UpdatePlatformSettingsHandler>();
+        builder.Services.AddScoped<GetEmailConnectionStatusHandler>();
+        builder.Services.AddScoped<GetEmailSummaryHandler>();
 
         builder.Services.AddScoped<IValidator<CreatePlanCommand>, CreatePlanValidator>();
         builder.Services.AddScoped<CreatePlanHandler>();

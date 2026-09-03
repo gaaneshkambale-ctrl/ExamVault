@@ -4,7 +4,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import SettingsTabNav from '../../components/SettingsTabNav';
 import SettingsDisclosure from '../../components/SettingsDisclosure';
-import { getPlatformSettings, sendTestEmail, updatePlatformSettings } from '../../api/platformSettingsApi';
+import {
+  getEmailConnectionStatus,
+  getEmailSummary,
+  getPlatformSettings,
+  sendTestEmail,
+  updatePlatformSettings,
+  type EmailConnectionStatusValue,
+} from '../../api/platformSettingsApi';
 import { extractServerError } from '../../utils/apiError';
 import type { PlatformSettings, UpdatePlatformSettingsRequest } from '../../types/platformSettings';
 
@@ -16,10 +23,17 @@ import type { PlatformSettings, UpdatePlatformSettingsRequest } from '../../type
 // N8nEmailDispatcher) - NotificationService's separate notify webhook
 // (exam reminders, results published, etc.) still only reads its own
 // static appsettings config, not this field, so this doesn't control ALL
-// platform email. Send Test Email is real - it posts an actual payload
-// through the same dispatch path. Connection Status/Email Summary/
-// Templates/Signature stay honest placeholders - there's no live health
-// check or send/delivery counters recorded anywhere in this codebase.
+// platform email. Send Test Email is real. Connection Status is a real
+// HEAD-request reachability probe against the configured webhook (never a
+// real send). Email Summary is a real count of today's send attempts,
+// summed across BOTH n8n dispatchers (this one plus NotificationService's
+// separate copy) via a cross-service call. Templates/Signature stay honest
+// placeholders - no template-editing concept exists anywhere.
+const CONNECTION_STATUS_LABEL: Record<EmailConnectionStatusValue, { label: string; variant: string }> = {
+  NotConfigured: { label: 'Not configured', variant: 'light' },
+  Reachable: { label: 'Reachable', variant: 'success' },
+  Unreachable: { label: 'Unreachable', variant: 'danger' },
+};
 const TABS = [
   { key: 'smtp', label: 'SMTP Server' },
   { key: 'templates', label: 'Email Templates' },
@@ -62,6 +76,15 @@ export default function EmailSettings() {
     mutationFn: (toEmail: string) => sendTestEmail(toEmail),
   });
 
+  const connectionStatusMutation = useMutation({
+    mutationFn: () => getEmailConnectionStatus(),
+  });
+
+  const { data: emailSummary, isLoading: isSummaryLoading, isError: isSummaryError } = useQuery({
+    queryKey: ['email-summary'],
+    queryFn: getEmailSummary,
+  });
+
   const update = <K extends keyof PlatformSettings>(key: K, value: PlatformSettings[K]) => {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
@@ -78,7 +101,7 @@ export default function EmailSettings() {
       <h1 className="h4 fw-bold mb-1 text-primary">Email Settings</h1>
       <p className="text-muted mb-3">Configure email settings for system and notifications.</p>
 
-      <SettingsDisclosure text="This platform sends email via a single n8n webhook, not SMTP - the Webhook URL below is real and overrides account-invite emails specifically (not every notification email in the system). Send Test Email genuinely sends through it. Connection Status, Email Summary, Templates, and Signature stay a visual reference - nothing here tracks send/delivery outcomes or supports a live connection check yet." />
+      <SettingsDisclosure text="This platform sends email via a single n8n webhook, not SMTP - the Webhook URL below is real and overrides account-invite emails specifically (not every notification email in the system). Send Test Email genuinely sends through it. Connection Status is a real reachability check against the configured webhook. Email Summary is a real count of today's send attempts, combined across this webhook and NotificationService's separate one. Templates and Signature stay a visual reference - no template-editing concept exists anywhere." />
 
       <Row className="g-3">
         <Col lg={2}>
@@ -160,34 +183,69 @@ export default function EmailSettings() {
                     <Card className="border-0 shadow-sm mb-3">
                       <Card.Body>
                         <h2 className="h6 fw-bold mb-3">Connection Status</h2>
-                        <Badge bg="light" text="muted" className="border mb-2">
-                          Not connected yet
-                        </Badge>
-                        <div className="text-muted small">No live webhook health check is wired up.</div>
+                        {connectionStatusMutation.data ? (
+                          <Badge
+                            bg={CONNECTION_STATUS_LABEL[connectionStatusMutation.data.status].variant}
+                            text={connectionStatusMutation.data.status === 'NotConfigured' ? 'muted' : undefined}
+                            className={connectionStatusMutation.data.status === 'NotConfigured' ? 'border mb-2' : 'mb-2'}
+                          >
+                            {CONNECTION_STATUS_LABEL[connectionStatusMutation.data.status].label}
+                          </Badge>
+                        ) : (
+                          <Badge bg="light" text="muted" className="border mb-2">
+                            Not checked yet
+                          </Badge>
+                        )}
+                        <div className="text-muted small mb-2">
+                          {connectionStatusMutation.data?.status === 'NotConfigured'
+                            ? 'No webhook URL is configured.'
+                            : 'A HEAD request to the configured webhook - never a real send.'}
+                        </div>
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          disabled={connectionStatusMutation.isPending}
+                          onClick={() => connectionStatusMutation.mutate()}
+                        >
+                          {connectionStatusMutation.isPending ? 'Checking...' : 'Check Connection'}
+                        </Button>
+                        {connectionStatusMutation.isError && (
+                          <Alert variant="danger" className="mt-2 mb-0 py-2">
+                            {extractServerError(connectionStatusMutation.error)}
+                          </Alert>
+                        )}
                       </Card.Body>
                     </Card>
 
                     <Card className="border-0 shadow-sm">
                       <Card.Body>
                         <h2 className="h6 fw-bold mb-3">Email Summary</h2>
-                        <div className="d-flex flex-column gap-2 small">
-                          <div className="d-flex justify-content-between">
-                            <span className="text-muted">Emails Sent (Today)</span>
-                            <span>—</span>
+                        {isSummaryLoading && (
+                          <div className="d-flex justify-content-center py-3">
+                            <Spinner animation="border" size="sm" />
                           </div>
-                          <div className="d-flex justify-content-between">
-                            <span className="text-muted">Emails Delivered</span>
-                            <span>—</span>
+                        )}
+                        {isSummaryError && <div className="text-danger small">Couldn't load today's email summary.</div>}
+                        {!isSummaryLoading && !isSummaryError && emailSummary && (
+                          <div className="d-flex flex-column gap-2 small">
+                            <div className="d-flex justify-content-between">
+                              <span className="text-muted">Emails Sent (Today)</span>
+                              <span>{emailSummary.sentToday}</span>
+                            </div>
+                            <div className="d-flex justify-content-between">
+                              <span className="text-muted">Emails Delivered</span>
+                              <span>{emailSummary.deliveredToday}</span>
+                            </div>
+                            <div className="d-flex justify-content-between">
+                              <span className="text-muted">Delivery Rate</span>
+                              <span>{emailSummary.deliveryRatePercent === null ? '—' : `${emailSummary.deliveryRatePercent}%`}</span>
+                            </div>
+                            <div className="d-flex justify-content-between">
+                              <span className="text-muted">Emails Failed</span>
+                              <span>{emailSummary.failedToday}</span>
+                            </div>
                           </div>
-                          <div className="d-flex justify-content-between">
-                            <span className="text-muted">Delivery Rate</span>
-                            <span>—</span>
-                          </div>
-                          <div className="d-flex justify-content-between">
-                            <span className="text-muted">Emails Failed</span>
-                            <span>—</span>
-                          </div>
-                        </div>
+                        )}
                       </Card.Body>
                     </Card>
                   </Col>

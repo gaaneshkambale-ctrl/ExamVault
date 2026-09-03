@@ -24,6 +24,7 @@ public class UserDbContext : DbContext
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -202,6 +203,17 @@ public class UserDbContext : DbContext
 
             entity.HasQueryFilter(rp =>
                 _currentTenant.IsSuperAdmin || (_currentTenant.IsAuthenticated && rp.TenantId == _currentTenant.TenantId));
+        });
+
+        // No HasQueryFilter - a platform-wide operational log, same reasoning
+        // as PlatformSettings/SystemErrorLog, not per-organization data.
+        modelBuilder.Entity<EmailDeliveryLog>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+            entity.HasIndex(l => l.CreatedAtUtc);
+            entity.Property(l => l.ToEmail).IsRequired().HasMaxLength(320);
+            entity.Property(l => l.Subject).IsRequired().HasMaxLength(200);
+            entity.Property(l => l.ErrorMessage).HasMaxLength(1000);
         });
     }
 }

@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
 using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Application.Settings.GetEmailConnectionStatus;
+using OnlineExamSystem.User.Application.Settings.GetEmailSummary;
 using OnlineExamSystem.User.Application.Settings.GetPlatformSettings;
 using OnlineExamSystem.User.Application.Settings.UpdatePlatformSettings;
 using PlatformSettingsEntity = OnlineExamSystem.User.Domain.Entities.PlatformSettings;
@@ -21,17 +23,23 @@ public class PlatformSettingsController : ControllerBase
     private readonly UpdatePlatformSettingsHandler _updateHandler;
     private readonly IPlatformSettingsRepository _platformSettingsRepository;
     private readonly IEmailDispatcher _emailDispatcher;
+    private readonly GetEmailConnectionStatusHandler _connectionStatusHandler;
+    private readonly GetEmailSummaryHandler _emailSummaryHandler;
 
     public PlatformSettingsController(
         GetPlatformSettingsHandler getHandler,
         UpdatePlatformSettingsHandler updateHandler,
         IPlatformSettingsRepository platformSettingsRepository,
-        IEmailDispatcher emailDispatcher)
+        IEmailDispatcher emailDispatcher,
+        GetEmailConnectionStatusHandler connectionStatusHandler,
+        GetEmailSummaryHandler emailSummaryHandler)
     {
         _getHandler = getHandler;
         _updateHandler = updateHandler;
         _platformSettingsRepository = platformSettingsRepository;
         _emailDispatcher = emailDispatcher;
+        _connectionStatusHandler = connectionStatusHandler;
+        _emailSummaryHandler = emailSummaryHandler;
     }
 
     [HttpGet]
@@ -124,6 +132,26 @@ public class PlatformSettingsController : ControllerBase
         }
 
         return Ok(new { message = "Test email sent." });
+    }
+
+    // Real reachability probe (HEAD, never a real send) against the
+    // currently configured n8n webhook - see N8nConnectionChecker's own
+    // comment for exactly what counts as Reachable vs Unreachable.
+    [HttpGet("email-connection-status")]
+    public async Task<IActionResult> GetEmailConnectionStatus(CancellationToken cancellationToken)
+    {
+        var status = await _connectionStatusHandler.HandleAsync(new GetEmailConnectionStatusQuery(), cancellationToken);
+        return Ok(new EmailConnectionStatusResponse(status.ToString()));
+    }
+
+    // Sums today's send/deliver/fail counts from this service's own
+    // credential-email log with NotificationService's separate general-
+    // notification log - see GetEmailSummaryHandler's own comment.
+    [HttpGet("email-summary")]
+    public async Task<IActionResult> GetEmailSummary(CancellationToken cancellationToken)
+    {
+        var summary = await _emailSummaryHandler.HandleAsync(new GetEmailSummaryQuery(), cancellationToken);
+        return Ok(new EmailSummaryResponse(summary.SentToday, summary.DeliveredToday, summary.FailedToday, summary.DeliveryRatePercent));
     }
 
     private static PlatformSettingsResponse ToResponse(PlatformSettingsEntity settings) =>
