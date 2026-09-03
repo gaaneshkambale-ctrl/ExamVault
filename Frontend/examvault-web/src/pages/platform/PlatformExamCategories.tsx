@@ -314,16 +314,18 @@ export default function PlatformExamCategories() {
                     <span className="fw-medium">{name}</span>
                     <span className="text-muted small">{matchedExams.length}</span>
                   </span>
-                  <Badge
-                    className="me-2"
+                  {/* Plain span, not react-bootstrap's Badge - Badge's default bg="primary"
+                      utility class is !important and clobbers a custom inline background,
+                      leaving the custom text color unreadable against it. */}
+                  <span
+                    className="d-inline-flex align-items-center rounded-pill px-2 py-1 small fw-medium me-2"
                     style={{
                       background: matchedExams.length > 0 ? '#eef2ff' : '#f3f4f6',
                       color: matchedExams.length > 0 ? '#4f46e5' : '#9ca3af',
-                      fontWeight: 500,
                     }}
                   >
                     {matchedExams.length} {matchedExams.length === 1 ? 'Exam' : 'Exams'}
-                  </Badge>
+                  </span>
                 </Accordion.Header>
                 <Accordion.Body className="p-0">
                   {matchedExams.length === 0 ? (
