@@ -134,7 +134,6 @@ const navGroups: NavGroup[] = [
       { key: 'users-org-admins', label: 'Organization Admins', path: '/platform/users/organization-admins' },
       { key: 'users-students', label: 'Students', path: '/platform/users/students' },
       { key: 'users-platform-admins', label: 'Platform Admins', path: '/platform/users/platform-admins' },
-      { key: 'users-roles', label: 'Roles & Permissions', path: '/platform/users/roles' },
     ],
   },
   {
