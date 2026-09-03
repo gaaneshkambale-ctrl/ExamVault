@@ -12,6 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.User.API.Authorization;
+using OnlineExamSystem.User.API.Jobs;
 using OnlineExamSystem.User.Application.Plans.Create;
 using OnlineExamSystem.User.Application.Plans.Delete;
 using OnlineExamSystem.User.Application.Plans.List;
@@ -170,6 +171,7 @@ public class Program
         builder.Services.AddScoped<SetTenantTrialHandler>();
         builder.Services.AddScoped<GetTenantRolePermissionsHandler>();
         builder.Services.AddScoped<UpdateTenantRolePermissionsHandler>();
+        builder.Services.AddHostedService<TrialExpiryCheckService>();
 
         builder.Services.AddScoped<IValidator<CreatePlanCommand>, CreatePlanValidator>();
         builder.Services.AddScoped<CreatePlanHandler>();
