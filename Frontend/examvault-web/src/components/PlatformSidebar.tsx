@@ -171,6 +171,7 @@ const navGroups: NavGroup[] = [
     path: '/platform/monitoring',
     icon: groupIcons.monitoring,
     children: [
+      { key: 'mon-overview', label: 'Overview', path: '/platform/monitoring' },
       { key: 'mon-active-orgs', label: 'Active Organizations', path: '/platform/monitoring/active-organizations' },
       { key: 'mon-active-exams', label: 'Active Exams', path: '/platform/monitoring/active-exams' },
       { key: 'mon-system-health', label: 'System Health', path: '/platform/monitoring/system-health' },

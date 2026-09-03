@@ -111,6 +111,7 @@ import MonitoringOverview from '../pages/platform/monitoring/MonitoringOverview'
 import MonitoringActiveOrganizations from '../pages/platform/monitoring/ActiveOrganizations';
 import MonitoringActiveExams from '../pages/platform/monitoring/ActiveExams';
 import MonitoringSystemHealth from '../pages/platform/monitoring/SystemHealth';
+import MonitoringApiHealth from '../pages/platform/monitoring/ApiHealth';
 import MonitoringServiceStatus from '../pages/platform/monitoring/ServiceStatus';
 import SystemLogs from '../pages/platform/SystemLogs';
 import PlatformAllExams from '../pages/platform/PlatformAllExams';
@@ -1125,6 +1126,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <MonitoringSystemHealth />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/monitoring/api-health"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <MonitoringApiHealth />
           </ProtectedRoute>
         }
       />
