@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Dropdown, Form, InputGroup, Modal, Row, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
 import ReportStatCard from '../../components/reports/ReportStatCard';
@@ -6,7 +7,7 @@ import { CheckCircleIcon, MinusCircleIcon } from '../../components/reports/Repor
 import { useAuth } from '../../hooks/useAuth';
 import { useUsers } from '../../hooks/useUsers';
 import { useRolePermissions, useUpdateRolePermissions } from '../../hooks/useRolePermissions';
-import { EditIcon } from '../../components/icons/ActionIcons';
+import { BarChartIcon, EditIcon, UsersIcon } from '../../components/icons/ActionIcons';
 import {
   COSMETIC_PERMISSIONS,
   COSMETIC_ROLE_PERMISSIONS,
@@ -50,6 +51,82 @@ function LockIcon({ size = 16 }: { size?: number }) {
     </svg>
   );
 }
+
+function GridIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+    </svg>
+  );
+}
+
+function ClipboardIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    </svg>
+  );
+}
+
+function QuestionCircleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12" y2="17" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function DocumentIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" />
+    </svg>
+  );
+}
+
+function ShieldCheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
+      <path d="M9 12.5l2 2 4-4.5" />
+    </svg>
+  );
+}
+
+interface PermissionModule {
+  name: string;
+  icon: ReactNode;
+  iconBg: string;
+  iconColor: string;
+  permissions: string[];
+}
+
+// Groups the same flat COSMETIC_PERMISSIONS list the rest of the page
+// already uses into named modules purely for the edit modal's layout - the
+// underlying permission keys and their persistence are unchanged.
+const PERMISSION_MODULES: PermissionModule[] = [
+  { name: 'Dashboard', icon: <GridIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', permissions: ['Dashboard - View'] },
+  { name: 'Exams', icon: <ClipboardIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', permissions: ['Exams - Create', 'Exams - Edit'] },
+  { name: 'Questions', icon: <QuestionCircleIcon />, iconBg: '#ecfdf5', iconColor: '#059669', permissions: ['Questions - Create', 'Questions - Edit'] },
+  { name: 'Results', icon: <BarChartIcon />, iconBg: '#fff7ed', iconColor: '#d97706', permissions: ['Results - View'] },
+  { name: 'Users', icon: <UsersIcon />, iconBg: '#ede9fe', iconColor: '#7c3aed', permissions: ['Users - View', 'Users - Edit'] },
+  { name: 'Settings', icon: <GearIcon />, iconBg: '#e0f2fe', iconColor: '#0284c7', permissions: ['Settings - View', 'Settings - Edit'] },
+  { name: 'Reports', icon: <DocumentIcon />, iconBg: '#ecfdf5', iconColor: '#059669', permissions: ['Reports - View'] },
+  { name: 'Certificates', icon: <ShieldCheckIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', permissions: ['Certificates - View'] },
+];
 
 interface RoleRow {
   role: string;
@@ -341,25 +418,51 @@ export default function RolesPermissions() {
         </Card.Body>
       </Card>
 
-      <Modal show={editingRole !== null} onHide={() => setEditingRole(null)} centered>
+      <Modal show={editingRole !== null} onHide={() => setEditingRole(null)} centered size="lg">
         <Modal.Header closeButton>
-          <Modal.Title className="h6">Edit {editingRole} Permissions</Modal.Title>
+          <div className="d-flex align-items-center gap-3">
+            <div
+              className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+              style={{ width: 40, height: 40, background: '#eef2ff', color: '#4f46e5' }}
+            >
+              <ShieldCheckIcon />
+            </div>
+            <div>
+              <Modal.Title className="h6 mb-0">Edit {editingRole} Permissions</Modal.Title>
+              <div className="text-muted small">Manage the permissions available for the {editingRole} role.</div>
+            </div>
+          </div>
         </Modal.Header>
         <Modal.Body>
-          <p className="text-muted small">
+          <Alert variant="info" className="py-2 small">
             Saving updates {editingRole}'s permission set. Some of these permissions are already enforced
             server-side; others remain informational until their own backend enforcement is wired up.
-          </p>
-          <Row>
-            {COSMETIC_PERMISSIONS.map((perm) => (
-              <Col xs={6} key={perm} className="mb-2">
-                <Form.Check
-                  type="checkbox"
-                  id={`edit-perm-${perm}`}
-                  label={perm}
-                  checked={draftPermissions.has(perm)}
-                  onChange={() => togglePermission(perm)}
-                />
+          </Alert>
+
+          <div className="fw-bold mb-2">Permission Modules</div>
+          <Row className="g-4">
+            {PERMISSION_MODULES.map((mod) => (
+              <Col xs={12} md={4} key={mod.name}>
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <div
+                    className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                    style={{ width: 28, height: 28, background: mod.iconBg, color: mod.iconColor }}
+                  >
+                    {mod.icon}
+                  </div>
+                  <span className="fw-medium small">{mod.name}</span>
+                </div>
+                {mod.permissions.map((perm) => (
+                  <Form.Check
+                    key={perm}
+                    type="checkbox"
+                    id={`edit-perm-${perm}`}
+                    label={perm}
+                    className="mb-1"
+                    checked={draftPermissions.has(perm)}
+                    onChange={() => togglePermission(perm)}
+                  />
+                ))}
               </Col>
             ))}
           </Row>
