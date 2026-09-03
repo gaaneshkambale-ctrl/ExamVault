@@ -196,10 +196,18 @@ export default function ImportUsers() {
   return (
     <AdminLayout active="Users">
       <div className="d-flex justify-content-between align-items-center mb-1">
-        <div>
-          <p className="text-muted small mb-1">Users / Bulk Import Users</p>
-          <h1 className="h4 fw-bold mb-1 text-primary">Bulk Import Users</h1>
-          <p className="text-muted mb-0">Import multiple users at once using an Excel (.xlsx) file.</p>
+        <div className="d-flex align-items-center gap-3">
+          <div
+            className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+            style={{ width: 44, height: 44, background: '#eef2ff', color: '#4f46e5' }}
+          >
+            <UploadIcon />
+          </div>
+          <div>
+            <p className="text-muted small mb-1">Users / Bulk Import Users</p>
+            <h1 className="h4 fw-bold mb-1 text-primary">Bulk Import Users</h1>
+            <p className="text-muted mb-0">Import multiple users at once using an Excel (.xlsx) file.</p>
+          </div>
         </div>
         <Button variant="outline-primary" onClick={() => void downloadTemplate()}>
           Download Sample File
