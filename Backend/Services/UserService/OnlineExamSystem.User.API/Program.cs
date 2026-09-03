@@ -48,6 +48,7 @@ using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
 using OnlineExamSystem.User.Application.Tenants.Delete;
 using OnlineExamSystem.User.Application.Tenants.GetBySlug;
 using OnlineExamSystem.User.Application.Tenants.GetPermissionVersion;
+using OnlineExamSystem.User.Application.Tenants.GetLimits;
 using OnlineExamSystem.User.Application.Tenants.GetRolePermissions;
 using OnlineExamSystem.User.Application.Tenants.List;
 using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
@@ -55,6 +56,9 @@ using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.SetTrial;
 using OnlineExamSystem.User.Application.Tenants.Update;
 using OnlineExamSystem.User.Application.Tenants.UpdateRolePermissions;
+using OnlineExamSystem.User.Application.Settings.GetPlatformSettings;
+using OnlineExamSystem.User.Application.Settings.UpdatePlatformSettings;
+using OnlineExamSystem.User.Application.Security;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
@@ -97,6 +101,8 @@ public class Program
         builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
         builder.Services.AddScoped<ITenantRepository, TenantRepository>();
         builder.Services.AddScoped<IPlanRepository, PlanRepository>();
+        builder.Services.AddScoped<IPlatformSettingsRepository, PlatformSettingsRepository>();
+        builder.Services.AddScoped<IPasswordPolicyProvider, PasswordPolicyProvider>();
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
@@ -161,6 +167,7 @@ public class Program
         builder.Services.AddScoped<SetTenantActiveStatusHandler>();
         builder.Services.AddScoped<GetTenantBySlugHandler>();
         builder.Services.AddScoped<GetTenantPermissionVersionHandler>();
+        builder.Services.AddScoped<GetTenantLimitsHandler>();
         builder.Services.AddScoped<IValidator<CreateTenantAdminCommand>, CreateTenantAdminValidator>();
         builder.Services.AddScoped<CreateTenantAdminHandler>();
         builder.Services.AddScoped<AssignPlanToTenantHandler>();
@@ -172,6 +179,10 @@ public class Program
         builder.Services.AddScoped<GetTenantRolePermissionsHandler>();
         builder.Services.AddScoped<UpdateTenantRolePermissionsHandler>();
         builder.Services.AddHostedService<TrialExpiryCheckService>();
+
+        builder.Services.AddScoped<GetPlatformSettingsHandler>();
+        builder.Services.AddScoped<IValidator<UpdatePlatformSettingsCommand>, UpdatePlatformSettingsValidator>();
+        builder.Services.AddScoped<UpdatePlatformSettingsHandler>();
 
         builder.Services.AddScoped<IValidator<CreatePlanCommand>, CreatePlanValidator>();
         builder.Services.AddScoped<CreatePlanHandler>();

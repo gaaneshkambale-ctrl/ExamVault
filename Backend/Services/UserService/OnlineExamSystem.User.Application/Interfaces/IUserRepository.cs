@@ -23,6 +23,11 @@ public interface IUserRepository
     Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AppUser>> GetByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>Real Tenant Settings > Default Limits "Max Users" enforcement point -
+    /// CreateUserHandler checks this against Tenant.MaxUsers before creating a new
+    /// user for that tenant.</summary>
+    Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
     Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default);
     Task AddAsync(AppUser user, CancellationToken cancellationToken = default);
     Task AddRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken = default);

@@ -55,6 +55,19 @@ public class CreateUserHandler
             return CreateUserResult.Conflict();
         }
 
+        // Real Tenant Settings > Default Limits "Max Users" enforcement -
+        // null MaxUsers (the common case, no admin has set one) means
+        // unlimited, same as before this existed.
+        var owningTenant = await _tenantRepository.GetByIdAsync(command.TenantId, cancellationToken);
+        if (owningTenant?.MaxUsers is not null)
+        {
+            var currentUserCount = await _userRepository.CountByTenantAsync(command.TenantId, cancellationToken);
+            if (currentUserCount >= owningTenant.MaxUsers)
+            {
+                return CreateUserResult.Invalid([$"This organization has reached its limit of {owningTenant.MaxUsers} users."]);
+            }
+        }
+
         var temporaryPassword = _passwordGenerator.Generate();
 
         var user = new AppUser
@@ -76,9 +89,8 @@ public class CreateUserHandler
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        var tenant = await _tenantRepository.GetByIdAsync(command.TenantId, cancellationToken);
-        var loginUrl = _tenantUrlBuilder.GetLoginUrl(tenant?.Slug, tenant?.IsActive ?? true);
-        var orgName = tenant?.Name;
+        var loginUrl = _tenantUrlBuilder.GetLoginUrl(owningTenant?.Slug, owningTenant?.IsActive ?? true);
+        var orgName = owningTenant?.Name;
 
         var emailSent = await _emailDispatcher.SendAsync(
             toEmail: user.Email,
@@ -94,7 +106,7 @@ public class CreateUserHandler
                   "set a new password of your own before you can continue.\n\n" +
                   "Thanks & Regards,\nExamVault",
             loginUrl: loginUrl,
-            tenantSlug: tenant?.Slug,
+            tenantSlug: owningTenant?.Slug,
             cancellationToken: cancellationToken);
         if (!emailSent)
         {

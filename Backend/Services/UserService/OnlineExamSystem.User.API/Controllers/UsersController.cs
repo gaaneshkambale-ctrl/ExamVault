@@ -165,6 +165,26 @@ public class UsersController : ControllerBase
                 new { message = "Your account has been deactivated. Contact an administrator." });
         }
 
+        if (result.IsAccountLocked)
+        {
+            _logger.LogWarning("Login blocked for locked account {Email} until {LockoutEndUtc}.", request.Email, result.LockoutEndUtc);
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message = $"Too many failed login attempts. Try again after {result.LockoutEndUtc:HH:mm} UTC.",
+                    lockoutEndUtc = result.LockoutEndUtc,
+                });
+        }
+
+        if (result.IsMaintenanceMode)
+        {
+            _logger.LogWarning("Login blocked for {Email} - platform is in maintenance mode.", request.Email);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The platform is currently undergoing maintenance. Please try again shortly." });
+        }
+
         if (!result.Success)
         {
             _logger.LogWarning("Login failed for email {Email}.", request.Email);

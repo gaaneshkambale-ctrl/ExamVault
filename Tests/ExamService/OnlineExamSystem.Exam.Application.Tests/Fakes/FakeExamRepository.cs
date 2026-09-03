@@ -45,6 +45,9 @@ public class FakeExamRepository : IExamRepository
     public Task<IReadOnlyList<ExamPaper>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ExamPaper>>(_exams.OrderByDescending(e => e.CreatedAtUtc).ToList());
 
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_exams.Count(e => e.TenantId == tenantId));
+
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
     {
         _exams.RemoveAll(e => e.Id == exam.Id);

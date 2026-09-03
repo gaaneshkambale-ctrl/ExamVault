@@ -14,6 +14,7 @@ public class LoginUserHandler
     private readonly ITenantRepository _tenantRepository;
     private readonly IPlanRepository _planRepository;
     private readonly IRolePermissionRepository _rolePermissionRepository;
+    private readonly IPlatformSettingsRepository _platformSettingsRepository;
     private readonly IValidator<LoginUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IJwtTokenService _jwtTokenService;
@@ -24,6 +25,7 @@ public class LoginUserHandler
         ITenantRepository tenantRepository,
         IPlanRepository planRepository,
         IRolePermissionRepository rolePermissionRepository,
+        IPlatformSettingsRepository platformSettingsRepository,
         IValidator<LoginUserCommand> validator,
         IPasswordHasher<AppUser> passwordHasher,
         IJwtTokenService jwtTokenService,
@@ -33,6 +35,7 @@ public class LoginUserHandler
         _tenantRepository = tenantRepository;
         _planRepository = planRepository;
         _rolePermissionRepository = rolePermissionRepository;
+        _platformSettingsRepository = platformSettingsRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
@@ -48,6 +51,11 @@ public class LoginUserHandler
         {
             return LoginUserResult.InvalidCredentials();
         }
+
+        // Read-only - never creates a row on the hot login path. Null means
+        // "no admin has touched Settings yet", so every real field below falls
+        // back to the same default the pre-Settings code always used.
+        var platformSettings = await _platformSettingsRepository.GetAsync(cancellationToken);
 
         // TenantSlug is only ever populated once the Gateway/frontend actually
         // resolves a subdomain (Phase 3 of multi_tenant_saas.txt) - until then
@@ -94,15 +102,40 @@ public class LoginUserHandler
             }
         }
 
+        // Real Security Settings > Password Policy "Maximum Login Attempts" -
+        // checked before touching the password at all, so a locked-out account
+        // can't be brute-forced during its own lockout window. Expired lockouts
+        // clear themselves here rather than needing a separate cleanup job.
+        if (user.LockoutEndUtc is not null)
+        {
+            if (user.LockoutEndUtc > DateTime.UtcNow)
+            {
+                return LoginUserResult.AccountLocked(user.LockoutEndUtc.Value);
+            }
+
+            user.LockoutEndUtc = null;
+            user.FailedLoginAttempts = 0;
+        }
+
         var verification = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, command.Password);
         if (verification == PasswordVerificationResult.Failed)
         {
+            var maxAttempts = platformSettings?.MaxLoginAttempts ?? 5;
+            var lockoutMinutes = platformSettings?.LockoutMinutes ?? 15;
+            user.FailedLoginAttempts += 1;
+            var justLockedOut = user.FailedLoginAttempts >= maxAttempts;
+            if (justLockedOut)
+            {
+                user.LockoutEndUtc = DateTime.UtcNow.AddMinutes(lockoutMinutes);
+            }
+            await _userRepository.SaveChangesAsync(cancellationToken);
+
             // Only auditable failure case with a real identity to attach -
             // unknown tenant/email above deliberately stays unaudited too,
             // same "never reveal whether it exists" principle already
             // documented there.
             await RecordLoginAuditAsync(user, "Failed login", command.IpAddress, cancellationToken);
-            return LoginUserResult.InvalidCredentials();
+            return justLockedOut ? LoginUserResult.AccountLocked(user.LockoutEndUtc!.Value) : LoginUserResult.InvalidCredentials();
         }
 
         if (!user.IsActive && !user.MustChangePassword)
@@ -111,12 +144,22 @@ public class LoginUserHandler
             return LoginUserResult.AccountDeactivated();
         }
 
+        // Real Platform Settings > General "Maintenance Mode" - checked only
+        // after a genuinely correct password, so a wrong-password attempt
+        // during maintenance still looks like an ordinary failed login, not a
+        // maintenance-mode probe. Super Admin always gets through, so they can
+        // turn it back off.
+        if (platformSettings is not null && platformSettings.MaintenanceModeEnabled && user.Role != UserRole.SuperAdmin)
+        {
+            return LoginUserResult.MaintenanceMode();
+        }
+
         var enabledFeatures = await _planRepository.GetFeaturesForTenantAsync(user.TenantId, cancellationToken);
         var grantedPermissions = await _rolePermissionRepository.GetForRoleAsync(
             user.TenantId, RolePermissionCatalog.CatalogRoleName(user.Role), cancellationToken);
         var callerTenant = await _tenantRepository.GetByIdAsync(user.TenantId, cancellationToken);
         var accessToken = _jwtTokenService.GenerateAccessToken(
-            user, enabledFeatures, grantedPermissions, callerTenant?.PermissionVersion ?? 0);
+            user, enabledFeatures, grantedPermissions, callerTenant?.PermissionVersion ?? 0, platformSettings?.SessionTimeoutMinutes);
         var refreshToken = _jwtTokenService.GenerateRefreshToken();
 
         await _userRepository.AddRefreshTokenAsync(new RefreshToken
@@ -128,6 +171,8 @@ public class LoginUserHandler
             IpAddress = command.IpAddress,
         }, cancellationToken);
         user.LastLoginAtUtc = DateTime.UtcNow;
+        user.FailedLoginAttempts = 0;
+        user.LockoutEndUtc = null;
         await _userRepository.SaveChangesAsync(cancellationToken);
 
         await RecordLoginAuditAsync(user, "User login", command.IpAddress, cancellationToken);

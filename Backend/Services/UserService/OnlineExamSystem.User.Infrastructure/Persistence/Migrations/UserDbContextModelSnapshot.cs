@@ -50,6 +50,9 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -69,6 +72,9 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.Property<string>("Location")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("LockoutEndUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("MustChangePassword")
                         .HasColumnType("bit");
@@ -209,6 +215,82 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.PlatformSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AllowSelfRegistration")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("DefaultEmailNotificationsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("DefaultInAppNotificationsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("DefaultMaxExams")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DefaultMaxStudents")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DefaultMaxUsers")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DefaultTrialDurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LockoutMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("MaintenanceModeEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxLoginAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("N8nWebhookUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PasswordMinLength")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("PasswordRequireDigit")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("PasswordRequireLowercase")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("PasswordRequireSpecialChar")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("PasswordRequireUppercase")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PlatformName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PlatformTagline")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SessionTimeoutMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlatformSettings");
+                });
+
             modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -311,6 +393,15 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsTrial")
                         .HasColumnType("bit");
+
+                    b.Property<int?>("MaxExams")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxStudents")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxUsers")
+                        .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()

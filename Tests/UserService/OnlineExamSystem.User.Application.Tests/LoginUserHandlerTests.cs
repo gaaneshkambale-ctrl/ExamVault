@@ -9,8 +9,20 @@ namespace OnlineExamSystem.User.Application.Tests;
 
 public class LoginUserHandlerTests
 {
-    private static LoginUserHandler CreateHandler(FakeUserRepository repository, FakeTenantRepository? tenantRepository = null) =>
-        new(repository, tenantRepository ?? new FakeTenantRepository(), new FakePlanRepository(), new FakeRolePermissionRepository(), new LoginUserValidator(), new PasswordHasher<AppUser>(), JwtTestHelper.CreateService(), new FakeAuditClient());
+    private static LoginUserHandler CreateHandler(
+        FakeUserRepository repository,
+        FakeTenantRepository? tenantRepository = null,
+        FakePlatformSettingsRepository? platformSettingsRepository = null) =>
+        new(
+            repository,
+            tenantRepository ?? new FakeTenantRepository(),
+            new FakePlanRepository(),
+            new FakeRolePermissionRepository(),
+            platformSettingsRepository ?? new FakePlatformSettingsRepository(),
+            new LoginUserValidator(),
+            new PasswordHasher<AppUser>(),
+            JwtTestHelper.CreateService(),
+            new FakeAuditClient());
 
     private static async Task<AppUser> SeedUser(
         FakeUserRepository repository,
@@ -236,5 +248,84 @@ public class LoginUserHandlerTests
         var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: "does-not-exist"));
 
         Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task Account_locks_out_after_reaching_the_configured_max_failed_attempts()
+    {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id);
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { MaxLoginAttempts = 3, LockoutMinutes = 15 },
+        };
+        var handler = CreateHandler(repository, tenantRepository, platformSettings);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var attempt = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "WrongPassword1", TenantSlug: tenant.Slug));
+            Assert.False(attempt.Success);
+            Assert.False(attempt.IsAccountLocked);
+        }
+
+        var lockingAttempt = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "WrongPassword1", TenantSlug: tenant.Slug));
+        Assert.True(lockingAttempt.IsAccountLocked);
+        Assert.NotNull(lockingAttempt.LockoutEndUtc);
+
+        // Even the correct password is rejected while locked out.
+        var duringLockout = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
+        Assert.True(duringLockout.IsAccountLocked);
+
+        var stored = await repository.GetByIdAsync(user.Id);
+        Assert.Equal(3, stored!.FailedLoginAttempts);
+    }
+
+    [Fact]
+    public async Task Successful_login_resets_a_previously_accumulated_failed_attempt_count()
+    {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id);
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { MaxLoginAttempts = 5, LockoutMinutes = 15 },
+        };
+        var handler = CreateHandler(repository, tenantRepository, platformSettings);
+
+        await handler.HandleAsync(new LoginUserCommand("jane@example.com", "WrongPassword1", TenantSlug: tenant.Slug));
+        await handler.HandleAsync(new LoginUserCommand("jane@example.com", "WrongPassword1", TenantSlug: tenant.Slug));
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
+
+        Assert.True(result.Success);
+        var stored = await repository.GetByIdAsync(user.Id);
+        Assert.Equal(0, stored!.FailedLoginAttempts);
+        Assert.Null(stored.LockoutEndUtc);
+    }
+
+    [Fact]
+    public async Task Maintenance_mode_blocks_a_regular_user_but_not_super_admin()
+    {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
+        var repository = new FakeUserRepository();
+        await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id);
+        var superAdmin = await SeedUser(repository, "superadmin@examvault.local", "Passw0rd!", role: UserRole.SuperAdmin);
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { MaintenanceModeEnabled = true },
+        };
+        var handler = CreateHandler(repository, tenantRepository, platformSettings);
+
+        var regularUserResult = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
+        Assert.False(regularUserResult.Success);
+        Assert.True(regularUserResult.IsMaintenanceMode);
+
+        var superAdminResult = await handler.HandleAsync(new LoginUserCommand("superadmin@examvault.local", "Passw0rd!"));
+        Assert.True(superAdminResult.Success);
+        Assert.Equal(superAdmin.Id, superAdminResult.User!.Id);
     }
 }

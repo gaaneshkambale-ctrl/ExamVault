@@ -1,20 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Button, Form, Modal } from 'react-bootstrap';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { setTenantTrial } from '../api/tenantsApi';
+import { getPlatformSettings } from '../api/platformSettingsApi';
 
 interface StartTrialButtonProps {
   tenantId: string;
   tenantName: string;
 }
 
-// Needs an end date, unlike DeactivateTenantButton's plain confirm - Trial
-// is manual and Super Admin controlled (see ActionPlan.txt "TRIAL
-// ORGANIZATIONS"), so the date has to come from this modal, not a default.
+// Trial is manual and Super Admin controlled (see ActionPlan.txt "TRIAL
+// ORGANIZATIONS"), so the date is always editable here - but now pre-filled
+// from the real Tenant Settings > Default Limits "Trial Duration" instead
+// of starting empty, still fully overridable per-org before confirming.
 export default function StartTrialButton({ tenantId, tenantName }: StartTrialButtonProps) {
   const [showModal, setShowModal] = useState(false);
   const [endDate, setEndDate] = useState('');
   const queryClient = useQueryClient();
+  const { data: platformSettings } = useQuery({
+    queryKey: ['platform-settings'],
+    queryFn: getPlatformSettings,
+    enabled: showModal,
+  });
 
   const startTrialMutation = useMutation({
     mutationFn: () => setTenantTrial(tenantId, true, new Date(endDate).toISOString()),
@@ -26,6 +33,13 @@ export default function StartTrialButton({ tenantId, tenantName }: StartTrialBut
   });
 
   const minDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  useEffect(() => {
+    if (showModal && !endDate && platformSettings) {
+      const defaultEnd = new Date(Date.now() + platformSettings.defaultTrialDurationDays * 24 * 60 * 60 * 1000);
+      setEndDate(defaultEnd.toISOString().slice(0, 10));
+    }
+  }, [showModal, endDate, platformSettings]);
 
   return (
     <>

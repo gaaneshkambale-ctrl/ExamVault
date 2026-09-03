@@ -23,7 +23,8 @@ public class JwtTokenService : IJwtTokenService
         AppUser user,
         IReadOnlyList<PlanFeature> enabledFeatures,
         IReadOnlyList<string> grantedPermissions,
-        int permissionVersion)
+        int permissionVersion,
+        int? accessTokenMinutesOverride = null)
     {
         var claims = new List<Claim>
         {
@@ -49,11 +50,16 @@ public class JwtTokenService : IJwtTokenService
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SigningKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+        // Real Security Settings > Session Management "Session Timeout" when
+        // the caller resolved one from PlatformSettings - falls back to the
+        // static appsettings.json value (JwtTokenService itself stays a pure
+        // token-crafter with no DB access of its own, per its original design).
+        var accessTokenMinutes = accessTokenMinutesOverride ?? _settings.AccessTokenMinutes;
         var token = new JwtSecurityToken(
             issuer: _settings.Issuer,
             audience: _settings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenMinutes),
+            expires: DateTime.UtcNow.AddMinutes(accessTokenMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

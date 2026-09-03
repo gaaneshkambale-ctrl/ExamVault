@@ -9,7 +9,8 @@ public interface IJwtTokenService
         AppUser user,
         IReadOnlyList<PlanFeature> enabledFeatures,
         IReadOnlyList<string> grantedPermissions,
-        int permissionVersion);
+        int permissionVersion,
+        int? accessTokenMinutesOverride = null);
     string GenerateRefreshToken();
     string HashToken(string token);
     DateTime GetRefreshTokenExpiry();

@@ -9,11 +9,16 @@ public class CreateTenantHandler
 {
     private readonly ITenantRepository _tenantRepository;
     private readonly IValidator<CreateTenantCommand> _validator;
+    private readonly IPlatformSettingsRepository _platformSettingsRepository;
 
-    public CreateTenantHandler(ITenantRepository tenantRepository, IValidator<CreateTenantCommand> validator)
+    public CreateTenantHandler(
+        ITenantRepository tenantRepository,
+        IValidator<CreateTenantCommand> validator,
+        IPlatformSettingsRepository platformSettingsRepository)
     {
         _tenantRepository = tenantRepository;
         _validator = validator;
+        _platformSettingsRepository = platformSettingsRepository;
     }
 
     public async Task<CreateTenantResult> HandleAsync(
@@ -32,8 +37,17 @@ public class CreateTenantHandler
             return CreateTenantResult.Conflict();
         }
 
+        // Real Tenant Settings > Default Limits - read-only lookup, no row
+        // created as a side effect. Null settings (no admin has visited
+        // Settings yet) means every new tenant stays unlimited, same as
+        // before this existed.
+        var platformSettings = await _platformSettingsRepository.GetAsync(cancellationToken);
+
         var tenant = new Tenant
         {
+            MaxUsers = platformSettings?.DefaultMaxUsers,
+            MaxExams = platformSettings?.DefaultMaxExams,
+            MaxStudents = platformSettings?.DefaultMaxStudents,
             Name = command.Name,
             Slug = command.Slug,
             PlanId = command.PlanId ?? TenantConstants.FullAccessPlanId,

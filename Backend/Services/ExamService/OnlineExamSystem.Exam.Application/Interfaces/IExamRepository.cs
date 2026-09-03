@@ -12,6 +12,11 @@ public interface IExamRepository
     Task<IReadOnlyList<ExamPaper>> GetAllAsync(CancellationToken cancellationToken = default);
     Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default);
 
+    /// <summary>Real Tenant Settings > Default Limits "Max Exams" enforcement point -
+    /// CreateExamHandler checks this against the tenant's own MaxExams (fetched
+    /// cross-service from UserService) before creating a new exam.</summary>
+    Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
+
     Task AddSectionAsync(Section section, CancellationToken cancellationToken = default);
     Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Section>> GetSectionsByExamIdAsync(Guid examId, CancellationToken cancellationToken = default);

@@ -88,6 +88,8 @@ public class Program
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IUserDirectoryClient, UserDirectoryClient>(client =>
             client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<INotificationDefaultsClient, NotificationDefaultsClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
         builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
             client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
         builder.Services.AddMemoryCache();

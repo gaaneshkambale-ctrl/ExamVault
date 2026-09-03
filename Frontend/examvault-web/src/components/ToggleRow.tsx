@@ -4,13 +4,17 @@ interface ToggleRowProps {
   label: string;
   description?: string;
   defaultChecked?: boolean;
+  // Real, controlled usage (Security/Platform Settings' now-live fields) -
+  // when provided, this row is a genuine editable toggle instead of the
+  // disabled illustrative-example switch every other field on these pages
+  // still is (see each page's own disclosure note for which is which).
+  checked?: boolean;
+  onChange?: (checked: boolean) => void;
+  disabled?: boolean;
 }
 
-// Static, disabled switch row for the Settings pages (setting.png) - the
-// on/off state shown is the mockup's illustrative example, not a real
-// persisted preference (nothing behind these pages is wired to a
-// backend - see each page's own disclosure note).
-export default function ToggleRow({ label, description, defaultChecked }: ToggleRowProps) {
+export default function ToggleRow({ label, description, defaultChecked, checked, onChange, disabled = true }: ToggleRowProps) {
+  const isControlled = checked !== undefined;
   return (
     <div className="d-flex justify-content-between align-items-start gap-3 py-2 border-bottom">
       <div>
@@ -21,7 +25,14 @@ export default function ToggleRow({ label, description, defaultChecked }: Toggle
           </div>
         )}
       </div>
-      <Form.Check type="switch" defaultChecked={defaultChecked} disabled className="flex-shrink-0" />
+      <Form.Check
+        type="switch"
+        defaultChecked={isControlled ? undefined : defaultChecked}
+        checked={isControlled ? checked : undefined}
+        onChange={isControlled ? (e) => onChange?.(e.target.checked) : undefined}
+        disabled={isControlled ? disabled : true}
+        className="flex-shrink-0"
+      />
     </div>
   );
 }

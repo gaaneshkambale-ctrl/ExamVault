@@ -11,7 +11,13 @@ public class RefreshTokenHandlerTests
     private static readonly JwtTokenService Jwt = JwtTestHelper.CreateService();
 
     private static RefreshTokenHandler CreateHandler(FakeUserRepository repository) =>
-        new(repository, new FakeTenantRepository(), new FakePlanRepository(), new FakeRolePermissionRepository(), Jwt);
+        new(
+            repository,
+            new FakeTenantRepository(),
+            new FakePlanRepository(),
+            new FakeRolePermissionRepository(),
+            new FakePlatformSettingsRepository(),
+            Jwt);
 
     private static async Task<(AppUser User, string RawToken)> SeedUserWithRefreshToken(
         FakeUserRepository repository,

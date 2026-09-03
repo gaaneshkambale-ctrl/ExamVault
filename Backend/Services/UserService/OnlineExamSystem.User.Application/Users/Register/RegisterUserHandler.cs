@@ -14,23 +14,34 @@ public class RegisterUserHandler
     private readonly IValidator<RegisterUserCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IEventPublisher _eventPublisher;
+    private readonly IPlatformSettingsRepository _platformSettingsRepository;
 
     public RegisterUserHandler(
         IUserRepository userRepository,
         IValidator<RegisterUserCommand> validator,
         IPasswordHasher<AppUser> passwordHasher,
-        IEventPublisher eventPublisher)
+        IEventPublisher eventPublisher,
+        IPlatformSettingsRepository platformSettingsRepository)
     {
         _userRepository = userRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
         _eventPublisher = eventPublisher;
+        _platformSettingsRepository = platformSettingsRepository;
     }
 
     public async Task<RegisterUserResult> HandleAsync(
         RegisterUserCommand command,
         CancellationToken cancellationToken = default)
     {
+        // Real Platform Settings > General > "Allow Self Registration" gate -
+        // read-only lookup, no row created as a side effect of a blocked attempt.
+        var platformSettings = await _platformSettingsRepository.GetAsync(cancellationToken);
+        if (platformSettings is not null && !platformSettings.AllowSelfRegistration)
+        {
+            return RegisterUserResult.Invalid(["Self-registration is currently disabled for this platform."]);
+        }
+
         var validationResult = await _validator.ValidateAsync(command, cancellationToken);
         if (!validationResult.IsValid)
         {

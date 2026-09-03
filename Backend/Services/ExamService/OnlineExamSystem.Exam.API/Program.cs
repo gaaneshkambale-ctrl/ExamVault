@@ -96,6 +96,8 @@ public class Program
             client.BaseAddress = userServiceBaseUri);
         builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
             client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddHttpClient<ITenantLimitsClient, TenantLimitsClient>(client =>
+            client.BaseAddress = userServiceBaseUri);
         builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
             client.BaseAddress = userServiceBaseUri);
         builder.Services.AddMemoryCache();

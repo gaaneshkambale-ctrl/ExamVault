@@ -66,6 +66,12 @@ public class UserRepository : IUserRepository
             .OrderByDescending(u => u.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    // Explicit tenantId, not ICurrentTenant - CreateUserHandler's quota check
+    // runs for the tenant the new user is being created in, which may differ
+    // from the caller's own ambient tenant context (or have none at all).
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        _dbContext.Users.CountAsync(u => u.TenantId == tenantId, cancellationToken);
+
     public async Task<IReadOnlyList<AppUser>> GetByIdsAsync(
         IReadOnlyList<Guid> ids,
         CancellationToken cancellationToken = default) =>

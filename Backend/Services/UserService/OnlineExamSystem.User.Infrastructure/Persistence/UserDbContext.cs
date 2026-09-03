@@ -23,6 +23,7 @@ public class UserDbContext : DbContext
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

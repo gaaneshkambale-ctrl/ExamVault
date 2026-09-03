@@ -29,6 +29,9 @@ public class ExamRepository : IExamRepository
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        _dbContext.Exams.CountAsync(e => e.TenantId == tenantId, cancellationToken);
+
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
     {
         _dbContext.Exams.Remove(exam);
