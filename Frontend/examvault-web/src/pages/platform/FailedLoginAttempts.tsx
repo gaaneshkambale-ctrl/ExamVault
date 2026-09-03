@@ -1,10 +1,12 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Card, Col, Row, Spinner, Table } from 'react-bootstrap';
+import { Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import { useTenants } from '../../hooks/useTenants';
 import { getAuditLogs } from '../../api/auditApi';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 // Real, same data source as Login Activity (same query key, dedupes the
 // fetch) - LoginUserHandler now writes a real "Failed login" Auth-module
@@ -43,6 +45,9 @@ export default function FailedLoginAttempts() {
   });
   const { data: tenants } = useTenants();
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
   const tenantNameById = useMemo(() => {
     const map = new Map<string, string>();
     (tenants ?? []).forEach((t) => map.set(t.id, t.name));
@@ -53,6 +58,16 @@ export default function FailedLoginAttempts() {
   const uniqueUsers = new Set(failedAttempts.map((l) => l.userId)).size;
   const uniqueOrgs = new Set(failedAttempts.map((l) => l.tenantId)).size;
   const uniqueIps = new Set(failedAttempts.map((l) => l.ipAddress).filter(Boolean)).size;
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize, failedAttempts.length]);
+
+  const totalPages = Math.max(1, Math.ceil(failedAttempts.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedAttempts = failedAttempts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = failedAttempts.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, failedAttempts.length);
 
   return (
     <PlatformLayout active="sec-failed-logins">
@@ -124,7 +139,7 @@ export default function FailedLoginAttempts() {
                     </tr>
                   </thead>
                   <tbody>
-                    {failedAttempts.map((log) => (
+                    {pagedAttempts.map((log) => (
                       <tr key={log.id}>
                         <td className="ps-4">{log.userName ?? '—'}</td>
                         <td className="text-muted">{tenantNameById.get(log.tenantId) ?? '—'}</td>
@@ -139,6 +154,32 @@ export default function FailedLoginAttempts() {
               )}
             </Card.Body>
           </Card>
+
+          {failedAttempts.length > 0 && (
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              <div className="text-muted small">
+                Showing {rangeStart} to {rangeEnd} of {failedAttempts.length} attempts
+              </div>
+              <div className="d-flex align-items-center gap-3">
+                <Pagination className="mb-0">
+                  <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                      {p}
+                    </Pagination.Item>
+                  ))}
+                  <Pagination.Next disabled={currentPage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
+                </Pagination>
+                <Form.Select size="sm" style={{ width: 100 }} value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size} / page
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+            </div>
+          )}
           {uniqueIps > 0 && (
             <div className="text-muted small mt-2">{uniqueIps} distinct IP address(es) involved.</div>
           )}

@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
-import { Badge, Card, Form, Spinner, Table } from 'react-bootstrap';
+import { useEffect, useMemo, useState } from 'react';
+import { Badge, Card, Form, Pagination, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import { useTenants } from '../../hooks/useTenants';
 import { getAuditLogs } from '../../api/auditApi';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 // Real, backed by AuditModule.Security - previously defined in the audit
 // system but never written anywhere. Now records the Super Admin's own
@@ -29,6 +31,8 @@ export default function SecurityEvents() {
   const { data: tenants } = useTenants();
 
   const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const tenantNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -46,6 +50,16 @@ export default function SecurityEvents() {
       orgName.toLowerCase().includes(searchQuery)
     );
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedEvents = filteredEvents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredEvents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredEvents.length);
 
   return (
     <PlatformLayout active="sec-events">
@@ -91,7 +105,7 @@ export default function SecurityEvents() {
                 </tr>
               </thead>
               <tbody>
-                {filteredEvents.map((log) => (
+                {pagedEvents.map((log) => (
                   <tr key={log.id}>
                     <td className="ps-4 text-muted" style={{ fontSize: 13 }}>
                       {new Date(log.timestampUtc).toLocaleString()}
@@ -108,6 +122,32 @@ export default function SecurityEvents() {
           )}
         </Card.Body>
       </Card>
+
+      {!isLoading && !isError && filteredEvents.length > 0 && (
+        <div className="d-flex justify-content-between align-items-center mt-3">
+          <div className="text-muted small">
+            Showing {rangeStart} to {rangeEnd} of {filteredEvents.length} events
+          </div>
+          <div className="d-flex align-items-center gap-3">
+            <Pagination className="mb-0">
+              <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                  {p}
+                </Pagination.Item>
+              ))}
+              <Pagination.Next disabled={currentPage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
+            </Pagination>
+            <Form.Select size="sm" style={{ width: 100 }} value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </Form.Select>
+          </div>
+        </div>
+      )}
     </PlatformLayout>
   );
 }
