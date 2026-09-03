@@ -43,7 +43,7 @@ public class RolesController : ControllerBase
             new GetAllRolePermissionsQuery(tenantId),
             cancellationToken);
 
-        return Ok(roles.Select(r => new RolePermissionsResponse(r.Role, r.Permissions)));
+        return Ok(roles.Select(r => new RolePermissionsResponse(r.Role, r.Permissions, r.UpdatedAtUtc)));
     }
 
     [HttpPut("{role}/permissions")]
@@ -82,7 +82,7 @@ public class RolesController : ControllerBase
 
         _logger.LogInformation("Permissions for role {Role} updated.", role);
         await RecordSecurityEventAsync(tenantId, $"{role} role permissions updated", cancellationToken);
-        return Ok(new RolePermissionsResponse(role, result.Permissions));
+        return Ok(new RolePermissionsResponse(role, result.Permissions, result.UpdatedAtUtc));
     }
 
     // The self-service counterpart to TenantsController's own

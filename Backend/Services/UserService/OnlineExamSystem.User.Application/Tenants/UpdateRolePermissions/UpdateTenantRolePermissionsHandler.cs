@@ -39,7 +39,7 @@ public class UpdateTenantRolePermissionsHandler
         }
 
         var distinctPermissions = command.Permissions.Distinct().ToList();
-        await _rolePermissionRepository.ReplaceForRoleAsync(command.TenantId, command.Role, distinctPermissions, cancellationToken);
+        await _rolePermissionRepository.ReplaceForRoleAsync(command.TenantId, command.Role, distinctPermissions, DateTime.UtcNow, cancellationToken);
         await _rolePermissionRepository.SaveChangesAsync(cancellationToken);
 
         return UpdateTenantRolePermissionsResult.Ok(distinctPermissions);

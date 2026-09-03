@@ -328,7 +328,7 @@ public class TenantsController : ControllerBase
             return NotFound(new { message = "Tenant not found." });
         }
 
-        return Ok(new RolePermissionsResponse(role, result.Permissions!));
+        return Ok(new RolePermissionsResponse(role, result.Permissions!, null));
     }
 
     [HttpPut("{id:guid}/roles/{role}/permissions")]
@@ -353,7 +353,7 @@ public class TenantsController : ControllerBase
 
         _logger.LogInformation("{Role} role permissions for tenant {TenantId} updated.", role, id);
         await RecordSecurityEventAsync(id, $"{role} role permissions updated", cancellationToken);
-        return Ok(new RolePermissionsResponse(role, result.Permissions!));
+        return Ok(new RolePermissionsResponse(role, result.Permissions!, null));
     }
 
     private static TenantResponse ToResponse(Tenant tenant) =>

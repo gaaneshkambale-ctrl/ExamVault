@@ -21,10 +21,11 @@ public class FakeRolePermissionRepository : IRolePermissionRepository
         Guid tenantId,
         string role,
         IReadOnlyList<string> permissionKeys,
+        DateTime updatedAtUtc,
         CancellationToken cancellationToken = default)
     {
         _rows.RemoveAll(rp => rp.TenantId == tenantId && rp.Role == role);
-        _rows.AddRange(permissionKeys.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key }));
+        _rows.AddRange(permissionKeys.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key, UpdatedAtUtc = updatedAtUtc }));
         return Task.CompletedTask;
     }
 

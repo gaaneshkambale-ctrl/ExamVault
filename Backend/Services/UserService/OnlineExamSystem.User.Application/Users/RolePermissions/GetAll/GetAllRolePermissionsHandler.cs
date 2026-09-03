@@ -40,9 +40,14 @@ public class GetAllRolePermissionsHandler
         // to the hardcoded defaults, making a real "zero permissions" save
         // look like it never persisted. ToLookup returns an empty sequence
         // for a missing key instead of throwing or omitting it.
-        var byRole = rows.ToLookup(rp => rp.Role, rp => rp.PermissionKey);
+        var byRole = rows.ToLookup(rp => rp.Role);
         return RolePermissionCatalog.Roles
-            .Select(role => new RoleWithPermissions(role, byRole[role].ToList()))
+            .Select(role =>
+            {
+                var roleRows = byRole[role].ToList();
+                var updatedAtUtc = roleRows.Count > 0 ? roleRows.Max(rp => rp.UpdatedAtUtc) : (DateTime?)null;
+                return new RoleWithPermissions(role, roleRows.Select(rp => rp.PermissionKey).ToList(), updatedAtUtc);
+            })
             .ToList();
     }
 }

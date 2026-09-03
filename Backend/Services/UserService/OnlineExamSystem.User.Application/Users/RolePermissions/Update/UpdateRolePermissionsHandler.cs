@@ -27,13 +27,15 @@ public class UpdateRolePermissionsHandler
         }
 
         var distinctPermissions = command.Permissions.Distinct().ToList();
+        var updatedAtUtc = DateTime.UtcNow;
         await _rolePermissionRepository.ReplaceForRoleAsync(
             command.TenantId,
             command.Role,
             distinctPermissions,
+            updatedAtUtc,
             cancellationToken);
         await _rolePermissionRepository.SaveChangesAsync(cancellationToken);
 
-        return UpdateRolePermissionsResult.Ok(distinctPermissions);
+        return UpdateRolePermissionsResult.Ok(distinctPermissions, updatedAtUtc);
     }
 }

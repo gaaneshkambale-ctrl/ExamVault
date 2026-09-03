@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Dropdown, Form, InputGroup, Modal, Row, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
-import SectionHeader from '../../components/SectionHeader';
+import ReportStatCard from '../../components/reports/ReportStatCard';
+import { CheckCircleIcon, MinusCircleIcon } from '../../components/reports/ReportIcons';
 import { useAuth } from '../../hooks/useAuth';
 import { useUsers } from '../../hooks/useUsers';
 import { useRolePermissions, useUpdateRolePermissions } from '../../hooks/useRolePermissions';
@@ -15,11 +16,37 @@ import {
 } from '../../constants/cosmeticRolePermissions';
 import type { UserRole } from '../../types/user';
 
-function ShieldCheckIcon() {
+function SearchIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
-      <path d="M9 12.5l2 2 4-4.5" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
+function PersonIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function LockIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="10" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
 }
@@ -70,6 +97,18 @@ const roles: RoleRow[] = [
   },
 ];
 
+type StatusFilter = 'all' | 'active' | 'unavailable';
+
+function formatUpdatedAt(iso: string | null | undefined): { date: string; time: string } | null {
+  if (!iso) return null;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return {
+    date: parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+    time: parsed.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
 export default function RolesPermissions() {
   const { user: currentUser } = useAuth();
   const { data: users } = useUsers();
@@ -78,14 +117,28 @@ export default function RolesPermissions() {
 
   const [editingRole, setEditingRole] = useState<string | null>(null);
   const [draftPermissions, setDraftPermissions] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const countFor = (role: string) => users?.filter((u) => u.role === (role as UserRole)).length ?? 0;
 
   const permissionsFor = (role: string, fallback: string[]) =>
     liveRolePermissions?.find((r) => r.role === role)?.permissions ?? fallback;
 
+  const updatedAtFor = (role: string) => liveRolePermissions?.find((r) => r.role === role)?.updatedAtUtc ?? null;
+
   const assignedPermissions = new Set(roles.flatMap((r) => permissionsFor(r.role, r.defaultPermissions)));
   const unassignedCount = COSMETIC_PERMISSIONS.length - assignedPermissions.size;
+
+  const visibleRoles = roles.filter((r) => {
+    const matchesSearch =
+      search.trim() === '' ||
+      r.role.toLowerCase().includes(search.trim().toLowerCase()) ||
+      r.description.toLowerCase().includes(search.trim().toLowerCase());
+    const matchesStatus =
+      statusFilter === 'all' || (statusFilter === 'active' ? r.isReal : !r.isReal);
+    return matchesSearch && matchesStatus;
+  });
 
   const openEdit = (role: string, fallback: string[]) => {
     setDraftPermissions(new Set(permissionsFor(role, fallback)));
@@ -134,25 +187,110 @@ export default function RolesPermissions() {
         block that action. Others remain informational only until their own backend enforcement is wired up.
       </Alert>
 
+      <Row className="g-3 mt-1">
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<PersonIcon />}
+            label="Total Roles"
+            value={String(roles.length)}
+            caption="Active roles in system"
+            iconBg="#eef2ff"
+            iconColor="#4f46e5"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<LockIcon />}
+            label="Total Permissions"
+            value={String(COSMETIC_PERMISSIONS.length)}
+            caption="Available permissions"
+            iconBg="#ecfdf5"
+            iconColor="#059669"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<CheckCircleIcon />}
+            label="Assigned Permissions"
+            value={String(assignedPermissions.size)}
+            caption="Permissions assigned"
+            iconBg="#ede9fe"
+            iconColor="#7c3aed"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<MinusCircleIcon />}
+            label="Unassigned Permissions"
+            value={String(unassignedCount)}
+            caption="Permissions pending"
+            iconBg="#fff7ed"
+            iconColor="#d97706"
+          />
+        </Col>
+      </Row>
+
       <Card className="border-0 shadow-sm mt-3">
-        <Card.Body className="p-0">
+        <Card.Body>
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+              <div className="fw-bold">Roles</div>
+              <div className="text-muted small">View and manage all user roles in the system.</div>
+            </div>
+            <div className="d-flex gap-2">
+              <InputGroup style={{ width: 220 }}>
+                <InputGroup.Text>
+                  <SearchIcon />
+                </InputGroup.Text>
+                <Form.Control
+                  type="search"
+                  placeholder="Search roles..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </InputGroup>
+              <Dropdown>
+                <Dropdown.Toggle
+                  as="button"
+                  bsPrefix="btn"
+                  className="btn btn-outline-secondary d-inline-flex align-items-center gap-2"
+                >
+                  <FilterIcon /> Filter
+                </Dropdown.Toggle>
+                <Dropdown.Menu align="end">
+                  <Dropdown.Item active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>
+                    All Statuses
+                  </Dropdown.Item>
+                  <Dropdown.Item active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}>
+                    Active
+                  </Dropdown.Item>
+                  <Dropdown.Item active={statusFilter === 'unavailable'} onClick={() => setStatusFilter('unavailable')}>
+                    Not Available
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown>
+            </div>
+          </div>
+
           <Table responsive hover className="mb-0 align-middle">
             <thead className="text-muted small text-uppercase bg-light">
               <tr>
-                <th className="ps-4">Role Name</th>
+                <th className="ps-2">Role Name</th>
                 <th>Description</th>
                 <th>Users</th>
                 <th>Status</th>
-                <th className="pe-4">Actions</th>
+                <th>Last Updated</th>
+                <th className="pe-2">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {roles.map(({ role, description, variant, isReal, defaultPermissions }) => {
+              {visibleRoles.map(({ role, description, variant, isReal, defaultPermissions }) => {
                 const isOwnRole = role === currentUser?.role;
                 const canEdit = isReal && !isOwnRole;
+                const updatedAt = formatUpdatedAt(updatedAtFor(role));
                 return (
                   <tr key={role}>
-                    <td className="ps-4">
+                    <td className="ps-2">
                       <Badge bg={variant}>{role}</Badge>
                     </td>
                     <td>{description}</td>
@@ -160,7 +298,17 @@ export default function RolesPermissions() {
                     <td>
                       <Badge bg={isReal ? 'success' : 'secondary'}>{isReal ? 'Active' : 'Not Available'}</Badge>
                     </td>
-                    <td className="pe-4">
+                    <td className="small">
+                      {updatedAt ? (
+                        <>
+                          <div>{updatedAt.date}</div>
+                          <div className="text-muted">{updatedAt.time}</div>
+                        </>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="pe-2">
                       <button
                         type="button"
                         className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
@@ -181,32 +329,15 @@ export default function RolesPermissions() {
                   </tr>
                 );
               })}
+              {visibleRoles.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center text-muted py-4">
+                    No roles match your search/filter.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </Table>
-        </Card.Body>
-      </Card>
-
-      <Card className="border-0 shadow-sm mt-3">
-        <Card.Body className="p-4">
-          <SectionHeader icon={<ShieldCheckIcon />} title="Permissions Overview" />
-          <Row className="g-4 text-center">
-            <Col xs={6} md={3}>
-              <div className="text-muted small mb-1">Total Roles</div>
-              <div className="h4 fw-bold mb-0">{roles.length}</div>
-            </Col>
-            <Col xs={6} md={3}>
-              <div className="text-muted small mb-1">Total Permissions</div>
-              <div className="h4 fw-bold mb-0">{COSMETIC_PERMISSIONS.length}</div>
-            </Col>
-            <Col xs={6} md={3}>
-              <div className="text-muted small mb-1">Assigned Permissions</div>
-              <div className="h4 fw-bold mb-0 text-success">{assignedPermissions.size}</div>
-            </Col>
-            <Col xs={6} md={3}>
-              <div className="text-muted small mb-1">Unassigned Permissions</div>
-              <div className="h4 fw-bold mb-0 text-warning">{unassignedCount}</div>
-            </Col>
-          </Row>
         </Card.Body>
       </Card>
 

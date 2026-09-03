@@ -6,4 +6,5 @@ public class RolePermission : TenantScopedEntity
 {
     public string Role { get; set; } = string.Empty;
     public string PermissionKey { get; set; } = string.Empty;
+    public DateTime UpdatedAtUtc { get; set; }
 }

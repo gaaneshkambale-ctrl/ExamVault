@@ -10,12 +10,18 @@ public interface IRolePermissionRepository
 
     Task AddRangeAsync(IReadOnlyList<RolePermission> rows, CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes every existing row for this role (within the caller's
-    /// tenant) and inserts one row per given permission key.</summary>
+    /// <summary>Diffs this role's rows (within the caller's tenant) against the
+    /// given permission keys - removing rows no longer desired, adding rows for
+    /// new keys, and leaving unchanged rows' Id/CreatedAtUtc untouched.
+    /// updatedAtUtc is stamped onto every row for the role (added and
+    /// surviving alike), so a role's "last updated" is always the most recent
+    /// save regardless of whether that save added, removed, or left permissions
+    /// unchanged.</summary>
     Task ReplaceForRoleAsync(
         Guid tenantId,
         string role,
         IReadOnlyList<string> permissionKeys,
+        DateTime updatedAtUtc,
         CancellationToken cancellationToken = default);
 
     /// <summary>Permission keys currently granted to this role within this tenant -

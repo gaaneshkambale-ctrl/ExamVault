@@ -25,6 +25,7 @@ public class RolePermissionRepository : IRolePermissionRepository
         Guid tenantId,
         string role,
         IReadOnlyList<string> permissionKeys,
+        DateTime updatedAtUtc,
         CancellationToken cancellationToken = default)
     {
         // IgnoreQueryFilters() + explicit TenantId, matching GetForRoleAsync's
@@ -48,14 +49,23 @@ public class RolePermissionRepository : IRolePermissionRepository
         // new Id in the same transaction - that pattern was fragile against
         // the (TenantId, Role, PermissionKey) unique index and is suspected
         // to have caused an unchanged permission to occasionally vanish.
-        var toRemove = existing.Where(rp => !desiredKeys.Contains(rp.PermissionKey));
+        var toRemove = existing.Where(rp => !desiredKeys.Contains(rp.PermissionKey)).ToList();
         _dbContext.RolePermissions.RemoveRange(toRemove);
 
         var existingKeys = existing.Select(rp => rp.PermissionKey).ToHashSet();
         var toAdd = desiredKeys.Where(key => !existingKeys.Contains(key));
         await _dbContext.RolePermissions.AddRangeAsync(
-            toAdd.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key }),
+            toAdd.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key, UpdatedAtUtc = updatedAtUtc }),
             cancellationToken);
+
+        // Touch every surviving row's timestamp too (not just newly-added
+        // ones), so "last updated" reflects any save - including one that
+        // only removed a permission and added no new rows.
+        var toRemoveIds = toRemove.Select(rp => rp.Id).ToHashSet();
+        foreach (var survivor in existing.Where(rp => !toRemoveIds.Contains(rp.Id)))
+        {
+            survivor.UpdatedAtUtc = updatedAtUtc;
+        }
 
         // Bump the tenant's permission version so already-issued access
         // tokens for this tenant are detected as stale within one cache
