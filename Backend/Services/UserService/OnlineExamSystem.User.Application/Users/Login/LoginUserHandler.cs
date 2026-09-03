@@ -114,7 +114,9 @@ public class LoginUserHandler
         var enabledFeatures = await _planRepository.GetFeaturesForTenantAsync(user.TenantId, cancellationToken);
         var grantedPermissions = await _rolePermissionRepository.GetForRoleAsync(
             user.TenantId, RolePermissionCatalog.CatalogRoleName(user.Role), cancellationToken);
-        var accessToken = _jwtTokenService.GenerateAccessToken(user, enabledFeatures, grantedPermissions);
+        var callerTenant = await _tenantRepository.GetByIdAsync(user.TenantId, cancellationToken);
+        var accessToken = _jwtTokenService.GenerateAccessToken(
+            user, enabledFeatures, grantedPermissions, callerTenant?.PermissionVersion ?? 0);
         var refreshToken = _jwtTokenService.GenerateRefreshToken();
 
         await _userRepository.AddRefreshTokenAsync(new RefreshToken

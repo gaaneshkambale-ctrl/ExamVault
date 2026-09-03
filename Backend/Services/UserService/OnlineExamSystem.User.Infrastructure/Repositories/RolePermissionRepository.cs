@@ -27,8 +27,18 @@ public class RolePermissionRepository : IRolePermissionRepository
         IReadOnlyList<string> permissionKeys,
         CancellationToken cancellationToken = default)
     {
+        // IgnoreQueryFilters() + explicit TenantId, matching GetForRoleAsync's
+        // own pattern - this method is called both from the tenant's own
+        // ambient-tenant self-service path AND from the Super Admin platform
+        // console (explicit tenantId, no ambient tenant). Without
+        // IgnoreQueryFilters(), a Super Admin's call would fall back to the
+        // global query filter's IsSuperAdmin bypass - which returns EVERY
+        // tenant's rows for this role, not just the target tenant's - so the
+        // diff below would remove/add across tenant boundaries. This was a
+        // real, previously-unnoticed cross-tenant data-corruption bug.
         var existing = await _dbContext.RolePermissions
-            .Where(rp => rp.Role == role)
+            .IgnoreQueryFilters()
+            .Where(rp => rp.TenantId == tenantId && rp.Role == role)
             .ToListAsync(cancellationToken);
         var desiredKeys = permissionKeys.ToHashSet();
 
@@ -46,6 +56,19 @@ public class RolePermissionRepository : IRolePermissionRepository
         await _dbContext.RolePermissions.AddRangeAsync(
             toAdd.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key }),
             cancellationToken);
+
+        // Bump the tenant's permission version so already-issued access
+        // tokens for this tenant are detected as stale within one cache
+        // cycle in every downstream service, instead of only at their next
+        // natural expiry/refresh (up to ~15 minutes). IgnoreQueryFilters()
+        // for the same Super-Admin-explicit-tenantId reason as above.
+        var tenant = await _dbContext.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
+        if (tenant is not null)
+        {
+            tenant.PermissionVersion++;
+        }
     }
 
     public async Task<IReadOnlyList<string>> GetForRoleAsync(

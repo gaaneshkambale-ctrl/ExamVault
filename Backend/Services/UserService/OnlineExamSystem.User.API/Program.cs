@@ -46,6 +46,7 @@ using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
 using OnlineExamSystem.User.Application.Tenants.Delete;
 using OnlineExamSystem.User.Application.Tenants.GetBySlug;
+using OnlineExamSystem.User.Application.Tenants.GetPermissionVersion;
 using OnlineExamSystem.User.Application.Tenants.GetRolePermissions;
 using OnlineExamSystem.User.Application.Tenants.List;
 using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
@@ -158,6 +159,7 @@ public class Program
         builder.Services.AddScoped<ListTenantsHandler>();
         builder.Services.AddScoped<SetTenantActiveStatusHandler>();
         builder.Services.AddScoped<GetTenantBySlugHandler>();
+        builder.Services.AddScoped<GetTenantPermissionVersionHandler>();
         builder.Services.AddScoped<IValidator<CreateTenantAdminCommand>, CreateTenantAdminValidator>();
         builder.Services.AddScoped<CreateTenantAdminHandler>();
         builder.Services.AddScoped<AssignPlanToTenantHandler>();

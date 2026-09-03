@@ -9,4 +9,11 @@ namespace OnlineExamSystem.Shared.Common.Multitenancy;
 public static class PermissionClaimTypes
 {
     public const string Permission = "permission";
+
+    // Single-valued - the issuing tenant's RolePermission "version" counter
+    // (Tenant.PermissionVersion) at the moment this token was minted.
+    // Downstream services compare this against the tenant's CURRENT version
+    // (via a short-TTL cached lookup) to detect a token issued before a
+    // permission change, without waiting for the token's natural expiry.
+    public const string PermissionVersion = "permission_version";
 }

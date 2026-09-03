@@ -29,4 +29,11 @@ public class Tenant : BaseEntity
     // as ExamPaper.Category (classification, not a hardcoded backend enum).
     public string? OrganizationCode { get; set; }
     public string? OrganizationType { get; set; }
+
+    // Bumped by RolePermissionRepository.ReplaceForRoleAsync every time ANY
+    // role's permissions change for this tenant. Embedded in every access
+    // token as the "permission_version" claim so downstream services can
+    // detect a stale token (one issued before the bump) within one cache
+    // cycle instead of waiting for its natural ~15-minute expiry.
+    public int PermissionVersion { get; set; }
 }

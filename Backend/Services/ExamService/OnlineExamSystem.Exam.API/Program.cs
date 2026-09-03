@@ -95,6 +95,10 @@ public class Program
             client.BaseAddress = userServiceBaseUri);
         builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
             client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var questionServiceBaseUrl = builder.Configuration["Services:QuestionServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:QuestionServiceBaseUrl\" configuration.");

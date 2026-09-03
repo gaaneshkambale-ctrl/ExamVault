@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.User.Application.Tenants.GetBySlug;
+using OnlineExamSystem.User.Application.Tenants.GetPermissionVersion;
 
 namespace OnlineExamSystem.User.API.Controllers;
 
@@ -16,10 +17,14 @@ namespace OnlineExamSystem.User.API.Controllers;
 public class InternalTenantsController : ControllerBase
 {
     private readonly GetTenantBySlugHandler _getTenantBySlugHandler;
+    private readonly GetTenantPermissionVersionHandler _getTenantPermissionVersionHandler;
 
-    public InternalTenantsController(GetTenantBySlugHandler getTenantBySlugHandler)
+    public InternalTenantsController(
+        GetTenantBySlugHandler getTenantBySlugHandler,
+        GetTenantPermissionVersionHandler getTenantPermissionVersionHandler)
     {
         _getTenantBySlugHandler = getTenantBySlugHandler;
+        _getTenantPermissionVersionHandler = getTenantPermissionVersionHandler;
     }
 
     [HttpGet("by-slug/{slug}")]
@@ -34,5 +39,26 @@ public class InternalTenantsController : ControllerBase
         return Ok(new InternalTenantResponse(tenant.Id, tenant.Name, tenant.Slug, tenant.IsActive));
     }
 
+    // Polled (with a short local cache, see each service's own
+    // PermissionVersionGuard) by every other service's authorization
+    // policies to detect a token issued before a permission change.
+    // Anonymous like this controller's other action - the caller here is
+    // always another backend service, not a forwarded end-user identity
+    // that would add anything meaningful to check; network isolation
+    // (this route is never Gateway-proxied) is the real boundary.
+    [HttpGet("{tenantId:guid}/permission-version")]
+    public async Task<IActionResult> PermissionVersion(Guid tenantId, CancellationToken cancellationToken)
+    {
+        var version = await _getTenantPermissionVersionHandler.HandleAsync(
+            new GetTenantPermissionVersionQuery(tenantId), cancellationToken);
+        if (version is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(new PermissionVersionResponse(version.Value));
+    }
+
     private record InternalTenantResponse(Guid Id, string Name, string Slug, bool IsActive);
+    private record PermissionVersionResponse(int Version);
 }

@@ -19,7 +19,11 @@ public class JwtTokenService : IJwtTokenService
         _settings = settings.Value;
     }
 
-    public string GenerateAccessToken(AppUser user, IReadOnlyList<PlanFeature> enabledFeatures, IReadOnlyList<string> grantedPermissions)
+    public string GenerateAccessToken(
+        AppUser user,
+        IReadOnlyList<PlanFeature> enabledFeatures,
+        IReadOnlyList<string> grantedPermissions,
+        int permissionVersion)
     {
         var claims = new List<Claim>
         {
@@ -28,6 +32,7 @@ public class JwtTokenService : IJwtTokenService
             new(ClaimTypes.Email, user.Email),
             new(ClaimTypes.Role, user.Role.ToString()),
             new(TenantClaimTypes.TenantId, user.TenantId.ToString()),
+            new(PermissionClaimTypes.PermissionVersion, permissionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
         // One claim per enabled Feature (not a single delimited value) - lets
