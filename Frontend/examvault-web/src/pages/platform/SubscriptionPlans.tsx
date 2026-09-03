@@ -1,12 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, InputGroup, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import { EditIcon, TrashIcon } from '../../components/icons/ActionIcons';
+import { useTenants } from '../../hooks/useTenants';
 import { createPlan, deletePlan, listPlans, updatePlan } from '../../api/plansApi';
 import { extractServerError } from '../../utils/apiError';
 import { ALL_PLAN_FEATURES, PLAN_FEATURE_LABELS } from '../../types/plan';
 import type { Plan, PlanFeature } from '../../types/plan';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+// Matches TenantConstants.FullAccessPlanId (Backend/Shared/.../Multitenancy)
+// - the one real, seeded Plan every tenant falls back to when created
+// without an explicit PlanId (CreateTenantHandler.cs). Not a cosmetic
+// "featured plan" pick - this is the actual default, so it gets its own
+// pinned callout above the table rather than being just another row in it.
+const FULL_ACCESS_PLAN_ID = '33333333-3333-3333-3333-333333333333';
 
 // Real Plan CRUD - replaces the old static reference-pricing cards now that
 // a real Plan entity + Tenant.PlanId assignment exists (see ActionPlan.txt's
@@ -105,6 +116,60 @@ function GearIcon() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function LightningIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+function DiamondIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.7 10.3 12 2l9.3 8.3a1 1 0 0 1 0 1.4L12 22l-9.3-10.3a1 1 0 0 1 0-1.4Z" />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
+    </svg>
+  );
+}
+
+// Cosmetic per-row icon/color based on a keyword match against the plan's
+// own name - deterministic, not stored anywhere. Same convention as
+// ManageExamTypes.tsx's iconForExamType. Falls back to a generic shield for
+// any custom plan name that doesn't match one of the common tiers.
+function iconForPlan(name: string): { icon: ReactNode; iconBg: string; iconColor: string } {
+  const lower = name.toLowerCase();
+  if (lower.includes('basic') || lower.includes('starter')) return { icon: <LightningIcon />, iconBg: '#dcfce7', iconColor: '#16a34a' };
+  if (lower.includes('professional') || lower.includes('pro')) return { icon: <DiamondIcon />, iconBg: '#dbeafe', iconColor: '#2563eb' };
+  if (lower.includes('business')) return { icon: <CrownIcon size={18} />, iconBg: '#ede9fe', iconColor: '#7c3aed' };
+  if (lower.includes('enterprise')) return { icon: <StarIcon />, iconBg: '#fff7ed', iconColor: '#d97706' };
+  return { icon: <ShieldIcon />, iconBg: '#f3f4f6', iconColor: '#4b5563' };
+}
+
 interface ModuleInfo {
   feature: PlanFeature;
   icon: ReactNode;
@@ -177,11 +242,48 @@ const MODULE_INFO: ModuleInfo[] = [
 export default function SubscriptionPlans() {
   const queryClient = useQueryClient();
   const { data: plans, isLoading, isError } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
+  // Same cross-tenant list OrganizationDetails.tsx/ManageTenants.tsx already
+  // fetch (useTenants dedupes the query) - used only to compute each plan's
+  // real "Organizations" count, not fetched again here.
+  const { data: tenants } = useTenants();
 
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<PlanFormState>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<Plan | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  const organizationCountByPlanId = useMemo(() => {
+    const map = new Map<string, number>();
+    (tenants ?? []).forEach((t) => map.set(t.planId, (map.get(t.planId) ?? 0) + 1));
+    return map;
+  }, [tenants]);
+
+  const defaultPlan = plans?.find((p) => p.id === FULL_ACCESS_PLAN_ID) ?? null;
+
+  const searchQuery = searchText.trim().toLowerCase();
+  const otherPlans = useMemo(() => {
+    return (plans ?? [])
+      .filter((p) => p.id !== FULL_ACCESS_PLAN_ID)
+      .filter(
+        (p) =>
+          !searchQuery ||
+          p.name.toLowerCase().includes(searchQuery) ||
+          (p.description ?? '').toLowerCase().includes(searchQuery),
+      );
+  }, [plans, searchQuery]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(otherPlans.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedPlans = otherPlans.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = otherPlans.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, otherPlans.length);
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -262,42 +364,174 @@ export default function SubscriptionPlans() {
       {isError && <div className="text-center text-danger py-5">Couldn't load plans. Please try again.</div>}
 
       {!isLoading && !isError && (
-        <Row className="g-3">
-          {plans?.map((plan) => (
-            <Col key={plan.id} md={6} lg={4}>
-              <Card className="border-0 shadow-sm h-100">
-                <Card.Body className="d-flex flex-column">
-                  <h2 className="h6 fw-bold mb-1">{plan.name}</h2>
-                  {plan.description && <p className="text-muted small mb-2">{plan.description}</p>}
-                  <div className="d-flex flex-wrap gap-1 mb-3">
-                    {plan.includedFeatures.length === 0 ? (
-                      <span className="text-muted small">No modules included</span>
-                    ) : (
-                      plan.includedFeatures.map((f) => (
+        <>
+          {defaultPlan && (
+            <Card className="border-0 shadow-sm mb-3" style={{ background: '#f5f5ff' }}>
+              <Card.Body>
+                <div className="d-flex align-items-start gap-3">
+                  <div
+                    className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+                    style={{ width: 44, height: 44, background: '#ede9fe', color: '#7c3aed' }}
+                  >
+                    <CrownIcon />
+                  </div>
+                  <div className="flex-grow-1">
+                    <h2 className="h6 fw-bold mb-1">{defaultPlan.name}</h2>
+                    {defaultPlan.description && <p className="text-muted small mb-2">{defaultPlan.description}</p>}
+                    <div className="d-flex flex-wrap gap-1 mb-3">
+                      {defaultPlan.includedFeatures.map((f) => (
                         <Badge key={f} bg="light" text="dark" className="border">
                           {PLAN_FEATURE_LABELS[f]}
                         </Badge>
-                      ))
-                    )}
+                      ))}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        className="d-inline-flex align-items-center gap-1"
+                        onClick={() => openEdit(defaultPlan)}
+                      >
+                        <EditIcon /> Edit Plan
+                      </Button>
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        className="d-inline-flex align-items-center gap-1"
+                        onClick={() => setDeleteTarget(defaultPlan)}
+                      >
+                        <TrashIcon /> Delete Plan
+                      </Button>
+                    </div>
                   </div>
-                  <div className="d-flex gap-2 mt-auto">
-                    <Button variant="outline-secondary" size="sm" onClick={() => openEdit(plan)}>
-                      Edit Plan
-                    </Button>
-                    <Button variant="outline-danger" size="sm" onClick={() => setDeleteTarget(plan)}>
-                      Delete
-                    </Button>
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
-          ))}
-          {plans?.length === 0 && (
-            <Col xs={12}>
-              <div className="text-center text-muted py-5">No plans yet. Click "+ Create Plan" to add one.</div>
-            </Col>
+                </div>
+              </Card.Body>
+            </Card>
           )}
-        </Row>
+
+          <div className="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-2">
+            <div>
+              <h2 className="h6 fw-bold mb-1">All Plans</h2>
+              <p className="text-muted small mb-0">Manage subscription plans and their permissions.</p>
+            </div>
+            <InputGroup style={{ width: 260 }}>
+              <InputGroup.Text>
+                <SearchIcon />
+              </InputGroup.Text>
+              <Form.Control
+                type="search"
+                placeholder="Search plans..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
+            </InputGroup>
+          </div>
+
+          <Card className="border-0 shadow-sm">
+            <Card.Body className={otherPlans.length === 0 ? '' : 'p-0'}>
+              {otherPlans.length === 0 ? (
+                <div className="text-center text-muted py-5">
+                  {searchQuery ? 'No plans match your search.' : 'No other plans yet. Click "+ Create Plan" to add one.'}
+                </div>
+              ) : (
+                <Table responsive hover className="mb-0 align-middle">
+                  <thead className="text-muted small text-uppercase bg-light">
+                    <tr>
+                      <th className="ps-4">Plan Name</th>
+                      <th>Description</th>
+                      <th>Modules Included</th>
+                      <th>Organizations</th>
+                      <th className="pe-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedPlans.map((plan) => {
+                      const style = iconForPlan(plan.name);
+                      const shown = plan.includedFeatures.slice(0, 2);
+                      const remaining = plan.includedFeatures.length - shown.length;
+                      return (
+                        <tr key={plan.id}>
+                          <td className="ps-4">
+                            <div className="d-flex align-items-center gap-2">
+                              <div
+                                className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                                style={{ width: 32, height: 32, background: style.iconBg, color: style.iconColor }}
+                              >
+                                {style.icon}
+                              </div>
+                              <span className="fw-medium">{plan.name}</span>
+                            </div>
+                          </td>
+                          <td className="text-muted" style={{ maxWidth: 280 }}>
+                            {plan.description || '—'}
+                          </td>
+                          <td>
+                            <div className="d-flex flex-wrap gap-1" style={{ maxWidth: 280 }}>
+                              {shown.length === 0 ? (
+                                <span className="text-muted small">None</span>
+                              ) : (
+                                shown.map((f) => (
+                                  <Badge key={f} bg="light" text="dark" className="border">
+                                    {PLAN_FEATURE_LABELS[f]}
+                                  </Badge>
+                                ))
+                              )}
+                              {remaining > 0 && (
+                                <Badge bg="light" text="dark" className="border">
+                                  +{remaining} more
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="text-muted">{organizationCountByPlanId.get(plan.id) ?? 0}</td>
+                          <td className="pe-4">
+                            <div className="d-flex gap-2">
+                              <Button variant="outline-secondary" size="sm" onClick={() => openEdit(plan)} title="Edit plan">
+                                <EditIcon />
+                              </Button>
+                              <Button variant="outline-danger" size="sm" onClick={() => setDeleteTarget(plan)} title="Delete plan">
+                                <TrashIcon />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              )}
+            </Card.Body>
+          </Card>
+
+          {otherPlans.length > 0 && (
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              <div className="text-muted small">
+                Showing {rangeStart} to {rangeEnd} of {otherPlans.length} plans
+              </div>
+              <div className="d-flex align-items-center gap-3">
+                <Pagination className="mb-0">
+                  <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                      {p}
+                    </Pagination.Item>
+                  ))}
+                  <Pagination.Next
+                    disabled={currentPage === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  />
+                </Pagination>
+                <Form.Select size="sm" style={{ width: 100 }} value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size} / page
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <Modal show={showForm} onHide={closeForm} centered size="lg">
