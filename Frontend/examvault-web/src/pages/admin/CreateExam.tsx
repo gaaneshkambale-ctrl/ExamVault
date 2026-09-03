@@ -3,6 +3,8 @@ import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { createExam } from '../../api/examApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import { EXAM_CATEGORIES } from '../../types/exam';
@@ -100,6 +102,9 @@ const QUICK_HELP = [
 
 export default function CreateExam() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canCreateExams = user?.role !== 'Instructor' || hasPermission('Exams - Create');
   const { data: examTypes } = useExamTypes();
   const [form, setForm] = useState<CreateExamRequest>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateExamRequest, string>>>(
@@ -351,16 +356,18 @@ export default function CreateExam() {
                   <Button variant="outline-secondary" onClick={() => navigate('/admin/exams')}>
                     Cancel
                   </Button>
-                  <Button type="submit" variant="primary" disabled={status === 'loading'}>
-                    {status === 'loading' ? (
-                      <>
-                        <Spinner animation="border" size="sm" className="me-2" />
-                        Creating...
-                      </>
-                    ) : (
-                      <>Save &amp; Next &rarr;</>
-                    )}
-                  </Button>
+                  {canCreateExams && (
+                    <Button type="submit" variant="primary" disabled={status === 'loading'}>
+                      {status === 'loading' ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>Save &amp; Next &rarr;</>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </Form>
             </Card.Body>

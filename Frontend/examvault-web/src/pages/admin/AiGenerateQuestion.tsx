@@ -5,6 +5,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AdminLayout from '../../layouts/AdminLayout';
 import { useExam, useExams } from '../../hooks/useExams';
 import { useSection } from '../../hooks/useSections';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { generateQuestions } from '../../api/aiApi';
 import { DISABLED_QUESTION_TYPES } from '../../types/ai';
 import type {
@@ -177,6 +179,10 @@ export default function AiGenerateQuestion() {
   const [searchParams] = useSearchParams();
   const sectionId = searchParams.get('sectionId');
   const fromWizard = searchParams.get('wizard') === 'true';
+
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canCreateQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Create');
 
   const { data: lockedExam } = useExam(urlExamId);
   const { data: allExams, isLoading: isLoadingExams } = useExams();
@@ -455,26 +461,28 @@ export default function AiGenerateQuestion() {
               >
                 Cancel
               </Link>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={
-                  isGenerating ||
-                  !selectedExamId ||
-                  questionTypes.length === 0 ||
-                  difficultyLevels.length === 0 ||
-                  (source === 'TopicText' && !topic.trim())
-                }
-              >
-                {isGenerating ? (
-                  <>
-                    <Spinner animation="border" size="sm" className="me-2" />
-                    Generating...
-                  </>
-                ) : (
-                  'Generate Questions'
-                )}
-              </Button>
+              {canCreateQuestions && (
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={
+                    isGenerating ||
+                    !selectedExamId ||
+                    questionTypes.length === 0 ||
+                    difficultyLevels.length === 0 ||
+                    (source === 'TopicText' && !topic.trim())
+                  }
+                >
+                  {isGenerating ? (
+                    <>
+                      <Spinner animation="border" size="sm" className="me-2" />
+                      Generating...
+                    </>
+                  ) : (
+                    'Generate Questions'
+                  )}
+                </Button>
+              )}
             </div>
           </Form>
         </Card.Body>

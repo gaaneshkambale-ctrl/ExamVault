@@ -6,6 +6,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import DeleteExamButton from '../../components/DeleteExamButton';
 import { EditIcon, ViewIcon, BarChartIcon } from '../../components/icons/ActionIcons';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useExams, useExamTypes } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { archiveExam, deleteExam } from '../../api/examApi';
@@ -178,6 +180,13 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50];
 const VALID_STATUSES: ExamStatus[] = ['Draft', 'Published', 'Archived'];
 
 export default function ManageExams() {
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  // Admin is never restricted here - only Instructor's own granted
+  // permissions (which an Admin can revoke independently of role) gate
+  // these actions, matching what ExamsController actually enforces.
+  const canCreateExams = user?.role !== 'Instructor' || hasPermission('Exams - Create');
+  const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
   const { data: exams, isLoading, isError } = useExams();
   const { data: examTypes } = useExamTypes();
   const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
@@ -303,9 +312,11 @@ export default function ManageExams() {
           <h1 className="h4 fw-bold mb-0 text-primary">Exams</h1>
           <p className="text-muted mb-0">View and manage all exams in the system</p>
         </div>
-        <Link to="/admin/exams/create" className="btn btn-primary">
-          + Create Exam
-        </Link>
+        {canCreateExams && (
+          <Link to="/admin/exams/create" className="btn btn-primary">
+            + Create Exam
+          </Link>
+        )}
       </div>
 
       <Row className="g-3 mb-4">
@@ -537,15 +548,17 @@ export default function ManageExams() {
                             >
                               <ViewIcon />
                             </Link>
-                            <Link
-                              to={`/admin/exams/${exam.id}/edit`}
-                              className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
-                              style={{ width: 32, height: 32 }}
-                              title="Edit"
-                              aria-label={`Edit ${exam.title}`}
-                            >
-                              <EditIcon />
-                            </Link>
+                            {canEditExams && (
+                              <Link
+                                to={`/admin/exams/${exam.id}/edit`}
+                                className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                                style={{ width: 32, height: 32 }}
+                                title="Edit"
+                                aria-label={`Edit ${exam.title}`}
+                              >
+                                <EditIcon />
+                              </Link>
+                            )}
                             <Link
                               to={`/admin/reports/${exam.id}`}
                               className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"

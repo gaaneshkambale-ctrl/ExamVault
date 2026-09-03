@@ -3,12 +3,17 @@ import { Link, useParams } from 'react-router-dom';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import DeleteSectionButton from '../../components/DeleteSectionButton';
 import { EditIcon } from '../../components/icons/ActionIcons';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useExam } from '../../hooks/useExams';
 import { useSections } from '../../hooks/useSections';
 
 export default function ManageSections() {
   const { examId } = useParams<{ examId: string }>();
   const { data: exam } = useExam(examId);
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
   const { data: sections, isLoading, isError } = useSections(examId);
 
   const totals = (sections ?? []).reduce(
@@ -35,15 +40,19 @@ export default function ManageSections() {
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h1 className="h4 fw-bold mb-0 text-primary">Manage Sections</h1>
           <div className="d-flex gap-2">
-            <Link
-              to={`/admin/exams/${examId}/sections/reorder`}
-              className="btn btn-outline-secondary"
-            >
-              Reorder Sections
-            </Link>
-            <Link to={`/admin/exams/${examId}/sections/create`} className="btn btn-primary">
-              + Add Section
-            </Link>
+            {canEditExams && (
+              <Link
+                to={`/admin/exams/${examId}/sections/reorder`}
+                className="btn btn-outline-secondary"
+              >
+                Reorder Sections
+              </Link>
+            )}
+            {canEditExams && (
+              <Link to={`/admin/exams/${examId}/sections/create`} className="btn btn-primary">
+                + Add Section
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -124,16 +133,20 @@ export default function ManageSections() {
                     </td>
                     <td className="pe-4">
                       <div className="d-flex gap-2">
-                        <Link
-                          to={`/admin/exams/${examId}/sections/${section.id}/edit`}
-                          className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
-                          style={{ width: 32, height: 32 }}
-                          title="Edit"
-                          aria-label={`Edit ${section.name}`}
-                        >
-                          <EditIcon />
-                        </Link>
-                        <DeleteSectionButton examId={examId!} sectionId={section.id} />
+                        {canEditExams && (
+                          <>
+                            <Link
+                              to={`/admin/exams/${examId}/sections/${section.id}/edit`}
+                              className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                              style={{ width: 32, height: 32 }}
+                              title="Edit"
+                              aria-label={`Edit ${section.name}`}
+                            >
+                              <EditIcon />
+                            </Link>
+                            <DeleteSectionButton examId={examId!} sectionId={section.id} />
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

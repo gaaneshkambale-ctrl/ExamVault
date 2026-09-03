@@ -5,6 +5,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/examApi';
 import { useExam, useExamTypes } from '../../hooks/useExams';
 import { validateCreateExam } from '../../utils/createExamValidation';
@@ -182,6 +184,9 @@ export default function EditExam() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
   const { data: exam, isLoading, isError } = useExam(id);
   const { data: examTypes } = useExamTypes();
 
@@ -671,16 +676,18 @@ export default function EditExam() {
                   <Link to="/admin/exams" className="btn btn-outline-secondary">
                     Cancel
                   </Link>
-                  <Button type="submit" variant="primary" disabled={saveMutation.isPending}>
-                    {saveMutation.isPending ? (
-                      <>
-                        <Spinner animation="border" size="sm" className="me-2" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Changes'
-                    )}
-                  </Button>
+                  {canEditExams && (
+                    <Button type="submit" variant="primary" disabled={saveMutation.isPending}>
+                      {saveMutation.isPending ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Changes'
+                      )}
+                    </Button>
+                  )}
                 </div>
               </Form>
             </Card.Body>

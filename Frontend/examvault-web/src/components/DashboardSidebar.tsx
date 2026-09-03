@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Offcanvas } from 'react-bootstrap';
 import BrandMark from './BrandMark';
+import { usePermissions } from '../hooks/usePermissions';
 
 export type DashboardNavItem =
   | 'Dashboard'
@@ -33,6 +34,14 @@ interface DashboardSidebarProps {
 }
 
 export default function DashboardSidebar({ active, show = false, onClose = () => {} }: DashboardSidebarProps) {
+  const { hasPermission } = usePermissions();
+  // This layout is Student-only (Admin/Instructor use AdminLayout/
+  // InstructorLayout) - Results - View is a real, revocable Student
+  // default permission (ResultsController enforces it with no role
+  // restriction at all), so hide the nav item rather than leave a link
+  // that 403s.
+  const visibleNavItems = navItems.filter((item) => item.label !== 'My Results' || hasPermission('Results - View'));
+
   return (
     <Offcanvas
       show={show}
@@ -54,7 +63,7 @@ export default function DashboardSidebar({ active, show = false, onClose = () =>
             ExamVault
           </div>
           <nav className="d-flex flex-column gap-1 flex-grow-1">
-            {navItems.map((item) =>
+            {visibleNavItems.map((item) =>
               item.path ? (
                 <Link
                   key={item.label}

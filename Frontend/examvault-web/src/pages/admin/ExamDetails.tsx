@@ -14,6 +14,8 @@ import { useQuestions } from '../../hooks/useQuestions';
 import { useAssignmentsForExam } from '../../hooks/useAssignments';
 import { useGroups } from '../../hooks/useGroups';
 import { useUngradedAnswers } from '../../hooks/useSubmissions';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { CreationMethod, ExamStatus } from '../../types/exam';
 import { getAssignmentStatus, type AssignmentStatus } from '../../types/assignment';
 import { extractServerError } from '../../utils/apiError';
@@ -53,6 +55,10 @@ export default function ExamDetails() {
   const { data: assignments, isLoading: isLoadingAssignments } = useAssignmentsForExam(id);
   const { data: groups } = useGroups();
   const { data: ungradedAnswers } = useUngradedAnswers(id);
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
+  const canCreateQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Create');
   const [statusError, setStatusError] = useState('');
 
   const groupNameById = useMemo(() => {
@@ -140,7 +146,7 @@ export default function ExamDetails() {
               {manageQuestionsMutation.isPending ? 'Loading...' : 'Manage Questions'}
             </Button>
           )}
-          {id && exam?.creationMethod === 'AiGenerated' && (
+          {id && exam?.creationMethod === 'AiGenerated' && canCreateQuestions && (
             <Link to={`/admin/exams/${id}/questions/ai-generate`} className="btn btn-outline-primary">
               Generate Questions with AI
             </Link>
@@ -150,7 +156,7 @@ export default function ExamDetails() {
               Grade Code Answers <Badge bg="warning" text="dark">{ungradedAnswers.length}</Badge>
             </Link>
           )}
-          {id && (
+          {id && canEditExams && (
             <Link to={`/admin/exams/${id}/edit`} className="btn btn-primary">
               Edit
             </Link>

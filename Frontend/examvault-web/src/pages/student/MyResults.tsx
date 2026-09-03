@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Card, Col, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Card, Col, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
 import PercentageRing from '../../components/PercentageRing';
 import { ViewIcon } from '../../components/icons/ActionIcons';
 import { useExams } from '../../hooks/useExams';
+import { usePermissions } from '../../hooks/usePermissions';
 import { getMyResult } from '../../api/resultApi';
 import { getMyAttempt } from '../../api/submissionApi';
 import type { CreationMethod } from '../../types/exam';
@@ -54,6 +55,7 @@ const PAGE_SIZE = 5;
 const RECENT_COUNT = 5;
 
 export default function MyResults() {
+  const { hasPermission } = usePermissions();
   const { data: exams, isLoading: isLoadingExams } = useExams();
   const [tab, setTab] = useState<'All' | 'Recent'>('All');
   const [page, setPage] = useState(1);
@@ -143,6 +145,18 @@ export default function MyResults() {
     tab === 'Recent' ? rows.slice(0, RECENT_COUNT) : rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const rangeStart = rows.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(currentPage * PAGE_SIZE, rows.length);
+
+  if (!hasPermission('Results - View')) {
+    return (
+      <StudentLayout active="My Results">
+        <h1 className="h4 fw-bold mb-1 text-primary">My Results</h1>
+        <Alert variant="warning" className="mb-0">
+          You don't currently have access to view results. Contact your organization's admin if you believe
+          this is a mistake.
+        </Alert>
+      </StudentLayout>
+    );
+  }
 
   return (
     <StudentLayout active="My Results">

@@ -9,6 +9,7 @@ import { useQuestions } from '../../hooks/useQuestions';
 import { useSections } from '../../hooks/useSections';
 import { useMyAssignmentForExam } from '../../hooks/useAssignments';
 import { useMyAttempt } from '../../hooks/useSubmissions';
+import { usePermissions } from '../../hooks/usePermissions';
 import { startAttempt } from '../../api/submissionApi';
 import { getAssignmentStatus } from '../../types/assignment';
 import type { CreationMethod } from '../../types/exam';
@@ -86,6 +87,8 @@ export default function ExamDetails() {
   const { data: sections } = useSections(id, Boolean(exam?.containsSections));
   const { data: assignment } = useMyAssignmentForExam(id);
   const { data: myAttempt } = useMyAttempt(id);
+  const { hasPermission } = usePermissions();
+  const canViewResults = hasPermission('Results - View');
 
   const attemptsUsed = myAttempt?.attempt.attemptNumber ?? 0;
   const isAttemptInProgress = myAttempt?.attempt.status === 'InProgress';
@@ -343,10 +346,14 @@ export default function ExamDetails() {
                   <Button variant="primary" className="w-100" onClick={beginSystemCheck}>
                     {attemptsUsed === 0 ? 'Start Exam Now' : 'Retake Exam'}
                   </Button>
-                ) : (
+                ) : canViewResults ? (
                   <Link to={`/results/${id}`} className="btn btn-outline-secondary w-100">
                     View Result
                   </Link>
+                ) : (
+                  <Button variant="outline-secondary" className="w-100" disabled>
+                    Results Unavailable
+                  </Button>
                 )}
               </Card.Body>
             </Card>

@@ -2,6 +2,8 @@ import { Badge, Card, ListGroup, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useQuestion } from '../../hooks/useQuestions';
 import type { QuestionDifficulty, QuestionType } from '../../types/question';
 import { PROGRAMMING_LANGUAGES } from '../../types/question';
@@ -30,6 +32,9 @@ export default function QuestionDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: question, isLoading, isError } = useQuestion(id);
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Edit');
 
   const backTo = question
     ? question.sectionId
@@ -43,9 +48,11 @@ export default function QuestionDetails() {
         <h1 className="h4 fw-bold mb-0 text-primary">Question Details</h1>
         {question && (
           <div className="d-flex align-items-center gap-3">
-            <Link to={`/admin/questions/${question.id}/edit`} className="btn btn-primary">
-              Edit
-            </Link>
+            {canEditQuestions && (
+              <Link to={`/admin/questions/${question.id}/edit`} className="btn btn-primary">
+                Edit
+              </Link>
+            )}
             <DeleteQuestionButton
               questionId={question.id}
               examId={question.examId}

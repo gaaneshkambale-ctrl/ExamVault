@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExams } from '../../hooks/useExams';
+import { usePermissions } from '../../hooks/usePermissions';
 import { getMyAttempt } from '../../api/submissionApi';
 import { getMyAssignmentForExam } from '../../api/assignmentApi';
 import { getAssignmentStatus } from '../../types/assignment';
@@ -90,6 +91,8 @@ function timeLeftLabel(startedAtUtc: string | null, durationMinutes: number): st
 const PAGE_SIZE = 6;
 
 export default function MyExams() {
+  const { hasPermission } = usePermissions();
+  const canViewResults = hasPermission('Results - View');
   const { data: exams, isLoading, isError } = useExams();
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab');
@@ -392,9 +395,11 @@ export default function MyExams() {
                         )}
                         {exam.rowStatus === 'Completed' && (
                           <div className="d-flex flex-column align-items-start gap-1">
-                            <Link to={`/results/${exam.id}`} className="btn btn-outline-secondary btn-sm">
-                              View Result →
-                            </Link>
+                            {canViewResults && (
+                              <Link to={`/results/${exam.id}`} className="btn btn-outline-secondary btn-sm">
+                                View Result →
+                              </Link>
+                            )}
                             {exam.hasRetakesLeft && (
                               <Link to={`/exams/${exam.id}`} className="btn btn-link btn-sm p-0">
                                 Retake Exam

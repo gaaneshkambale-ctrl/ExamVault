@@ -12,6 +12,8 @@ import { bulkAssignSection } from '../../api/questionApi';
 import { useExam } from '../../hooks/useExams';
 import { useSection, useSections } from '../../hooks/useSections';
 import { useQuestionsBySection, useUnassignedQuestions } from '../../hooks/useQuestions';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { NavigationType, SectionRequest } from '../../types/section';
 import type { QuestionResponse, QuestionType } from '../../types/question';
 import { extractServerError } from '../../utils/apiError';
@@ -286,6 +288,12 @@ export default function SectionForm() {
   const [searchParams] = useSearchParams();
   const fromWizard = searchParams.get('wizard') === 'true';
   const queryClient = useQueryClient();
+
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
+  const canCreateQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Create');
+  const canEditQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Edit');
 
   const { data: exam } = useExam(examId);
   const { data: existingSection, isLoading: isLoadingSection } = useSection(examId, sectionId);
@@ -949,19 +957,21 @@ export default function SectionForm() {
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <div className="fw-bold small text-uppercase text-muted">Available Questions</div>
                     <div className="d-flex align-items-center gap-2">
-                      <Button
-                        variant="outline-primary"
-                        size="sm"
-                        disabled={submitting}
-                        onClick={goToCreateQuestion}
-                      >
-                        {useAiGenerate
-                          ? isEdit || submitting
-                            ? '+ Generate with AI'
-                            : 'Save & Generate with AI'
-                          : '+ Create Question'}
-                      </Button>
-                      {useAiGenerate && (
+                      {canCreateQuestions && (
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          disabled={submitting}
+                          onClick={goToCreateQuestion}
+                        >
+                          {useAiGenerate
+                            ? isEdit || submitting
+                              ? '+ Generate with AI'
+                              : 'Save & Generate with AI'
+                            : '+ Create Question'}
+                        </Button>
+                      )}
+                      {useAiGenerate && canCreateQuestions && (
                         <Button variant="outline-secondary" size="sm" onClick={openManualQuestion}>
                           + Manual Question
                         </Button>
@@ -1025,15 +1035,17 @@ export default function SectionForm() {
                               <td>{q.marks}</td>
                               <td onClick={(e) => e.stopPropagation()}>
                                 <div className="d-flex gap-2">
-                                  <Link
-                                    to={`/admin/questions/${q.id}/edit`}
-                                    className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
-                                    style={{ width: 32, height: 32 }}
-                                    title="Edit"
-                                    aria-label="Edit question"
-                                  >
-                                    <EditIcon />
-                                  </Link>
+                                  {canEditQuestions && (
+                                    <Link
+                                      to={`/admin/questions/${q.id}/edit`}
+                                      className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center"
+                                      style={{ width: 32, height: 32 }}
+                                      title="Edit"
+                                      aria-label="Edit question"
+                                    >
+                                      <EditIcon />
+                                    </Link>
+                                  )}
                                   <DeleteQuestionButton
                                     questionId={q.id}
                                     examId={q.examId}
@@ -1098,9 +1110,11 @@ export default function SectionForm() {
               <Button variant="outline-secondary" onClick={() => setStep(2)}>
                 Back
               </Button>
-              <Button variant="primary" disabled={submitting} onClick={handleSubmit}>
-                {submitting ? 'Saving...' : isEdit ? 'Save Section' : 'Add Section'}
-              </Button>
+              {canEditExams && (
+                <Button variant="primary" disabled={submitting} onClick={handleSubmit}>
+                  {submitting ? 'Saving...' : isEdit ? 'Save Section' : 'Add Section'}
+                </Button>
+              )}
             </div>
           </div>
         </>
