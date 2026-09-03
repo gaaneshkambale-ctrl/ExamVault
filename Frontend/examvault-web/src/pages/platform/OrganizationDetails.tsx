@@ -8,7 +8,9 @@ import ReactivateTenantButton from '../../components/ReactivateTenantButton';
 import StartTrialButton from '../../components/StartTrialButton';
 import EndTrialButton from '../../components/EndTrialButton';
 import OrgAvatar from '../../components/OrgAvatar';
+import SegmentDonutChart from '../../components/SegmentDonutChart';
 import { useTenants } from '../../hooks/useTenants';
+import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import {
   createTenantAdmin,
   deleteTenant,
@@ -23,6 +25,7 @@ import { listExams } from '../../api/examApi';
 import { getAuditLogs } from '../../api/auditApi';
 import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
+import { timeAgo } from '../../utils/timeAgo';
 import { PLAN_FEATURE_LABELS } from '../../types/plan';
 import { ORGANIZATION_TYPES } from '../../types/tenant';
 import { COSMETIC_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
@@ -30,22 +33,23 @@ import { COSMETIC_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
 const ACTIVITY_LOG_FROM = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
 const ACTIVITY_LOG_TO = new Date().toISOString();
 
-// Matches org_submenu.png's Organization Details page - all 8 tabs from
-// the mockup exist as real nav. Overview/Admins/Subscriptions/Activity Log
-// have real data behind them (Organization Code/Type/Address included,
-// editable via the Actions panel's Edit Organization); Settings now hosts a
-// real Role Permissions panel (Super Admin's counterpart to a tenant's own
-// self-service Roles & Permissions page - see tenantsApi.ts's
-// getTenantRolePermissions/updateTenantRolePermissions), covering all 3 real
-// tenant roles (Admin/Instructor/Student) via a role selector. The header's
-// Admin Contact/Total Users/Total Exams and the Overview tab's Admin
-// Information card are real too (cross-tenant queries filtered to this
-// org, same pattern AllUsers.tsx/PlatformAllExams.tsx already use). The
-// dedicated Usage/Users/Exams TABS (as opposed to the header stats/Admin
-// Info card) are still the mockup's placeholder-only surfaces - a full
-// per-org Users/Exams list view is a bigger feature than this fix covered.
-// Add Admin (real) lives on the Admins tab; Suspend/Edit/Reset Admin
-// Password/Delete (all real) live in the Actions panel.
+// Matches org_submenu.png's Organization Details page - all 8 tabs are now
+// real, no placeholder surfaces left. Overview/Admins/Subscriptions/
+// Activity Log have real data behind them (Organization Code/Type/Address
+// included, editable via the Actions panel's Edit Organization); Settings
+// hosts a real Role Permissions panel (Super Admin's counterpart to a
+// tenant's own self-service Roles & Permissions page - see tenantsApi.ts's
+// getTenantRolePermissions/updateTenantRolePermissions), covering all 3
+// real tenant roles (Admin/Instructor/Student) via a role selector. Users
+// and Exams are real per-org tables (same cross-tenant queries the header
+// stats already use, filtered to this org - same shape as
+// AllUsers.tsx/PlatformAllExams.tsx's own tables). Usage shows real Users-
+// by-Role and Exams-by-Status donuts from that same data; exam attempts/
+// pass-rate stay unshown - there's no cross-tenant submissions endpoint to
+// source them from, the same gap the platform's own Exam Usage report
+// (ExamUsageReport.tsx) has. Add Admin (real) lives on the Admins tab;
+// Suspend/Edit/Reset Admin Password/Delete (all real) live in the Actions
+// panel.
 const TABS = ['Overview', 'Usage', 'Admins', 'Users', 'Exams', 'Subscriptions', 'Activity Log', 'Settings'] as const;
 type DetailTab = (typeof TABS)[number];
 
@@ -63,10 +67,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <span>{value}</span>
     </div>
   );
-}
-
-function NotConnected({ label }: { label: string }) {
-  return <div className="text-center text-muted small py-5 border rounded-3">"{label}" isn't connected yet.</div>;
 }
 
 export default function OrganizationDetails() {
@@ -131,6 +131,27 @@ export default function OrganizationDetails() {
   const tenantExams = useMemo(
     () => (allExams ?? []).filter((e) => e.tenantId === tenant?.id),
     [allExams, tenant?.id],
+  );
+  // exam.totalQuestions is a legacy field never kept in sync with Question
+  // Service - same reason PlatformAllExams.tsx computes the real count
+  // instead of trusting it.
+  const questionCounts = useQuestionCountsByExam(tab === 'Exams' ? tenantExams.map((e) => e.id) : undefined);
+
+  const examStatusCounts = useMemo(
+    () => ({
+      Published: tenantExams.filter((e) => e.status === 'Published').length,
+      Draft: tenantExams.filter((e) => e.status === 'Draft').length,
+      Archived: tenantExams.filter((e) => e.status === 'Archived').length,
+    }),
+    [tenantExams],
+  );
+  const userRoleCounts = useMemo(
+    () => ({
+      Admin: tenantUsers.filter((u) => u.role === 'Admin').length,
+      Instructor: tenantUsers.filter((u) => u.role === 'Instructor').length,
+      Student: tenantUsers.filter((u) => u.role === 'Student').length,
+    }),
+    [tenantUsers],
   );
 
   const { data: activityLogs, isLoading: isLoadingActivity, isError: isActivityError } = useQuery({
@@ -596,17 +617,146 @@ export default function OrganizationDetails() {
             </Card>
           )}
 
-          {tab !== 'Overview' &&
-            tab !== 'Admins' &&
-            tab !== 'Subscriptions' &&
-            tab !== 'Activity Log' &&
-            tab !== 'Settings' && (
-              <Card className="border-0 shadow-sm">
-                <Card.Body>
-                  <NotConnected label={tab} />
-                </Card.Body>
-              </Card>
-            )}
+          {tab === 'Usage' && (
+            <>
+              <Row xs={1} sm={2} className="g-3 mb-3">
+                <Col>
+                  <Card className="border-0 shadow-sm h-100">
+                    <Card.Body>
+                      <h2 className="h6 fw-bold mb-3">Users by Role</h2>
+                      <SegmentDonutChart
+                        centerLabel="Total"
+                        segments={[
+                          { label: 'Students', value: userRoleCounts.Student, color: '#2563eb' },
+                          { label: 'Admins', value: userRoleCounts.Admin, color: '#16a34a' },
+                          { label: 'Instructors', value: userRoleCounts.Instructor, color: '#d97706' },
+                        ]}
+                      />
+                    </Card.Body>
+                  </Card>
+                </Col>
+                <Col>
+                  <Card className="border-0 shadow-sm h-100">
+                    <Card.Body>
+                      <h2 className="h6 fw-bold mb-3">Exams by Status</h2>
+                      <SegmentDonutChart
+                        centerLabel="Total"
+                        segments={[
+                          { label: 'Published', value: examStatusCounts.Published, color: '#16a34a' },
+                          { label: 'Draft', value: examStatusCounts.Draft, color: '#d97706' },
+                          { label: 'Archived', value: examStatusCounts.Archived, color: '#6b7280' },
+                        ]}
+                      />
+                    </Card.Body>
+                  </Card>
+                </Col>
+              </Row>
+              <div className="text-muted small">
+                Exam attempts and pass-rate usage aren't shown here - there's no cross-tenant submissions endpoint
+                to source them from yet (same gap the platform's own Exam Usage report has).
+              </div>
+            </>
+          )}
+
+          {tab === 'Users' && (
+            <Card className="border-0 shadow-sm">
+              <Card.Body className={tenantUsers.length === 0 ? '' : 'p-0'}>
+                {tenantUsers.length === 0 ? (
+                  <div className="text-center text-muted small py-3">No users in this organization yet.</div>
+                ) : (
+                  <Table responsive hover className="mb-0 align-middle">
+                    <thead className="text-muted small text-uppercase bg-light">
+                      <tr>
+                        <th className="ps-4">User</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Last Login</th>
+                        <th className="pe-4">Joined On</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tenantUsers.map((user) => (
+                        <tr key={user.id}>
+                          <td className="ps-4">
+                            <div className="fw-medium">{user.fullName}</div>
+                            <div className="text-muted" style={{ fontSize: 12 }}>
+                              {user.email}
+                            </div>
+                          </td>
+                          <td>
+                            <Badge
+                              bg={
+                                user.role === 'Admin'
+                                  ? 'info'
+                                  : user.role === 'Instructor'
+                                    ? 'warning'
+                                    : 'secondary'
+                              }
+                            >
+                              {user.role}
+                            </Badge>
+                          </td>
+                          <td>
+                            <Badge bg={user.isActive ? 'success' : 'secondary'}>
+                              {user.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </td>
+                          <td className="text-muted">{user.lastLoginAtUtc ? timeAgo(user.lastLoginAtUtc) : 'Never'}</td>
+                          <td className="pe-4">{new Date(user.createdAtUtc).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
+              </Card.Body>
+            </Card>
+          )}
+
+          {tab === 'Exams' && (
+            <Card className="border-0 shadow-sm">
+              <Card.Body className={tenantExams.length === 0 ? '' : 'p-0'}>
+                {tenantExams.length === 0 ? (
+                  <div className="text-center text-muted small py-3">No exams in this organization yet.</div>
+                ) : (
+                  <Table responsive hover className="mb-0 align-middle">
+                    <thead className="text-muted small text-uppercase bg-light">
+                      <tr>
+                        <th className="ps-4">Exam</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Questions</th>
+                        <th className="pe-4">Created On</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tenantExams.map((exam) => (
+                        <tr key={exam.id}>
+                          <td className="ps-4">
+                            <div className="fw-medium">{exam.title}</div>
+                            {exam.examCode && (
+                              <div className="text-muted" style={{ fontSize: 12 }}>
+                                {exam.examCode}
+                              </div>
+                            )}
+                          </td>
+                          <td className="text-muted">{exam.category || '—'}</td>
+                          <td>
+                            <Badge
+                              bg={exam.status === 'Published' ? 'success' : exam.status === 'Archived' ? 'secondary' : 'warning'}
+                            >
+                              {exam.status}
+                            </Badge>
+                          </td>
+                          <td className="text-muted">{questionCounts[exam.id] ?? exam.totalQuestions}</td>
+                          <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
+              </Card.Body>
+            </Card>
+          )}
         </div>
 
         <div className="col-lg-4">
