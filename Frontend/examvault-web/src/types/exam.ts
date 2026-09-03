@@ -70,6 +70,11 @@ export interface CreateExamTypeRequest {
   purpose?: string | null;
 }
 
+export interface UpdateExamTypeRequest {
+  name: string;
+  purpose?: string | null;
+}
+
 export interface ReminderSettingsResponse {
   enable24HourReminder: boolean;
   enable1HourReminder: boolean;

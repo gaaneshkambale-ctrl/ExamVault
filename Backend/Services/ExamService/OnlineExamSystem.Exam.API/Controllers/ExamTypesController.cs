@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Exam.Application.ExamTypes.Create;
 using OnlineExamSystem.Exam.Application.ExamTypes.Delete;
 using OnlineExamSystem.Exam.Application.ExamTypes.List;
+using OnlineExamSystem.Exam.Application.ExamTypes.Update;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
@@ -17,17 +18,20 @@ public class ExamTypesController : ControllerBase
     private readonly CreateExamTypeHandler _createExamTypeHandler;
     private readonly ListExamTypesHandler _listExamTypesHandler;
     private readonly DeleteExamTypeHandler _deleteExamTypeHandler;
+    private readonly UpdateExamTypeHandler _updateExamTypeHandler;
     private readonly ILogger<ExamTypesController> _logger;
 
     public ExamTypesController(
         CreateExamTypeHandler createExamTypeHandler,
         ListExamTypesHandler listExamTypesHandler,
         DeleteExamTypeHandler deleteExamTypeHandler,
+        UpdateExamTypeHandler updateExamTypeHandler,
         ILogger<ExamTypesController> logger)
     {
         _createExamTypeHandler = createExamTypeHandler;
         _listExamTypesHandler = listExamTypesHandler;
         _deleteExamTypeHandler = deleteExamTypeHandler;
+        _updateExamTypeHandler = updateExamTypeHandler;
         _logger = logger;
     }
 
@@ -57,6 +61,32 @@ public class ExamTypesController : ControllerBase
     {
         var examTypes = await _listExamTypesHandler.HandleAsync(cancellationToken);
         return Ok(examTypes.Select(ToResponse));
+    }
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = ExamTypes)]
+    public async Task<IActionResult> Update(Guid id, UpdateExamTypeRequest request, CancellationToken cancellationToken)
+    {
+        var command = new UpdateExamTypeCommand(id, request.Name, request.Purpose);
+        var result = await _updateExamTypeHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Exam type not found." });
+        }
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        _logger.LogInformation("Exam type {ExamTypeId} updated.", id);
+        return Ok(ToResponse(result.ExamType!));
     }
 
     [HttpDelete("{id:guid}")]

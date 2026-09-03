@@ -9,6 +9,7 @@ import type {
   ProctoringSettingsResponse,
   ReminderSettingsResponse,
   UpdateExamRequest,
+  UpdateExamTypeRequest,
 } from '../types/exam';
 
 export async function createExam(request: CreateExamRequest): Promise<ExamResponse> {
@@ -57,6 +58,11 @@ export async function listExamTypes(): Promise<ExamTypeOption[]> {
 
 export async function createExamType(request: CreateExamTypeRequest): Promise<ExamTypeOption> {
   const { data } = await apiClient.post<ExamTypeOption>('/api/exam-types', request);
+  return data;
+}
+
+export async function updateExamType(id: string, request: UpdateExamTypeRequest): Promise<ExamTypeOption> {
+  const { data } = await apiClient.put<ExamTypeOption>(`/api/exam-types/${id}`, request);
   return data;
 }
 
