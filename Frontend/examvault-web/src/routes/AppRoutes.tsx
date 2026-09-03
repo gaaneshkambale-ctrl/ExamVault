@@ -833,7 +833,7 @@ export default function AppRoutes() {
         path="/platform/users"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <AllUsers />
+            <AllUsers key="all" />
           </ProtectedRoute>
         }
       />
@@ -841,7 +841,7 @@ export default function AppRoutes() {
         path="/platform/users/organization-admins"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <AllUsers roleFilter="Admin" />
+            <AllUsers key="Admin" roleFilter="Admin" />
           </ProtectedRoute>
         }
       />
@@ -849,7 +849,7 @@ export default function AppRoutes() {
         path="/platform/users/students"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <AllUsers roleFilter="Student" />
+            <AllUsers key="Student" roleFilter="Student" />
           </ProtectedRoute>
         }
       />
@@ -857,7 +857,7 @@ export default function AppRoutes() {
         path="/platform/users/platform-admins"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <AllUsers roleFilter="SuperAdmin" />
+            <AllUsers key="SuperAdmin" roleFilter="SuperAdmin" />
           </ProtectedRoute>
         }
       />

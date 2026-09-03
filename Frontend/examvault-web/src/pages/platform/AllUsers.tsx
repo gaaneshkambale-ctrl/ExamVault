@@ -41,6 +41,21 @@ const ROLE_NAV_KEYS: Record<(typeof ROLE_TABS)[number]['key'], string> = {
   SuperAdmin: 'users-platform-admins',
 };
 
+// Header/breadcrumb copy per entry point - the sidebar's Organization
+// Admins/Students/Platform Admins links deep-link into this same page via
+// roleFilter, so each needs to look like its own page rather than always
+// reading "All Users" regardless of which link was clicked.
+const PAGE_COPY: Record<
+  (typeof ROLE_TABS)[number]['key'],
+  { title: string; description: string }
+> = {
+  all: { title: 'All Users', description: 'Every user across every organization on the platform.' },
+  Admin: { title: 'Organization Admins', description: 'Every organization admin across every organization on the platform.' },
+  Instructor: { title: 'Instructors', description: 'Every instructor across every organization on the platform.' },
+  Student: { title: 'Students', description: 'Every student across every organization on the platform.' },
+  SuperAdmin: { title: 'Platform Admins', description: 'Every platform admin on the platform.' },
+};
+
 function exportUsersToCsv(users: PlatformUserListItem[], tenantNameById: Map<string, string>) {
   const header = ['Full Name', 'Email', 'Organization', 'Role', 'Status', 'Joined On'];
   const rows = users.map((u) => [
@@ -115,11 +130,13 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
     .sort((a, b) => new Date(b.createdAtUtc).getTime() - new Date(a.createdAtUtc).getTime())
     .slice(0, 5);
 
+  const pageCopy = PAGE_COPY[roleTab];
+
   return (
     <PlatformLayout active={ROLE_NAV_KEYS[roleTab]}>
-      <p className="text-muted small mb-1">Platform Admin / Users / All Users</p>
-      <h1 className="h4 fw-bold mb-1 text-primary">All Users</h1>
-      <p className="text-muted mb-3">Every user across every organization on the platform.</p>
+      <p className="text-muted small mb-1">Platform Admin / Users / {pageCopy.title}</p>
+      <h1 className="h4 fw-bold mb-1 text-primary">{pageCopy.title}</h1>
+      <p className="text-muted mb-3">{pageCopy.description}</p>
 
       <Form.Group className="mb-3" controlId="allUsersOrgFilter" style={{ maxWidth: 320 }}>
         <Form.Label className="small fw-bold">Organization</Form.Label>
