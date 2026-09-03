@@ -19,6 +19,7 @@ import {
 } from '../../api/tenantsApi';
 import { assignPlanToTenant, listPlans } from '../../api/plansApi';
 import { listAllUsers } from '../../api/userApi';
+import { listExams } from '../../api/examApi';
 import { getAuditLogs } from '../../api/auditApi';
 import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
@@ -31,17 +32,20 @@ const ACTIVITY_LOG_TO = new Date().toISOString();
 
 // Matches org_submenu.png's Organization Details page - all 8 tabs from
 // the mockup exist as real nav. Overview/Admins/Subscriptions/Activity Log
-// have real data behind them (Organization Code/Type included, editable
-// via the Actions panel's Edit Organization); Settings now hosts a real
-// Role Permissions panel (Super Admin's counterpart to a tenant's own
+// have real data behind them (Organization Code/Type/Address included,
+// editable via the Actions panel's Edit Organization); Settings now hosts a
+// real Role Permissions panel (Super Admin's counterpart to a tenant's own
 // self-service Roles & Permissions page - see tenantsApi.ts's
 // getTenantRolePermissions/updateTenantRolePermissions), covering all 3 real
-// tenant roles (Admin/Instructor/Student) via a role selector. Usage/Users/Exams
-// still show the mockup's Billing/Quick Stats fields with no backing field
-// anywhere in this codebase - honest placeholders, matching every other
-// "not connected yet" surface in this console. Add Admin (real) lives on
-// the Admins tab; Suspend/Edit/Reset Admin Password/Delete (all real) live
-// in the Actions panel.
+// tenant roles (Admin/Instructor/Student) via a role selector. The header's
+// Admin Contact/Total Users/Total Exams and the Overview tab's Admin
+// Information card are real too (cross-tenant queries filtered to this
+// org, same pattern AllUsers.tsx/PlatformAllExams.tsx already use). The
+// dedicated Usage/Users/Exams TABS (as opposed to the header stats/Admin
+// Info card) are still the mockup's placeholder-only surfaces - a full
+// per-org Users/Exams list view is a bigger feature than this fix covered.
+// Add Admin (real) lives on the Admins tab; Suspend/Edit/Reset Admin
+// Password/Delete (all real) live in the Actions panel.
 const TABS = ['Overview', 'Usage', 'Admins', 'Users', 'Exams', 'Subscriptions', 'Activity Log', 'Settings'] as const;
 type DetailTab = (typeof TABS)[number];
 
@@ -113,6 +117,20 @@ export default function OrganizationDetails() {
   const tenantAdmins = useMemo(
     () => (allUsers ?? []).filter((u) => u.tenantId === tenant?.id && u.role === 'Admin'),
     [allUsers, tenant?.id],
+  );
+  const tenantUsers = useMemo(
+    () => (allUsers ?? []).filter((u) => u.tenantId === tenant?.id),
+    [allUsers, tenant?.id],
+  );
+  const primaryAdmin = tenantAdmins[0];
+
+  // Same cross-tenant query PlatformAllExams.tsx already uses (same query
+  // key, so React Query dedupes rather than fetching twice) - filtered down
+  // to this one org for the header/Quick Stats counts below.
+  const { data: allExams } = useQuery({ queryKey: ['platform-exams'], queryFn: listExams });
+  const tenantExams = useMemo(
+    () => (allExams ?? []).filter((e) => e.tenantId === tenant?.id),
+    [allExams, tenant?.id],
   );
 
   const { data: activityLogs, isLoading: isLoadingActivity, isError: isActivityError } = useQuery({
@@ -284,15 +302,15 @@ export default function OrganizationDetails() {
             </div>
             <div>
               <div>Admin Contact</div>
-              <div className="text-body">&mdash;</div>
+              <div className="text-body">{primaryAdmin ? primaryAdmin.email : '—'}</div>
             </div>
             <div>
               <div>Total Users</div>
-              <div className="text-body">&mdash;</div>
+              <div className="text-body">{tenantUsers.length}</div>
             </div>
             <div>
               <div>Total Exams</div>
-              <div className="text-body">&mdash;</div>
+              <div className="text-body">{tenantExams.length}</div>
             </div>
           </div>
         </Card.Body>
@@ -341,9 +359,21 @@ export default function OrganizationDetails() {
               <Card className="border-0 shadow-sm mb-3">
                 <Card.Body>
                   <h2 className="h6 fw-bold mb-3">Admin Information</h2>
-                  <div className="text-muted small mb-2">
-                    No per-organization admin lookup exists yet - use the Admins tab to add one.
-                  </div>
+                  {primaryAdmin ? (
+                    <>
+                      <InfoRow label="Name" value={primaryAdmin.fullName} />
+                      <InfoRow label="Email" value={primaryAdmin.email} />
+                      <InfoRow label="Status" value={primaryAdmin.isActive ? 'Active' : 'Inactive'} />
+                      {tenantAdmins.length > 1 && (
+                        <div className="text-muted small mt-2">
+                          +{tenantAdmins.length - 1} more admin{tenantAdmins.length - 1 === 1 ? '' : 's'} - see the
+                          Admins tab.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-muted small mb-2">No admin added yet - use the Admins tab to add one.</div>
+                  )}
                 </Card.Body>
               </Card>
 
@@ -585,11 +615,11 @@ export default function OrganizationDetails() {
               <h2 className="h6 fw-bold mb-3">Quick Stats</h2>
               <div className="d-flex justify-content-between small py-1">
                 <span className="text-muted">Total Users</span>
-                <span>&mdash;</span>
+                <span>{tenantUsers.length}</span>
               </div>
               <div className="d-flex justify-content-between small py-1">
                 <span className="text-muted">Total Exams</span>
-                <span>&mdash;</span>
+                <span>{tenantExams.length}</span>
               </div>
               <div className="d-flex justify-content-between small py-1">
                 <span className="text-muted">Total Submissions</span>
