@@ -136,6 +136,7 @@ export interface QuestionResponse {
 export interface PlatformQuestionResponse {
   id: string;
   examId: string;
+  sectionId: string | null;
   tenantId: string;
   questionType: QuestionType;
   questionText: string;

@@ -9,6 +9,7 @@ namespace OnlineExamSystem.Shared.Contracts.Responses.Question;
 public record PlatformQuestionResponse(
     Guid Id,
     Guid ExamId,
+    Guid? SectionId,
     Guid TenantId,
     string QuestionType,
     string QuestionText,

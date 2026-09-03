@@ -146,6 +146,7 @@ public class QuestionsController : ControllerBase
         return Ok(questions.Select(q => new PlatformQuestionResponse(
             q.Id,
             q.ExamId,
+            q.SectionId,
             q.TenantId,
             q.QuestionType.ToString(),
             q.QuestionText,
