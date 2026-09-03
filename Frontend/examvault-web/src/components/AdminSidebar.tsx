@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Offcanvas } from 'react-bootstrap';
 import BrandMark from './BrandMark';
+import { useFeatures } from '../hooks/useFeatures';
 
 export type AdminNavItem =
   | 'Dashboard'
@@ -45,6 +46,11 @@ interface NavItem {
   label: AdminNavItem;
   path: string | null;
   children?: NavChild[];
+  // Matches a PlanFeature name (Backend/Shared/.../Multitenancy/
+  // PlanFeature.cs) - hidden whenever the current user's tenant Plan
+  // doesn't include it (SuperAdmin always sees everything). Only set on
+  // groups gated end-to-end (nav + route), see useFeatures.ts.
+  feature?: string;
 }
 
 const navItems: NavItem[] = [
@@ -70,6 +76,7 @@ const navItems: NavItem[] = [
   {
     label: 'Live Monitoring',
     path: '/admin/live-monitoring/active-exams',
+    feature: 'LiveMonitoring',
     children: [
       { label: 'Active Exams', path: '/admin/live-monitoring/active-exams' },
       { label: 'Student Attempts', path: '/admin/live-monitoring/student-attempts' },
@@ -205,8 +212,11 @@ function isSectionActive(item: NavItem, active: AdminNavItem): boolean {
 }
 
 export default function AdminSidebar({ active, show = false, onClose = () => {} }: AdminSidebarProps) {
+  const { hasFeature } = useFeatures();
+  const visibleNavItems = navItems.filter((item) => !item.feature || hasFeature(item.feature));
+
   const [openSections, setOpenSections] = useState<Set<AdminNavItem>>(
-    () => new Set(navItems.filter((item) => item.children && isSectionActive(item, active)).map((item) => item.label)),
+    () => new Set(visibleNavItems.filter((item) => item.children && isSectionActive(item, active)).map((item) => item.label)),
   );
 
   const toggleSection = (label: AdminNavItem) => {
@@ -236,7 +246,7 @@ export default function AdminSidebar({ active, show = false, onClose = () => {} 
           ExamVault
         </div>
         <nav className="d-flex flex-column gap-1 flex-grow-1">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isOpen = item.children ? openSections.has(item.label) : false;
           return (
             <div key={item.label}>
