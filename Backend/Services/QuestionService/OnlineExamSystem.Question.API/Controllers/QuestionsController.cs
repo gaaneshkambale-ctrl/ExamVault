@@ -130,10 +130,10 @@ public class QuestionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var questions = await _listQuestionsHandler.HandleAsync(
-            new ListQuestionsQuery(examId, sectionId, unassignedOnly),
+            new ListQuestionsQuery(examId, sectionId, unassignedOnly, GetCallerOwnerUserId()),
             cancellationToken);
         return Ok(questions.Select(q =>
-            ToResponse(q.Question, q.Options, q.Parameters, q.TestCases, q.SqlTestCases, RevealAnswers)));
+            ToResponse(q.Question, q.Options, q.Parameters, q.TestCases, q.SqlTestCases, RevealAnswersFor(q.Question))));
     }
 
     // Super Admin platform-wide Question Bank browse across every tenant's
@@ -175,14 +175,15 @@ public class QuestionsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _getQuestionHandler.HandleAsync(new GetQuestionQuery(id), cancellationToken);
+        var result = await _getQuestionHandler.HandleAsync(new GetQuestionQuery(id, GetCallerOwnerUserId()), cancellationToken);
         if (result is null)
         {
             return NotFound(new { message = "Question not found." });
         }
 
         return Ok(ToResponse(
-            result.Question, result.Options, result.Parameters, result.TestCases, result.SqlTestCases, RevealAnswers));
+            result.Question, result.Options, result.Parameters, result.TestCases, result.SqlTestCases,
+            RevealAnswersFor(result.Question)));
     }
 
     [HttpPut("{id:guid}")]
@@ -207,13 +208,19 @@ public class QuestionsController : ControllerBase
             request.ReturnType,
             request.Parameters?.Select(p => new QuestionParameterInput(p.Name, p.Type)).ToList(),
             request.TestCases?.Select(ToTestCaseInput).ToList(),
-            request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList());
+            request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList(),
+            GetCallerOwnerUserId());
 
         var result = await _updateQuestionHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Question not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (!result.Success)
@@ -251,11 +258,30 @@ public class QuestionsController : ControllerBase
         return NoContent();
     }
 
-    // Admin/Instructor see real IsCorrect flags (they author questions); any
-    // other authenticated caller (a student taking an exam) gets them masked
-    // so the correct answer can't be read off the network response while
-    // GET /api/questions is open to any authenticated role.
-    private bool RevealAnswers => User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || User.IsInRole("Instructor");
+    // Admin/SuperAdmin see real IsCorrect flags for every question; Instructor
+    // only for questions they created themselves (ownership, not just role);
+    // any other authenticated caller (a student taking an exam) gets them
+    // masked so the correct answer can't be read off the network response
+    // while GET /api/questions is open to any authenticated role.
+    private bool RevealAnswersFor(ExamQuestion question)
+    {
+        if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
+        {
+            return true;
+        }
+
+        if (User.IsInRole("Instructor"))
+        {
+            return question.CreatedByUserId == Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        }
+
+        return false;
+    }
+
+    // Non-null only for an Instructor caller - Admin/SuperAdmin/Student pass
+    // null through to the handlers for unrestricted access.
+    private Guid? GetCallerOwnerUserId() =>
+        User.IsInRole("Instructor") ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!) : null;
 
     private static QuestionTestCaseInput ToTestCaseInput(QuestionTestCaseRequest request) =>
         new(

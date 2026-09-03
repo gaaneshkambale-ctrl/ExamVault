@@ -179,7 +179,12 @@ export default function RolesPermissions() {
                       type="button"
                       className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
                       style={{ width: 32, height: 32 }}
-                      title={`Edit ${role} permissions`}
+                      title={
+                        isReal && !notTenantScoped
+                          ? `Edit ${role} permissions`
+                          : `${role} permissions aren't editable from this screen`
+                      }
+                      disabled={!isReal || notTenantScoped}
                       onClick={() => openEdit(role, defaultPermissions)}
                     >
                       <EditIcon />

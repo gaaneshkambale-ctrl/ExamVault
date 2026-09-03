@@ -51,6 +51,12 @@ public class FakeExamRepository : IExamRepository
         return Task.CompletedTask;
     }
 
+    public Task<IReadOnlyList<ExamPaper>> GetOwnedAsync(
+        Guid createdByUserId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamPaper>>(
+            _exams.Where(e => e.CreatedByUserId == createdByUserId).OrderByDescending(e => e.CreatedAtUtc).ToList());
+
     public Task AddSectionAsync(Section section, CancellationToken cancellationToken = default)
     {
         _sections.Add(section);

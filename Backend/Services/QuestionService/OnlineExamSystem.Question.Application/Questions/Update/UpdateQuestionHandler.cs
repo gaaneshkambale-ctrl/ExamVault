@@ -33,6 +33,11 @@ public class UpdateQuestionHandler
             return UpdateQuestionResult.NotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId && question.CreatedByUserId != ownerUserId)
+        {
+            return UpdateQuestionResult.Forbidden();
+        }
+
         question.QuestionType = Enum.Parse<QuestionType>(command.QuestionType, ignoreCase: true);
         question.QuestionText = command.QuestionText;
         question.Marks = command.Marks;

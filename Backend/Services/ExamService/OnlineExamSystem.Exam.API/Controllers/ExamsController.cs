@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Exam.Application.Exams;
 using OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 using OnlineExamSystem.Exam.Application.Exams.Create;
 using OnlineExamSystem.Exam.Application.Exams.Delete;
@@ -107,15 +108,7 @@ public class ExamsController : ControllerBase
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        // SuperAdmin counts as "admin" here so the Reports console can list
-        // exams across every tenant - GetAllAsync's own EF query filter
-        // (IsSuperAdmin bypass) is what actually scopes the result, this
-        // flag only decides which repository method gets called. Instructor
-        // also needs the full (not published-only) view of their own exams,
-        // same as Admin - only Student is restricted to published+assigned.
-        var isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || User.IsInRole("Instructor");
-
-        var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(callerId, isAdmin), cancellationToken);
+        var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(callerId, GetCallerExamAccessScope()), cancellationToken);
         return Ok(exams.Select(ToResponse));
     }
 
@@ -123,11 +116,7 @@ public class ExamsController : ControllerBase
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        // Instructor sees the full (not published-only) view of an exam,
-        // same as Admin - only Student is restricted to published+assigned.
-        var isAdmin = User.IsInRole("Admin") || User.IsInRole("Instructor");
-
-        var exam = await _getExamHandler.HandleAsync(new GetExamQuery(id, callerId, isAdmin), cancellationToken);
+        var exam = await _getExamHandler.HandleAsync(new GetExamQuery(id, callerId, GetCallerExamAccessScope()), cancellationToken);
         if (exam is null)
         {
             return NotFound(new { message = "Exam not found." });
@@ -136,12 +125,31 @@ public class ExamsController : ControllerBase
         return Ok(ToResponse(exam));
     }
 
+    // SuperAdmin/Admin get unrestricted tenant-wide (or cross-tenant, for
+    // SuperAdmin - GetAllAsync's own EF query filter IsSuperAdmin bypass is
+    // what actually scopes that) access. Instructor is now scoped to exams
+    // they created themselves - same ownership principle Update enforces.
+    // Student keeps its separate published+assigned scope (handled inside
+    // the handlers, not here).
+    private ExamAccessScope GetCallerExamAccessScope() =>
+        User.IsInRole("Admin") || User.IsInRole("SuperAdmin")
+            ? ExamAccessScope.All
+            : User.IsInRole("Instructor")
+                ? ExamAccessScope.OwnedOnly
+                : ExamAccessScope.AssignedPublishedOnly;
+
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
     [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Update(Guid id, UpdateExamRequest request, CancellationToken cancellationToken)
     {
+        // Instructor is restricted to exams they created themselves; Admin/
+        // SuperAdmin remain unrestricted (null = no ownership check).
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         var command = new UpdateExamCommand(
             id,
             request.Title,
@@ -167,13 +175,19 @@ public class ExamsController : ControllerBase
             request.AutoSubmitOnTimeEnd,
             request.ConfirmBeforeSubmit,
             request.ExamCode,
-            request.ExamTypeId);
+            request.ExamTypeId,
+            ownerUserId);
 
         var result = await _updateExamHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Exam not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (!result.Success)

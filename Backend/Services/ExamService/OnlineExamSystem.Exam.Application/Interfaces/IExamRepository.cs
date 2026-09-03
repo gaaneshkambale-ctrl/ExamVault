@@ -33,6 +33,12 @@ public interface IExamRepository
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Every exam this tenant's caller created themselves - the Instructor
+    /// ownership scope (Admin/SuperAdmin use GetAllAsync instead, unrestricted).</summary>
+    Task<IReadOnlyList<ExamPaper>> GetOwnedAsync(
+        Guid createdByUserId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> IsUserAssignedAsync(Guid examId, Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>The caller's own assignment for this exam, or null if unassigned. Picks the most

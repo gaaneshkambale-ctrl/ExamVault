@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Application.Sections;
 using OnlineExamSystem.Exam.Application.Sections.Create;
 using OnlineExamSystem.Exam.Application.Sections.Delete;
@@ -30,6 +32,7 @@ public class SectionsController : ControllerBase
     private readonly ListAllSectionsHandler _listAllSectionsHandler;
     private readonly ReorderSectionsHandler _reorderSectionsHandler;
     private readonly GetOrCreateDefaultSectionHandler _getOrCreateDefaultSectionHandler;
+    private readonly IExamRepository _examRepository;
     private readonly ILogger<SectionsController> _logger;
 
     public SectionsController(
@@ -41,6 +44,7 @@ public class SectionsController : ControllerBase
         ListAllSectionsHandler listAllSectionsHandler,
         ReorderSectionsHandler reorderSectionsHandler,
         GetOrCreateDefaultSectionHandler getOrCreateDefaultSectionHandler,
+        IExamRepository examRepository,
         ILogger<SectionsController> logger)
     {
         _createSectionHandler = createSectionHandler;
@@ -51,7 +55,24 @@ public class SectionsController : ControllerBase
         _listAllSectionsHandler = listAllSectionsHandler;
         _reorderSectionsHandler = reorderSectionsHandler;
         _getOrCreateDefaultSectionHandler = getOrCreateDefaultSectionHandler;
+        _examRepository = examRepository;
         _logger = logger;
+    }
+
+    // Instructor is restricted to sections of exams they created themselves
+    // (ownership derives from the parent ExamPaper.CreatedByUserId, same-
+    // service DB, no cross-service call needed) - Admin/SuperAdmin remain
+    // unrestricted.
+    private async Task<bool> CallerOwnsExamAsync(Guid examId, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole("Instructor"))
+        {
+            return true;
+        }
+
+        var exam = await _examRepository.GetByIdAsync(examId, cancellationToken);
+        var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        return exam is not null && exam.CreatedByUserId == callerId;
     }
 
     [HttpPost]
@@ -60,6 +81,11 @@ public class SectionsController : ControllerBase
     [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Create(Guid examId, SectionRequest request, CancellationToken cancellationToken)
     {
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var command = new CreateSectionCommand(
             examId,
             request.Name,
@@ -130,6 +156,11 @@ public class SectionsController : ControllerBase
     [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> GetOrCreateDefault(Guid examId, CancellationToken cancellationToken)
     {
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var section = await _getOrCreateDefaultSectionHandler.HandleAsync(
             new GetOrCreateDefaultSectionQuery(examId),
             cancellationToken);
@@ -168,6 +199,11 @@ public class SectionsController : ControllerBase
         if (existing is null || existing.ExamId != examId)
         {
             return NotFound(new { message = "Section not found." });
+        }
+
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
         }
 
         var command = new UpdateSectionCommand(
@@ -218,6 +254,11 @@ public class SectionsController : ControllerBase
             return NotFound(new { message = "Section not found." });
         }
 
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
 
@@ -236,6 +277,11 @@ public class SectionsController : ControllerBase
         ReorderSectionsRequest request,
         CancellationToken cancellationToken)
     {
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var order = request.Order
             .Select(o => new OnlineExamSystem.Exam.Application.Sections.SectionOrderEntry(o.SectionId, o.DisplayOrder))
             .ToList();

@@ -35,6 +35,15 @@ public class ExamRepository : IExamRepository
         return Task.CompletedTask;
     }
 
+    public async Task<IReadOnlyList<ExamPaper>> GetOwnedAsync(
+        Guid createdByUserId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.Exams
+            .Include(e => e.ExamType)
+            .Where(e => e.CreatedByUserId == createdByUserId)
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public Task AddSectionAsync(Section section, CancellationToken cancellationToken = default) =>
         _dbContext.Sections.AddAsync(section, cancellationToken).AsTask();
 

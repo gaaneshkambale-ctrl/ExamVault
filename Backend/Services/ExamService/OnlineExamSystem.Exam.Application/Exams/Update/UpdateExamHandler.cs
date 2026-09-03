@@ -38,6 +38,11 @@ public class UpdateExamHandler
             return UpdateExamResult.NotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return UpdateExamResult.Forbidden();
+        }
+
         exam.Title = command.Title;
         exam.ExamCode = string.IsNullOrWhiteSpace(command.ExamCode) ? null : command.ExamCode.Trim();
         exam.Description = command.Description;

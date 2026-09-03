@@ -115,4 +115,52 @@ public class UpdateQuestionHandlerTests
         Assert.Equal("Old text", question.QuestionText);
         Assert.Single(repository.Options);
     }
+
+    [Fact]
+    public async Task Owner_can_update_their_own_question()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new FakeQuestionRepository();
+        var question = new ExamQuestion { QuestionText = "Old text", CreatedByUserId = ownerId };
+        await repository.AddAsync(question, []);
+        var handler = CreateHandler(repository);
+
+        var command = new UpdateQuestionCommand(
+            question.Id,
+            "MultipleChoice",
+            "New text",
+            5,
+            "Hard",
+            [new QuestionOptionInput("X", true), new QuestionOptionInput("Y", false)],
+            OwnerUserId: ownerId);
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.Equal("New text", result.Question!.QuestionText);
+    }
+
+    [Fact]
+    public async Task Non_owner_cannot_update_another_instructors_question()
+    {
+        var repository = new FakeQuestionRepository();
+        var question = new ExamQuestion { QuestionText = "Old text", CreatedByUserId = Guid.NewGuid() };
+        await repository.AddAsync(question, []);
+        var handler = CreateHandler(repository);
+
+        var command = new UpdateQuestionCommand(
+            question.Id,
+            "MultipleChoice",
+            "New text",
+            5,
+            "Hard",
+            [new QuestionOptionInput("X", true), new QuestionOptionInput("Y", false)],
+            OwnerUserId: Guid.NewGuid());
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsForbidden);
+        Assert.Equal("Old text", question.QuestionText);
+    }
 }
