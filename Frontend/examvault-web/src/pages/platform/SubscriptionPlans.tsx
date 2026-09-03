@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
@@ -12,6 +13,13 @@ import type { Plan, PlanFeature } from '../../types/plan';
 // "SUBSCRIPTION-BASED FEATURE GATING" section). Billing/pricing stays out of
 // scope - a Plan is purely a checklist of included Admin console modules,
 // enforced for real on the backend via JWT "feature" claims.
+//
+// Create/Edit modal redesigned to match Create-new-plan.png: icon badge
+// header, a 2-column grid of icon+description module cards instead of a
+// flat checkbox list, and a selected-count. The mockup's "Activate Plan"
+// toggle is deliberately not included - Plan has no isActive/enabled field
+// anywhere in this codebase (every seeded/created plan is always
+// assignable), so a toggle here would have nothing real to control.
 interface PlanFormState {
   name: string;
   description: string;
@@ -19,6 +27,152 @@ interface PlanFormState {
 }
 
 const EMPTY_FORM: PlanFormState = { name: '', description: '', includedFeatures: new Set() };
+
+function CrownIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7Z" />
+      <path d="M5 19h14" />
+    </svg>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function DocumentIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" />
+    </svg>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
+function MonitorIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
+}
+
+function BarChartIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="20" x2="12" y2="10" /><line x1="18" y1="20" x2="18" y2="4" /><line x1="6" y1="20" x2="6" y2="16" />
+    </svg>
+  );
+}
+
+function PieChartIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+interface ModuleInfo {
+  feature: PlanFeature;
+  icon: ReactNode;
+  iconBg: string;
+  iconColor: string;
+  description: string;
+}
+
+// Icon/color/description per module, in ALL_PLAN_FEATURES order (laid out
+// 2-per-row below, matching the mockup's grid exactly).
+const MODULE_INFO: ModuleInfo[] = [
+  {
+    feature: 'Users',
+    icon: <UsersIcon />,
+    iconBg: '#ede9fe',
+    iconColor: '#7c3aed',
+    description: 'Manage users, roles, permissions and organization members.',
+  },
+  {
+    feature: 'Exams',
+    icon: <DocumentIcon />,
+    iconBg: '#dcfce7',
+    iconColor: '#16a34a',
+    description: 'Create, edit and manage exams, sections and schedules.',
+  },
+  {
+    feature: 'ExamTypes',
+    icon: <ListIcon />,
+    iconBg: '#dbeafe',
+    iconColor: '#2563eb',
+    description: 'Manage exam categories and type configurations.',
+  },
+  {
+    feature: 'LiveMonitoring',
+    icon: <MonitorIcon />,
+    iconBg: '#ffedd5',
+    iconColor: '#ea580c',
+    description: 'Monitor live exams, detect violations and take actions.',
+  },
+  {
+    feature: 'Results',
+    icon: <BarChartIcon />,
+    iconBg: '#dcfce7',
+    iconColor: '#16a34a',
+    description: 'View and analyze results, performance and analytics.',
+  },
+  {
+    feature: 'Reports',
+    icon: <PieChartIcon />,
+    iconBg: '#fee2e2',
+    iconColor: '#dc2626',
+    description: 'Access advanced reports and export capabilities.',
+  },
+  {
+    feature: 'Notifications',
+    icon: <BellIcon />,
+    iconBg: '#fef9c3',
+    iconColor: '#ca8a04',
+    description: 'Send email and in-app notifications.',
+  },
+  {
+    feature: 'Settings',
+    icon: <GearIcon />,
+    iconBg: '#f3f4f6',
+    iconColor: '#4b5563',
+    description: 'Configure system settings and general preferences.',
+  },
+];
 
 export default function SubscriptionPlans() {
   const queryClient = useQueryClient();
@@ -146,38 +300,99 @@ export default function SubscriptionPlans() {
         </Row>
       )}
 
-      <Modal show={showForm} onHide={closeForm} centered>
+      <Modal show={showForm} onHide={closeForm} centered size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>{editingPlan ? 'Edit Plan' : 'Create Plan'}</Modal.Title>
+          <div className="d-flex align-items-center gap-3">
+            <div
+              className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+              style={{ width: 48, height: 48, background: '#eef2ff', color: '#4f46e5' }}
+            >
+              <CrownIcon />
+            </div>
+            <div>
+              <Modal.Title>{editingPlan ? `Edit ${editingPlan.name}` : 'Create New Plan'}</Modal.Title>
+              <div className="text-muted small">Define plan details and select the modules to include.</div>
+            </div>
+          </div>
         </Modal.Header>
         <Modal.Body>
           {saveMutation.isError && <Alert variant="danger">{extractServerError(saveMutation.error)}</Alert>}
+
+          <div className="fw-bold mb-3">Plan Information</div>
           <Form.Group className="mb-3" controlId="planName">
-            <Form.Label>Plan Name</Form.Label>
-            <Form.Control value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Form.Label>
+              Plan Name <span className="text-danger">*</span>
+            </Form.Label>
+            <Form.Control
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Enter plan name"
+            />
+            <Form.Text className="text-muted">Choose a clear and recognizable name for this plan.</Form.Text>
           </Form.Group>
-          <Form.Group className="mb-3" controlId="planDescription">
+          <Form.Group className="mb-4" controlId="planDescription">
             <Form.Label>Description</Form.Label>
             <Form.Control
               as="textarea"
               rows={2}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Enter plan description"
             />
+            <Form.Text className="text-muted">Describe the plan, its purpose and who it's intended for.</Form.Text>
           </Form.Group>
-          <Form.Label>Included Modules</Form.Label>
-          <div className="d-flex flex-column gap-2">
-            {ALL_PLAN_FEATURES.map((feature) => (
-              <Form.Check
-                key={feature}
-                type="checkbox"
-                id={`feature-${feature}`}
-                label={PLAN_FEATURE_LABELS[feature]}
-                checked={form.includedFeatures.has(feature)}
-                onChange={() => toggleFeature(feature)}
-              />
-            ))}
+
+          <div className="d-flex justify-content-between align-items-center mb-1">
+            <div className="fw-bold">Included Modules</div>
+            <div className="text-muted small">
+              {form.includedFeatures.size} of {ALL_PLAN_FEATURES.length} selected
+            </div>
           </div>
+          <p className="text-muted small mb-3">Select the modules and features that will be available in this plan.</p>
+
+          <Row className="g-2 mb-3">
+            {MODULE_INFO.map((mod) => {
+              const checked = form.includedFeatures.has(mod.feature);
+              return (
+                <Col xs={12} md={6} key={mod.feature}>
+                  <label
+                    className="d-flex align-items-start gap-2 border rounded-3 p-3 mb-0"
+                    style={{
+                      cursor: 'pointer',
+                      borderColor: checked ? '#4f46e5' : undefined,
+                      background: checked ? '#f5f5ff' : undefined,
+                    }}
+                  >
+                    <Form.Check
+                      type="checkbox"
+                      className="mt-1"
+                      checked={checked}
+                      onChange={() => toggleFeature(mod.feature)}
+                    />
+                    <div
+                      className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+                      style={{ width: 40, height: 40, background: mod.iconBg, color: mod.iconColor }}
+                    >
+                      {mod.icon}
+                    </div>
+                    <div>
+                      <div className="fw-medium">{PLAN_FEATURE_LABELS[mod.feature]}</div>
+                      <div className="text-muted small">{mod.description}</div>
+                    </div>
+                  </label>
+                </Col>
+              );
+            })}
+          </Row>
+
+          <Alert variant="light" className="border small mb-0 d-flex align-items-start gap-2">
+            <span className="text-primary flex-shrink-0" style={{ marginTop: 2 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+            </span>
+            Super Admin has full access to all modules regardless of the plan.
+          </Alert>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={closeForm}>
