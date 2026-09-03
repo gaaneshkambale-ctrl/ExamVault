@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, Form, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Button, Card, Col, Form, InputGroup, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteGroupButton from '../../components/DeleteGroupButton';
+import ReportStatCard from '../../components/reports/ReportStatCard';
+import { CheckCircleIcon, MinusCircleIcon } from '../../components/reports/ReportIcons';
 import { UsersIcon } from '../../components/icons/ActionIcons';
 import { useGroups } from '../../hooks/useGroups';
 import { createGroup } from '../../api/groupApi';
@@ -14,6 +16,23 @@ function extractError(error: unknown): string {
     return error.response.data.message;
   }
   return 'Something went wrong. Please try again.';
+}
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function PersonIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+    </svg>
+  );
 }
 
 const PAGE_SIZE = 5;
@@ -55,18 +74,74 @@ export default function ManageGroups() {
     setShowCreate(true);
   };
 
+  const totalGroups = groups?.length ?? 0;
+  const totalMembers = groups?.reduce((sum, g) => sum + g.memberCount, 0) ?? 0;
+  const groupsWithMembers = groups?.filter((g) => g.memberCount > 0).length ?? 0;
+  const emptyGroups = groups?.filter((g) => g.memberCount === 0).length ?? 0;
+
   return (
     <AdminLayout active="User Groups">
       <div className="d-flex justify-content-between align-items-center mb-1">
-        <div>
-          <p className="text-muted small mb-1">Users / User Groups</p>
-          <h1 className="h4 fw-bold mb-1 text-primary">User Groups</h1>
-          <p className="text-muted mb-0">Create and manage groups to organize users.</p>
+        <div className="d-flex align-items-center gap-3">
+          <div
+            className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+            style={{ width: 44, height: 44, background: '#eef2ff', color: '#4f46e5' }}
+          >
+            <UsersIcon />
+          </div>
+          <div>
+            <p className="text-muted small mb-1">Users / User Groups</p>
+            <h1 className="h4 fw-bold mb-1 text-primary">User Groups</h1>
+            <p className="text-muted mb-0">Create and manage groups to organize users.</p>
+          </div>
         </div>
         <Button variant="primary" onClick={openCreate}>
           + Create Group
         </Button>
       </div>
+
+      <Row className="g-3 mt-1">
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<UsersIcon />}
+            label="Total Groups"
+            value={String(totalGroups)}
+            caption="Groups in system"
+            iconBg="#eef2ff"
+            iconColor="#4f46e5"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<PersonIcon />}
+            label="Total Members"
+            value={String(totalMembers)}
+            caption="Across all groups"
+            iconBg="#ecfdf5"
+            iconColor="#059669"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<CheckCircleIcon />}
+            label="Groups with Members"
+            value={String(groupsWithMembers)}
+            caption="Actively used groups"
+            iconBg="#ede9fe"
+            iconColor="#7c3aed"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<MinusCircleIcon />}
+            label="Empty Groups"
+            value={String(emptyGroups)}
+            caption="No members yet"
+            iconBg="#fff7ed"
+            iconColor="#d97706"
+          />
+        </Col>
+      </Row>
 
       <Modal show={showCreate} onHide={() => setShowCreate(false)} centered>
         <Modal.Header closeButton>
@@ -95,12 +170,17 @@ export default function ManageGroups() {
 
       <Row className="g-2 mb-3 mt-3">
         <Col md={6}>
-          <Form.Control
-            type="search"
-            placeholder="Search groups..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
+          <InputGroup>
+            <InputGroup.Text>
+              <SearchIcon />
+            </InputGroup.Text>
+            <Form.Control
+              type="search"
+              placeholder="Search groups..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+          </InputGroup>
         </Col>
       </Row>
 
