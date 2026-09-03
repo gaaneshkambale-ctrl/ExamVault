@@ -525,7 +525,7 @@ export default function OrganizationDetails() {
 
   if (isLoading) {
     return (
-      <PlatformLayout active="org-details">
+      <PlatformLayout active="org-all">
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
@@ -535,7 +535,7 @@ export default function OrganizationDetails() {
 
   if (!tenant) {
     return (
-      <PlatformLayout active="org-details">
+      <PlatformLayout active="org-all">
         <div className="text-center text-muted py-5">
           Organization not found. <Link to="/platform/organizations">Back to All Organizations</Link>
         </div>
@@ -544,7 +544,7 @@ export default function OrganizationDetails() {
   }
 
   return (
-    <PlatformLayout active="org-details">
+    <PlatformLayout active="org-all">
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
         <div>
           <p className="text-muted small mb-1">Platform Admin / Organizations / Organization Details</p>

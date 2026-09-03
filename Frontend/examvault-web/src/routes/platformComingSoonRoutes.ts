@@ -10,8 +10,6 @@ export interface PlatformComingSoonRoute {
 }
 
 export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
-  { path: '/platform/organizations/details', active: 'org-details', parent: 'Organizations', title: 'Organization Details' },
-
   { path: '/platform/users/roles', active: 'users-roles', parent: 'Users', title: 'Roles & Permissions' },
 
   { path: '/platform/questions', active: 'questions', parent: 'Platform Admin', title: 'Questions' },
