@@ -12,14 +12,16 @@ import { isValidEmail } from '../../utils/email';
 import { ORGANIZATION_TYPES } from '../../types/tenant';
 
 // Matches org_submenu.png's Create Organization page. Real fields: Name,
-// Subdomain, Organization Code/Type, and Admin Full Name/Email/Phone
+// Subdomain, Organization Type, Address, and Admin Full Name/Email/Phone
 // Number/Designation - if Full Name and Email are filled, this page makes
 // a second real API call (createTenantAdmin) right after the tenant is
 // created, so creating an org and its first admin is one step instead of
-// the old create-then-separately-add-admin flow. Every other field in the
-// mockup (the whole Address section, the 3 toggles) has no backing field
-// anywhere in this codebase - shown disabled with a "not saved yet" hint
-// rather than silently accepting and discarding input.
+// the old create-then-separately-add-admin flow. Organization Code is no
+// longer a manual field - the backend generates a unique one automatically
+// on creation (CreateTenantHandler -> OrganizationCodeGenerator), visible
+// afterward on the org's Details page. The mockup's 3 toggles still have no
+// backing field anywhere in this codebase - shown disabled with a "not
+// saved yet" hint rather than silently accepting and discarding input.
 export default function CreateOrganization() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -28,9 +30,14 @@ export default function CreateOrganization() {
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  const [orgCode, setOrgCode] = useState('');
   const [orgType, setOrgType] = useState('');
   const [planId, setPlanId] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [country, setCountry] = useState('');
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPhoneNumber, setAdminPhoneNumber] = useState('');
@@ -47,8 +54,13 @@ export default function CreateOrganization() {
         planId: planId || undefined,
         isTrial,
         trialEndsAtUtc: isTrial && trialEndDate ? new Date(trialEndDate).toISOString() : undefined,
-        organizationCode: orgCode.trim() || undefined,
         organizationType: orgType || undefined,
+        addressLine1: addressLine1.trim() || undefined,
+        addressLine2: addressLine2.trim() || undefined,
+        city: city.trim() || undefined,
+        state: state.trim() || undefined,
+        postalCode: postalCode.trim() || undefined,
+        country: country.trim() || undefined,
       });
       let adminError: string | null = null;
       if (adminFullName.trim() && adminEmail.trim()) {
@@ -105,16 +117,11 @@ export default function CreateOrganization() {
                   <Form.Group controlId="orgName">
                     <Form.Label>Organization Name *</Form.Label>
                     <Form.Control value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Greenfield University" />
+                    <Form.Text className="text-muted">
+                      A unique Organization Code will be generated automatically from this name.
+                    </Form.Text>
                   </Form.Group>
                 </Col>
-                <Col md={6}>
-                  <Form.Group controlId="orgCode">
-                    <Form.Label>Organization Code</Form.Label>
-                    <Form.Control value={orgCode} onChange={(e) => setOrgCode(e.target.value)} placeholder="e.g. GFU2026" />
-                  </Form.Group>
-                </Col>
-              </Row>
-              <Row className="g-3 mb-2">
                 <Col md={6}>
                   <Form.Group controlId="orgSlug">
                     <Form.Label>Subdomain *</Form.Label>
@@ -125,6 +132,8 @@ export default function CreateOrganization() {
                     <Form.Text className="text-muted">This will be used for tenant access.</Form.Text>
                   </Form.Group>
                 </Col>
+              </Row>
+              <Row className="g-3 mb-2">
                 <Col md={6}>
                   <Form.Group controlId="orgType">
                     <Form.Label>Organization Type</Form.Label>
@@ -230,9 +239,46 @@ export default function CreateOrganization() {
               </p>
 
               <h2 className="h6 fw-bold mb-3 mt-4">Address Information</h2>
-              <div className="text-muted small border rounded-3 p-3 mb-3">
-                Address fields aren't connected yet - no backend field exists on the organization record.
-              </div>
+              <Row className="g-3 mb-2">
+                <Col md={6}>
+                  <Form.Group controlId="orgAddressLine1">
+                    <Form.Label>Address Line 1</Form.Label>
+                    <Form.Control value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} placeholder="Street address" />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group controlId="orgAddressLine2">
+                    <Form.Label>Address Line 2 (optional)</Form.Label>
+                    <Form.Control value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} placeholder="Apartment, suite, etc." />
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row className="g-3 mb-3">
+                <Col md={3}>
+                  <Form.Group controlId="orgCity">
+                    <Form.Label>City</Form.Label>
+                    <Form.Control value={city} onChange={(e) => setCity(e.target.value)} />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group controlId="orgState">
+                    <Form.Label>State</Form.Label>
+                    <Form.Control value={state} onChange={(e) => setState(e.target.value)} />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group controlId="orgPostalCode">
+                    <Form.Label>Postal Code</Form.Label>
+                    <Form.Control value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group controlId="orgCountry">
+                    <Form.Label>Country</Form.Label>
+                    <Form.Control value={country} onChange={(e) => setCountry(e.target.value)} />
+                  </Form.Group>
+                </Col>
+              </Row>
 
               <h2 className="h6 fw-bold mb-3 mt-4">Additional Settings</h2>
               <div className="text-muted small border rounded-3 p-3 mb-4">

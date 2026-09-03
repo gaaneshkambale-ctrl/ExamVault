@@ -20,6 +20,12 @@ export interface Tenant {
   trialEndsAtUtc: string | null;
   organizationCode: string | null;
   organizationType: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
 }
 
 export interface CreateTenantRequest {
@@ -28,8 +34,13 @@ export interface CreateTenantRequest {
   planId?: string;
   isTrial?: boolean;
   trialEndsAtUtc?: string | null;
-  organizationCode?: string | null;
   organizationType?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
 }
 
 export interface CreateTenantAdminRequest {
@@ -44,4 +55,10 @@ export interface UpdateTenantRequest {
   slug: string;
   organizationCode?: string | null;
   organizationType?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
 }

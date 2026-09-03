@@ -157,6 +157,12 @@ export default function OrganizationDetails() {
   const [editSlug, setEditSlug] = useState('');
   const [editOrgCode, setEditOrgCode] = useState('');
   const [editOrgType, setEditOrgType] = useState('');
+  const [editAddressLine1, setEditAddressLine1] = useState('');
+  const [editAddressLine2, setEditAddressLine2] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editState, setEditState] = useState('');
+  const [editPostalCode, setEditPostalCode] = useState('');
+  const [editCountry, setEditCountry] = useState('');
 
   const updateTenantMutation = useMutation({
     mutationFn: () =>
@@ -165,6 +171,12 @@ export default function OrganizationDetails() {
         slug: editSlug.trim(),
         organizationCode: editOrgCode.trim() || null,
         organizationType: editOrgType || null,
+        addressLine1: editAddressLine1.trim() || null,
+        addressLine2: editAddressLine2.trim() || null,
+        city: editCity.trim() || null,
+        state: editState.trim() || null,
+        postalCode: editPostalCode.trim() || null,
+        country: editCountry.trim() || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tenants'] });
@@ -178,6 +190,12 @@ export default function OrganizationDetails() {
     setEditSlug(tenant?.slug ?? '');
     setEditOrgCode(tenant?.organizationCode ?? '');
     setEditOrgType(tenant?.organizationType ?? '');
+    setEditAddressLine1(tenant?.addressLine1 ?? '');
+    setEditAddressLine2(tenant?.addressLine2 ?? '');
+    setEditCity(tenant?.city ?? '');
+    setEditState(tenant?.state ?? '');
+    setEditPostalCode(tenant?.postalCode ?? '');
+    setEditCountry(tenant?.country ?? '');
     setShowEditOrg(true);
   };
 
@@ -332,7 +350,12 @@ export default function OrganizationDetails() {
               <Card className="border-0 shadow-sm mb-3">
                 <Card.Body>
                   <h2 className="h6 fw-bold mb-3">Address Information</h2>
-                  <NotConnected label="Address Information" />
+                  <InfoRow label="Address Line 1" value={tenant.addressLine1 ?? '—'} />
+                  <InfoRow label="Address Line 2" value={tenant.addressLine2 ?? '—'} />
+                  <InfoRow label="City" value={tenant.city ?? '—'} />
+                  <InfoRow label="State" value={tenant.state ?? '—'} />
+                  <InfoRow label="Postal Code" value={tenant.postalCode ?? '—'} />
+                  <InfoRow label="Country" value={tenant.country ?? '—'} />
                 </Card.Body>
               </Card>
 
@@ -721,7 +744,7 @@ export default function OrganizationDetails() {
             <Form.Label>Organization Code</Form.Label>
             <Form.Control value={editOrgCode} onChange={(e) => setEditOrgCode(e.target.value)} placeholder="e.g. GFU2026" />
           </Form.Group>
-          <Form.Group controlId="editOrgType">
+          <Form.Group className="mb-3" controlId="editOrgType">
             <Form.Label>Organization Type</Form.Label>
             <Form.Select value={editOrgType} onChange={(e) => setEditOrgType(e.target.value)}>
               <option value="">Select type</option>
@@ -732,6 +755,48 @@ export default function OrganizationDetails() {
               ))}
             </Form.Select>
           </Form.Group>
+
+          <h2 className="h6 fw-bold mb-2 mt-4">Address</h2>
+          <Row className="g-3 mb-2">
+            <Col md={6}>
+              <Form.Group controlId="editAddressLine1">
+                <Form.Label>Address Line 1</Form.Label>
+                <Form.Control value={editAddressLine1} onChange={(e) => setEditAddressLine1(e.target.value)} />
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group controlId="editAddressLine2">
+                <Form.Label>Address Line 2</Form.Label>
+                <Form.Control value={editAddressLine2} onChange={(e) => setEditAddressLine2(e.target.value)} />
+              </Form.Group>
+            </Col>
+          </Row>
+          <Row className="g-3">
+            <Col md={3}>
+              <Form.Group controlId="editCity">
+                <Form.Label>City</Form.Label>
+                <Form.Control value={editCity} onChange={(e) => setEditCity(e.target.value)} />
+              </Form.Group>
+            </Col>
+            <Col md={3}>
+              <Form.Group controlId="editState">
+                <Form.Label>State</Form.Label>
+                <Form.Control value={editState} onChange={(e) => setEditState(e.target.value)} />
+              </Form.Group>
+            </Col>
+            <Col md={3}>
+              <Form.Group controlId="editPostalCode">
+                <Form.Label>Postal Code</Form.Label>
+                <Form.Control value={editPostalCode} onChange={(e) => setEditPostalCode(e.target.value)} />
+              </Form.Group>
+            </Col>
+            <Col md={3}>
+              <Form.Group controlId="editCountry">
+                <Form.Label>Country</Form.Label>
+                <Form.Control value={editCountry} onChange={(e) => setEditCountry(e.target.value)} />
+              </Form.Group>
+            </Col>
+          </Row>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={() => setShowEditOrg(false)}>

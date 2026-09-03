@@ -43,8 +43,14 @@ public class CreateTenantHandler
             IsActive = false,
             IsTrial = command.IsTrial,
             TrialEndsAtUtc = command.IsTrial ? command.TrialEndsAtUtc : null,
-            OrganizationCode = string.IsNullOrWhiteSpace(command.OrganizationCode) ? null : command.OrganizationCode.Trim(),
+            OrganizationCode = await OrganizationCodeGenerator.GenerateAsync(command.Name, _tenantRepository, cancellationToken),
             OrganizationType = string.IsNullOrWhiteSpace(command.OrganizationType) ? null : command.OrganizationType.Trim(),
+            AddressLine1 = string.IsNullOrWhiteSpace(command.AddressLine1) ? null : command.AddressLine1.Trim(),
+            AddressLine2 = string.IsNullOrWhiteSpace(command.AddressLine2) ? null : command.AddressLine2.Trim(),
+            City = string.IsNullOrWhiteSpace(command.City) ? null : command.City.Trim(),
+            State = string.IsNullOrWhiteSpace(command.State) ? null : command.State.Trim(),
+            PostalCode = string.IsNullOrWhiteSpace(command.PostalCode) ? null : command.PostalCode.Trim(),
+            Country = string.IsNullOrWhiteSpace(command.Country) ? null : command.Country.Trim(),
         };
         await _tenantRepository.AddAsync(tenant, cancellationToken);
         await _tenantRepository.SaveChangesAsync(cancellationToken);

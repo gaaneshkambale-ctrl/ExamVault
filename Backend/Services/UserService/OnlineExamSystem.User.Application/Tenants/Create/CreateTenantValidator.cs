@@ -24,7 +24,12 @@ public class CreateTenantValidator : AbstractValidator<CreateTenantCommand>
             .When(x => x.IsTrial)
             .WithMessage("Trial end date must be set and in the future.");
 
-        RuleFor(x => x.OrganizationCode).MaximumLength(50);
         RuleFor(x => x.OrganizationType).MaximumLength(100);
+        RuleFor(x => x.AddressLine1).MaximumLength(200);
+        RuleFor(x => x.AddressLine2).MaximumLength(200);
+        RuleFor(x => x.City).MaximumLength(100);
+        RuleFor(x => x.State).MaximumLength(100);
+        RuleFor(x => x.PostalCode).MaximumLength(20);
+        RuleFor(x => x.Country).MaximumLength(100);
     }
 }

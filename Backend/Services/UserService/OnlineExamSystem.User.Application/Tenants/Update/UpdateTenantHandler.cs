@@ -40,6 +40,12 @@ public class UpdateTenantHandler
         tenant.Slug = command.Slug;
         tenant.OrganizationCode = string.IsNullOrWhiteSpace(command.OrganizationCode) ? null : command.OrganizationCode.Trim();
         tenant.OrganizationType = string.IsNullOrWhiteSpace(command.OrganizationType) ? null : command.OrganizationType.Trim();
+        tenant.AddressLine1 = string.IsNullOrWhiteSpace(command.AddressLine1) ? null : command.AddressLine1.Trim();
+        tenant.AddressLine2 = string.IsNullOrWhiteSpace(command.AddressLine2) ? null : command.AddressLine2.Trim();
+        tenant.City = string.IsNullOrWhiteSpace(command.City) ? null : command.City.Trim();
+        tenant.State = string.IsNullOrWhiteSpace(command.State) ? null : command.State.Trim();
+        tenant.PostalCode = string.IsNullOrWhiteSpace(command.PostalCode) ? null : command.PostalCode.Trim();
+        tenant.Country = string.IsNullOrWhiteSpace(command.Country) ? null : command.Country.Trim();
         await _tenantRepository.SaveChangesAsync(cancellationToken);
 
         return UpdateTenantResult.Ok(tenant);

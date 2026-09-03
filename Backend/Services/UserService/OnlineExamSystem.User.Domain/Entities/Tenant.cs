@@ -30,6 +30,13 @@ public class Tenant : BaseEntity
     public string? OrganizationCode { get; set; }
     public string? OrganizationType { get; set; }
 
+    public string? AddressLine1 { get; set; }
+    public string? AddressLine2 { get; set; }
+    public string? City { get; set; }
+    public string? State { get; set; }
+    public string? PostalCode { get; set; }
+    public string? Country { get; set; }
+
     // Bumped by RolePermissionRepository.ReplaceForRoleAsync every time ANY
     // role's permissions change for this tenant. Embedded in every access
     // token as the "permission_version" claim so downstream services can

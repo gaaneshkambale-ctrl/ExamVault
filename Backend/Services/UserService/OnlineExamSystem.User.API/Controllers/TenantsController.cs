@@ -80,8 +80,13 @@ public class TenantsController : ControllerBase
                 request.PlanId,
                 request.IsTrial,
                 request.TrialEndsAtUtc,
-                request.OrganizationCode,
-                request.OrganizationType),
+                request.OrganizationType,
+                request.AddressLine1,
+                request.AddressLine2,
+                request.City,
+                request.State,
+                request.PostalCode,
+                request.Country),
             cancellationToken);
 
         if (result.SlugAlreadyExists)
@@ -220,7 +225,18 @@ public class TenantsController : ControllerBase
     public async Task<IActionResult> Update(Guid id, UpdateTenantRequest request, CancellationToken cancellationToken)
     {
         var result = await _updateTenantHandler.HandleAsync(
-            new UpdateTenantCommand(id, request.Name, request.Slug, request.OrganizationCode, request.OrganizationType),
+            new UpdateTenantCommand(
+                id,
+                request.Name,
+                request.Slug,
+                request.OrganizationCode,
+                request.OrganizationType,
+                request.AddressLine1,
+                request.AddressLine2,
+                request.City,
+                request.State,
+                request.PostalCode,
+                request.Country),
             cancellationToken);
 
         if (result.TenantNotFound)
@@ -367,7 +383,13 @@ public class TenantsController : ControllerBase
             tenant.IsTrial,
             tenant.TrialEndsAtUtc,
             tenant.OrganizationCode,
-            tenant.OrganizationType);
+            tenant.OrganizationType,
+            tenant.AddressLine1,
+            tenant.AddressLine2,
+            tenant.City,
+            tenant.State,
+            tenant.PostalCode,
+            tenant.Country);
 
     // Gives AuditModule.Security (defined but never written anywhere until
     // now) a real purpose - the Super Admin's own tenant-lifecycle actions.
