@@ -10,11 +10,13 @@ public static class PermissionPolicies
 {
     public const string QuestionsCreate = "Permission:Questions-Create";
     public const string QuestionsEdit = "Permission:Questions-Edit";
+    public const string ExamsEdit = "Permission:Exams-Edit";
 
     public static void AddPermissionPolicies(this AuthorizationOptions options)
     {
         options.AddPolicy(QuestionsCreate, policy => policy.RequireAssertion(RequiresPermission("Questions - Create")));
         options.AddPolicy(QuestionsEdit, policy => policy.RequireAssertion(RequiresPermission("Questions - Edit")));
+        options.AddPolicy(ExamsEdit, policy => policy.RequireAssertion(RequiresPermission("Exams - Edit")));
     }
 
     // SuperAdmin always passes. Otherwise the caller needs the permission

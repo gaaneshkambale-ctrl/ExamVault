@@ -157,7 +157,7 @@ public class QuestionsController : ControllerBase
     [HttpPut("bulk-assign-section")]
     [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
-    [Authorize(Policy = QuestionsEdit)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> BulkAssignSection(
         BulkAssignSectionRequest request,
         CancellationToken cancellationToken)
