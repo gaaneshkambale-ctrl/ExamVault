@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react';
 import { Form } from 'react-bootstrap';
 
 interface ToggleRowProps {
-  label: string;
+  label: ReactNode;
   description?: string;
   defaultChecked?: boolean;
   // Real, controlled usage (Security/Platform Settings' now-live fields) -
