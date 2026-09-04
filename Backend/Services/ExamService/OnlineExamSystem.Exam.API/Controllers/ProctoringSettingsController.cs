@@ -41,6 +41,7 @@ public class ProctoringSettingsController : ControllerBase
     [Authorize(Roles = "Admin")]
     [Authorize(Policy = Settings)]
     [Authorize(Policy = SettingsEdit)]
+    [Authorize(Policy = ExamSecurityOrProctoring)]
     public async Task<IActionResult> Update(UpdateProctoringSettingsRequest request, CancellationToken cancellationToken)
     {
         var settings = await _updateProctoringSettingsHandler.HandleAsync(

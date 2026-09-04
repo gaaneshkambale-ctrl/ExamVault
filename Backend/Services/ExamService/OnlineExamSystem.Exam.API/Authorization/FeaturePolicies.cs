@@ -19,6 +19,17 @@ public static class FeaturePolicies
     public const string ExamTypes = "Feature:ExamTypes";
     public const string Settings = "Feature:Settings";
 
+    // ProctoringSettingsController.Update saves ONE shared entity that two
+    // different pages edit different subsets of (Security Settings' exam-
+    // environment fields, Proctoring Settings' camera/AI fields - see
+    // ActionPlan.txt's "SPLIT LiveMonitoring" plan) - splitting the PUT
+    // itself per-field wasn't warranted, so this mirrors Submission
+    // Service's ResultsOrReports precedent: accept either feature rather
+    // than picking one arbitrarily. Closes the reported gap (an org with
+    // NEITHER feature could still save this settings row at all) without
+    // blocking an org that legitimately has only one of the two.
+    public const string ExamSecurityOrProctoring = "Feature:ExamSecurityOrProctoring";
+
     public static void AddFeaturePolicies(this AuthorizationOptions options)
     {
         foreach (var feature in Enum.GetValues<PlanFeature>())
@@ -28,6 +39,12 @@ public static class FeaturePolicies
                     context.User.IsInRole("SuperAdmin") ||
                     context.User.HasClaim(FeatureClaimTypes.Feature, feature.ToString())));
         }
+
+        options.AddPolicy(ExamSecurityOrProctoring, policy =>
+            policy.RequireAssertion(context =>
+                context.User.IsInRole("SuperAdmin") ||
+                context.User.HasClaim(FeatureClaimTypes.Feature, PlanFeature.ExamSecurity.ToString()) ||
+                context.User.HasClaim(FeatureClaimTypes.Feature, PlanFeature.Proctoring.ToString())));
     }
 
     public static string PolicyName(PlanFeature feature) => $"Feature:{feature}";

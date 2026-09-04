@@ -12,6 +12,7 @@ import {
 } from '../../hooks/useExams';
 import { useSystemSettings } from '../../hooks/useSystemSettings';
 import { useMyPreferences } from '../../hooks/useNotifications';
+import { useFeatures } from '../../hooks/useFeatures';
 
 const icon = {
   general: (
@@ -67,6 +68,7 @@ function withinLastDays(iso: string | undefined, days: number): boolean {
 
 export default function AdminSettings() {
   const [search, setSearch] = useState('');
+  const { hasFeature } = useFeatures();
 
   const { data: general, isLoading: loadingGeneral } = useGeneralSettings();
   const { data: examDefaults, isLoading: loadingExamDefaults } = useExamDefaults();
@@ -220,14 +222,26 @@ export default function AdminSettings() {
   }, [general, examDefaults, proctoring, reminders, system, preferences, resultPref, anyEmailEnabled, anyInAppEnabled, remindersEnabledCount]);
 
   const filteredCards = useMemo(() => {
+    // Security/Proctoring Settings edit the same ProctoringSettings entity
+    // real exam-security/camera capabilities the org's plan may no longer
+    // include (see ActionPlan.txt's "SPLIT LiveMonitoring" plan) - their
+    // routes already redirect away via ProtectedRoute's own feature gate,
+    // so drop the card here too rather than link to a page that'll just
+    // bounce the admin back to their dashboard.
+    const entitled = cards.filter((c) => {
+      if (c.key === 'security') return hasFeature('ExamSecurity');
+      if (c.key === 'proctoring') return hasFeature('Proctoring');
+      return true;
+    });
+
     const q = search.trim().toLowerCase();
-    if (!q) return cards;
-    return cards.filter(
+    if (!q) return entitled;
+    return entitled.filter(
       (c) =>
         c.title.toLowerCase().includes(q) ||
         c.rows.some((r) => r.label.toLowerCase().includes(q)),
     );
-  }, [cards, search]);
+  }, [cards, search, hasFeature]);
 
   // Real, documented rules (not a vibes-based number) - see ActionPlan.txt.
   const stats = useMemo(() => {

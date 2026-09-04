@@ -744,7 +744,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/settings/security"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin']} feature="ExamSecurity">
             <SecuritySettingsPage />
           </ProtectedRoute>
         }
@@ -752,7 +752,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/settings/proctoring"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin']} feature="Proctoring">
             <ProctoringSettingsPage />
           </ProtectedRoute>
         }
