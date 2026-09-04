@@ -236,14 +236,16 @@ export default function CreateExam() {
                       <Form.Select
                         value={form.examTypeId ?? ''}
                         onChange={(e) => updateField('examTypeId', e.target.value || null)}
+                        isInvalid={!!fieldErrors.examTypeId}
                       >
-                        <option value="">Not set</option>
+                        <option value="">Select an exam type</option>
                         {examTypes?.map((type) => (
                           <option key={type.id} value={type.id}>
                             {type.name}
                           </option>
                         ))}
                       </Form.Select>
+                      <Form.Control.Feedback type="invalid">{fieldErrors.examTypeId}</Form.Control.Feedback>
                     </Form.Group>
                   </Col>
                   <Col md={4} className="d-flex align-items-start pt-4">
