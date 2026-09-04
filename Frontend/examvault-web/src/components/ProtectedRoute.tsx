@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { Spinner } from 'react-bootstrap';
 import { useAuth } from '../hooks/useAuth';
 import { useFeatures } from '../hooks/useFeatures';
+import { dashboardPathForRole } from '../utils/roleRouting';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -35,12 +36,18 @@ export default function ProtectedRoute({ children, roles, feature }: ProtectedRo
     return <Navigate to="/change-password" replace state={{ forced: true }} />;
   }
 
+  // Both branches below used to bounce to "/" - the public marketing
+  // homepage, which has no login-state awareness at all (Home.tsx renders
+  // unconditionally). To a still-logged-in Admin whose org lost a feature
+  // (the common, everyday way this fires - naturally clicking their own
+  // sidebar, not poking at a stray URL) that looked exactly like being
+  // logged out. Land them back on their own dashboard instead.
   if (roles && user && !roles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={dashboardPathForRole(user.role)} replace />;
   }
 
-  if (feature && !hasFeature(feature)) {
-    return <Navigate to="/" replace />;
+  if (feature && user && !hasFeature(feature)) {
+    return <Navigate to={dashboardPathForRole(user.role)} replace />;
   }
 
   return <>{children}</>;
