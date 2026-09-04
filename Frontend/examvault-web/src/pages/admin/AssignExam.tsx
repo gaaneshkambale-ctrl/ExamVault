@@ -11,6 +11,7 @@ import { useExams } from '../../hooks/useExams';
 import { useGroups } from '../../hooks/useGroups';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { useUsers } from '../../hooks/useUsers';
+import { useFeatures } from '../../hooks/useFeatures';
 import type { AssignmentTargetType, ExamAssignmentResponse } from '../../types/assignment';
 import { extractServerError } from '../../utils/apiError';
 
@@ -132,6 +133,14 @@ export default function AssignExam() {
   const { data: groups } = useGroups();
   const { data: users } = useUsers();
   const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
+  const { hasFeature } = useFeatures();
+  // Real gate, not cosmetic - Submission Service's JoinRecording now
+  // requires the Proctoring PlanFeature (see ActionPlan.txt's "SPLIT
+  // LiveMonitoring" plan), so an org without it would never get a working
+  // camera feed no matter what's checked here. Disabling the toggle rather
+  // than just leaving it clickable-but-inert matches this app's own
+  // no-dead-control convention.
+  const hasProctoring = hasFeature('Proctoring');
 
   const [step, setStep] = useState<WizardStep>(1);
   const [examSearch, setExamSearch] = useState('');
@@ -916,6 +925,7 @@ export default function AssignExam() {
                     id="enableProctoring"
                     label="Enable Proctoring"
                     checked={enableProctoring}
+                    disabled={!hasProctoring}
                     onChange={(e) => {
                       setEnableProctoring(e.target.checked);
                       if (!e.target.checked) {
@@ -929,14 +939,20 @@ export default function AssignExam() {
                     label="Allow Live Video Feed"
                     className="ms-4 mt-1"
                     checked={enableLiveVideo}
-                    disabled={!enableProctoring}
+                    disabled={!hasProctoring || !enableProctoring}
                     onChange={(e) => setEnableLiveVideo(e.target.checked)}
                   />
-                  <div className="form-text ms-4">
-                    Lets an admin watch this student's camera live during the exam. Face-detection and
-                    tab/window monitoring above work either way - this only controls whether the camera is
-                    ever published for watching.
-                  </div>
+                  {hasProctoring ? (
+                    <div className="form-text ms-4">
+                      Lets an admin watch this student's camera live during the exam. Face-detection and
+                      tab/window monitoring above work either way - this only controls whether the camera is
+                      ever published for watching.
+                    </div>
+                  ) : (
+                    <div className="form-text ms-4 text-warning">
+                      Your organization's plan doesn't include Proctoring, so this can't be turned on.
+                    </div>
+                  )}
                 </div>
               </Col>
             </Row>
