@@ -7030,3 +7030,105 @@ with no history, got the real empty state "No plan changes match your
 filters." distinct from the true-empty "No plan changes recorded yet."),
 Clear, the row detail modal, and the Export menu all worked as designed.
 All test/throwaway accounts cleaned up afterward.
+
+DONE (2026-09-04): Redesigned the public landing page (Home.tsx) and Footer
+to match webpage.png, then replaced the hero specifically to match a second,
+more elaborate mockup (image.png) per explicit follow-up direction.
+
+webpage.png pass (Home.tsx):
+- Added 3 new sections that didn't exist: How It Works (4 numbered steps),
+  a Pricing teaser (Free/Basic/Professional/Enterprise, links to the real
+  /pricing page for the full comparison rather than duplicating it), and a
+  Security First section.
+- Expanded Features from 5 to 6 cards, updated Built for Everyone's copy
+  and added real "Learn more" links, added a real Accordion-based FAQ (4
+  honest answers - e.g. the "8 question types" claim was checked directly
+  against QuestionType.cs, not invented), and a new final CTA banner
+  (replacing the old icon-chip banner, which the new mockup doesn't have).
+- Footer redesigned to a 5-column layout (Product/Company/Support/Stay
+  Updated with a newsletter box + social icons). Links only go to pages
+  that are genuinely real (Features/#anchor, Exams, Pricing, Security/
+  #anchor, About Us, Contact) - Privacy Policy/Terms of Service/Help
+  Center/Documentation have no real page behind them, so they render as
+  plain muted non-clickable text instead of dead links (confirmed visually
+  distinguishable from real links).
+
+image.png follow-up (hero only): user shared a second, different hero
+mockup mid-review and asked to replace the hero with it. Before building,
+flagged and resolved three things rather than assuming:
+- The mockup's "Trusted by 50+ Colleges & Institutes" badge is an
+  unverifiable specific customer count - user chose generic wording
+  instead ("Built for Colleges & Institutes" badge, "Built for
+  Institutions of Every Size" in the trust strip).
+- The mockup uses a stock photo of a person - no licensed photo asset
+  available, user chose an illustration instead (kept the existing
+  dashboard-preview sketch, replaced the old "Online Exam" quiz panel with
+  3 floating callout bubbles matching the new mockup's composition).
+- The mockup's nav adds "Solutions"/"Resources" dropdowns - user chose to
+  leave NavBar unchanged (real sub-pages for those don't exist).
+New headline/copy/CTAs ("Get Started Free"/"Watch Demo"), a 4-item (was 3)
+icon+title+subtitle trust-chip row under the CTAs, and a new "Trusted by
+Leading Educational Institutions" strip (Colleges/Institutes/Training
+Centers/Universities) below the hero.
+
+Fixed one real rendering bug found during live verification: the bar
+chart's percentage-height flex children weren't resolving correctly
+(bars rendered nearly flat regardless of their data value) - switched to
+computed pixel heights, confirmed visually correct afterward.
+
+Verification: tsc --noEmit clean, lint clean (same 3 pre-existing
+unrelated warnings only), npm run build succeeded, npm run test 61/61
+passed. Live-verified in a local Vite dev server against the local
+Docker backend (no auth needed - public page): hero, floating callouts,
+trust strip, features, how-it-works, pricing teaser, security, FAQ, CTA
+banner and footer all checked visually; confirmed the footer's real vs.
+plain-text links are visually distinguishable and the "Watch Demo"/"Book
+a Demo" links correctly go to the real /contact page.
+
+NOT committed/pushed - per the user's standing rule, holding until they
+explicitly ask.
+
+DONE (2026-09-04): Wired the landing page's Pricing teaser to real Plan
+data instead of static marketing copy, per the user's explicit ask
+("i want real ... like superadmin subscriptwise").
+
+Before building, asked and confirmed two real design decisions rather than
+assuming: (1) the public page excludes the internal "Full Access" default
+plan - same exclusion the Super Admin "All Plans" page already applies,
+since it's the fallback every tenant gets, not a real sellable tier; (2)
+no fake "Most Popular" badge - Plan has no real featured/highlighted field
+to back one honestly.
+
+Backend: added `GET /api/plans/public` to PlansController - [AllowAnonymous]
+overriding the controller's own class-level SuperAdmin-only [Authorize],
+reuses the same ListPlansHandler/ToResponse as the authenticated List
+action, just filters out TenantConstants.FullAccessPlanId. Nothing new
+exposed that wasn't already meant to be public on a pricing page (pricing/
+limits/included modules, no billing/personal data). Gateway's existing
+`/api/plans/{**catch-all}` route already covers it, no gateway change
+needed.
+
+Frontend: Home.tsx's Pricing teaser now calls a real useQuery against the
+new endpoint (api/plansApi.ts's listPublicPlans) instead of a hardcoded
+array. Price/period/CTA are derived live from each plan's actual
+monthlyPrice/annualPrice (null price -> "Custom Pricing"/"Contact Us" CTA,
+otherwise "Get Started"). Feature bullets are real too: computed from
+maxStudents/maxExams (or "Unlimited" when null) plus the plan's actual
+included modules via PLAN_FEATURE_LABELS, with a real "+N more features"
+count - not fabricated copy. Cards sort cheapest-to-custom-pricing. Added
+loading/error/empty states since this is the first place the public,
+unauthenticated site fetches live backend data.
+
+Verification: dotnet build/test (full solution) - 0 errors, 390/390
+passed. Frontend tsc/lint/build/test - clean, 61/61 passed. Live-verified
+end to end: rebuilt and restarted user-api locally, confirmed
+`GET /api/plans/public` is genuinely anonymous (200, no token) and
+correctly excludes Full Access: dev DB only had one other real plan
+("Restricted (No Exams)", no pricing set) at first, so created three
+throwaway plans (Free ₹0/Basic ₹999/Professional ₹2,499, varied limits
+and features) to see the full card grid render, confirmed every field
+shown (price, period, student/exam limits, real feature names, +N more
+count, CTA target) matched that plan's actual database row exactly, then
+deleted all test plans and the throwaway account afterward.
+
+NOT committed/pushed - holding per the user's standing rule.

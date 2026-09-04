@@ -47,6 +47,22 @@ public class PlansController : ControllerBase
         return Ok(plans.Select(ToResponse));
     }
 
+    // Anonymous, real-data pricing feed for the public marketing site
+    // (Home.tsx's Pricing teaser) - overrides this controller's own
+    // class-level SuperAdmin-only [Authorize]. Excludes the "Full Access"
+    // default/fallback plan (TenantConstants.FullAccessPlanId) - it's the
+    // internal default new tenants get, not a real sellable public tier,
+    // same exclusion the Super Admin "All Plans" page already applies.
+    // Every field returned here (pricing/limits/included modules) is
+    // already meant to be public on a pricing page - nothing sensitive.
+    [AllowAnonymous]
+    [HttpGet("public")]
+    public async Task<IActionResult> ListPublic(CancellationToken cancellationToken)
+    {
+        var plans = await _listPlansHandler.HandleAsync(new ListPlansQuery(), cancellationToken);
+        return Ok(plans.Where(p => p.Id != TenantConstants.FullAccessPlanId).Select(ToResponse));
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(CreatePlanRequest request, CancellationToken cancellationToken)
     {
