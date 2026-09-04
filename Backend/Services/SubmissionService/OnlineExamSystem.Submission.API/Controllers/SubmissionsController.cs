@@ -275,6 +275,7 @@ public class SubmissionsController : ControllerBase
     // student's assignment, or the video provider is unconfigured/down -
     // the frontend just doesn't attempt to join anything in that case.
     [HttpPost("{attemptId:guid}/recording/join")]
+    [Authorize(Policy = Proctoring)]
     public async Task<IActionResult> JoinRecording(Guid attemptId, CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -309,7 +310,7 @@ public class SubmissionsController : ControllerBase
     // until this has been explicitly turned on for the attempt in question.
     [HttpPut("{attemptId:guid}/live-watch")]
     [Authorize(Roles = "Admin")]
-    [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = Proctoring)]
     public async Task<IActionResult> SetLiveWatch(
         Guid attemptId,
         SetLiveWatchRequest request,
@@ -338,7 +339,7 @@ public class SubmissionsController : ControllerBase
     // not grant watch access.
     [HttpPost("{attemptId:guid}/recording/watch")]
     [Authorize(Roles = "Admin")]
-    [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = Proctoring)]
     public async Task<IActionResult> WatchRecording(Guid attemptId, CancellationToken cancellationToken)
     {
         var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -587,7 +588,7 @@ public class SubmissionsController : ControllerBase
     // on ExamAttempt), each with its own timestamp/severity/status.
     [HttpGet("by-exam/{examId:guid}/violations")]
     [Authorize(Roles = "Admin")]
-    [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = ExamSecurity)]
     public async Task<IActionResult> ViolationsByExam(Guid examId, CancellationToken cancellationToken)
     {
         var events = await _listViolationsByExamHandler.HandleAsync(
@@ -599,7 +600,7 @@ public class SubmissionsController : ControllerBase
 
     [HttpPut("violations/{violationId:guid}/status")]
     [Authorize(Roles = "Admin")]
-    [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = ExamSecurity)]
     public async Task<IActionResult> UpdateViolationStatus(
         Guid violationId,
         UpdateViolationStatusRequest request,

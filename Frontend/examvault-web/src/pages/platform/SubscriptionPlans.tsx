@@ -116,6 +116,24 @@ function GearIcon() {
   );
 }
 
+function ShieldCheckIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
 function SearchIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -178,9 +196,15 @@ interface ModuleInfo {
   description: string;
 }
 
-// Icon/color/description per module, in ALL_PLAN_FEATURES order (laid out
-// 2-per-row below, matching the mockup's grid exactly).
-const MODULE_INFO: ModuleInfo[] = [
+// Icon/color/description per module. Split into 3 groups 2026-09-04
+// (matching the plan-editing screen to the same 3-tier model the sidebar/
+// backend now enforce, see ActionPlan.txt's "SPLIT LiveMonitoring" plan) -
+// GENERAL_MODULES render in their own flat grid unchanged, SECURITY_MODULES
+// and MONITORING_MODULES render under their own labeled section headers so
+// this screen visually teaches the same distinction that caused the
+// original bundled-LiveMonitoring bug, rather than just adding 2 more
+// cards to one flat list.
+const GENERAL_MODULES: ModuleInfo[] = [
   {
     feature: 'Users',
     icon: <UsersIcon />,
@@ -201,13 +225,6 @@ const MODULE_INFO: ModuleInfo[] = [
     iconBg: '#dbeafe',
     iconColor: '#2563eb',
     description: 'Manage exam categories and type configurations.',
-  },
-  {
-    feature: 'LiveMonitoring',
-    icon: <MonitorIcon />,
-    iconBg: '#ffedd5',
-    iconColor: '#ea580c',
-    description: 'Monitor live exams, detect violations and take actions.',
   },
   {
     feature: 'Results',
@@ -238,6 +255,61 @@ const MODULE_INFO: ModuleInfo[] = [
     description: 'Configure system settings and general preferences.',
   },
 ];
+
+const SECURITY_MODULES: ModuleInfo[] = [
+  {
+    feature: 'ExamSecurity',
+    icon: <ShieldCheckIcon />,
+    iconBg: '#fee2e2',
+    iconColor: '#dc2626',
+    description: 'Tab-switch and copy/paste detection, fullscreen enforcement, and security violation tracking.',
+  },
+];
+
+const MONITORING_MODULES: ModuleInfo[] = [
+  {
+    feature: 'LiveMonitoring',
+    icon: <MonitorIcon />,
+    iconBg: '#ffedd5',
+    iconColor: '#ea580c',
+    description: 'Track active exams, student attempts and real-time progress - no camera access.',
+  },
+  {
+    feature: 'Proctoring',
+    icon: <CameraIcon />,
+    iconBg: '#ede9fe',
+    iconColor: '#7c3aed',
+    description: 'Webcam monitoring, live camera watch, recording and playback review.',
+  },
+];
+
+function renderModuleCard(mod: ModuleInfo, includedFeatures: Set<PlanFeature>, toggleFeature: (feature: PlanFeature) => void) {
+  const checked = includedFeatures.has(mod.feature);
+  return (
+    <Col xs={12} md={6} key={mod.feature}>
+      <label
+        className="d-flex align-items-start gap-2 border rounded-3 p-3 mb-0"
+        style={{
+          cursor: 'pointer',
+          borderColor: checked ? '#4f46e5' : undefined,
+          background: checked ? '#f5f5ff' : undefined,
+        }}
+      >
+        <Form.Check type="checkbox" className="mt-1" checked={checked} onChange={() => toggleFeature(mod.feature)} />
+        <div
+          className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+          style={{ width: 40, height: 40, background: mod.iconBg, color: mod.iconColor }}
+        >
+          {mod.icon}
+        </div>
+        <div>
+          <div className="fw-medium">{PLAN_FEATURE_LABELS[mod.feature]}</div>
+          <div className="text-muted small">{mod.description}</div>
+        </div>
+      </label>
+    </Col>
+  );
+}
 
 export default function SubscriptionPlans() {
   const queryClient = useQueryClient();
@@ -584,40 +656,17 @@ export default function SubscriptionPlans() {
           </div>
           <p className="text-muted small mb-3">Select the modules and features that will be available in this plan.</p>
 
-          <Row className="g-2 mb-3">
-            {MODULE_INFO.map((mod) => {
-              const checked = form.includedFeatures.has(mod.feature);
-              return (
-                <Col xs={12} md={6} key={mod.feature}>
-                  <label
-                    className="d-flex align-items-start gap-2 border rounded-3 p-3 mb-0"
-                    style={{
-                      cursor: 'pointer',
-                      borderColor: checked ? '#4f46e5' : undefined,
-                      background: checked ? '#f5f5ff' : undefined,
-                    }}
-                  >
-                    <Form.Check
-                      type="checkbox"
-                      className="mt-1"
-                      checked={checked}
-                      onChange={() => toggleFeature(mod.feature)}
-                    />
-                    <div
-                      className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
-                      style={{ width: 40, height: 40, background: mod.iconBg, color: mod.iconColor }}
-                    >
-                      {mod.icon}
-                    </div>
-                    <div>
-                      <div className="fw-medium">{PLAN_FEATURE_LABELS[mod.feature]}</div>
-                      <div className="text-muted small">{mod.description}</div>
-                    </div>
-                  </label>
-                </Col>
-              );
-            })}
-          </Row>
+          <Row className="g-2 mb-3">{GENERAL_MODULES.map((mod) => renderModuleCard(mod, form.includedFeatures, toggleFeature))}</Row>
+
+          <div className="text-muted small fw-bold text-uppercase mb-2" style={{ letterSpacing: 0.5 }}>
+            Exam Security
+          </div>
+          <Row className="g-2 mb-3">{SECURITY_MODULES.map((mod) => renderModuleCard(mod, form.includedFeatures, toggleFeature))}</Row>
+
+          <div className="text-muted small fw-bold text-uppercase mb-2" style={{ letterSpacing: 0.5 }}>
+            Monitoring &amp; Proctoring
+          </div>
+          <Row className="g-2 mb-3">{MONITORING_MODULES.map((mod) => renderModuleCard(mod, form.includedFeatures, toggleFeature))}</Row>
 
           <Alert variant="light" className="border small mb-0 d-flex align-items-start gap-2">
             <span className="text-primary flex-shrink-0" style={{ marginTop: 2 }}>

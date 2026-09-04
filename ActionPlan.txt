@@ -6461,3 +6461,192 @@ adding one is out of scope for this ask.
 Existing ExamTypeWiseReport.tsx (Overview) changes: row Action ->
 `/admin/reports/exam-type/{id}` instead of `/admin/reports/exams`; new
 "Compare Exam Types" button next to Export Report -> Comparison page.
+
+================================================================================
+PLAN: SPLIT LiveMonitoring INTO ExamSecurity / LiveMonitoring / Proctoring (2026-09-04)
+================================================================================
+Trigger: shubham-admin@examvaults.in kept seeing/using the whole "Live
+Monitoring" admin console section after Live Monitoring was revoked on
+their org's Plan - traced to the single `LiveMonitoring` PlanFeature
+bundling four unrelated capabilities (Active Exams, Student Attempts,
+Security Violations, camera-based Proctoring) behind one on/off switch.
+User proposed a 3-tier entitlement redesign instead of a 2-tier one:
+ExamSecurity (non-video browser/security controls + violation tracking,
+should be available even on lower plans), LiveMonitoring narrowed to
+real-time non-video oversight (active exams/attempts/progress/violation
+feed/admin intervention), and Proctoring kept as the premium,
+privacy-sensitive webcam/live-video/recording tier. Explicitly NOT adding
+AI Proctoring or Identity Verification - neither exists in this codebase
+today, per the user's own instruction not to invent capabilities.
+
+Inspected first (before writing this plan), per the user's own
+instruction: `PlanFeature` (Backend/Shared/.../Multitenancy/PlanFeature.cs)
+is a shared enum; `Plan.IncludedFeatures` is stored as a comma-separated
+list of enum NAMES (nvarchar(200)) via a ValueConverter in
+UserDbContext.cs, not a bitmask - so appending new enum values is safe
+regardless of position, no int-renumbering risk. Every service
+(Submission/Exam/User) auto-registers a `Feature:{Name}` AuthorizationOptions
+policy for every enum value via `Enum.GetValues<PlanFeature>()` reflection
+in each service's own `FeaturePolicies.AddFeaturePolicies()` - adding a
+new enum value alone creates its policy everywhere already; only need to
+add named consts where a controller actually references one via
+`[Authorize(Policy = ...)]` (which requires a compile-time constant).
+Grepped the ENTIRE backend for `Policy = LiveMonitoring` and confirmed
+all 6 uses live in exactly one file, `SubmissionsController.cs` - no
+other service references this feature. `ProctoringSettingsController`
+(Exam Service, the per-exam detector-config screen matching `7.png`) is
+already gated by `Settings`, not `LiveMonitoring` - confirmed unrelated,
+staying untouched (see scope note below). The seeded "Full Access" plan
+(`TenantConstants.FullAccessPlanId`) auto-includes every enum value via
+`Enum.GetValues<PlanFeature>().ToList()` in its `HasData` seed - EF's
+migration generator re-diffs this automatically when the enum grows, so
+that one row updates itself via the new migration with no manual SQL.
+Any OTHER, manually-created Plan does NOT get this treatment automatically
+(HasData only ever touches its own seeded rows) - needs an explicit
+backward-compat data migration step, see step 3.
+
+Concrete steps:
+
+1. Backend, shared enum: add `ExamSecurity` and `Proctoring` to
+   `PlanFeature` (Backend/Shared/OnlineExamSystem.Shared.Common/
+   Multitenancy/PlanFeature.cs), appended at the end - safe since storage
+   is by name, not numeric position.
+
+2. Backend, re-tag `SubmissionsController.cs` (Submission.API):
+   - `LiveByExam` (GET by-exam/{id}/live, powers Active Exams) and
+     `ForceSubmit` (admin ends an attempt) stay `LiveMonitoring`.
+   - `ViolationsByExam` (GET by-exam/{id}/violations) and
+     `UpdateViolationStatus` (PUT violations/{id}/status) move to the new
+     `ExamSecurity` policy.
+   - `SetLiveWatch` (PUT {id}/live-watch) and `WatchRecording`
+     (POST {id}/recording/watch) move to the new `Proctoring` policy.
+   - `JoinRecording` (POST {id}/recording/join, the student's own camera
+     publish) currently has NO feature gate at all - add `Proctoring`.
+     This is a genuinely new enforcement point, not a re-tag: closes a
+     real gap where a student could still publish video for an org with
+     no Proctoring entitlement at all. Flagged explicitly since it's new
+     behavior, not just a rename.
+   Add `ExamSecurity`/`Proctoring` consts to Submission Service's own
+   `Authorization/FeaturePolicies.cs` (same file `LiveMonitoring`'s const
+   already lives in).
+
+3. Backend, EF migration (`dotnet ef migrations add
+   SplitLiveMonitoringFeature --project ...User.Infrastructure`):
+   auto-picks-up the Full-Access plan's HasData string change as an
+   UpdateData call. Add a hand-written `migrationBuilder.Sql(...)` in the
+   same migration's Up(): for every OTHER Plan row whose IncludedFeatures
+   currently contains "LiveMonitoring", append ",ExamSecurity,Proctoring"
+   (idempotent - only if not already present) so no organization already
+   granted Live Monitoring silently loses Security Violations or
+   Proctoring access it effectively had yesterday. This is the
+   backward-compatibility guarantee the user explicitly asked for.
+   Migration gets applied and verified against a real local DB copy
+   before this is considered done - never assumed blind against the live
+   Hostinger VPS database.
+
+4. Frontend, `types/plan.ts`: add `ExamSecurity`/`Proctoring` to the
+   `PlanFeature` union, `ALL_PLAN_FEATURES`, and `PLAN_FEATURE_LABELS`
+   ("Exam Security", "Proctoring").
+
+5. Frontend, `pages/platform/SubscriptionPlans.tsx`: new `MODULE_INFO`
+   entries (icon/color/description) for both new modules. Regroup the
+   Create/Edit modal's "Included Modules" card grid into labeled
+   sections matching the user's own proposed layout - "Exam Security" as
+   its own section, "Monitoring & Proctoring" grouping Live Monitoring +
+   Proctoring together - rather than the current flat 2-column grid, so
+   the plan-editing screen itself visually teaches the same 3-tier model
+   (why this problem won't recur when a 4th tier like AI Proctoring gets
+   added later).
+
+6. Frontend, `components/AdminSidebar.tsx`: give `NavChild` its own
+   optional `feature` field (currently only `NavItem`/top-level groups
+   have one, added in the prior LiveMonitoring-only fix). Live Monitoring
+   group's children get individual features: Active Exams/Student
+   Attempts -> `LiveMonitoring`, Security Violations -> `ExamSecurity`,
+   Proctoring -> `Proctoring`. The parent group itself is visible if ANY
+   child passes (not one blanket feature check on the group) - an org
+   with only ExamSecurity should still see "Live Monitoring" in the nav
+   with just Security Violations under it, not have the whole section
+   vanish.
+
+7. Frontend, `routes/AppRoutes.tsx`: update the 4 live-monitoring routes'
+   `ProtectedRoute feature=` prop to match step 2's table - Security
+   Violations -> `ExamSecurity`, Proctoring -> `Proctoring`, Active
+   Exams/Student Attempts stay `LiveMonitoring`.
+
+8. Verification: this codebase's own established convention for closing
+   every prior phase/feature gate is live curl/browser adversarial
+   testing with a real JWT (see every "Verified live..." paragraph
+   throughout this file) - there is no WebApplicationFactory-style
+   integration-test project anywhere for controller-level authorization,
+   so this plan follows the same convention rather than introducing new
+   test infrastructure unprompted. Concretely: create a throwaway Plan
+   with only ExamSecurity checked and confirm Security Violations works
+   while Active Exams/Student Attempts/Proctoring 403; repeat with only
+   LiveMonitoring checked and only Proctoring checked; confirm the
+   sidebar shows exactly the right subset of Live Monitoring's children
+   in each case; confirm the backward-compat migration left an existing
+   LiveMonitoring-only Plan with all three now checked.
+
+Explicitly OUT of scope, decided during planning rather than silently
+dropped: `ProctoringSettingsController` (the per-exam detector-config
+screen, `7.png` - Enable Proctoring/Face Detection/Allow Live Video Feed
+toggles) stays gated by `Settings`, untouched - configuring detectors is
+an Admin Settings capability, distinct from the runtime entitlement to
+actually USE Live Monitoring/Proctoring, and touching it would mean
+splitting one settings-update endpoint's authorization per-field, which
+wasn't asked for. "Candidate activity logs" as its own screen doesn't
+exist anywhere in this codebase and is not being built now. No AI
+Proctoring or Identity Verification PlanFeature - flagged in the user's
+own message as future-only, added if/when the backend actually supports
+them.
+
+DONE (2026-09-04): all 8 steps implemented exactly as planned, no
+deviations. `PlanFeature` gained `ExamSecurity = 8`/`Proctoring = 9`.
+`SubmissionsController.cs` re-tagged: `ViolationsByExam`/
+`UpdateViolationStatus` -> `ExamSecurity`; `SetLiveWatch`/`WatchRecording`
+-> `Proctoring`; `LiveByExam`/`ForceSubmit` stayed `LiveMonitoring`;
+`JoinRecording` gained `[Authorize(Policy = Proctoring)]` (previously
+ungated entirely - the one genuinely new enforcement point, not a
+re-tag). EF migration `SplitLiveMonitoringFeature` generated against
+`OnlineExamSystem.User.Infrastructure` - auto-scaffolded UpdateData for
+the seeded Full-Access plan, hand-added the backward-compat raw-SQL
+UPDATE (comma-wrapped LIKE, idempotent) for every other Plan row that
+had LiveMonitoring, plus a best-effort symmetric Down(). Frontend:
+`types/plan.ts` grew to 10 features; `SubscriptionPlans.tsx`'s Create/
+Edit modal now renders 3 labeled groups (general modules unchanged,
+"Exam Security" section, "Monitoring & Proctoring" section with Live
+Monitoring + Proctoring together) via a new shared `renderModuleCard`
+helper, with new `ShieldCheckIcon`/`CameraIcon`; `AdminSidebar.tsx`'s
+`NavChild` gained its own optional `feature` (previously only `NavItem`
+had one) - Live Monitoring's 4 children now gate individually
+(Active Exams/Student Attempts -> LiveMonitoring, Security Violations ->
+ExamSecurity, Proctoring -> Proctoring), and the parent group is visible
+whenever ANY child is; `AppRoutes.tsx`'s Security Violations/Proctoring
+routes' `ProtectedRoute feature=` updated to match.
+
+Verification done: `dotnet build` clean across the whole solution,
+`dotnet test` 369/369 across all 8 backend test projects (zero
+regressions - none of these are new test coverage, since this codebase's
+existing authorization-policy verification convention is live curl/
+browser testing, not unit tests, per step 8's own note). Frontend
+`tsc --noEmit`, `oxlint`, and a real `npm run build` (production build,
+not just tsc) all clean.
+
+NOT done, explicitly left for the user rather than assumed: the EF
+migration was generated and reviewed but NOT applied to any database.
+`dotnet ef migrations list` against this machine's local
+`ExamVault.UserDb` showed 19 OTHER migrations already Pending before this
+one even existed - applying `dotnet ef database update` would have
+silently applied that entire unrelated backlog as a side effect of this
+task, on a database whose current real state wasn't confirmed, so it was
+deliberately not run. The user needs to apply this migration themselves
+(locally, and separately on the Hostinger VPS's production database once
+deployed) and confirm the backward-compat SQL actually preserved
+existing Plans' access before rollout. Step 8's live curl/browser
+adversarial verification (throwaway Plan with only ExamSecurity/only
+LiveMonitoring/only Proctoring checked, confirming exact 200-vs-403 per
+combination) was also not performed - requires a real logged-in Super
+Admin session this agent cannot create itself (entering passwords is
+off-limits), same constraint noted earlier in this session's Live
+Monitoring fix.

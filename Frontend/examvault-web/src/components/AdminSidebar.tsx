@@ -40,6 +40,11 @@ export type AdminNavItem =
 interface NavChild {
   label: AdminNavItem;
   path: string;
+  // Same PlanFeature gating as NavItem.feature below, but per-child - a
+  // group can mix children gated by different features (Live Monitoring's
+  // own children span LiveMonitoring/ExamSecurity/Proctoring, split
+  // 2026-09-04, see ActionPlan.txt's "SPLIT LiveMonitoring" plan).
+  feature?: string;
 }
 
 interface NavItem {
@@ -49,7 +54,10 @@ interface NavItem {
   // Matches a PlanFeature name (Backend/Shared/.../Multitenancy/
   // PlanFeature.cs) - hidden whenever the current user's tenant Plan
   // doesn't include it (SuperAdmin always sees everything). Only set on
-  // groups gated end-to-end (nav + route), see useFeatures.ts.
+  // groups gated end-to-end (nav + route), see useFeatures.ts. A group
+  // with children instead gates via each child's own `feature` (see
+  // visibleNavItems below) - this field is for groups with no children,
+  // or a blanket gate that applies before any per-child one.
   feature?: string;
 }
 
@@ -76,12 +84,11 @@ const navItems: NavItem[] = [
   {
     label: 'Live Monitoring',
     path: '/admin/live-monitoring/active-exams',
-    feature: 'LiveMonitoring',
     children: [
-      { label: 'Active Exams', path: '/admin/live-monitoring/active-exams' },
-      { label: 'Student Attempts', path: '/admin/live-monitoring/student-attempts' },
-      { label: 'Security Violations', path: '/admin/live-monitoring/security-violations' },
-      { label: 'Proctoring', path: '/admin/live-monitoring/proctoring' },
+      { label: 'Active Exams', path: '/admin/live-monitoring/active-exams', feature: 'LiveMonitoring' },
+      { label: 'Student Attempts', path: '/admin/live-monitoring/student-attempts', feature: 'LiveMonitoring' },
+      { label: 'Security Violations', path: '/admin/live-monitoring/security-violations', feature: 'ExamSecurity' },
+      { label: 'Proctoring', path: '/admin/live-monitoring/proctoring', feature: 'Proctoring' },
     ],
   },
   {
@@ -213,7 +220,17 @@ function isSectionActive(item: NavItem, active: AdminNavItem): boolean {
 
 export default function AdminSidebar({ active, show = false, onClose = () => {} }: AdminSidebarProps) {
   const { hasFeature } = useFeatures();
-  const visibleNavItems = navItems.filter((item) => !item.feature || hasFeature(item.feature));
+  // Groups with children gate per-child (a group is visible if ANY child
+  // is - e.g. an org with only ExamSecurity still sees "Live Monitoring"
+  // with just Security Violations under it, not the whole section
+  // vanishing); a childless item falls back to its own `feature`, if set.
+  const visibleNavItems = navItems.flatMap((item) => {
+    if (item.children) {
+      const visibleChildren = item.children.filter((child) => !child.feature || hasFeature(child.feature));
+      return visibleChildren.length > 0 ? [{ ...item, children: visibleChildren }] : [];
+    }
+    return !item.feature || hasFeature(item.feature) ? [item] : [];
+  });
 
   const [openSections, setOpenSections] = useState<Set<AdminNavItem>>(
     () => new Set(visibleNavItems.filter((item) => item.children && isSectionActive(item, active)).map((item) => item.label)),

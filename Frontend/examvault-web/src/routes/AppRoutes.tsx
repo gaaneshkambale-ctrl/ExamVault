@@ -374,7 +374,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/security-violations"
         element={
-          <ProtectedRoute roles={['Admin']} feature="LiveMonitoring">
+          <ProtectedRoute roles={['Admin']} feature="ExamSecurity">
             <SecurityViolations />
           </ProtectedRoute>
         }
@@ -382,7 +382,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/proctoring"
         element={
-          <ProtectedRoute roles={['Admin']} feature="LiveMonitoring">
+          <ProtectedRoute roles={['Admin']} feature="Proctoring">
             <Proctoring />
           </ProtectedRoute>
         }

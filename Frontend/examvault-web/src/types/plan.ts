@@ -1,5 +1,9 @@
 // Mirrors the backend's PlanFeature enum (Backend/Shared/.../Multitenancy/PlanFeature.cs)
-// - the 8 gateable Admin console modules.
+// - the 10 gateable Admin console modules. ExamSecurity/Proctoring split
+// out of LiveMonitoring 2026-09-04 (see ActionPlan.txt's "SPLIT
+// LiveMonitoring" plan) - LiveMonitoring narrowed to non-video real-time
+// oversight, ExamSecurity covers violation tracking, Proctoring covers
+// webcam/live-video/recording.
 export type PlanFeature =
   | 'Users'
   | 'Exams'
@@ -8,7 +12,9 @@ export type PlanFeature =
   | 'Results'
   | 'Reports'
   | 'Notifications'
-  | 'Settings';
+  | 'Settings'
+  | 'ExamSecurity'
+  | 'Proctoring';
 
 export const ALL_PLAN_FEATURES: PlanFeature[] = [
   'Users',
@@ -19,6 +25,8 @@ export const ALL_PLAN_FEATURES: PlanFeature[] = [
   'Reports',
   'Notifications',
   'Settings',
+  'ExamSecurity',
+  'Proctoring',
 ];
 
 export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
@@ -30,6 +38,8 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   Reports: 'Reports',
   Notifications: 'Notifications',
   Settings: 'Settings',
+  ExamSecurity: 'Exam Security',
+  Proctoring: 'Proctoring',
 };
 
 export interface Plan {
