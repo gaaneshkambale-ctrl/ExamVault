@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, InputGroup, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, InputGroup, Modal, Pagination, Row, Spinner } from 'react-bootstrap';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import { EditIcon, TrashIcon } from '../../components/icons/ActionIcons';
@@ -584,81 +584,108 @@ export default function SubscriptionPlans() {
             </InputGroup>
           </div>
 
-          <Card className="border-0 shadow-sm">
-            <Card.Body className={otherPlans.length === 0 ? '' : 'p-0'}>
-              {otherPlans.length === 0 ? (
-                <div className="text-center text-muted py-5">
-                  {searchQuery ? 'No plans match your search.' : 'No other plans yet. Click "+ Create Plan" to add one.'}
-                </div>
-              ) : (
-                <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
-                    <tr>
-                      <th className="ps-4">Plan Name</th>
-                      <th>Description</th>
-                      <th>Modules Included</th>
-                      <th>Organizations</th>
-                      <th className="pe-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedPlans.map((plan) => {
-                      const style = iconForPlan(plan.name);
-                      const shown = plan.includedFeatures.slice(0, 2);
-                      const remaining = plan.includedFeatures.length - shown.length;
-                      return (
-                        <tr key={plan.id}>
-                          <td className="ps-4">
-                            <div className="d-flex align-items-center gap-2">
-                              <div
-                                className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
-                                style={{ width: 32, height: 32, background: style.iconBg, color: style.iconColor }}
-                              >
-                                {style.icon}
+          {otherPlans.length === 0 ? (
+            <Card className="border-0 shadow-sm">
+              <Card.Body className="text-center text-muted py-5">
+                {searchQuery ? 'No plans match your search.' : 'No other plans yet. Click "+ Create Plan" to add one.'}
+              </Card.Body>
+            </Card>
+          ) : (
+            <Row className="g-3">
+              {pagedPlans.map((plan) => {
+                const style = iconForPlan(plan.name);
+                const shown = plan.includedFeatures.slice(0, 3);
+                const remaining = plan.includedFeatures.length - shown.length;
+                const orgCount = organizationCountByPlanId.get(plan.id) ?? 0;
+                const limitStats: { label: string; value: number | null }[] = [
+                  { label: 'Students', value: plan.maxStudents },
+                  { label: 'Admins', value: plan.maxAdmins },
+                  { label: 'Instructors', value: plan.maxInstructors },
+                  { label: 'Exams', value: plan.maxExams },
+                ];
+                return (
+                  <Col xs={12} md={6} xl={4} key={plan.id}>
+                    <Card className="border-0 shadow-sm h-100">
+                      <Card.Body className="d-flex flex-column">
+                        <div className="d-flex align-items-start justify-content-between gap-2 mb-2">
+                          <div className="d-flex align-items-center gap-2">
+                            <div
+                              className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+                              style={{ width: 40, height: 40, background: style.iconBg, color: style.iconColor }}
+                            >
+                              {style.icon}
+                            </div>
+                            <div>
+                              <div className="fw-bold">{plan.name}</div>
+                              <div className="text-muted small">
+                                {orgCount} organization{orgCount === 1 ? '' : 's'}
                               </div>
-                              <span className="fw-medium">{plan.name}</span>
                             </div>
-                          </td>
-                          <td className="text-muted" style={{ maxWidth: 280 }}>
-                            {plan.description || '—'}
-                          </td>
-                          <td>
-                            <div className="d-flex flex-wrap gap-1" style={{ maxWidth: 280 }}>
-                              {shown.length === 0 ? (
-                                <span className="text-muted small">None</span>
-                              ) : (
-                                shown.map((f) => (
-                                  <Badge key={f} bg="light" text="dark" className="border">
-                                    {PLAN_FEATURE_LABELS[f]}
-                                  </Badge>
-                                ))
-                              )}
-                              {remaining > 0 && (
-                                <Badge bg="light" text="dark" className="border">
-                                  +{remaining} more
-                                </Badge>
-                              )}
-                            </div>
-                          </td>
-                          <td className="text-muted">{organizationCountByPlanId.get(plan.id) ?? 0}</td>
-                          <td className="pe-4">
-                            <div className="d-flex gap-2">
-                              <Button variant="outline-secondary" size="sm" onClick={() => openEdit(plan)} title="Edit plan">
-                                <EditIcon />
-                              </Button>
-                              <Button variant="outline-danger" size="sm" onClick={() => setDeleteTarget(plan)} title="Delete plan">
-                                <TrashIcon />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </Table>
-              )}
-            </Card.Body>
-          </Card>
+                          </div>
+                          <div className="d-flex gap-1 flex-shrink-0">
+                            <Button variant="outline-secondary" size="sm" onClick={() => openEdit(plan)} title="Edit plan">
+                              <EditIcon />
+                            </Button>
+                            <Button variant="outline-danger" size="sm" onClick={() => setDeleteTarget(plan)} title="Delete plan">
+                              <TrashIcon />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {plan.description && <p className="text-muted small mb-3">{plan.description}</p>}
+
+                        <div className="d-flex align-items-baseline gap-1 mb-3">
+                          {plan.monthlyPrice !== null ? (
+                            <>
+                              <span className="h4 fw-bold mb-0">₹{plan.monthlyPrice.toLocaleString('en-IN')}</span>
+                              <span className="text-muted small">/ month</span>
+                            </>
+                          ) : (
+                            <span className="h5 fw-bold mb-0 text-muted">Custom pricing</span>
+                          )}
+                          {plan.annualPrice !== null && (
+                            <span className="text-muted small ms-1">
+                              (₹{plan.annualPrice.toLocaleString('en-IN')} billed annually)
+                            </span>
+                          )}
+                        </div>
+
+                        <Row className="g-2 mb-3">
+                          {limitStats.map((stat) => (
+                            <Col xs={3} key={stat.label}>
+                              <div className="text-center border rounded-3 py-2" style={{ background: '#f8f9fb' }}>
+                                <div className="fw-bold small">{stat.value ?? '∞'}</div>
+                                <div className="text-muted" style={{ fontSize: 10 }}>
+                                  {stat.label}
+                                </div>
+                              </div>
+                            </Col>
+                          ))}
+                        </Row>
+
+                        <div className="d-flex flex-wrap gap-1 mt-auto">
+                          {shown.length === 0 ? (
+                            <span className="text-muted small">No modules included</span>
+                          ) : (
+                            shown.map((f) => (
+                              <Badge key={f} bg="light" text="dark" className="border fw-normal">
+                                {PLAN_FEATURE_LABELS[f]}
+                              </Badge>
+                            ))
+                          )}
+                          {remaining > 0 && (
+                            <Badge bg="light" text="dark" className="border fw-normal">
+                              +{remaining} more
+                            </Badge>
+                          )}
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                );
+              })}
+            </Row>
+          )}
 
           {otherPlans.length > 0 && (
             <div className="d-flex justify-content-between align-items-center mt-3">
