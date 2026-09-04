@@ -90,6 +90,9 @@ public class UserDbContext : DbContext
                 .HasConversion(featuresConverter, featuresComparer)
                 .HasMaxLength(200);
 
+            entity.Property(p => p.MonthlyPrice).HasColumnType("decimal(10,2)");
+            entity.Property(p => p.AnnualPrice).HasColumnType("decimal(10,2)");
+
             // Every Tenant seeded above (and every one that existed before
             // subscription plans shipped) points at this - full access,
             // nothing silently locked out on migration day.

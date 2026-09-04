@@ -31,13 +31,80 @@ const FULL_ACCESS_PLAN_ID = '33333333-3333-3333-3333-333333333333';
 // toggle is deliberately not included - Plan has no isActive/enabled field
 // anywhere in this codebase (every seeded/created plan is always
 // assignable), so a toggle here would have nothing real to control.
+// Pricing/limit fields are kept as strings in form state (not number|null)
+// so an input can be genuinely blank while being edited - trimmed and
+// parsed to number|null only when the mutation actually builds its
+// request. Blank = unlimited (limits) / not set (pricing), same
+// null-means-unlimited convention Tenant's own limit fields already use.
 interface PlanFormState {
   name: string;
   description: string;
   includedFeatures: Set<PlanFeature>;
+  monthlyPrice: string;
+  annualPrice: string;
+  maxStudents: string;
+  maxAdmins: string;
+  maxInstructors: string;
+  maxExams: string;
+  maxQuestions: string;
+  maxAiQuestionsPerMonth: string;
+  storageGb: string;
 }
 
-const EMPTY_FORM: PlanFormState = { name: '', description: '', includedFeatures: new Set() };
+const EMPTY_FORM: PlanFormState = {
+  name: '',
+  description: '',
+  includedFeatures: new Set(),
+  monthlyPrice: '',
+  annualPrice: '',
+  maxStudents: '',
+  maxAdmins: '',
+  maxInstructors: '',
+  maxExams: '',
+  maxQuestions: '',
+  maxAiQuestionsPerMonth: '',
+  storageGb: '',
+};
+
+// Blank input -> null (unlimited / not set), otherwise the entered number.
+function parseOptionalNumber(value: string): number | null {
+  const trimmed = value.trim();
+  return trimmed === '' ? null : Number(trimmed);
+}
+
+function SectionBar({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
+  return (
+    <div className="d-flex align-items-center gap-2 px-3 py-3 rounded-3 mb-3" style={{ background: '#f5f5ff' }}>
+      <div
+        className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+        style={{ width: 36, height: 36, background: '#e0e7ff', color: '#4f46e5' }}
+      >
+        {icon}
+      </div>
+      <div>
+        <div className="fw-bold">{title}</div>
+        <div className="text-muted small">{subtitle}</div>
+      </div>
+    </div>
+  );
+}
+
+function RupeeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="6" y1="3" x2="18" y2="3" /><line x1="6" y1="8" x2="18" y2="8" />
+      <path d="M6 13h3c3 0 5-1.5 5-5" /><path d="M6 13l9 9" />
+    </svg>
+  );
+}
+
+function GaugeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 14 15.5 9.5" /><path d="M3.6 15a9 9 0 1 1 16.8 0" />
+    </svg>
+  );
+}
 
 function CrownIcon({ size = 22 }: { size?: number }) {
   return (
@@ -363,6 +430,15 @@ export default function SubscriptionPlans() {
         name: form.name.trim(),
         description: form.description.trim() || null,
         includedFeatures: [...form.includedFeatures],
+        monthlyPrice: parseOptionalNumber(form.monthlyPrice),
+        annualPrice: parseOptionalNumber(form.annualPrice),
+        maxStudents: parseOptionalNumber(form.maxStudents),
+        maxAdmins: parseOptionalNumber(form.maxAdmins),
+        maxInstructors: parseOptionalNumber(form.maxInstructors),
+        maxExams: parseOptionalNumber(form.maxExams),
+        maxQuestions: parseOptionalNumber(form.maxQuestions),
+        maxAiQuestionsPerMonth: parseOptionalNumber(form.maxAiQuestionsPerMonth),
+        storageGb: parseOptionalNumber(form.storageGb),
       };
       return editingPlan ? updatePlan(editingPlan.id, request) : createPlan(request);
     },
@@ -394,6 +470,15 @@ export default function SubscriptionPlans() {
       name: plan.name,
       description: plan.description ?? '',
       includedFeatures: new Set(plan.includedFeatures),
+      monthlyPrice: plan.monthlyPrice?.toString() ?? '',
+      annualPrice: plan.annualPrice?.toString() ?? '',
+      maxStudents: plan.maxStudents?.toString() ?? '',
+      maxAdmins: plan.maxAdmins?.toString() ?? '',
+      maxInstructors: plan.maxInstructors?.toString() ?? '',
+      maxExams: plan.maxExams?.toString() ?? '',
+      maxQuestions: plan.maxQuestions?.toString() ?? '',
+      maxAiQuestionsPerMonth: plan.maxAiQuestionsPerMonth?.toString() ?? '',
+      storageGb: plan.storageGb?.toString() ?? '',
     });
     setShowForm(true);
   };
@@ -647,6 +732,149 @@ export default function SubscriptionPlans() {
             />
             <Form.Text className="text-muted">Describe the plan, its purpose and who it's intended for.</Form.Text>
           </Form.Group>
+
+          <SectionBar icon={<RupeeIcon />} title="Pricing & Billing" subtitle="Reference pricing shown to Super Admins - not connected to any payment provider yet." />
+          <Row className="mb-4">
+            <Col md={6}>
+              <Form.Group className="mb-3" controlId="planMonthlyPrice">
+                <Form.Label className="fw-bold small">Monthly Price (₹)</Form.Label>
+                <InputGroup>
+                  <InputGroup.Text>₹</InputGroup.Text>
+                  <Form.Control
+                    type="number"
+                    min={0}
+                    value={form.monthlyPrice}
+                    onChange={(e) => setForm({ ...form, monthlyPrice: e.target.value })}
+                    placeholder="Leave blank for no price"
+                  />
+                </InputGroup>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3" controlId="planAnnualPrice">
+                <Form.Label className="fw-bold small">Annual Price (₹)</Form.Label>
+                <InputGroup>
+                  <InputGroup.Text>₹</InputGroup.Text>
+                  <Form.Control
+                    type="number"
+                    min={0}
+                    value={form.annualPrice}
+                    onChange={(e) => setForm({ ...form, annualPrice: e.target.value })}
+                    placeholder="Leave blank for no price"
+                  />
+                </InputGroup>
+                {(() => {
+                  const monthly = parseOptionalNumber(form.monthlyPrice);
+                  const annual = parseOptionalNumber(form.annualPrice);
+                  if (monthly === null || annual === null || monthly <= 0) return null;
+                  const savingsPct = Math.round((1 - annual / (monthly * 12)) * 100);
+                  return savingsPct > 0 ? (
+                    <Form.Text className="text-success">Annual billing saves ~{savingsPct}% vs. paying monthly.</Form.Text>
+                  ) : null;
+                })()}
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <SectionBar icon={<GaugeIcon />} title="Usage Limits" subtitle="Leave a field blank for unlimited. These become each organization's effective limits when this plan is assigned." />
+          <Row className="mb-2">
+            <Col md={4}>
+              <Form.Group className="mb-3" controlId="planMaxStudents">
+                <Form.Label className="fw-bold small">Max Students</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  value={form.maxStudents}
+                  onChange={(e) => setForm({ ...form, maxStudents: e.target.value })}
+                  placeholder="Unlimited"
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3" controlId="planMaxAdmins">
+                <Form.Label className="fw-bold small">Max Admins</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  value={form.maxAdmins}
+                  onChange={(e) => setForm({ ...form, maxAdmins: e.target.value })}
+                  placeholder="Unlimited"
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3" controlId="planMaxInstructors">
+                <Form.Label className="fw-bold small">Max Instructors</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  value={form.maxInstructors}
+                  onChange={(e) => setForm({ ...form, maxInstructors: e.target.value })}
+                  placeholder="Unlimited"
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3" controlId="planMaxExams">
+                <Form.Label className="fw-bold small">Max Exams</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  value={form.maxExams}
+                  onChange={(e) => setForm({ ...form, maxExams: e.target.value })}
+                  placeholder="Unlimited"
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3" controlId="planMaxQuestions">
+                <Form.Label className="fw-bold small">Max Questions</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  value={form.maxQuestions}
+                  onChange={(e) => setForm({ ...form, maxQuestions: e.target.value })}
+                  placeholder="Unlimited"
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3" controlId="planMaxAiQuestions">
+                <Form.Label className="fw-bold small">AI Questions / Month</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  value={form.maxAiQuestionsPerMonth}
+                  onChange={(e) => setForm({ ...form, maxAiQuestionsPerMonth: e.target.value })}
+                  placeholder="Unlimited"
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3" controlId="planStorageGb">
+                <Form.Label className="fw-bold small">Storage (GB)</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  value={form.storageGb}
+                  onChange={(e) => setForm({ ...form, storageGb: e.target.value })}
+                  placeholder="Unlimited"
+                />
+              </Form.Group>
+            </Col>
+          </Row>
+          <Alert variant="light" className="border small mb-4 d-flex align-items-start gap-2">
+            <span className="text-muted flex-shrink-0" style={{ marginTop: 2 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+            </span>
+            <span>
+              Students, Admins, Instructors and Exams are enforced when an organization tries to create a new one.{' '}
+              <strong>Questions, AI Questions/Month and Storage GB are saved and shown only</strong> - they are not yet
+              enforced anywhere in the product.
+            </span>
+          </Alert>
 
           <div className="d-flex justify-content-between align-items-center mb-1">
             <div className="fw-bold">Included Modules</div>

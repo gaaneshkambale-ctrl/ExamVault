@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Exam.Application.Assignments;
 using OnlineExamSystem.Exam.Application.Interfaces;
@@ -31,6 +32,12 @@ public class ExamRepository : IExamRepository
 
     public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
         _dbContext.Exams.CountAsync(e => e.TenantId == tenantId, cancellationToken);
+
+    public async Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        return new EfUnitOfWorkTransaction(transaction);
+    }
 
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
     {

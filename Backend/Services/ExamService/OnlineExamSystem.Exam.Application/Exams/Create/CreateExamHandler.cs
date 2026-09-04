@@ -46,10 +46,16 @@ public class CreateExamHandler
         // Super Admin request (no tenant context, e.g. seeding) skips this,
         // same as every other tenant-scoped check in this codebase. A
         // failed/unreachable UserService call fails open (never blocks exam
-        // creation over a transient cross-service error).
+        // creation over a transient cross-service error). The limit value
+        // itself lives in UserService (fetched cross-service, seeded from
+        // the tenant's assigned Plan - see CreateTenantHandler/
+        // AssignPlanToTenantHandler there), but the actual count-then-insert
+        // race is local to this service's own database, so it's the local
+        // Serializable transaction below - not the cross-service call - that
+        // has to close it. See IUnitOfWorkTransaction's own comment.
+        TenantLimits? limits = null;
         if (_currentTenant.IsAuthenticated && !_currentTenant.IsSuperAdmin)
         {
-            TenantLimits? limits = null;
             try
             {
                 limits = await _tenantLimitsClient.GetLimitsAsync(_currentTenant.TenantId, cancellationToken);
@@ -57,15 +63,6 @@ public class CreateExamHandler
             catch
             {
                 // Fail open - see comment above.
-            }
-
-            if (limits?.MaxExams is not null)
-            {
-                var currentExamCount = await _examRepository.CountByTenantAsync(_currentTenant.TenantId, cancellationToken);
-                if (currentExamCount >= limits.MaxExams)
-                {
-                    return CreateExamResult.Invalid([$"This organization has reached its limit of {limits.MaxExams} exams."]);
-                }
             }
         }
 
@@ -102,8 +99,26 @@ public class CreateExamHandler
         };
         exam.ExamCode = GenerateExamCode(command.Category, exam.Id);
 
-        await _examRepository.AddAsync(exam, cancellationToken);
-        await _examRepository.SaveChangesAsync(cancellationToken);
+        await using var transaction = await _examRepository.BeginSerializableTransactionAsync(cancellationToken);
+        try
+        {
+            if (limits?.MaxExams is not null)
+            {
+                var currentExamCount = await _examRepository.CountByTenantAsync(_currentTenant.TenantId, cancellationToken);
+                if (currentExamCount >= limits.MaxExams)
+                {
+                    return CreateExamResult.Invalid([$"This organization has reached its limit of {limits.MaxExams} exams."]);
+                }
+            }
+
+            await _examRepository.AddAsync(exam, cancellationToken);
+            await _examRepository.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (TransientConcurrencyException ex)
+        {
+            return CreateExamResult.Invalid([ex.Message]);
+        }
 
         return CreateExamResult.Ok(exam);
     }

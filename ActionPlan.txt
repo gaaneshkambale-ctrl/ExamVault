@@ -6764,3 +6764,226 @@ prefill (Duration/Passing Marks) is client-side-only logic with no
 backend round-trip to verify via curl - confirmed by code review and
 `tsc`/lint/`npm run build`, not live-clicked (needs a real browser
 session this agent can't create itself).
+
+================================================================================
+PLAN: PLAN PRICING & PER-PLAN USAGE LIMITS (2026-09-04)
+================================================================================
+User supplied `create-plan.png`, a richer Create/Edit Plan modal than
+today's (Plan Information + Included Modules only) - adds Pricing &
+Billing, Usage Limits, Trial Settings, and a separate Advanced Features
+checklist. Asked for a plan first, scoped down via a clarifying question
+before writing this: **Trial Settings and Advanced Features are OUT of
+scope** (neither was picked when asked) - this plan covers only Pricing
+& Billing and Usage Limits. Also confirmed: Usage Limits enforcement
+extends what already exists rather than building everything the mockup
+implies (Questions/AI Questions per Month/Storage GB stay honestly
+unenforced, no new infrastructure for those); Pricing is a stored+
+displayed reference value only, not connected to any billing/payment
+system (none exists in this codebase).
+
+Inspected the current real state before designing this:
+- `Plan` (User Service): Name/Description/IncludedFeatures only - no
+  pricing, no limits. Its own doc comment previously said "Billing/
+  pricing stays out of scope" - this plan deliberately reopens that,
+  per the user's explicit ask this time.
+- `Tenant` already has `MaxUsers`/`MaxExams`/`MaxStudents` (nullable =
+  unlimited). MaxUsers is genuinely enforced (CreateUserHandler, flat
+  total across every role). MaxExams is genuinely enforced
+  (ExamService's CreateExamHandler, via a real cross-service call -
+  `ITenantLimitsClient`/`GetTenantLimitsHandler`). MaxStudents is
+  stored but its own doc comment admits it - "not enforced yet - no
+  per-role count check anywhere today, only a flat per-tenant user
+  count." No MaxAdmins/MaxInstructors field exists at all.
+- These Tenant limits are seeded ONCE, at tenant creation
+  (`CreateTenantHandler`), from `PlatformSettings.DefaultMaxUsers/
+  DefaultMaxExams/DefaultMaxStudents` (one global Super-Admin-set
+  default for every tenant regardless of Plan) - then individually
+  overridable per org thereafter. Nothing currently ties these limits
+  to which Plan a tenant is on, which somewhat defeats having
+  differentiated pricing tiers - this plan's real point is closing
+  that gap, not just adding display fields.
+- `AssignPlanToTenantHandler` (the "Change Plan / Upgrade" action
+  already used live today on Shubham Institute) currently only flips
+  `Tenant.PlanId` - doesn't touch limits at all.
+
+Concrete steps:
+
+1. Backend, `Plan.cs`: add `MonthlyPrice`/`AnnualPrice` (decimal?) and
+   `MaxStudents`/`MaxAdmins`/`MaxInstructors`/`MaxExams`/`MaxQuestions`/
+   `MaxAiQuestionsPerMonth`/`StorageGb` (int?, nullable = unlimited,
+   same convention Tenant already uses). Thread through
+   CreatePlanCommand/UpdatePlanCommand/Handlers/Validators,
+   PlansController, Shared.Contracts request/response, `types/plan.ts`.
+
+2. Backend, `Tenant.cs`: add `MaxAdmins`/`MaxInstructors` (int?),
+   parallel to the existing `MaxStudents`.
+
+3. Backend, `CreateTenantHandler`: seed the new tenant's
+   MaxUsers/MaxAdmins/MaxInstructors/MaxStudents/MaxExams from the
+   ASSIGNED PLAN's limits instead of `PlatformSettings.DefaultMax*`.
+   Flagged, not silently done: this makes `PlatformSettings.
+   DefaultMaxUsers/DefaultMaxExams/DefaultMaxStudents` (Platform
+   Settings' own "Tenant Defaults" section) effectively dead - not
+   deleting that page/entity in this pass (a separate decision, same
+   as the General/System Settings removal earlier today needed its
+   own explicit go-ahead), just noting it as a real follow-up.
+
+4. Backend, `AssignPlanToTenantHandler`: when the plan actually
+   changes (not a no-op reassignment to the same plan), also re-seed
+   the tenant's MaxUsers/MaxAdmins/MaxInstructors/MaxStudents/MaxExams
+   from the NEW plan's limits - real "upgrade your quota" semantics,
+   matching what a plan change should actually do. This is a genuine
+   behavior change to an action already used live today, called out
+   explicitly rather than silently bundled in.
+
+5. Backend, real enforcement extension (`CreateUserHandler`): add a
+   new `IUserRepository.CountByTenantAndRoleAsync(tenantId, role)`,
+   then check the new user's specific role against
+   Tenant.MaxStudents/MaxAdmins/MaxInstructors (Student/Admin/
+   Instructor respectively) alongside the existing flat MaxUsers
+   check, which stays as an overall safety net, unchanged. This is
+   what actually turns MaxStudents from stored-but-inert into real,
+   and adds real Admin/Instructor limits that never existed before.
+
+6. Backend, EF migration: new nullable columns on `Plans`
+   (MonthlyPrice/AnnualPrice/MaxStudents/MaxAdmins/MaxInstructors/
+   MaxExams/MaxQuestions/MaxAiQuestionsPerMonth/StorageGb) and
+   `Tenants` (MaxAdmins/MaxInstructors). Generated and reviewed but
+   NOT applied automatically, same caution as every migration this
+   session - this local machine's DB already had unrelated pending
+   migrations before this session started.
+
+7. Frontend, `SubscriptionPlans.tsx`: add "Pricing & Billing" (Monthly
+   Price/Annual Price, ₹ prefix, an "Annual billing saves ~17%"
+   helper note computed live from the two entered values, matching
+   the mockup's own math rather than a hardcoded "17%") and "Usage
+   Limits" (Students/Admins/Instructors/Exams/Questions/AI Questions
+   per Month/Storage GB - blank input = unlimited, matching Tenant's
+   own existing null-means-unlimited UI convention) sections to the
+   Create/Edit modal, using the same icon-badge SectionBar pattern
+   built for Exam Settings today. Questions/AI Questions per Month/
+   Storage GB fields get a small honest note that they're not yet
+   enforced, matching this codebase's own established disclosure
+   convention rather than presenting them as identically real to the
+   four that are.
+
+8. Frontend, `OrganizationsAndPlans.tsx`/`OrganizationDetails.tsx`:
+   NOT changed in this pass - flagged as a reasonable follow-up
+   (showing a tenant's real current limits/price next to its plan)
+   rather than silently expanding scope beyond the Create Plan modal
+   itself, which is what was actually asked for.
+
+9. Verification: `dotnet build`/`test` (full solution, watch for any
+   test building a "valid" CreateUserCommand/Plan that this changes
+   the meaning of, same class of gap the Exam Type change hit this
+   session), frontend `tsc`/lint/`npm run build`/`npm run test` (all
+   four this time, not just three - the Exam Type CI failure earlier
+   today was exactly this). Live curl verification with the
+   established throwaway-account pattern: create a test Plan with
+   tight Student/Admin/Instructor/Exam limits, assign it to a
+   throwaway tenant, confirm user/exam creation is genuinely blocked
+   once each limit is hit and allowed below it - not just that the
+   fields save and redisplay correctly.
+
+NOT started yet - plan only, per the user's explicit request to review
+this before any code changes.
+
+DONE (2026-09-04): Implemented exactly the confirmed scope, per the
+user's own explicit, detailed final instruction (Pricing + Usage Limits
+only - no Trial Settings, no Advanced Features, no payment/billing/
+metering infrastructure).
+
+Backend:
+- `Plan.cs`: added MonthlyPrice/AnnualPrice (decimal?) and MaxStudents/
+  MaxAdmins/MaxInstructors/MaxExams/MaxQuestions/MaxAiQuestionsPerMonth/
+  StorageGb (int?). Threaded through Create/UpdatePlanCommand/Handler/
+  Validator, PlansController, Shared.Contracts request/response types.
+- `Tenant.cs`: added MaxAdmins/MaxInstructors (int?), alongside the
+  existing MaxUsers/MaxExams/MaxStudents.
+- `CreateTenantHandler`: now seeds MaxExams/MaxStudents/MaxAdmins/
+  MaxInstructors from the tenant's ASSIGNED PLAN instead of
+  `PlatformSettings.DefaultMax*`. MaxUsers deliberately left unseeded
+  (the user's instruction named 4 fields, not 5) - stays whatever it
+  was (null/unlimited for new tenants). PlatformSettings' DefaultMax*
+  tenant-default fields are now effectively dead - NOT deleted this
+  pass, flagged as a real follow-up per the user's explicit instruction
+  not to touch them here.
+- `AssignPlanToTenantHandler`: a genuine plan change now also re-seeds
+  the tenant's MaxExams/MaxStudents/MaxAdmins/MaxInstructors from the
+  NEW plan. Never touches Users/Exams rows - downgrade only prevents
+  NEW resource creation past the new limit, existing resources stay
+  fully accessible. Verified live (see below).
+- Real, concurrency-safe enforcement: `IUnitOfWorkTransaction`/
+  `TransientConcurrencyException`/`EfUnitOfWorkTransaction` (Serializable-
+  isolation transaction wrapping count-then-insert, SQL Server deadlock-
+  victim error 1205 translated to a clean retryable validation error) -
+  built once in User Service, duplicated into Exam Service per this
+  codebase's own per-service-duplication convention (same shape as
+  FeaturePolicies).
+  - `CreateUserHandler` (User Service): flat MaxUsers check (unchanged)
+    plus new per-role MaxStudents/MaxAdmins/MaxInstructors checks, all
+    inside one Serializable transaction with the insert.
+  - `CreateExamHandler` (Exam Service): MaxExams's actual limit value
+    was already fetched cross-service from UserService's
+    `GetTenantLimitsHandler` (pre-existing - now automatically Plan-
+    driven, zero extra change needed there); what was missing was
+    concurrency safety for the LOCAL count-then-insert race in Exam
+    Service's own database, which the same transaction pattern now
+    closes.
+  - `FakeUserRepository`/`FakeExamRepository` test fakes updated with a
+    no-op in-memory transaction so existing handler tests keep passing
+    unchanged.
+- EF migration `AddPlanPricingAndUsageLimits` generated and reviewed -
+  purely additive nullable columns + Plans/Tenants HasData seed-row
+  updates, "may result in loss of data" is EF's standard boilerplate
+  for this shape, not real. Applied to the LOCAL DEV database only
+  (auto-applied via each service's own `Database.Migrate()` on
+  container startup, same as every other migration this session) -
+  NOT applied to production, per the user's explicit instruction.
+
+Frontend:
+- `types/plan.ts`: Plan/CreatePlanRequest/UpdatePlanRequest extended
+  with all 9 new fields, doc comment states plainly which 4 are
+  enforced vs. which 3 are stored+displayed only.
+- `SubscriptionPlans.tsx`: Create/Edit Plan modal gained "Pricing &
+  Billing" (Monthly/Annual Price with a live "saves ~X%" note computed
+  from the two entered values) and "Usage Limits" (all 7 fields, blank
+  = unlimited, matching Tenant's own convention) sections, using the
+  same icon-badge SectionBar pattern built for Exam Settings earlier
+  today. An inline note explicitly discloses that Questions/AI
+  Questions per Month/Storage GB are saved and shown only, not
+  enforced - matches this codebase's own established disclosure
+  convention. `OrganizationsAndPlans.tsx`/`OrganizationDetails.tsx`
+  deliberately NOT touched, per the confirmed scope.
+
+Verification - all run, all passed:
+- `dotnet build` (User Service, Exam Service, then full `ExamVault.sln`
+  - 0 warnings, 0 errors).
+- `dotnet test` (full solution): 390/390 passed across all 8 test
+  projects, including both updated fakes.
+- Frontend `npx tsc --noEmit`: clean. `npm run lint`: clean (only 3
+  pre-existing, unrelated warnings). `npm run build`: succeeded.
+  `npm run test` (Vitest, explicitly run this time - see the CI-failure
+  lesson earlier today): 61/61 passed.
+- Live verification on local Docker dev (rebuilt user-api/exam-api,
+  confirmed the migration auto-applied cleanly on container startup):
+  created a real throwaway Plan (MaxStudents=1/MaxAdmins=1/
+  MaxInstructors=1/MaxExams=1) and a throwaway tenant assigned to it -
+  confirmed the tenant's effective limits were seeded correctly from
+  the Plan. As that tenant's own Admin, confirmed the 1st Student/
+  Admin/Instructor/Exam create each succeeded and the 2nd of each was
+  genuinely blocked by the server with the expected message ("This
+  organization has reached its limit of 1 <role>s/exams") - not a
+  frontend-only check, a real 400 from directly calling the API.
+  Reassigned the tenant to the default Full Access plan afterward and
+  confirmed all 3 existing users stayed intact (no delete anywhere) -
+  the "downgrade/upgrade never deletes existing data" guarantee holds
+  live, not just in the code comments. All test rows (Plan, Tenant,
+  Users, Exam, ExamType, the throwaway SuperAdmin account) deleted
+  afterward - confirmed zero rows remain.
+
+NOT done, deliberately: no payment gateway, invoices, revenue
+calculations, billing provider integration, usage metering for
+Questions/AI Questions/Storage GB, Trial Settings, Advanced Features.
+Migration not applied to production - only generated, reviewed, and
+tested against the local dev database.

@@ -42,11 +42,28 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   Proctoring: 'Proctoring',
 };
 
+// Pricing + usage-limit fields added 2026-09-04 (ActionPlan.txt's "PLAN
+// PRICING & PER-PLAN USAGE LIMITS" plan). MonthlyPrice/AnnualPrice are
+// stored/displayed only - no billing provider exists yet. Of the 7 limit
+// fields, only maxStudents/maxAdmins/maxInstructors/maxExams are actually
+// enforced server-side (Tenant's effective limits, seeded from these on
+// tenant creation/plan change); maxQuestions/maxAiQuestionsPerMonth/storageGb
+// are persisted and shown but NOT enforced - their metering infrastructure
+// doesn't exist yet.
 export interface Plan {
   id: string;
   name: string;
   description: string | null;
   includedFeatures: PlanFeature[];
+  monthlyPrice: number | null;
+  annualPrice: number | null;
+  maxStudents: number | null;
+  maxAdmins: number | null;
+  maxInstructors: number | null;
+  maxExams: number | null;
+  maxQuestions: number | null;
+  maxAiQuestionsPerMonth: number | null;
+  storageGb: number | null;
   createdAtUtc: string;
   updatedAtUtc: string;
 }
@@ -55,10 +72,28 @@ export interface CreatePlanRequest {
   name: string;
   description: string | null;
   includedFeatures: PlanFeature[];
+  monthlyPrice: number | null;
+  annualPrice: number | null;
+  maxStudents: number | null;
+  maxAdmins: number | null;
+  maxInstructors: number | null;
+  maxExams: number | null;
+  maxQuestions: number | null;
+  maxAiQuestionsPerMonth: number | null;
+  storageGb: number | null;
 }
 
 export interface UpdatePlanRequest {
   name: string;
   description: string | null;
   includedFeatures: PlanFeature[];
+  monthlyPrice: number | null;
+  annualPrice: number | null;
+  maxStudents: number | null;
+  maxAdmins: number | null;
+  maxInstructors: number | null;
+  maxExams: number | null;
+  maxQuestions: number | null;
+  maxAiQuestionsPerMonth: number | null;
+  storageGb: number | null;
 }

@@ -47,6 +47,19 @@ public class FakeExamRepository : IExamRepository
     public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_exams.Count(e => e.TenantId == tenantId));
 
+    // No real database to isolate here - the fake's in-memory list is never touched
+    // concurrently in a test, so a no-op transaction that always commits is enough
+    // to satisfy the interface.
+    public Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IUnitOfWorkTransaction>(new NoOpUnitOfWorkTransaction());
+
+    private sealed class NoOpUnitOfWorkTransaction : IUnitOfWorkTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
     {
         _exams.RemoveAll(e => e.Id == exam.Id);

@@ -51,7 +51,19 @@ public class PlansController : ControllerBase
     public async Task<IActionResult> Create(CreatePlanRequest request, CancellationToken cancellationToken)
     {
         var result = await _createPlanHandler.HandleAsync(
-            new CreatePlanCommand(request.Name, request.Description, ParseFeatures(request.IncludedFeatures)),
+            new CreatePlanCommand(
+                request.Name,
+                request.Description,
+                ParseFeatures(request.IncludedFeatures),
+                request.MonthlyPrice,
+                request.AnnualPrice,
+                request.MaxStudents,
+                request.MaxAdmins,
+                request.MaxInstructors,
+                request.MaxExams,
+                request.MaxQuestions,
+                request.MaxAiQuestionsPerMonth,
+                request.StorageGb),
             cancellationToken);
 
         if (result.NameAlreadyExists)
@@ -77,7 +89,20 @@ public class PlansController : ControllerBase
     public async Task<IActionResult> Update(Guid id, UpdatePlanRequest request, CancellationToken cancellationToken)
     {
         var result = await _updatePlanHandler.HandleAsync(
-            new UpdatePlanCommand(id, request.Name, request.Description, ParseFeatures(request.IncludedFeatures)),
+            new UpdatePlanCommand(
+                id,
+                request.Name,
+                request.Description,
+                ParseFeatures(request.IncludedFeatures),
+                request.MonthlyPrice,
+                request.AnnualPrice,
+                request.MaxStudents,
+                request.MaxAdmins,
+                request.MaxInstructors,
+                request.MaxExams,
+                request.MaxQuestions,
+                request.MaxAiQuestionsPerMonth,
+                request.StorageGb),
             cancellationToken);
 
         if (result.NotFound)
@@ -131,5 +156,14 @@ public class PlansController : ControllerBase
         plan.Description,
         plan.IncludedFeatures.Select(f => f.ToString()).ToList(),
         plan.CreatedAtUtc,
-        plan.UpdatedAtUtc);
+        plan.UpdatedAtUtc,
+        plan.MonthlyPrice,
+        plan.AnnualPrice,
+        plan.MaxStudents,
+        plan.MaxAdmins,
+        plan.MaxInstructors,
+        plan.MaxExams,
+        plan.MaxQuestions,
+        plan.MaxAiQuestionsPerMonth,
+        plan.StorageGb);
 }

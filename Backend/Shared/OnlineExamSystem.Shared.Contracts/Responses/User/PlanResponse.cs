@@ -6,4 +6,13 @@ public record PlanResponse(
     string? Description,
     IReadOnlyList<string> IncludedFeatures,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    decimal? MonthlyPrice = null,
+    decimal? AnnualPrice = null,
+    int? MaxStudents = null,
+    int? MaxAdmins = null,
+    int? MaxInstructors = null,
+    int? MaxExams = null,
+    int? MaxQuestions = null,
+    int? MaxAiQuestionsPerMonth = null,
+    int? StorageGb = null);

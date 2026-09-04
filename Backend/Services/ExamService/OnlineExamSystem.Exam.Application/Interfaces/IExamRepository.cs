@@ -14,8 +14,18 @@ public interface IExamRepository
 
     /// <summary>Real Tenant Settings > Default Limits "Max Exams" enforcement point -
     /// CreateExamHandler checks this against the tenant's own MaxExams (fetched
-    /// cross-service from UserService) before creating a new exam.</summary>
+    /// cross-service from UserService) before creating a new exam. Always called
+    /// inside the transaction BeginSerializableTransactionAsync opens, so the count
+    /// is race-safe against a concurrent request creating an exam for the same
+    /// tenant.</summary>
     Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
+
+    /// <summary>Opens a Serializable-isolation transaction - wrap a count-then-insert
+    /// sequence in it (count, compare to MaxExams, AddAsync, SaveChangesAsync, then
+    /// CommitAsync) so two concurrent requests can never both pass the same limit
+    /// check before either commits. See IUnitOfWorkTransaction's own comment for why
+    /// this isolation level specifically.</summary>
+    Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default);
 
     Task AddSectionAsync(Section section, CancellationToken cancellationToken = default);
     Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default);

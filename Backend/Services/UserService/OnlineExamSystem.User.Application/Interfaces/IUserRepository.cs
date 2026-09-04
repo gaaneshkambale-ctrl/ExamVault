@@ -1,4 +1,5 @@
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 
 namespace OnlineExamSystem.User.Application.Interfaces;
 
@@ -28,6 +29,20 @@ public interface IUserRepository
     /// CreateUserHandler checks this against Tenant.MaxUsers before creating a new
     /// user for that tenant.</summary>
     Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
+
+    /// <summary>Per-role count, for the real MaxStudents/MaxAdmins/MaxInstructors
+    /// enforcement in CreateUserHandler - always called inside the transaction
+    /// BeginSerializableTransactionAsync opens, so the count is race-safe against
+    /// a concurrent request creating a user of the same role for the same tenant.</summary>
+    Task<int> CountByTenantAndRoleAsync(Guid tenantId, UserRole role, CancellationToken cancellationToken = default);
+
+    /// <summary>Opens a Serializable-isolation transaction - wrap a count-then-insert
+    /// sequence in it (count, compare to the Max* limit, AddAsync, SaveChangesAsync,
+    /// then CommitAsync) so two concurrent requests can never both pass the same
+    /// limit check before either commits. See IUnitOfWorkTransaction's own comment
+    /// for why this isolation level specifically.</summary>
+    Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default);
+
     Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default);
     Task AddAsync(AppUser user, CancellationToken cancellationToken = default);
     Task AddRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken = default);

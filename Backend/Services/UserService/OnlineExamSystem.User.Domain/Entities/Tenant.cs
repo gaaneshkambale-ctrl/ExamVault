@@ -37,15 +37,22 @@ public class Tenant : BaseEntity
     public string? PostalCode { get; set; }
     public string? Country { get; set; }
 
-    // Nullable = unlimited. Seeded from PlatformSettings.DefaultMax* at
-    // creation time (CreateTenantHandler) but individually overridable per
-    // org thereafter - enforced by CreateUserHandler (UserService) and
-    // ExamService's CreateExamHandler. MaxStudents is stored for a future
-    // per-role breakdown but not enforced yet - there's no per-role count
-    // check anywhere today, only a flat per-tenant user count.
+    // Nullable = unlimited. These are the tenant's own EFFECTIVE limits -
+    // seeded from the assigned Plan's own Max* fields (the entitlement
+    // source) at tenant creation (CreateTenantHandler) and re-seeded on
+    // every real plan change (AssignPlanToTenantHandler), but individually
+    // overridable per org thereafter, same as before. MaxUsers is a flat
+    // safety-net check across every role (CreateUserHandler); MaxStudents/
+    // MaxAdmins/MaxInstructors are real per-role checks (also
+    // CreateUserHandler); MaxExams is enforced by ExamService's
+    // CreateExamHandler via a cross-service call. A plan downgrade never
+    // deletes or deactivates existing users/exams that are now over the
+    // new limit - it only blocks creating new ones past that point.
     public int? MaxUsers { get; set; }
     public int? MaxExams { get; set; }
     public int? MaxStudents { get; set; }
+    public int? MaxAdmins { get; set; }
+    public int? MaxInstructors { get; set; }
 
     // Bumped by RolePermissionRepository.ReplaceForRoleAsync every time ANY
     // role's permissions change for this tenant. Embedded in every access
