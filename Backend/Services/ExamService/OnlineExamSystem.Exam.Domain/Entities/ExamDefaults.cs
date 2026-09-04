@@ -4,8 +4,12 @@ using OnlineExamSystem.Shared.Common.Multitenancy;
 namespace OnlineExamSystem.Exam.Domain.Entities;
 
 /// <summary>One row per tenant of default values shown on the Exam Settings card.
-/// Not yet wired into CreateExam's actual prefill values (deferred) - this round
-/// only makes the values real and editable in Settings.</summary>
+/// DefaultMaxAttempts/NegativeMarkingEnabled/NegativeMarkingValue/AutoSubmitEnabled
+/// seed a newly created exam's matching ExamPaper fields (see CreateExamHandler).
+/// DefaultDurationMinutes/PassingScorePercent prefill the Create Exam form
+/// client-side instead (CreateExam.tsx), since those are collected directly on
+/// that form. AutoSaveEnabled/QuestionNavigationMode/ResultPublishingMode have no
+/// corresponding ExamPaper field yet - stay deferred.</summary>
 public class ExamDefaults : TenantScopedEntity
 {
     public int DefaultDurationMinutes { get; set; } = 60;

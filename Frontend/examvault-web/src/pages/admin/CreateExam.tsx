@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +9,7 @@ import { createExam } from '../../api/examApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreateExamRequest, CreationMethod } from '../../types/exam';
-import { useExamTypes } from '../../hooks/useExams';
+import { useExamDefaults, useExamTypes } from '../../hooks/useExams';
 import { extractServerError } from '../../utils/apiError';
 import ExamWizardStepper from '../../components/ExamWizardStepper';
 
@@ -106,12 +106,32 @@ export default function CreateExam() {
   const { hasPermission } = usePermissions();
   const canCreateExams = user?.role !== 'Instructor' || hasPermission('Exams - Create');
   const { data: examTypes } = useExamTypes();
+  const { data: examDefaults } = useExamDefaults();
   const [form, setForm] = useState<CreateExamRequest>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateExamRequest, string>>>(
     {},
   );
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
+
+  // Exam Settings' configured defaults now actually prefill this form (see
+  // ExamDefaults.cs's own doc comment - this was the deferred half of that
+  // gap, CreateExamHandler covers the fields not collected here at all).
+  // Only applies while Duration/Passing Marks still match the untouched
+  // hardcoded initial state, so it can never clobber something the Admin
+  // already typed - including if this query happens to resolve late.
+  useEffect(() => {
+    if (!examDefaults) return;
+    setForm((prev) =>
+      prev.durationMinutes === initialFormState.durationMinutes && prev.passingMarks === initialFormState.passingMarks
+        ? {
+            ...prev,
+            durationMinutes: examDefaults.defaultDurationMinutes,
+            passingMarks: Math.round((prev.totalMarks * examDefaults.passingScorePercent) / 100),
+          }
+        : prev,
+    );
+  }, [examDefaults]);
 
   const updateField = <K extends keyof CreateExamRequest>(field: K, value: CreateExamRequest[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));

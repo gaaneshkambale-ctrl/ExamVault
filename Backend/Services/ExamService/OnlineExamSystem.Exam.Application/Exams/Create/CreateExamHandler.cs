@@ -69,6 +69,18 @@ public class CreateExamHandler
             }
         }
 
+        // Exam Settings' configured defaults now actually seed a new exam's
+        // Settings-panel fields (previously always the entity's own hardcoded
+        // property initializers, ignoring whatever the Admin configured - see
+        // ExamDefaults.cs's own doc comment). Duration/TotalMarks/PassingMarks
+        // stay driven by the command instead - those are collected directly on
+        // the Create Exam form itself, which prefills FROM these same defaults
+        // client-side (CreateExam.tsx), so the command already carries the
+        // Admin's (possibly-edited) choice by the time it gets here.
+        // AutoSaveEnabled/QuestionNavigationMode/ResultPublishingMode have no
+        // corresponding ExamPaper field to seed - stay deferred, unchanged.
+        var defaults = await _examRepository.GetOrCreateExamDefaultsAsync(cancellationToken);
+
         var exam = new ExamPaper
         {
             Title = command.Title,
@@ -83,6 +95,10 @@ public class CreateExamHandler
             PassingMarks = command.PassingMarks,
             Instructions = command.Instructions,
             CreatedByUserId = command.CreatedByUserId,
+            MaxAttempts = defaults.DefaultMaxAttempts,
+            NegativeMarkingEnabled = defaults.NegativeMarkingEnabled,
+            NegativeMarks = defaults.NegativeMarkingValue,
+            AutoSubmitOnTimeEnd = defaults.AutoSubmitEnabled,
         };
         exam.ExamCode = GenerateExamCode(command.Category, exam.Id);
 

@@ -6721,3 +6721,46 @@ Service` (a different, unrelated job) stays untouched. Verification:
 full-solution `dotnet build` and `dotnet test` (all passing test
 projects unaffected - neither removed handler had dedicated tests),
 frontend `tsc --noEmit`/lint/`npm run build` all clean.
+
+================================================================================
+FIX: WIRE EXAM SETTINGS' DEFAULTS INTO NEWLY CREATED EXAMS (2026-09-04)
+================================================================================
+User reported (Admin side): configured "Exam Settings" defaults weren't
+showing up on newly created exams. Confirmed via the entity's own doc
+comment on `ExamDefaults.cs` - literally said "Not yet wired into
+CreateExam's actual prefill values (deferred)". Every new `ExamPaper`
+always got the entity's hardcoded C# property-initializer defaults
+(MaxAttempts=1, NegativeMarkingEnabled=false, NegativeMarks=0,
+AutoSubmitOnTimeEnd=true) regardless of what the Admin configured.
+
+Checked which of ExamDefaults' 9 fields have a real corresponding field
+to seed before wiring anything: `DefaultDurationMinutes`/
+`PassingScorePercent` map to `CreateExamRequest.durationMinutes`/
+`passingMarks`, both collected directly on the Create Exam form itself -
+fixed client-side (`CreateExam.tsx` now prefills via `useExamDefaults()`,
+guarded so it only applies while those two fields still match the
+untouched hardcoded initial state, never clobbering something the Admin
+already typed). `DefaultMaxAttempts`/`NegativeMarkingEnabled`/
+`NegativeMarkingValue`/`AutoSubmitEnabled` map to real `ExamPaper` fields
+never collected on the Create form at all - fixed server-side
+(`CreateExamHandler` now calls the already-existing
+`GetOrCreateExamDefaultsAsync` and seeds the new exam from it instead of
+the hardcoded initializers). `AutoSaveEnabled`/`QuestionNavigationMode`/
+`ResultPublishingMode` have no corresponding `ExamPaper` field anywhere -
+confirmed via the entity's full field list, left deferred rather than
+inventing new columns for this ask. Updated both entities' own doc
+comments and `ExamSettingsPage.tsx`'s stale "don't yet prefill" note to
+match.
+
+Verified live end-to-end (throwaway Admin account, same pattern as
+earlier fixes today): set distinctive test ExamDefaults (MaxAttempts=7,
+NegativeMarkingEnabled=false, NegativeMarks=0.5, AutoSubmitEnabled=false,
+all different from the old hardcoded values), created a real exam via
+curl, confirmed the response carried exactly those values - not the old
+1/false/0/true. Restored the tenant's original ExamDefaults and deleted
+the throwaway exam/account afterward. `dotnet test` for Exam Service
+still 83/83 (no test asserted on the old hardcoded values). Frontend
+prefill (Duration/Passing Marks) is client-side-only logic with no
+backend round-trip to verify via curl - confirmed by code review and
+`tsc`/lint/`npm run build`, not live-clicked (needs a real browser
+session this agent can't create itself).

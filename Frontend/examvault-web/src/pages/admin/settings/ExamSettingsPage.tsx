@@ -48,7 +48,8 @@ export default function ExamSettingsPage() {
       <h1 className="h4 fw-bold mb-1 text-primary">Exam Settings</h1>
       <p className="text-muted mb-4">Configure default exam behavior and assessment preferences.</p>
       <p className="text-muted small mb-4" style={{ maxWidth: 640 }}>
-        These are default values only - they don't yet prefill the Create Exam form automatically.
+        These values prefill Duration/Passing Score, Max Attempts, Negative Marking and Auto Submit
+        whenever a new exam is created - editing an exam afterward never re-applies these.
       </p>
 
       <Card className="border-0 shadow-sm" style={{ maxWidth: 640 }}>
