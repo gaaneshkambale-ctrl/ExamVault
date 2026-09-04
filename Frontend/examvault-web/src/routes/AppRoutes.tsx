@@ -53,12 +53,10 @@ import ExamTypeStudentPerformance from '../pages/admin/ExamTypeStudentPerformanc
 import ExamTypeComparison from '../pages/admin/ExamTypeComparison';
 import ExamTypeQuestionAnalysis from '../pages/admin/ExamTypeQuestionAnalysis';
 import AdminSettings from '../pages/admin/AdminSettings';
-import GeneralSettingsPage from '../pages/admin/settings/GeneralSettingsPage';
 import ExamSettingsPage from '../pages/admin/settings/ExamSettingsPage';
 import SecuritySettingsPage from '../pages/admin/settings/SecuritySettingsPage';
 import ProctoringSettingsPage from '../pages/admin/settings/ProctoringSettingsPage';
 import NotificationSettingsPage from '../pages/admin/settings/NotificationSettingsPage';
-import SystemSettingsPage from '../pages/admin/settings/SystemSettingsPage';
 import ExamReportDetails from '../pages/admin/ExamReportDetails';
 import AdvanceExamReport from '../pages/admin/AdvanceExamReport';
 import InstructorDashboard from '../pages/instructor/InstructorDashboard';
@@ -726,14 +724,6 @@ export default function AppRoutes() {
         }
       />
       <Route
-        path="/admin/settings/general"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <GeneralSettingsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/admin/settings/exams"
         element={
           <ProtectedRoute roles={['Admin']}>
@@ -762,14 +752,6 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <NotificationSettingsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/settings/system"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <SystemSettingsPage />
           </ProtectedRoute>
         }
       />

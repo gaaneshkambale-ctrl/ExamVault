@@ -17,7 +17,6 @@ public class NotificationDbContext : TenantScopedDbContext
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
-    public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<SystemErrorLog> SystemErrorLogs => Set<SystemErrorLog>();
     public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
 
@@ -80,16 +79,6 @@ public class NotificationDbContext : TenantScopedDbContext
             entity.HasData(NotificationTemplateSeed.Templates);
             entity.HasQueryFilter(t =>
                 CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && t.TenantId == CurrentTenant.TenantId));
-        });
-
-        modelBuilder.Entity<SystemSettings>(entity =>
-        {
-            entity.HasKey(s => s.Id);
-            entity.Property(s => s.BackupFrequency).HasConversion<string>();
-            entity.Property(s => s.LogLevel).HasConversion<string>();
-            entity.HasIndex(s => s.TenantId);
-            entity.HasQueryFilter(s =>
-                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && s.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<SystemErrorLog>(entity =>

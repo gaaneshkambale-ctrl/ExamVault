@@ -27,8 +27,6 @@ using OnlineExamSystem.Notification.Application.Notifications.Mine.GetUnreadCoun
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAllAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.Preferences;
-using OnlineExamSystem.Notification.Application.Settings.GetSystemSettings;
-using OnlineExamSystem.Notification.Application.Settings.UpdateSystemSettings;
 using OnlineExamSystem.Notification.Application.SystemLogs.ListSystemErrorLogs;
 using OnlineExamSystem.Notification.Application.SystemLogs.RecordSystemErrorLog;
 using OnlineExamSystem.Notification.Application.SystemLogs.ResolveSystemErrorLog;
@@ -64,18 +62,13 @@ public class Program
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
         builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
-        builder.Services.AddScoped<ISystemSettingsRepository, SystemSettingsRepository>();
         builder.Services.AddScoped<ISystemErrorLogRepository, SystemErrorLogRepository>();
         builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
         builder.Services.AddScoped<RecordAuditLogHandler>();
         builder.Services.AddScoped<ListAuditLogsHandler>();
-        builder.Services.AddScoped<GetSystemSettingsHandler>();
-        builder.Services.AddScoped<IValidator<UpdateSystemSettingsCommand>, UpdateSystemSettingsValidator>();
-        builder.Services.AddScoped<UpdateSystemSettingsHandler>();
         builder.Services.AddScoped<RecordSystemErrorLogHandler>();
         builder.Services.AddScoped<ListSystemErrorLogsHandler>();
         builder.Services.AddScoped<ResolveSystemErrorLogHandler>();
-        builder.Services.AddHostedService<AuditLogRetentionCleanupService>();
         builder.Services.AddHostedService<SystemErrorLogRetentionCleanupService>();
 
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));

@@ -95,15 +95,6 @@ export interface ProctoringSettingsResponse {
   updatedAtUtc?: string;
 }
 
-export interface GeneralSettingsResponse {
-  organizationName: string;
-  supportEmail: string;
-  language: string;
-  timezone: string;
-  dateFormat: string;
-  updatedAtUtc: string;
-}
-
 export type QuestionNavigationMode = 'Free' | 'Sequential';
 export type ResultPublishingMode = 'Automatic' | 'Manual';
 

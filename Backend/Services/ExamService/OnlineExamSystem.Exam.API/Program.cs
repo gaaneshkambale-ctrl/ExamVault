@@ -34,9 +34,7 @@ using OnlineExamSystem.Exam.Application.Proctoring.UpdateProctoringSettings;
 using OnlineExamSystem.Exam.Application.Reminders.GetReminderSettings;
 using OnlineExamSystem.Exam.Application.Reminders.UpdateReminderSettings;
 using OnlineExamSystem.Exam.Application.Settings.GetExamDefaults;
-using OnlineExamSystem.Exam.Application.Settings.GetGeneralSettings;
 using OnlineExamSystem.Exam.Application.Settings.UpdateExamDefaults;
-using OnlineExamSystem.Exam.Application.Settings.UpdateGeneralSettings;
 using OnlineExamSystem.Exam.Application.Sections.Create;
 using OnlineExamSystem.Exam.Application.Sections.Delete;
 using OnlineExamSystem.Exam.Application.Sections.GetById;
@@ -151,8 +149,6 @@ public class Program
         builder.Services.AddScoped<UpdateReminderSettingsHandler>();
         builder.Services.AddScoped<GetProctoringSettingsHandler>();
         builder.Services.AddScoped<UpdateProctoringSettingsHandler>();
-        builder.Services.AddScoped<GetGeneralSettingsHandler>();
-        builder.Services.AddScoped<UpdateGeneralSettingsHandler>();
         builder.Services.AddScoped<GetExamDefaultsHandler>();
         builder.Services.AddScoped<UpdateExamDefaultsHandler>();
 

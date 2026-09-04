@@ -16,7 +16,6 @@ public class FakeExamRepository : IExamRepository
     private readonly List<ExamType> _examTypes = [];
     private ReminderSettings? _reminderSettings;
     private ProctoringSettings? _proctoringSettings;
-    private GeneralSettings? _generalSettings;
     private ExamDefaults? _examDefaults;
 
     public IReadOnlyList<ExamPaper> Exams => _exams;
@@ -276,12 +275,6 @@ public class FakeExamRepository : IExamRepository
     {
         _proctoringSettings ??= new ProctoringSettings();
         return Task.FromResult(_proctoringSettings);
-    }
-
-    public Task<GeneralSettings> GetOrCreateGeneralSettingsAsync(CancellationToken cancellationToken = default)
-    {
-        _generalSettings ??= new GeneralSettings();
-        return Task.FromResult(_generalSettings);
     }
 
     public Task<ExamDefaults> GetOrCreateExamDefaultsAsync(CancellationToken cancellationToken = default)

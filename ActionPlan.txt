@@ -6650,3 +6650,74 @@ combination) was also not performed - requires a real logged-in Super
 Admin session this agent cannot create itself (entering passwords is
 off-limits), same constraint noted earlier in this session's Live
 Monitoring fix.
+
+================================================================================
+PLAN: REMOVE GENERAL SETTINGS AND SYSTEM SETTINGS FROM ADMIN CONSOLE (2026-09-04)
+================================================================================
+User decided the Admin console's "General Settings" and "System Settings"
+cards (Admin > Settings) shouldn't exist for tenant Admins at all - full
+removal (entity/backend/frontend/data), not just hiding the UI. Confirmed
+with the user before touching anything, since this is a real, irreversible
+schema change (DROP TABLE via migration).
+
+Inspected both features fully before removing anything:
+- General Settings (Exam Service): `GeneralSettings` entity (Organization
+  Name/Support Email/Language/Timezone/Date Format), one row per tenant.
+  Fully self-contained - only its own Get/UpdateGeneralSettingsHandler
+  ever reads or writes it, confirmed via a repo-wide grep. Safe to remove
+  cleanly, no other functional loss.
+- System Settings (Notification Service): `SystemSettings` entity
+  (MaintenanceModeEnabled/BackupFrequency/AuditLogRetentionDays/LogLevel).
+  MaintenanceModeEnabled/LogLevel/BackupFrequency really are inert
+  (persisted, never wired to real behavior - the entity's own doc comment
+  says so). AuditLogRetentionDays is NOT inert - `AuditLogRetentionCleanup
+  Service` (a real 24h-polling BackgroundService) reads it per-tenant to
+  delete old AuditLog rows. Flagged this to the user before proceeding;
+  user chose to remove the cleanup job too rather than keep it on a
+  hardcoded default - audit logs will grow unbounded with no automatic
+  cleanup from this point on, a deliberate, explicit tradeoff.
+
+Full removal list (confirmed via repo-wide grep, no other consumers):
+- Frontend: `GeneralSettingsPage.tsx`, `SystemSettingsPage.tsx`,
+  `useSystemSettings.ts`, `systemSettingsApi.ts`, `types/systemSettings.ts`,
+  `useGeneralSettings`/`getGeneralSettings`/`updateGeneralSettings` out of
+  `useExams.ts`/`examApi.ts`, `GeneralSettingsResponse` out of
+  `types/exam.ts`, the two routes in `AppRoutes.tsx`, and the 'general'/
+  'system' cards + their row-building code out of `AdminSettings.tsx`.
+- Backend (Exam Service): `GeneralSettingsController.cs`,
+  `GeneralSettings.cs` entity, `Settings/GetGeneralSettings/` and
+  `Settings/UpdateGeneralSettings/` folders, the GeneralSettings members
+  on `IExamRepository`/`ExamRepository`, its `ExamDbContext` DbSet/config,
+  Program.cs DI, `Shared.Contracts` request/response, `FakeExamRepository`
+  in the test project. New migration drops the GeneralSettings table.
+- Backend (Notification Service): `SystemSettingsController.cs`,
+  `AuditLogRetentionCleanupService.cs` (the job, per the user's choice),
+  `SystemSettings.cs` entity, `ISystemSettingsRepository`/
+  `SystemSettingsRepository`, `Settings/GetSystemSettings/` and
+  `Settings/UpdateSystemSettings/` folders, `NotificationDbContext`
+  DbSet/config, Program.cs DI (repository + handlers + hosted service),
+  `Shared.Contracts` request/response. New migration drops the
+  SystemSettings table.
+
+Verification: full solution `dotnet build`, `dotnet test` (confirm no
+regressions in the other 350+ tests - none directly tested either
+handler), frontend `tsc --noEmit`/lint/`npm run build`. Migrations
+generated and reviewed but, per this session's own established caution
+around this local machine's database (19 unrelated migrations already
+sat pending before this session started), NOT applied automatically -
+left for the user to apply deliberately, same as the LiveMonitoring
+split's migration earlier today.
+
+DONE (2026-09-04): full removal completed exactly as planned, both
+services plus the frontend. Two new EF migrations generated (not
+applied - same deliberate caution as above): `RemoveGeneralSettings`
+(Exam Service, DROP TABLE GeneralSettings) and `RemoveSystemSettings`
+(Notification Service, DROP TABLE SystemSettings). Every file listed
+in the plan was deleted or edited exactly as scoped - no additional
+consumers turned up beyond what the pre-removal grep already found.
+`AuditLogRetentionCleanupService` deleted outright per the user's
+explicit choice - Notification Service's `SystemErrorLogRetentionCleanup
+Service` (a different, unrelated job) stays untouched. Verification:
+full-solution `dotnet build` and `dotnet test` (all passing test
+projects unaffected - neither removed handler had dedicated tests),
+frontend `tsc --noEmit`/lint/`npm run build` all clean.

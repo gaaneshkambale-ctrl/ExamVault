@@ -118,10 +118,6 @@ public interface IExamRepository
     /// detector enabled (the pre-existing default behavior) if it doesn't exist yet.</summary>
     Task<ProctoringSettings> GetOrCreateProctoringSettingsAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the single global GeneralSettings row, creating it with the
-    /// entity's own defaults if it doesn't exist yet.</summary>
-    Task<GeneralSettings> GetOrCreateGeneralSettingsAsync(CancellationToken cancellationToken = default);
-
     /// <summary>Returns the single global ExamDefaults row, creating it with the
     /// entity's own defaults if it doesn't exist yet.</summary>
     Task<ExamDefaults> GetOrCreateExamDefaultsAsync(CancellationToken cancellationToken = default);

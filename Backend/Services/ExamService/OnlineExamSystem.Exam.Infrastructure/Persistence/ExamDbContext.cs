@@ -20,7 +20,6 @@ public class ExamDbContext : TenantScopedDbContext
     public DbSet<ExamReminderLog> ExamReminderLogs => Set<ExamReminderLog>();
     public DbSet<ReminderSettings> ReminderSettings => Set<ReminderSettings>();
     public DbSet<ProctoringSettings> ProctoringSettings => Set<ProctoringSettings>();
-    public DbSet<GeneralSettings> GeneralSettings => Set<GeneralSettings>();
     public DbSet<ExamDefaults> ExamDefaults => Set<ExamDefaults>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
@@ -133,19 +132,6 @@ public class ExamDbContext : TenantScopedDbContext
             entity.HasIndex(r => r.TenantId);
             entity.HasQueryFilter(r =>
                 CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && r.TenantId == CurrentTenant.TenantId));
-        });
-
-        modelBuilder.Entity<GeneralSettings>(entity =>
-        {
-            entity.HasKey(g => g.Id);
-            entity.Property(g => g.OrganizationName).HasMaxLength(200);
-            entity.Property(g => g.SupportEmail).HasMaxLength(200);
-            entity.Property(g => g.Language).HasMaxLength(100);
-            entity.Property(g => g.Timezone).HasMaxLength(100);
-            entity.Property(g => g.DateFormat).HasMaxLength(50);
-            entity.HasIndex(g => g.TenantId);
-            entity.HasQueryFilter(g =>
-                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && g.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ExamDefaults>(entity =>

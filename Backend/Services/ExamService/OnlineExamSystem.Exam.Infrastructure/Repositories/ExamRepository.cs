@@ -358,19 +358,6 @@ public class ExamRepository : IExamRepository
         return settings;
     }
 
-    public async Task<GeneralSettings> GetOrCreateGeneralSettingsAsync(CancellationToken cancellationToken = default)
-    {
-        var settings = await _dbContext.GeneralSettings.FirstOrDefaultAsync(cancellationToken);
-        if (settings is null)
-        {
-            settings = new GeneralSettings();
-            await _dbContext.GeneralSettings.AddAsync(settings, cancellationToken);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        return settings;
-    }
-
     public async Task<ExamDefaults> GetOrCreateExamDefaultsAsync(CancellationToken cancellationToken = default)
     {
         var settings = await _dbContext.ExamDefaults.FirstOrDefaultAsync(cancellationToken);
