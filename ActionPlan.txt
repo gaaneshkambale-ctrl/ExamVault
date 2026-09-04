@@ -7132,3 +7132,60 @@ count, CTA target) matched that plan's actual database row exactly, then
 deleted all test plans and the throwaway account afterward.
 
 NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-04): Created a real, persistent QA test organization on local
+Docker dev per the user's explicit request (10 accounts split 1 SuperAdmin/
+1 Admin/2 Instructors/6 Students, kept - not cleaned up like every other
+test pass this session), and walked create -> assign -> take -> result
+through once for each role.
+
+Attempted this on production (examvaults.in) first per the user's initial
+answer, but found the real API host is `api.examvaults.in` (root-domain
+calls 405 - not documented anywhere I'd read before, found via
+docker-compose.traefik.yml's Host() rule) - once on the right host,
+`/api/users/register` itself returned a real, systemic 500 for every
+input tried, unrelated to this task. Flagged it as a live bug rather than
+working around it; the user then said to just do this in Docker instead,
+so the production register bug is still open and needs separate
+investigation.
+
+Org: "QA Demo Institute" (slug qa-demo-institute, Full Access plan).
+Accounts (all real onboarding flow - registered/created with a real temp
+password, logged in, called the real change-password endpoint to set the
+final password, which is what actually activates a new account - not a
+shortcut):
+- superadmin@qa.examvault.local / Exam2026!SuperAdmin
+- admin@qa.examvault.local / Exam2026!Admin
+- instructor1@qa.examvault.local / Exam2026!Instructor1
+- instructor2@qa.examvault.local / Exam2026!Instructor2
+- student1@qa.examvault.local .. student6@qa.examvault.local /
+  Exam2026!Student1 .. Exam2026!Student6
+
+2 real exams (General Aptitude Test, Data Structures Fundamentals; both
+with 2 real MCQ/True-False questions, published, assigned to all 6
+students). Student1 took Exam 1 with all-correct answers -> real 20/20
+pass. Student2 took Exam 2 with one right/one wrong answer -> confirmed
+real negative marking (15 - 0.25 = 14.75) and a real fail (14.75 < 15
+passing marks) - not a canned result, genuinely computed by Result
+Service from the actual submitted answers.
+
+Found and fixed a real bug along the way: ResultsController.ByExam
+(Result Service) is `[Authorize(Roles = "Admin,Instructor")]`, but the
+Submission Service endpoint it calls server-to-server
+(SubmissionsController.ByExam) was Admin-only - so any Instructor trying
+to view an exam's results got a 403 from Submission Service, surfaced to
+the UI as a generic 502. Confirmed this wasn't an isolated oversight (every
+other action on that controller - grading, force-submit, live-watch,
+proctoring recordings - is deliberately Admin-only) before widening just
+this one route's Roles to "Admin,Instructor", matching what
+ResultsController already promised. Rebuilt/restarted submission-api,
+retested as Instructor1 - now 200, real results returned. Full solution
+build+test still 390/390 passing afterward.
+
+Also confirmed via the platform admin API: SuperAdmin sees the new org
+in the tenants list; Admin sees all 9 tenant-scoped users and both exams;
+Instructor1 (after the fix) can view results for an exam it created.
+
+NOT committed/pushed (this is a data-creation task, not a design change,
+but the SubmissionsController.ByExam authorization fix IS real code -
+holding per the user's standing rule until they say to commit/push).

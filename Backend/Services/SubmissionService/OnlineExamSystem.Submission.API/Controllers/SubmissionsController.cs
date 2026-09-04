@@ -534,8 +534,17 @@ public class SubmissionsController : ControllerBase
             result.SectionStates.Select(ToResponse).ToList()));
     }
 
+    // Roles here must stay in lockstep with ResultService's own
+    // ResultsController.ByExam ([Authorize(Roles = "Admin,Instructor")]) -
+    // that endpoint calls this one server-to-server to build its report,
+    // so a narrower role list here 403s the whole feature for whichever
+    // role got left out (found live: Instructor could open exam results in
+    // the UI, but the report always failed because this endpoint didn't
+    // recognize the Instructor role yet). Every other action on this
+    // controller (proctoring, grading, force-submit, live-watch) is
+    // deliberately Admin-only and unaffected by this change.
     [HttpGet("by-exam/{examId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = ResultsOrReports)]
     public async Task<IActionResult> ByExam(Guid examId, CancellationToken cancellationToken)
     {
