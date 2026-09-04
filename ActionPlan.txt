@@ -6987,3 +6987,46 @@ calculations, billing provider integration, usage metering for
 Questions/AI Questions/Storage GB, Trial Settings, Advanced Features.
 Migration not applied to production - only generated, reviewed, and
 tested against the local dev database.
+
+DONE (2026-09-04): Redesigned Subscription History (SubscriptionHistory.tsx)
+to match subscription-history.png, on top of the same real Security/"Plan
+changed" audit data as before (no backend change needed).
+
+Added: an icon-badge header with a real CSV export (Export dropdown ->
+"Export as CSV", same Blob+object-URL pattern as ActivityLogPanel.tsx);
+4 stat cards (Total Changes/Organizations/Plan Upgrades/Plan Downgrades,
+computed from the currently-filtered rows, not a separate global count); a
+real filter panel (Organization/Plan/Changed By/Date Range, applied on
+Search - not live-as-you-type - Clear resets both pending and applied
+state); sortable Date/Organization/Changed By column headers; a row detail
+modal; and pagination with a page-size selector, matching the convention
+already established on SubscriptionPlans.tsx/SecurityEvents.tsx.
+
+Upgrade/Downgrade direction is inferred by comparing each plan's
+includedFeatures.length (Plan.MonthlyPrice is too often null - reference
+plans have no price - to rank by; feature count is always populated and is
+this codebase's real "how much can this org do" measure). Honestly returns
+no direction (a plain badge, not counted in either stat) when either plan
+can't be resolved (renamed/deleted since the change) or both plans have an
+identical feature count - confirmed live against real dev data where
+exactly this happens (two real plans in this DB currently share the same
+10 features).
+
+"Changed By" is rendered as email + a static "SuperAdmin" role label, not
+fabricated: TenantsController.RecordSecurityEventAsync (the only writer of
+this audit activity) is only reachable from that SuperAdmin-only-authorized
+controller, and writes ClaimTypes.Email into UserName - both verified
+directly against real rows in the local dev database before relying on
+them.
+
+Verification: tsc --noEmit clean, lint clean (same 3 pre-existing unrelated
+warnings only), npm run build succeeded, npm run test 61/61 passed. Live-
+verified on local Docker dev with a throwaway Super Admin account against
+real existing plan-change history (3 real rows, including one referencing
+an already-deleted test tenant/plan from earlier today - confirmed the
+page's own "-" fallbacks handle that correctly rather than crashing):
+stat cards, sortable headers, the Organization filter (selected one org
+with no history, got the real empty state "No plan changes match your
+filters." distinct from the true-empty "No plan changes recorded yet."),
+Clear, the row detail modal, and the Export menu all worked as designed.
+All test/throwaway accounts cleaned up afterward.
