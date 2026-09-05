@@ -44,7 +44,8 @@ public class AuditLogsController : ControllerBase
             request.EntityId,
             request.UserId,
             request.UserName,
-            request.IpAddress);
+            request.IpAddress,
+            request.IsSuperAdminActor);
 
         await _recordAuditLogHandler.HandleAsync(command, cancellationToken);
         return NoContent();
@@ -75,7 +76,14 @@ public class AuditLogsController : ControllerBase
         var items = await _listAuditLogsHandler.HandleAsync(
             new ListAuditLogsQuery(fromUtc, toUtc, parsedModule, userId), cancellationToken);
 
-        return Ok(items.Select(ToResponse).ToList());
+        // A regular Admin's own tenant can legitimately contain audit rows
+        // where the actor was a Platform Super Admin acting on their org
+        // (see AuditLog.IsSuperAdminActor's own comment) - real event, but
+        // the tenant Admin shouldn't see platform staff's identity. Only
+        // mask for that response; a SuperAdmin viewing the same endpoint
+        // (Platform console's own Audit Reports) still sees the real actor.
+        var maskSuperAdminActor = !User.IsInRole("SuperAdmin");
+        return Ok(items.Select((log) => ToResponse(log, maskSuperAdminActor)).ToList());
     }
 
     // Self-service Activity Log for the Profile page - reuses the same
@@ -100,18 +108,22 @@ public class AuditLogsController : ControllerBase
         var items = await _listAuditLogsHandler.HandleAsync(
             new ListAuditLogsQuery(resolvedFromUtc, resolvedToUtc, parsedModule, UserId: userId), cancellationToken);
 
-        return Ok(items.Select(ToResponse).ToList());
+        return Ok(items.Select(log => ToResponse(log)).ToList());
     }
 
-    private static AuditLogResponse ToResponse(AuditLog log) => new(
-        log.Id,
-        log.CreatedAtUtc,
-        log.Module.ToString(),
-        log.Activity,
-        log.Details,
-        log.EntityId,
-        log.UserId,
-        log.UserName,
-        log.IpAddress,
-        log.TenantId);
+    private static AuditLogResponse ToResponse(AuditLog log, bool maskSuperAdminActor = false)
+    {
+        var mask = maskSuperAdminActor && log.IsSuperAdminActor;
+        return new(
+            log.Id,
+            log.CreatedAtUtc,
+            log.Module.ToString(),
+            log.Activity,
+            log.Details,
+            log.EntityId,
+            mask ? null : log.UserId,
+            mask ? "ExamVault Support" : log.UserName,
+            log.IpAddress,
+            log.TenantId);
+    }
 }

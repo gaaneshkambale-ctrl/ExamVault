@@ -19,6 +19,7 @@ public class FakeAuditClient : IAuditClient
         Guid? userId,
         string? userName,
         string? ipAddress,
+        bool isSuperAdminActor = false,
         CancellationToken cancellationToken = default)
     {
         _entries.Add(new Entry(tenantId, module, activity, userId, userName));

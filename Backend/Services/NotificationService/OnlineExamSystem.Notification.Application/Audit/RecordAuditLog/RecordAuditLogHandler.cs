@@ -24,6 +24,7 @@ public class RecordAuditLogHandler
             UserId = command.UserId,
             UserName = command.UserName,
             IpAddress = command.IpAddress,
+            IsSuperAdminActor = command.IsSuperAdminActor,
         };
 
         await _repository.AddAsync(entry, cancellationToken);

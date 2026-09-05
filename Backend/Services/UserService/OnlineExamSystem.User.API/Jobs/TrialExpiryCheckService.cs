@@ -75,7 +75,7 @@ public class TrialExpiryCheckService : BackgroundService
                 null,
                 "System",
                 null,
-                cancellationToken);
+                cancellationToken: cancellationToken);
         }
     }
 }

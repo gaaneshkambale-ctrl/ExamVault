@@ -25,11 +25,12 @@ public class AuditClient : IAuditClient
         Guid? userId,
         string? userName,
         string? ipAddress,
+        bool isSuperAdminActor = false,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var request = new RecordAuditLogRequest(tenantId, module, activity, details, entityId, userId, userName, ipAddress);
+            var request = new RecordAuditLogRequest(tenantId, module, activity, details, entityId, userId, userName, ipAddress, isSuperAdminActor);
             using var response = await _httpClient.PostAsJsonAsync("api/audit-logs", request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {

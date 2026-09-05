@@ -197,5 +197,5 @@ public class LoginUserHandler
             user.Id,
             user.FullName,
             ipAddress,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 }

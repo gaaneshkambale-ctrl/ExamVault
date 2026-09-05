@@ -331,7 +331,7 @@ public class UsersController : ControllerBase
             adminId,
             User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
         var updatedUserCreatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
         return Ok(ToResponse(result.User!, updatedUserCreatedByName));
     }
@@ -612,7 +612,7 @@ public class UsersController : ControllerBase
             userId,
             result.User!.FullName,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
         return NoContent();
     }
 

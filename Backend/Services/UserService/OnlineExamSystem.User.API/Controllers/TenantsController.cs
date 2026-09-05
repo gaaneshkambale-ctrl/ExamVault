@@ -436,6 +436,12 @@ public class TenantsController : ControllerBase
             actorId is not null ? Guid.Parse(actorId) : null,
             User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
+            // This whole controller is [Authorize(Roles = "SuperAdmin")] -
+            // every call through here is genuinely a platform staff member
+            // acting on someone else's org, so this is always true, not a
+            // per-request role check. See AuditLog.IsSuperAdminActor's own
+            // comment for what this masks and where.
+            isSuperAdminActor: true,
+            cancellationToken: cancellationToken);
     }
 }
