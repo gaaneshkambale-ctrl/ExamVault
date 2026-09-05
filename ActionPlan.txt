@@ -7635,3 +7635,42 @@ correctly fall back to "—" instead of erroring - real data, real gaps,
 nothing faked. Pagination confirmed working (9 pages at 10/page).
 
 NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Fixed another real dark-mode bug from user screenshots
+(32.png - Dashboard date-range pill nearly unreadable; 31.png - Platform
+Settings' disclosure banner nearly unreadable). Root cause: both used
+Bootstrap's `bg-white` utility (a literal, theme-independent #fff,
+distinct from the theme-aware `bg-body`/`bg-body-tertiary`/Card
+components used everywhere else in this console) paired with
+`text-muted` - in dark mode `text-muted` correctly lightens for a dark
+background, but `bg-white` never changes, producing light-gray-text-on-
+white-background. Grepped for the same `bg-white` pattern across the
+whole Platform Admin section and found 5 total instances, not just the
+2 reported - fixed all of them with `bg-body` (same theme-aware CSS
+variable react-bootstrap's own Card component already uses, so light
+mode renders identically):
+  - components/SettingsDisclosure.tsx (shared by 5 Settings pages -
+    Platform/Email/Notification/Tenant/Security Settings)
+  - pages/platform/PlatformDashboard.tsx (date-range pill - 32.png's bug)
+  - pages/platform/SystemLogs.tsx (same date-range pill pattern)
+  - pages/platform/PlatformAnnouncement.tsx (inlined disclosure banner)
+  - pages/platform/PlatformComingSoon.tsx (the "isn't connected yet"
+    placeholder shown on every still-unbuilt Super Admin page - this fix
+    alone benefits every one of those pages going forward)
+
+Verification: tsc clean, npm run build succeeded, 61/61 tests passed.
+Rebuilt and redeployed the frontend Docker image. Live-verified in dark
+mode as Super Admin: Dashboard's date-range pill and Platform Settings'
+disclosure banner both now render with a proper dark surface and fully
+legible text (reproducing 32.png/31.png exactly, now fixed); System Logs'
+matching date-range pill confirmed fixed too.
+
+Side note (not fixed, flagged for a future pass): PlatformDashboard.tsx
+still shows a stale "Submissions - not connected yet (no cross-tenant
+attempts endpoint)" message under the Platform Overview chart, and Total
+Submissions still shows "—" - both left over from before this session's
+own Submissions page work added a real GET /api/submissions/all endpoint.
+The Dashboard was never updated to use it. Out of scope for this dark-
+mode bug fix; worth a follow-up.
+
+NOT committed/pushed - holding per the user's standing rule.

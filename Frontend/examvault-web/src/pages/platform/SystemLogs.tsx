@@ -154,7 +154,7 @@ export default function SystemLogs() {
           </p>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <span className="d-inline-flex align-items-center gap-2 border rounded-pill px-3 py-2 small text-muted bg-white">
+          <span className="d-inline-flex align-items-center gap-2 border rounded-pill px-3 py-2 small text-muted bg-body">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="4" width="18" height="18" rx="2" />
               <line x1="16" y1="2" x2="16" y2="6" />

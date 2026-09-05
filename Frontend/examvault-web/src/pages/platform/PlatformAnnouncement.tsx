@@ -69,7 +69,7 @@ export default function PlatformAnnouncement() {
         </Button>
       </div>
 
-      <div className="border rounded-3 bg-white p-3 mb-3 text-muted small">
+      <div className="border rounded-3 bg-body p-3 mb-3 text-muted small">
         This table shows real announcement history across every organization. "New Announcement" is disabled - sending
         to every organization at once isn't supported by the backend yet (today's send action only reaches one
         organization's own users).
