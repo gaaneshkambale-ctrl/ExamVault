@@ -7,6 +7,7 @@ public class FakeQuestionServiceClient : IQuestionServiceClient
     public List<Guid> UnassignedSectionIds { get; } = [];
     public bool ThrowOnUnassign { get; set; }
     public Dictionary<Guid, int> QuestionCountsByExamId { get; } = [];
+    public Dictionary<Guid, int> QuestionCountsBySectionId { get; } = [];
 
     public Task UnassignSectionQuestionsAsync(
         Guid sectionId,
@@ -27,4 +28,10 @@ public class FakeQuestionServiceClient : IQuestionServiceClient
         string bearerToken,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(QuestionCountsByExamId.GetValueOrDefault(examId));
+
+    public Task<IReadOnlyDictionary<Guid, int>> GetQuestionCountsBySectionAsync(
+        Guid examId,
+        string bearerToken,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, int>>(QuestionCountsBySectionId);
 }

@@ -22,15 +22,17 @@ public class ChangeExamStatusHandlerTests
             PassingMarks = 10,
         };
         await repository.AddAsync(exam);
-        await repository.AddSectionAsync(new Section
+        var section = new Section
         {
             ExamId = exam.Id,
             QuestionCount = 10,
             Marks = 20,
             DurationMinutes = 20,
-        });
+        };
+        await repository.AddSectionAsync(section);
         var questionServiceClient = new FakeQuestionServiceClient();
         questionServiceClient.QuestionCountsByExamId[exam.Id] = 10;
+        questionServiceClient.QuestionCountsBySectionId[section.Id] = 10;
         var handler = new ChangeExamStatusHandler(repository, questionServiceClient);
 
         var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Published));
@@ -62,6 +64,39 @@ public class ChangeExamStatusHandlerTests
 
         Assert.False(result.Success);
         Assert.NotEmpty(result.ValidationErrors);
+        Assert.Equal(ExamStatus.Draft, exam.Status);
+    }
+
+    [Fact]
+    public async Task Publish_is_blocked_when_a_section_has_no_real_assigned_questions()
+    {
+        // Reproduces the actual bug: AI-generated questions get created against the
+        // exam but never assigned to a section (SectionId stays null), so
+        // GetQuestionCountAsync's exam-wide total is non-zero even though the one
+        // section a student's exam screen actually renders from has nothing real.
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper
+        {
+            Title = "C# Fundamentals",
+            Status = ExamStatus.Draft,
+            ContainsSections = true,
+            DurationMinutes = 20,
+            TotalMarks = 20,
+            PassingMarks = 10,
+        };
+        await repository.AddAsync(exam);
+        var section = new Section { ExamId = exam.Id, Name = "Oops", QuestionCount = 10, Marks = 20, DurationMinutes = 20 };
+        await repository.AddSectionAsync(section);
+        var questionServiceClient = new FakeQuestionServiceClient();
+        questionServiceClient.QuestionCountsByExamId[exam.Id] = 10;
+        // Deliberately no entry in QuestionCountsBySectionId for `section.Id` - the
+        // 10 real questions exist but none are assigned to this section.
+        var handler = new ChangeExamStatusHandler(repository, questionServiceClient);
+
+        var result = await handler.HandleAsync(new ChangeExamStatusCommand(exam.Id, ExamStatus.Published));
+
+        Assert.False(result.Success);
+        Assert.Contains(result.ValidationErrors, e => e.Contains("Oops") && e.Contains("no questions assigned"));
         Assert.Equal(ExamStatus.Draft, exam.Status);
     }
 

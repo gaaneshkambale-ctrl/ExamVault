@@ -6,7 +6,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import DraftEditorModal from '../../components/DraftEditorModal';
 import { EditIcon, TrashIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { generateQuestions } from '../../api/aiApi';
-import { createQuestion } from '../../api/questionApi';
+import { bulkAssignSection, createQuestion } from '../../api/questionApi';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import type { DraftQuestion, GenerateDifficulty, GenerateQuestionsRequest, GenerateQuestionType } from '../../types/ai';
@@ -30,6 +30,12 @@ interface PreviewState {
   request: GenerateQuestionsRequest;
   backTo: string;
   returnTo?: string;
+  // Present only when generation was launched from a specific section's
+  // "+ Generate with AI" (sectioned exams) - approved questions are
+  // assigned straight into it, so they don't land as unassigned and
+  // silently invisible to students (a sectioned exam only ever shows
+  // students the questions actually attached to a section).
+  sectionId?: string | null;
 }
 
 
@@ -69,7 +75,7 @@ export default function AiGeneratedQuestionsPreview() {
     );
   }
 
-  const { examId, request, backTo, returnTo } = initialState;
+  const { examId, request, backTo, returnTo, sectionId } = initialState;
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -150,6 +156,22 @@ export default function AiGeneratedQuestionsPreview() {
       setSelectedIds(failedIds);
       setIsApproving(false);
       return;
+    }
+
+    if (sectionId) {
+      const createdQuestionIds = results
+        .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof createQuestion>>> => r.status === 'fulfilled')
+        .map((r) => r.value.id);
+      try {
+        await bulkAssignSection(sectionId, createdQuestionIds);
+      } catch (error) {
+        setApproveError(
+          `Questions were created, but couldn't be assigned to the section automatically: ` +
+            `${extractServerError(error)} Assign them manually from the section's question list.`,
+        );
+        setIsApproving(false);
+        return;
+      }
     }
 
     queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', examId] });

@@ -16,4 +16,14 @@ public interface IQuestionServiceClient
         Guid examId,
         string bearerToken,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Real question counts per section, from Question Service - a question created
+    /// via AI-generation (or any other path) that never got assigned to a section (SectionId
+    /// still null) doesn't count toward any section here, even though it counts toward
+    /// GetQuestionCountAsync's exam-wide total. Used to catch a sectioned exam that looks
+    /// publishable overall but has a section with nothing real a student could ever see.</summary>
+    Task<IReadOnlyDictionary<Guid, int>> GetQuestionCountsBySectionAsync(
+        Guid examId,
+        string bearerToken,
+        CancellationToken cancellationToken = default);
 }

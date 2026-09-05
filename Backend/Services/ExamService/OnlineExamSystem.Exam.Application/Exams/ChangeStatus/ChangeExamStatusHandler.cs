@@ -63,6 +63,18 @@ public class ChangeExamStatusHandler
             {
                 var sections = await _examRepository.GetSectionsByExamIdAsync(exam.Id, cancellationToken);
                 errors.AddRange(ValidatePublishTotals(exam, sections));
+
+                // A question created via AI-generation (or any other path) that never got
+                // assigned to a section still counts toward realQuestionCount above, but a
+                // student's exam-taking screen only ever renders questions grouped by
+                // section - a section with zero real assigned questions renders as a blank
+                // page even though the exam "has questions" overall.
+                var sectionQuestionCounts = await _questionServiceClient.GetQuestionCountsBySectionAsync(
+                    exam.Id, command.BearerToken, cancellationToken);
+                errors.AddRange(sections
+                    .Where(s => !sectionQuestionCounts.TryGetValue(s.Id, out var count) || count == 0)
+                    .Select(s => $"Section \"{s.Name}\" has no questions assigned to it yet. " +
+                        "Assign at least one question to it before publishing."));
             }
 
             if (errors.Count > 0)

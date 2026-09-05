@@ -273,6 +273,7 @@ export default function AiGenerateQuestion() {
             ? `/admin/exams/${urlExamId}/questions/ai-generate`
             : '/admin/questions/ai-generate',
           returnTo: sectionReturnTo,
+          sectionId,
         },
       });
     } catch (error) {

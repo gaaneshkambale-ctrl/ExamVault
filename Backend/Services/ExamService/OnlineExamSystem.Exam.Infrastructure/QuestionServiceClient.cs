@@ -44,4 +44,31 @@ public class QuestionServiceClient : IQuestionServiceClient
         var questions = await response.Content.ReadFromJsonAsync<List<JsonElement>>(cancellationToken: cancellationToken);
         return questions?.Count ?? 0;
     }
+
+    public async Task<IReadOnlyDictionary<Guid, int>> GetQuestionCountsBySectionAsync(
+        Guid examId,
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"internal/questions/answer-key?examId={examId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var questions = await response.Content.ReadFromJsonAsync<List<JsonElement>>(cancellationToken: cancellationToken);
+        var counts = new Dictionary<Guid, int>();
+        foreach (var question in questions ?? [])
+        {
+            if (question.TryGetProperty("sectionId", out var sectionIdProperty) &&
+                sectionIdProperty.ValueKind == JsonValueKind.String &&
+                sectionIdProperty.GetGuid() is var sectionId)
+            {
+                counts[sectionId] = counts.GetValueOrDefault(sectionId) + 1;
+            }
+        }
+        return counts;
+    }
 }
