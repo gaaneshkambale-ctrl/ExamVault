@@ -9,18 +9,20 @@ import { getPlatformSettings, updatePlatformSettings } from '../../api/platformS
 import { extractServerError } from '../../utils/apiError';
 import type { PlatformSettings, UpdatePlatformSettingsRequest } from '../../types/platformSettings';
 
-// Matches setting.png's Tenant Settings screen. Default Limits and Trial
-// Duration are now real - Max Users/Max Exams are genuinely enforced
-// (CreateUserHandler in UserService, CreateExamHandler in ExamService via a
-// new cross-service tenant-limits lookup) whenever a Super Admin creates a
-// new organization, and Trial Duration pre-fills StartTrialButton's date
-// picker (still fully overridable per-org). Max Storage stays honest "not
-// enforced" - nothing in this codebase tracks per-tenant storage usage, so
-// a limit on it would have nothing real to check against. Default Features
-// toggles are dropped entirely - this session already built real,
-// enforced Plan-based feature gating (Subscriptions > Plans); a second
-// "tenant-default" toggle layer over the same concepts would conflict with
-// it rather than add anything real.
+// Matches setting.png's Tenant Settings screen. Trial Duration is real -
+// it pre-fills StartTrialButton's date picker (still fully overridable
+// per-org). Default Limits' Max Users/Max Exams inputs were removed
+// entirely (2026-09-05): CreateTenantHandler was changed to seed every new
+// tenant's limits from its assigned Plan instead, so these PlatformSettings
+// fields stopped being read there - keeping them in the UI falsely implied
+// they still did something. Max Students stays, but honestly disclosed as
+// not enforced (same underlying reason - Plan owns it now). Max Storage
+// stays honest "not enforced" too - nothing in this codebase tracks
+// per-tenant storage usage, so a limit on it would have nothing real to
+// check against. Default Features toggles are dropped entirely - this
+// session already built real, enforced Plan-based feature gating
+// (Subscriptions > Plans); a second "tenant-default" toggle layer over the
+// same concepts would conflict with it rather than add anything real.
 const TABS = [
   { key: 'general', label: 'General' },
   { key: 'features', label: 'Features' },
@@ -86,7 +88,7 @@ export default function TenantSettings() {
       <h1 className="h4 fw-bold mb-1 text-primary">Tenant Settings</h1>
       <p className="text-muted mb-3">Manage default settings for new organizations (tenants).</p>
 
-      <SettingsDisclosure text="Default Limits and Trial Duration below are real - applied to every newly created organization and genuinely enforced at user/exam creation time. Max Storage and Default Features stay a visual reference (no storage tracking exists, and feature gating is already handled for real by Subscriptions > Plans)." />
+      <SettingsDisclosure text="Trial Duration below is real - applied to every newly created organization. Max Users/Max Exams limits now come from each organization's assigned Plan (Subscriptions > Plans), not from defaults here. Max Students, Max Storage, and Default Features stay a visual reference (Max Students and Max Storage aren't enforced, and feature gating is already handled for real by Subscriptions > Plans)." />
 
       <Row className="g-3">
         <Col lg={2}>
@@ -152,28 +154,9 @@ export default function TenantSettings() {
                       <Card.Body>
                         <h2 className="h6 fw-bold mb-3">Default Limits</h2>
                         <p className="text-muted" style={{ fontSize: 12 }}>
-                          Applied to newly created organizations. Blank = unlimited.
+                          Max Users/Max Exams moved to each organization's assigned Plan (Subscriptions &gt; Plans) -
+                          set them there instead.
                         </p>
-                        <Form.Group className="mb-3">
-                          <Form.Label className="small text-muted">Max Users</Form.Label>
-                          <Form.Control
-                            type="number"
-                            min={1}
-                            placeholder="Unlimited"
-                            value={limitToInput(draft.defaultMaxUsers)}
-                            onChange={(e) => update('defaultMaxUsers', inputToLimit(e.target.value))}
-                          />
-                        </Form.Group>
-                        <Form.Group className="mb-3">
-                          <Form.Label className="small text-muted">Max Exams</Form.Label>
-                          <Form.Control
-                            type="number"
-                            min={1}
-                            placeholder="Unlimited"
-                            value={limitToInput(draft.defaultMaxExams)}
-                            onChange={(e) => update('defaultMaxExams', inputToLimit(e.target.value))}
-                          />
-                        </Form.Group>
                         <Form.Group className="mb-3">
                           <Form.Label className="small text-muted">Max Students</Form.Label>
                           <Form.Control
@@ -210,8 +193,8 @@ export default function TenantSettings() {
                       <Card.Body>
                         <h2 className="h6 fw-bold mb-2">About Tenants</h2>
                         <p className="text-muted small">
-                          These limits apply to newly created organizations. Existing organizations keep their own
-                          previously-set (or unlimited) limits unless a Super Admin edits them individually.
+                          Trial Duration applies to newly created organizations. User/exam limits are set per
+                          organization via its assigned Plan (Subscriptions &gt; Plans), not here.
                         </p>
                         <h2 className="h6 fw-bold mb-2 mt-3">Need Help?</h2>
                         <p className="text-muted small mb-1">Learn how tenant settings work</p>
