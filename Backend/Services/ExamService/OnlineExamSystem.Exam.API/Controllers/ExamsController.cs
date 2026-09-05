@@ -227,6 +227,17 @@ public class ExamsController : ControllerBase
         }
 
         _logger.LogInformation("Exam {ExamId} deleted.", id);
+        var deletedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await _auditClient.RecordAsync(
+            result.TenantId,
+            "Exams",
+            "Deleted exam",
+            result.Title,
+            id.ToString(),
+            deletedByUserId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return NoContent();
     }
 
