@@ -234,10 +234,9 @@ export default function ImportUsers() {
               <SectionHeader icon={<UploadIcon />} title="Upload File" subtitle="Upload an Excel file with user details." />
 
               <div
-                className="border border-2 border-dashed rounded-3 text-center py-5 px-3"
+                className={`border border-2 border-dashed rounded-3 text-center py-5 px-3 ${isDragOver ? 'bg-primary-subtle' : 'bg-body-tertiary'}`}
                 style={{
                   borderColor: isDragOver ? '#4f46e5' : '#dee2e6',
-                  background: isDragOver ? '#eef2ff' : '#f8f9fa',
                   cursor: 'pointer',
                 }}
                 onClick={() => fileInputRef.current?.click()}
