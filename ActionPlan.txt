@@ -7189,3 +7189,87 @@ Instructor1 (after the fix) can view results for an exam it created.
 NOT committed/pushed (this is a data-creation task, not a design change,
 but the SubmissionsController.ByExam authorization fix IS real code -
 holding per the user's standing rule until they say to commit/push).
+
+DONE (2026-09-05): Fixed a real dark-mode bug reported in My Profile >
+Preferences - selecting Dark theme only partially applied: individual
+react-bootstrap components (Cards, the profile info panel, notification
+panel) correctly restyled via Bootstrap 5.3's data-bs-theme CSS variables,
+but the page's own main-content wrapper and top bar stayed stuck light,
+leaving a jarring half-dark/half-light result exactly as shown in the
+reported screenshot.
+
+Root cause: AdminLayout/InstructorLayout/PlatformLayout/StudentLayout (all
+4 - the shared shell every single dashboard page renders inside) used
+Bootstrap's bg-light/bg-white utility classes for the main content area
+and top bar. Those two classes are deliberately STATIC in Bootstrap 5.3's
+color-mode system - they never respond to data-bs-theme, unlike the
+adaptive bg-body/bg-body-tertiary classes. Fixed all 4 layouts:
+bg-light -> bg-body-tertiary (main content), bg-white -> bg-body (top
+bar) - matches Bootstrap's own documented dark-mode convention.
+
+Also confirmed, not a bug: the user asked whether "System" and "Dark"
+looked the same - they do on a machine whose OS/browser is itself set to
+a dark color-scheme preference (confirmed via
+matchMedia('(prefers-color-scheme: dark)').matches === true on the test
+browser), since System deliberately mirrors that OS preference. They'd
+only visibly differ on a light-OS machine.
+
+Verification: tsc clean, lint clean (same 3 pre-existing warnings), build
+succeeded, 61/61 Vitest tests passed. Live-verified against the QA Demo
+Institute SuperAdmin account: selected Dark, saved, confirmed via direct
+API call that `theme: "Dark"` persisted server-side, then reloaded fresh
+and confirmed the ENTIRE page (header text, main background, sidebar,
+cards, form inputs) renders consistently dark from initial load - not
+just the components inside cards. Restored that account's preferences
+back to its original defaults afterward (System theme, UTC, DD MMM YYYY)
+since testing had incidentally nudged its Timezone/Date Format too.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Fixed a second, real bug found while re-verifying the
+dark-mode fix - Super Admin's own My Profile page showed the STUDENT
+sidebar (My Exams/My Results/My Certificates), not the Platform Admin
+console. Root cause: Profile.tsx's Layout-selection ternary only handled
+Admin and Instructor explicitly, falling through to StudentLayout for
+every other role - including SuperAdmin (Student itself was never meant
+to hit that fallthrough branch on purpose, SuperAdmin was just missed).
+Added an explicit SuperAdmin -> PlatformLayout case. Confirmed no other
+page in the app has this same dynamic-by-role layout pattern (grepped for
+it) - Profile.tsx is the only shared cross-role page, everything else is
+already hardcoded to its own role-specific layout, so this bug class is
+fully contained.
+
+Also rebuilt the Docker frontend container after both this fix and the
+earlier bg-light/bg-white dark-mode fix - the first two live-verifications
+of dark mode had been against the local Vite dev server, not the actual
+Docker frontend the user was testing against, so the container was still
+stale.
+
+Verification: tsc clean, lint clean, build succeeded, 61/61 tests passed.
+Live-verified both fixes together against the rebuilt Docker frontend:
+Super Admin's Profile page now shows the correct Platform Admin sidebar
+(Dashboard/Organizations/Users/Exams/.../System Logs) AND the whole page
+renders consistently dark in one screenshot.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Fixed a third real dark-mode bug - hovering over a
+table row (e.g. the Organizations list) made its text nearly unreadable.
+Root cause: index.css's `.table-hover > tbody > tr:hover > *` rule
+hardcodes a light hover background (#f8f9ff) with no dark-mode
+counterpart - in dark mode the row's own text goes light (correctly,
+via Bootstrap's theme-aware body color) while this override kept forcing
+a light background regardless of theme, producing light-text-on-light-
+background on hover. Added a `[data-bs-theme='dark']` override with a
+proper dark, subtle hover tint (rgba(255,255,255,0.075)), leaving the
+existing light-mode color untouched. Checked the rest of index.css for
+the same class of bug - found a couple of hardcoded light borders
+(.dropdown-menu, .form-control/.form-select) that stay light in dark
+mode too, but those are minor border-visibility cosmetics, not the
+text-becomes-invisible severity that was actually reported, so left
+alone rather than scope-creeping.
+
+Verification: tsc clean, lint clean, build succeeded, 61/61 tests passed.
+Rebuilt the Docker frontend and live-verified by hovering the exact same
+row from the bug report (Test Org, Inactive) - now shows a proper dark
+hover highlight with fully legible text.

@@ -15,8 +15,8 @@ export default function InstructorLayout({ active, children }: InstructorLayoutP
   return (
     <div className="d-flex min-vh-100">
       <InstructorSidebar active={active} show={showMobileNav} onClose={() => setShowMobileNav(false)} />
-      <main className="flex-grow-1 bg-light">
-        <div className="d-flex justify-content-between justify-content-md-end align-items-center gap-3 px-4 px-md-5 py-3 bg-white border-bottom">
+      <main className="flex-grow-1 bg-body-tertiary">
+        <div className="d-flex justify-content-between justify-content-md-end align-items-center gap-3 px-4 px-md-5 py-3 bg-body border-bottom">
           <div className="d-flex d-md-none align-items-center gap-2 fw-bold text-primary">
             <BrandMark />
             ExamVault

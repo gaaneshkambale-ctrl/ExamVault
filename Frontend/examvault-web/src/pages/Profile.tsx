@@ -4,6 +4,7 @@ import { Alert, Badge, Button, Card, Col, Row, Spinner, Tab, Tabs } from 'react-
 import { Link } from 'react-router-dom';
 import AdminLayout from '../layouts/AdminLayout';
 import InstructorLayout from '../layouts/InstructorLayout';
+import PlatformLayout from '../layouts/PlatformLayout';
 import StudentLayout from '../layouts/StudentLayout';
 import ProfileAvatarIllustration from '../components/illustrations/ProfileAvatarIllustration';
 import PersonalInfoPanel from '../components/profile/PersonalInfoPanel';
@@ -125,7 +126,14 @@ export default function Profile() {
     return null;
   }
 
-  const Layout = user.role === 'Admin' ? AdminLayout : user.role === 'Instructor' ? InstructorLayout : StudentLayout;
+  const Layout =
+    user.role === 'SuperAdmin'
+      ? PlatformLayout
+      : user.role === 'Admin'
+        ? AdminLayout
+        : user.role === 'Instructor'
+          ? InstructorLayout
+          : StudentLayout;
   const dashboardPath = dashboardPathForRole(user.role);
 
   return (

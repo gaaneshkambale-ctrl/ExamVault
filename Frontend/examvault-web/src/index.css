@@ -116,6 +116,14 @@ h1, h2, h3, h4, h5, h6 {
   background-color: #f8f9ff;
 }
 
+/* Dark mode's own hover shade - without this, the light-mode #f8f9ff above
+   stays light-on-hover while the theme's own text color goes light too,
+   making hovered rows nearly unreadable (light text on a near-white
+   background) - found live on the Organizations table. */
+[data-bs-theme='dark'] .table-hover > tbody > tr:hover > * {
+  background-color: rgba(255, 255, 255, 0.075);
+}
+
 /* Dropdown menus */
 .dropdown-menu {
   border-radius: var(--bs-border-radius);
