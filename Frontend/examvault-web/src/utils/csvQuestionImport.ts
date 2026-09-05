@@ -1,4 +1,9 @@
-import type { CreateQuestionOptionRequest, QuestionDifficulty, QuestionType } from '../types/question';
+import type {
+  CreateQuestionOptionRequest,
+  ProgrammingLanguage,
+  QuestionDifficulty,
+  QuestionType,
+} from '../types/question';
 
 export interface CsvImportRow {
   rowNumber: number;
@@ -8,6 +13,27 @@ export interface CsvImportRow {
   marks: number;
   options: CreateQuestionOptionRequest[];
   shuffleOptions: boolean;
+  error: string | null;
+}
+
+// Code/Programming questions don't have Options/Correct Answer at all - they
+// have a programming language, optional starter code, and an optional
+// reference solution - fields the standard template above has no columns
+// for. Deliberately excludes Function Signature/Test Cases (parameters,
+// typed test cases, Sql setup scripts) - those are structured/nested data
+// that doesn't fit a flat CSV cell without an error-prone custom encoding;
+// bulk-import the base question here, then add test cases per-question via
+// Edit Question afterward (same "import the easy part, refine the rest
+// manually" shape CsvImportPanel already has for everything else).
+export interface CsvCodeImportRow {
+  rowNumber: number;
+  questionText: string;
+  difficulty: QuestionDifficulty;
+  marks: number;
+  programmingLanguage: ProgrammingLanguage | null;
+  starterCode: string;
+  sampleAnswer: string;
+  allowLanguageChange: boolean;
   error: string | null;
 }
 
@@ -178,6 +204,94 @@ export function parseQuestionImportCsv(text: string): CsvImportRow[] {
       marks: Number.isFinite(marks) ? marks : 0,
       options,
       shuffleOptions,
+      error: errors.length > 0 ? errors.join('; ') : null,
+    };
+  });
+}
+
+const CODE_CSV_TEMPLATE_HEADER =
+  'Question Text,Difficulty,Marks,Programming Language,Starter Code,Sample Answer / Reference Query,Allow Language Change';
+
+const CODE_CSV_TEMPLATE_EXAMPLE_ROWS = [
+  'Write a function that returns the sum of two integers.,Easy,2,Python,"def add(a, b):\n    pass","def add(a, b):\n    return a + b",No',
+  'Write a query returning every student with a score above 85.,Medium,3,SQL,,"SELECT name, score FROM students WHERE score > 85;",No',
+];
+
+export function buildCodeCsvTemplate(): string {
+  return [CODE_CSV_TEMPLATE_HEADER, ...CODE_CSV_TEMPLATE_EXAMPLE_ROWS].join('\r\n');
+}
+
+const PROGRAMMING_LANGUAGE_ALIASES: Record<string, ProgrammingLanguage> = {
+  'c#': 'CSharp',
+  csharp: 'CSharp',
+  java: 'Java',
+  python: 'Python',
+  'c++': 'Cpp',
+  cpp: 'Cpp',
+  javascript: 'JavaScript',
+  js: 'JavaScript',
+  sql: 'Sql',
+};
+
+function normalizeProgrammingLanguage(raw: string): ProgrammingLanguage | null {
+  return PROGRAMMING_LANGUAGE_ALIASES[raw.trim().toLowerCase()] ?? null;
+}
+
+/** Parses a Code/Programming question-import CSV (header row required). Only the base
+ * question fields are covered (see CsvCodeImportRow's own comment) - test cases and the
+ * function signature/Sql setup are added afterward via Edit Question, same as the standard
+ * template leaves anything it can't safely encode to manual follow-up. */
+export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
+  const table = parseCsvText(text);
+  if (table.length === 0) {
+    return [];
+  }
+
+  const header = table[0].map((h) => h.trim().toLowerCase());
+  const dataRows = table.slice(1).filter((r) => r.some((cell) => cell.trim() !== ''));
+
+  const columnIndex = (name: string) => header.indexOf(name);
+  const idx = {
+    text: columnIndex('question text'),
+    difficulty: columnIndex('difficulty'),
+    marks: columnIndex('marks'),
+    language: columnIndex('programming language'),
+    starterCode: columnIndex('starter code'),
+    sampleAnswer: columnIndex('sample answer / reference query'),
+    allowLanguageChange: columnIndex('allow language change'),
+  };
+
+  return dataRows.map((cells, dataIndex) => {
+    const get = (i: number) => (i >= 0 && i < cells.length ? cells[i].trim() : '');
+
+    const questionText = get(idx.text);
+    const difficulty = normalizeDifficulty(get(idx.difficulty));
+    const marksRaw = get(idx.marks);
+    const marks = Number(marksRaw);
+    const programmingLanguage = normalizeProgrammingLanguage(get(idx.language));
+    const starterCode = get(idx.starterCode);
+    const sampleAnswer = get(idx.sampleAnswer);
+    const allowLanguageChange = normalizeYesNo(get(idx.allowLanguageChange));
+
+    const errors: string[] = [];
+    if (!questionText) errors.push('question text is required');
+    if (!difficulty) errors.push('difficulty must be Easy, Medium, or Hard');
+    if (!marksRaw || !Number.isFinite(marks) || marks <= 0) {
+      errors.push('marks must be a number greater than 0');
+    }
+    if (!programmingLanguage) {
+      errors.push('programming language must be one of C#, Java, Python, C++, JavaScript, or SQL');
+    }
+
+    return {
+      rowNumber: dataIndex + 1,
+      questionText,
+      difficulty: difficulty ?? 'Easy',
+      marks: Number.isFinite(marks) ? marks : 0,
+      programmingLanguage,
+      starterCode,
+      sampleAnswer,
+      allowLanguageChange,
       error: errors.length > 0 ? errors.join('; ') : null,
     };
   });

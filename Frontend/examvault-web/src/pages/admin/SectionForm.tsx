@@ -1121,11 +1121,16 @@ export default function SectionForm() {
       )}
 
       {examId && (
+        // This modal is only ever reached via a "manual" path (Manual exams'
+        // own "+ Create Question", or AI-generated exams' "+ Manual
+        // Question") - goToCreateQuestion sends AI-generated exams to the
+        // separate AI generator instead. Import belongs on both, so it's
+        // unconditional here.
         <CreateQuestionModal
           examId={examId}
           sectionName={form.name}
           defaultMarks={defaultQuestionMarks}
-          allowImport={!useAiGenerate}
+          allowImport
           show={showCreateQuestion}
           onClose={() => setShowCreateQuestion(false)}
           onCreated={handleQuestionCreated}
