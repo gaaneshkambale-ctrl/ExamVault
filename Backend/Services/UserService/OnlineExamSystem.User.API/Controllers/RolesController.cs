@@ -43,7 +43,7 @@ public class RolesController : ControllerBase
             new GetAllRolePermissionsQuery(tenantId),
             cancellationToken);
 
-        return Ok(roles.Select(r => new RolePermissionsResponse(r.Role, r.Permissions, r.UpdatedAtUtc)));
+        return Ok(roles.Select(r => new RolePermissionsResponse(r.Role, r.Permissions, r.UpdatedAtUtc, r.UpdatedByUserId)));
     }
 
     [HttpPut("{role}/permissions")]
@@ -67,8 +67,9 @@ public class RolesController : ControllerBase
         }
 
         var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
+        var updatedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _updateRolePermissionsHandler.HandleAsync(
-            new UpdateRolePermissionsCommand(tenantId, role, request.Permissions),
+            new UpdateRolePermissionsCommand(tenantId, role, request.Permissions, updatedByUserId),
             cancellationToken);
 
         if (!result.Success)
@@ -82,7 +83,7 @@ public class RolesController : ControllerBase
 
         _logger.LogInformation("Permissions for role {Role} updated.", role);
         await RecordSecurityEventAsync(tenantId, $"{role} role permissions updated", cancellationToken);
-        return Ok(new RolePermissionsResponse(role, result.Permissions, result.UpdatedAtUtc));
+        return Ok(new RolePermissionsResponse(role, result.Permissions, result.UpdatedAtUtc, updatedByUserId));
     }
 
     // The self-service counterpart to TenantsController's own

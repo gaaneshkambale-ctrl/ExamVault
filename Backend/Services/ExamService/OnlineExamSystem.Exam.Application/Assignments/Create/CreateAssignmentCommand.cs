@@ -18,4 +18,5 @@ public record CreateAssignmentCommand(
     bool AutoSubmitOnTimeOver,
     bool EnableProctoring,
     bool EnableLiveVideo,
-    string BearerToken);
+    string BearerToken,
+    Guid CreatedByUserId);

@@ -5,4 +5,5 @@ public record CreateTenantAdminCommand(
     string FullName,
     string Email,
     string? PhoneNumber = null,
-    string? Designation = null);
+    string? Designation = null,
+    Guid? CreatedByUserId = null);

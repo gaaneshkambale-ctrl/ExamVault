@@ -74,7 +74,7 @@ export default function PlatformSettings() {
 
   const save = () => {
     if (!draft) return;
-    const { updatedAtUtc: _updatedAtUtc, ...request } = draft;
+    const { updatedAtUtc: _updatedAtUtc, updatedByUserId: _updatedByUserId, updatedByName: _updatedByName, ...request } = draft;
     saveMutation.mutate(request);
   };
 
@@ -254,6 +254,12 @@ export default function PlatformSettings() {
                 <Alert variant="success" className="mt-3 mb-0 py-2">
                   Settings saved.
                 </Alert>
+              )}
+
+              {settings && (
+                <p className="text-muted small mt-3 mb-0">
+                  Last updated by {settings.updatedByName ?? '—'} on {new Date(settings.updatedAtUtc).toLocaleString()}
+                </p>
               )}
 
               <div className="mt-3">

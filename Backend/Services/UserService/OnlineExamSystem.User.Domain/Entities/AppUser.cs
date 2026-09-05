@@ -49,4 +49,10 @@ public class AppUser : BaseEntity
     // ExamAssignment.AssignmentNumber) powering the "EV-ADM-0001"-style
     // formatted user id shown on the profile page - not stored as a string.
     public int UserNumber { get; set; }
+
+    // Which Admin/SuperAdmin created this account - real accountability for
+    // who added a user to the system. Null for self-registered accounts
+    // (RegisterUserHandler - there's no admin creator, the user created
+    // themselves) and for pre-existing accounts that predate this field.
+    public Guid? CreatedByUserId { get; set; }
 }

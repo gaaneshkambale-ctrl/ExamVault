@@ -43,6 +43,7 @@ public class CreatePlanHandler
             MaxQuestions = command.MaxQuestions,
             MaxAiQuestionsPerMonth = command.MaxAiQuestionsPerMonth,
             StorageGb = command.StorageGb,
+            CreatedByUserId = command.CreatedByUserId,
         };
         await _planRepository.AddAsync(plan, cancellationToken);
         await _planRepository.SaveChangesAsync(cancellationToken);

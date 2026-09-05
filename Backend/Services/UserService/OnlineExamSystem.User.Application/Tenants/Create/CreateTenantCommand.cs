@@ -12,4 +12,5 @@ public record CreateTenantCommand(
     string? City = null,
     string? State = null,
     string? PostalCode = null,
-    string? Country = null);
+    string? Country = null,
+    Guid? CreatedByUserId = null);

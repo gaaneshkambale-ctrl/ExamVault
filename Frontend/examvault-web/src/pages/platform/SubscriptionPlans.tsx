@@ -560,6 +560,12 @@ export default function SubscriptionPlans() {
                         <TrashIcon /> Delete Plan
                       </Button>
                     </div>
+                    <div className="text-muted mt-2" style={{ fontSize: 11.5 }}>
+                      Created by {defaultPlan.createdByName ?? '—'}
+                      {defaultPlan.updatedByName && (
+                        <> · Last updated by {defaultPlan.updatedByName} on {new Date(defaultPlan.updatedAtUtc).toLocaleDateString()}</>
+                      )}
+                    </div>
                   </div>
                 </div>
               </Card.Body>
@@ -677,6 +683,15 @@ export default function SubscriptionPlans() {
                             <Badge bg="light" text="dark" className="border fw-normal">
                               +{remaining} more
                             </Badge>
+                          )}
+                        </div>
+
+                        <div className="text-muted mt-2 pt-2 border-top" style={{ fontSize: 11.5 }}>
+                          <div>Created by {plan.createdByName ?? '—'}</div>
+                          {plan.updatedByName && (
+                            <div>
+                              Last updated by {plan.updatedByName} on {new Date(plan.updatedAtUtc).toLocaleDateString()}
+                            </div>
                           )}
                         </div>
                       </Card.Body>

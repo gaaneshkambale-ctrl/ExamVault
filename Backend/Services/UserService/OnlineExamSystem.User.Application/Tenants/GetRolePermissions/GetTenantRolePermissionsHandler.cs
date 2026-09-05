@@ -38,7 +38,7 @@ public class GetTenantRolePermissionsHandler
             return GetTenantRolePermissionsResult.NotFound();
         }
 
-        var permissions = await _rolePermissionRepository.GetForRoleAsync(query.TenantId, query.Role, cancellationToken);
-        return GetTenantRolePermissionsResult.Ok(permissions);
+        var (permissions, updatedAtUtc, updatedByUserId) = await _rolePermissionRepository.GetForRoleWithMetadataAsync(query.TenantId, query.Role, cancellationToken);
+        return GetTenantRolePermissionsResult.Ok(permissions, updatedAtUtc, updatedByUserId);
     }
 }

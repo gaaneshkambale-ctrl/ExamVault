@@ -6,4 +6,5 @@ public record CreateUserCommand(
     string Email,
     string Role,
     string? PhoneNumber = null,
-    string? RollNumber = null);
+    string? RollNumber = null,
+    Guid? CreatedByUserId = null);

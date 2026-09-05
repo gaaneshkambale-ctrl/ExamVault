@@ -76,6 +76,7 @@ public class CreateTenantHandler
             State = string.IsNullOrWhiteSpace(command.State) ? null : command.State.Trim(),
             PostalCode = string.IsNullOrWhiteSpace(command.PostalCode) ? null : command.PostalCode.Trim(),
             Country = string.IsNullOrWhiteSpace(command.Country) ? null : command.Country.Trim(),
+            CreatedByUserId = command.CreatedByUserId,
         };
         await _tenantRepository.AddAsync(tenant, cancellationToken);
         await _tenantRepository.SaveChangesAsync(cancellationToken);

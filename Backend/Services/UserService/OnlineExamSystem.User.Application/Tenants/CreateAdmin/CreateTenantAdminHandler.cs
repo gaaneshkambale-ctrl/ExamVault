@@ -75,6 +75,7 @@ public class CreateTenantAdminHandler
             MustChangePassword = true,
             PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim(),
             Designation = string.IsNullOrWhiteSpace(command.Designation) ? null : command.Designation.Trim(),
+            CreatedByUserId = command.CreatedByUserId,
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, temporaryPassword);
 

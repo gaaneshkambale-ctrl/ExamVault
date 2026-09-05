@@ -22,10 +22,11 @@ public class FakeRolePermissionRepository : IRolePermissionRepository
         string role,
         IReadOnlyList<string> permissionKeys,
         DateTime updatedAtUtc,
+        Guid updatedByUserId,
         CancellationToken cancellationToken = default)
     {
         _rows.RemoveAll(rp => rp.TenantId == tenantId && rp.Role == role);
-        _rows.AddRange(permissionKeys.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key, UpdatedAtUtc = updatedAtUtc }));
+        _rows.AddRange(permissionKeys.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key, UpdatedAtUtc = updatedAtUtc, UpdatedByUserId = updatedByUserId }));
         return Task.CompletedTask;
     }
 
@@ -43,6 +44,24 @@ public class FakeRolePermissionRepository : IRolePermissionRepository
             .Select(rp => rp.PermissionKey)
             .ToList();
         return Task.FromResult(keys);
+    }
+
+    public Task<(IReadOnlyList<string> Permissions, DateTime? UpdatedAtUtc, Guid? UpdatedByUserId)> GetForRoleWithMetadataAsync(
+        Guid tenantId, string role, CancellationToken cancellationToken = default)
+    {
+        var rows = _rows.Where(rp => rp.TenantId == tenantId && rp.Role == role).ToList();
+        if (rows.Count == 0)
+        {
+            IReadOnlyList<string> defaults = _rows.Any(rp => rp.TenantId == tenantId)
+                ? Array.Empty<string>()
+                : RolePermissionCatalog.DefaultsForRole(role);
+            return Task.FromResult<(IReadOnlyList<string>, DateTime?, Guid?)>((defaults, null, null));
+        }
+
+        var updatedAtUtc = rows.Max(r => r.UpdatedAtUtc);
+        var updatedByUserId = rows.Where(r => r.UpdatedAtUtc == updatedAtUtc).Select(r => r.UpdatedByUserId).FirstOrDefault();
+        IReadOnlyList<string> keys = rows.Select(r => r.PermissionKey).ToList();
+        return Task.FromResult<(IReadOnlyList<string>, DateTime?, Guid?)>((keys, updatedAtUtc, updatedByUserId));
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

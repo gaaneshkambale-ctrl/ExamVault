@@ -55,6 +55,7 @@ public class UsersController : ControllerBase
     private readonly RevokeSessionHandler _revokeSessionHandler;
     private readonly GetMyPreferencesHandler _getMyPreferencesHandler;
     private readonly UpdateMyPreferencesHandler _updateMyPreferencesHandler;
+    private readonly IUserRepository _userRepository;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<UsersController> _logger;
 
@@ -88,6 +89,7 @@ public class UsersController : ControllerBase
         RevokeSessionHandler revokeSessionHandler,
         GetMyPreferencesHandler getMyPreferencesHandler,
         UpdateMyPreferencesHandler updateMyPreferencesHandler,
+        IUserRepository userRepository,
         IAuditClient auditClient,
         ILogger<UsersController> logger)
     {
@@ -111,6 +113,7 @@ public class UsersController : ControllerBase
         _revokeSessionHandler = revokeSessionHandler;
         _getMyPreferencesHandler = getMyPreferencesHandler;
         _updateMyPreferencesHandler = updateMyPreferencesHandler;
+        _userRepository = userRepository;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -234,7 +237,8 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var users = await _listUsersHandler.HandleAsync(new ListUsersQuery(), cancellationToken);
-        return Ok(users.Select(ToResponse));
+        var names = await ActorNameResolver.ResolveAsync(_userRepository, users.Select(u => u.CreatedByUserId), cancellationToken);
+        return Ok(users.Select(u => ToResponse(u, u.CreatedByUserId.HasValue ? names.GetValueOrDefault(u.CreatedByUserId.Value) : null)));
     }
 
     [Authorize(Roles = "Admin")]
@@ -243,13 +247,15 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> Create(CreateUserRequest request, CancellationToken cancellationToken)
     {
         var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
+        var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var command = new CreateUserCommand(
             tenantId,
             request.FullName,
             request.Email,
             request.Role,
             request.PhoneNumber,
-            request.RollNumber);
+            request.RollNumber,
+            createdByUserId);
         var result = await _createUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.EmailAlreadyExists)
@@ -273,7 +279,8 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} created by admin.", user.Id);
-        return StatusCode(StatusCodes.Status201Created, ToResponse(user));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, ToResponse(user, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
@@ -325,7 +332,8 @@ public class UsersController : ControllerBase
             User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
-        return Ok(ToResponse(result.User!));
+        var updatedUserCreatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, updatedUserCreatedByName));
     }
 
     [Authorize(Roles = "Admin")]
@@ -371,7 +379,8 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} deactivated by admin {AdminId}.", id, currentUserId);
-        return Ok(ToResponse(result.User!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
@@ -389,7 +398,8 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} reactivated by admin.", id);
-        return Ok(ToResponse(result.User!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
@@ -463,7 +473,8 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "User not found." });
         }
 
-        return Ok(ToResponse(user));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(user, createdByName));
     }
 
     // Admin-only counterpart to GetMyPhoto - lets admin screens (e.g. Live
@@ -715,7 +726,7 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
-    private static UserListItemResponse ToResponse(AppUser user) =>
+    private static UserListItemResponse ToResponse(AppUser user, string? createdByName) =>
         new(
             user.Id,
             user.FullName,
@@ -727,7 +738,9 @@ public class UsersController : ControllerBase
             user.PhotoData is not null,
             user.RollNumber,
             user.TenantId,
-            user.LastLoginAtUtc);
+            user.LastLoginAtUtc,
+            user.CreatedByUserId,
+            createdByName);
 
     private static UserSessionResponse ToResponse(RefreshToken token)
     {

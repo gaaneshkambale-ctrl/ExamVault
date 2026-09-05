@@ -76,6 +76,7 @@ public class AssignmentsController : ControllerBase
     {
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
+        var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         var command = new CreateAssignmentCommand(
             request.ExamId,
@@ -95,7 +96,8 @@ public class AssignmentsController : ControllerBase
             request.AutoSubmitOnTimeOver,
             request.EnableProctoring,
             request.EnableLiveVideo,
-            bearerToken);
+            bearerToken,
+            createdByUserId);
 
         var result = await _createAssignmentHandler.HandleAsync(command, cancellationToken);
 
@@ -274,7 +276,8 @@ public class AssignmentsController : ControllerBase
             assignment.EnableProctoring,
             assignment.EnableLiveVideo,
             assignment.CreatedAtUtc,
-            assignment.CancelledAtUtc);
+            assignment.CancelledAtUtc,
+            assignment.CreatedByUserId);
 
     private static MyAssignmentResponse ToMyResponse(ExamAssignment assignment) =>
         new(

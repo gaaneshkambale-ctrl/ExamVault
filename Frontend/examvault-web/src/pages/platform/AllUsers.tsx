@@ -206,7 +206,8 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
                       <th>Role</th>
                       <th>Status</th>
                       <th>Last Login</th>
-                      <th className="pe-4">Joined On</th>
+                      <th>Joined On</th>
+                      <th className="pe-4">Created By</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -244,7 +245,8 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
                           <Badge bg={user.isActive ? 'success' : 'secondary'}>{user.isActive ? 'Active' : 'Inactive'}</Badge>
                         </td>
                         <td className="text-muted">{user.lastLoginAtUtc ? timeAgo(user.lastLoginAtUtc) : 'Never'}</td>
-                        <td className="pe-4">{new Date(user.createdAtUtc).toLocaleDateString()}</td>
+                        <td>{new Date(user.createdAtUtc).toLocaleDateString()}</td>
+                        <td className="pe-4 text-muted">{user.createdByName ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>

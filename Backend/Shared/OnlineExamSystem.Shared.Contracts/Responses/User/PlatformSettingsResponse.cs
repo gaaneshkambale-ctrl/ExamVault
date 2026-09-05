@@ -20,4 +20,6 @@ public record PlatformSettingsResponse(
     string? N8nWebhookUrl,
     bool DefaultInAppNotificationsEnabled,
     bool DefaultEmailNotificationsEnabled,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    Guid? UpdatedByUserId = null,
+    string? UpdatedByName = null);

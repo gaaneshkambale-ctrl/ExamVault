@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
@@ -25,6 +26,7 @@ public class PlatformSettingsController : ControllerBase
     private readonly IEmailDispatcher _emailDispatcher;
     private readonly GetEmailConnectionStatusHandler _connectionStatusHandler;
     private readonly GetEmailSummaryHandler _emailSummaryHandler;
+    private readonly IUserRepository _userRepository;
 
     public PlatformSettingsController(
         GetPlatformSettingsHandler getHandler,
@@ -32,7 +34,8 @@ public class PlatformSettingsController : ControllerBase
         IPlatformSettingsRepository platformSettingsRepository,
         IEmailDispatcher emailDispatcher,
         GetEmailConnectionStatusHandler connectionStatusHandler,
-        GetEmailSummaryHandler emailSummaryHandler)
+        GetEmailSummaryHandler emailSummaryHandler,
+        IUserRepository userRepository)
     {
         _getHandler = getHandler;
         _updateHandler = updateHandler;
@@ -40,13 +43,15 @@ public class PlatformSettingsController : ControllerBase
         _emailDispatcher = emailDispatcher;
         _connectionStatusHandler = connectionStatusHandler;
         _emailSummaryHandler = emailSummaryHandler;
+        _userRepository = userRepository;
     }
 
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
         var settings = await _getHandler.HandleAsync(new GetPlatformSettingsQuery(), cancellationToken);
-        return Ok(ToResponse(settings));
+        var updatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, settings.UpdatedByUserId, cancellationToken);
+        return Ok(ToResponse(settings, updatedByName));
     }
 
     // The only genuinely public slice of this controller - Platform Name/
@@ -72,6 +77,7 @@ public class PlatformSettingsController : ControllerBase
     [HttpPut]
     public async Task<IActionResult> Update(UpdatePlatformSettingsRequest request, CancellationToken cancellationToken)
     {
+        var updatedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var command = new UpdatePlatformSettingsCommand(
             request.PlatformName,
             request.PlatformTagline,
@@ -91,7 +97,8 @@ public class PlatformSettingsController : ControllerBase
             request.DefaultMaxStudents,
             request.N8nWebhookUrl,
             request.DefaultInAppNotificationsEnabled,
-            request.DefaultEmailNotificationsEnabled);
+            request.DefaultEmailNotificationsEnabled,
+            updatedByUserId);
 
         var result = await _updateHandler.HandleAsync(command, cancellationToken);
         if (!result.Success)
@@ -103,7 +110,8 @@ public class PlatformSettingsController : ControllerBase
                     .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
         }
 
-        return Ok(ToResponse(result.Settings!));
+        var updatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.Settings!.UpdatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Settings!, updatedByName));
     }
 
     // Real - sends an actual test payload through the same dispatch path
@@ -154,7 +162,7 @@ public class PlatformSettingsController : ControllerBase
         return Ok(new EmailSummaryResponse(summary.SentToday, summary.DeliveredToday, summary.FailedToday, summary.DeliveryRatePercent));
     }
 
-    private static PlatformSettingsResponse ToResponse(PlatformSettingsEntity settings) =>
+    private static PlatformSettingsResponse ToResponse(PlatformSettingsEntity settings, string? updatedByName) =>
         new(
             settings.PlatformName,
             settings.PlatformTagline,
@@ -175,5 +183,7 @@ public class PlatformSettingsController : ControllerBase
             settings.N8nWebhookUrl,
             settings.DefaultInAppNotificationsEnabled,
             settings.DefaultEmailNotificationsEnabled,
-            settings.UpdatedAtUtc);
+            settings.UpdatedAtUtc,
+            settings.UpdatedByUserId,
+            updatedByName);
 }

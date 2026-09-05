@@ -43,4 +43,9 @@ public class PlatformSettings : BaseEntity
     public bool DefaultEmailNotificationsEnabled { get; set; } = true;
 
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    // Who last changed these platform-wide settings (password policy,
+    // lockout, self-registration, maintenance mode) - real accountability
+    // for a security-critical table, not previously tracked at all.
+    public Guid? UpdatedByUserId { get; set; }
 }

@@ -17,7 +17,7 @@ public class UpdateRolePermissionsValidatorTests
     [InlineData("Student")]
     public void Accepts_tenant_assignable_roles(string role)
     {
-        var command = new UpdateRolePermissionsCommand(Guid.NewGuid(), role, ["Dashboard - View"]);
+        var command = new UpdateRolePermissionsCommand(Guid.NewGuid(), role, ["Dashboard - View"], Guid.NewGuid());
 
         var result = _validator.Validate(command);
 
@@ -30,7 +30,7 @@ public class UpdateRolePermissionsValidatorTests
     [InlineData("NotARole")]
     public void Rejects_non_tenant_assignable_roles(string role)
     {
-        var command = new UpdateRolePermissionsCommand(Guid.NewGuid(), role, ["Dashboard - View"]);
+        var command = new UpdateRolePermissionsCommand(Guid.NewGuid(), role, ["Dashboard - View"], Guid.NewGuid());
 
         var result = _validator.Validate(command);
 
@@ -40,7 +40,7 @@ public class UpdateRolePermissionsValidatorTests
     [Fact]
     public void Rejects_unknown_permission_keys()
     {
-        var command = new UpdateRolePermissionsCommand(Guid.NewGuid(), "Admin", ["Not - A Real Key"]);
+        var command = new UpdateRolePermissionsCommand(Guid.NewGuid(), "Admin", ["Not - A Real Key"], Guid.NewGuid());
 
         var result = _validator.Validate(command);
 

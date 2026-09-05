@@ -46,7 +46,11 @@ public class GetAllRolePermissionsHandler
             {
                 var roleRows = byRole[role].ToList();
                 var updatedAtUtc = roleRows.Count > 0 ? roleRows.Max(rp => rp.UpdatedAtUtc) : (DateTime?)null;
-                return new RoleWithPermissions(role, roleRows.Select(rp => rp.PermissionKey).ToList(), updatedAtUtc);
+                var updatedByUserId = roleRows
+                    .Where(rp => rp.UpdatedAtUtc == updatedAtUtc)
+                    .Select(rp => rp.UpdatedByUserId)
+                    .FirstOrDefault();
+                return new RoleWithPermissions(role, roleRows.Select(rp => rp.PermissionKey).ToList(), updatedAtUtc, updatedByUserId);
             })
             .ToList();
     }

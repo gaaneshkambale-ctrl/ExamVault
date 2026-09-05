@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Exam.Application.Proctoring.GetProctoringSettings;
@@ -44,6 +45,7 @@ public class ProctoringSettingsController : ControllerBase
     [Authorize(Policy = ExamSecurityOrProctoring)]
     public async Task<IActionResult> Update(UpdateProctoringSettingsRequest request, CancellationToken cancellationToken)
     {
+        var updatedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var settings = await _updateProctoringSettingsHandler.HandleAsync(
             new UpdateProctoringSettingsCommand(
                 request.ProctoringEnabled,
@@ -55,6 +57,7 @@ public class ProctoringSettingsController : ControllerBase
                 request.CopyPasteBlockingEnabled,
                 request.RightClickBlockingEnabled,
                 request.MultipleMonitorsEnabled,
+                updatedByUserId,
                 request.SessionTimeoutMinutes),
             cancellationToken);
         return Ok(ToResponse(settings));
@@ -72,5 +75,6 @@ public class ProctoringSettingsController : ControllerBase
             settings.RightClickBlockingEnabled,
             settings.MultipleMonitorsEnabled,
             settings.SessionTimeoutMinutes,
-            settings.UpdatedAtUtc);
+            settings.UpdatedAtUtc,
+            settings.UpdatedByUserId);
 }

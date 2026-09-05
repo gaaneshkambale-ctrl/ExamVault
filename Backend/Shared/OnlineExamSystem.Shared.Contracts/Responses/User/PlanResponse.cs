@@ -15,4 +15,8 @@ public record PlanResponse(
     int? MaxExams = null,
     int? MaxQuestions = null,
     int? MaxAiQuestionsPerMonth = null,
-    int? StorageGb = null);
+    int? StorageGb = null,
+    Guid? CreatedByUserId = null,
+    Guid? UpdatedByUserId = null,
+    string? CreatedByName = null,
+    string? UpdatedByName = null);

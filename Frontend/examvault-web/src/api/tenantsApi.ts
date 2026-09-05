@@ -1,5 +1,6 @@
 import apiClient from './axiosClient';
 import type { CreateTenantAdminRequest, CreateTenantRequest, Tenant, UpdateTenantRequest } from '../types/tenant';
+import type { RolePermissionsEntry } from '../types/user';
 
 export async function listTenants(): Promise<Tenant[]> {
   const { data } = await apiClient.get<Tenant[]>('/api/tenants');
@@ -46,21 +47,21 @@ export async function setTenantTrial(tenantId: string, isTrial: boolean, trialEn
   return data;
 }
 
-export async function getTenantRolePermissions(tenantId: string, role: string): Promise<string[]> {
-  const { data } = await apiClient.get<{ role: string; permissions: string[] }>(
+export async function getTenantRolePermissions(tenantId: string, role: string): Promise<RolePermissionsEntry> {
+  const { data } = await apiClient.get<RolePermissionsEntry>(
     `/api/tenants/${tenantId}/roles/${role}/permissions`,
   );
-  return data.permissions;
+  return data;
 }
 
 export async function updateTenantRolePermissions(
   tenantId: string,
   role: string,
   permissions: string[],
-): Promise<string[]> {
-  const { data } = await apiClient.put<{ role: string; permissions: string[] }>(
+): Promise<RolePermissionsEntry> {
+  const { data } = await apiClient.put<RolePermissionsEntry>(
     `/api/tenants/${tenantId}/roles/${role}/permissions`,
     { permissions },
   );
-  return data.permissions;
+  return data;
 }

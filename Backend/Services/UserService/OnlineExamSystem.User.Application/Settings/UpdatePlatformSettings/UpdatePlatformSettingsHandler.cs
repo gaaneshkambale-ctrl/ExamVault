@@ -45,6 +45,7 @@ public class UpdatePlatformSettingsHandler
         settings.DefaultInAppNotificationsEnabled = command.DefaultInAppNotificationsEnabled;
         settings.DefaultEmailNotificationsEnabled = command.DefaultEmailNotificationsEnabled;
         settings.UpdatedAtUtc = DateTime.UtcNow;
+        settings.UpdatedByUserId = command.UpdatedByUserId;
 
         await _repository.SaveChangesAsync(cancellationToken);
 

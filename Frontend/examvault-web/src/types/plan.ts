@@ -66,6 +66,10 @@ export interface Plan {
   storageGb: number | null;
   createdAtUtc: string;
   updatedAtUtc: string;
+  createdByUserId: string | null;
+  updatedByUserId: string | null;
+  createdByName: string | null;
+  updatedByName: string | null;
 }
 
 export interface CreatePlanRequest {

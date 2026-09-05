@@ -14,4 +14,5 @@ public record CreatePlanCommand(
     int? MaxExams = null,
     int? MaxQuestions = null,
     int? MaxAiQuestionsPerMonth = null,
-    int? StorageGb = null);
+    int? StorageGb = null,
+    Guid? CreatedByUserId = null);

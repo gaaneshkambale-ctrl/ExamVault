@@ -33,6 +33,7 @@ public class UpdateRolePermissionsHandler
             command.Role,
             distinctPermissions,
             updatedAtUtc,
+            command.UpdatedByUserId,
             cancellationToken);
         await _rolePermissionRepository.SaveChangesAsync(cancellationToken);
 

@@ -175,6 +175,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                   <th>Users</th>
                   <th>Exams</th>
                   <th>Created On</th>
+                  <th>Created By</th>
                   <th className="pe-4">Actions</th>
                 </tr>
               </thead>
@@ -234,6 +235,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                       {isLoadingExams ? <Spinner animation="border" size="sm" /> : (examCountByTenantId.get(tenant.id) ?? 0)}
                     </td>
                     <td>{new Date(tenant.createdAtUtc).toLocaleDateString()}</td>
+                    <td className="text-muted">{tenant.createdByName ?? '—'}</td>
                     <td className="pe-4">
                       <div className="d-flex gap-2">
                         <Link

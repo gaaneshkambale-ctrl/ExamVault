@@ -37,6 +37,7 @@ public class TenantsController : ControllerBase
     private readonly SetTenantTrialHandler _setTenantTrialHandler;
     private readonly GetTenantRolePermissionsHandler _getTenantRolePermissionsHandler;
     private readonly UpdateTenantRolePermissionsHandler _updateTenantRolePermissionsHandler;
+    private readonly IUserRepository _userRepository;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<TenantsController> _logger;
 
@@ -52,6 +53,7 @@ public class TenantsController : ControllerBase
         SetTenantTrialHandler setTenantTrialHandler,
         GetTenantRolePermissionsHandler getTenantRolePermissionsHandler,
         UpdateTenantRolePermissionsHandler updateTenantRolePermissionsHandler,
+        IUserRepository userRepository,
         IAuditClient auditClient,
         ILogger<TenantsController> logger)
     {
@@ -66,6 +68,7 @@ public class TenantsController : ControllerBase
         _setTenantTrialHandler = setTenantTrialHandler;
         _getTenantRolePermissionsHandler = getTenantRolePermissionsHandler;
         _updateTenantRolePermissionsHandler = updateTenantRolePermissionsHandler;
+        _userRepository = userRepository;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -73,6 +76,7 @@ public class TenantsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateTenantRequest request, CancellationToken cancellationToken)
     {
+        var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _createTenantHandler.HandleAsync(
             new CreateTenantCommand(
                 request.Name,
@@ -86,7 +90,8 @@ public class TenantsController : ControllerBase
                 request.City,
                 request.State,
                 request.PostalCode,
-                request.Country),
+                request.Country,
+                createdByUserId),
             cancellationToken);
 
         if (result.SlugAlreadyExists)
@@ -105,14 +110,16 @@ public class TenantsController : ControllerBase
 
         var tenant = result.Tenant!;
         _logger.LogInformation("Tenant {TenantId} ({Slug}) created.", tenant.Id, tenant.Slug);
-        return StatusCode(StatusCodes.Status201Created, ToResponse(tenant));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, tenant.CreatedByUserId, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, ToResponse(tenant, createdByName));
     }
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var tenants = await _listTenantsHandler.HandleAsync(new ListTenantsQuery(), cancellationToken);
-        return Ok(tenants.Select(ToResponse));
+        var names = await ActorNameResolver.ResolveAsync(_userRepository, tenants.Select(t => t.CreatedByUserId), cancellationToken);
+        return Ok(tenants.Select(t => ToResponse(t, t.CreatedByUserId.HasValue ? names.GetValueOrDefault(t.CreatedByUserId.Value) : null)));
     }
 
     [HttpPost("{id:guid}/deactivate")]
@@ -129,7 +136,8 @@ public class TenantsController : ControllerBase
 
         _logger.LogInformation("Tenant {TenantId} deactivated.", id);
         await RecordSecurityEventAsync(id, "Organization deactivated", cancellationToken);
-        return Ok(ToResponse(result.Tenant!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.Tenant!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Tenant!, createdByName));
     }
 
     [HttpPost("{id:guid}/reactivate")]
@@ -146,7 +154,8 @@ public class TenantsController : ControllerBase
 
         _logger.LogInformation("Tenant {TenantId} reactivated.", id);
         await RecordSecurityEventAsync(id, "Organization reactivated", cancellationToken);
-        return Ok(ToResponse(result.Tenant!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.Tenant!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Tenant!, createdByName));
     }
 
     [HttpPost("{id:guid}/admins")]
@@ -155,8 +164,9 @@ public class TenantsController : ControllerBase
         CreateTenantAdminRequest request,
         CancellationToken cancellationToken)
     {
+        var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _createTenantAdminHandler.HandleAsync(
-            new CreateTenantAdminCommand(id, request.FullName, request.Email, request.PhoneNumber, request.Designation),
+            new CreateTenantAdminCommand(id, request.FullName, request.Email, request.PhoneNumber, request.Designation, createdByUserId),
             cancellationToken);
 
         if (result.TenantNotFound)
@@ -180,6 +190,7 @@ public class TenantsController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("Admin {UserId} created for tenant {TenantId}.", user.Id, id);
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
         return StatusCode(StatusCodes.Status201Created, new UserListItemResponse(
             user.Id,
             user.FullName,
@@ -189,7 +200,11 @@ public class TenantsController : ControllerBase
             user.IsActive,
             user.PhoneNumber,
             HasPhoto: false,
-            user.RollNumber));
+            user.RollNumber,
+            user.TenantId,
+            user.LastLoginAtUtc,
+            user.CreatedByUserId,
+            createdByName));
     }
 
     [HttpPut("{id:guid}/plan")]
@@ -218,7 +233,8 @@ public class TenantsController : ControllerBase
                 entityId: request.PlanId.ToString(),
                 details: $"{result.PreviousPlanName} -> {result.NewPlanName}");
         }
-        return Ok(ToResponse(result.Tenant!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.Tenant!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Tenant!, createdByName));
     }
 
     [HttpPut("{id:guid}")]
@@ -259,7 +275,8 @@ public class TenantsController : ControllerBase
         }
 
         _logger.LogInformation("Tenant {TenantId} updated.", id);
-        return Ok(ToResponse(result.Tenant!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.Tenant!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Tenant!, createdByName));
     }
 
     [HttpDelete("{id:guid}")]
@@ -325,7 +342,8 @@ public class TenantsController : ControllerBase
             request.IsTrial ? "Trial started" : "Trial ended",
             cancellationToken,
             details: request.IsTrial ? $"Ends {request.TrialEndsAtUtc:yyyy-MM-dd}" : null);
-        return Ok(ToResponse(result.Tenant!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.Tenant!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Tenant!, createdByName));
     }
 
     [HttpGet("{id:guid}/roles/{role}/permissions")]
@@ -344,7 +362,8 @@ public class TenantsController : ControllerBase
             return NotFound(new { message = "Tenant not found." });
         }
 
-        return Ok(new RolePermissionsResponse(role, result.Permissions!, null));
+        var updatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.UpdatedByUserId, cancellationToken);
+        return Ok(new RolePermissionsResponse(role, result.Permissions!, result.UpdatedAtUtc, result.UpdatedByUserId, updatedByName));
     }
 
     [HttpPut("{id:guid}/roles/{role}/permissions")]
@@ -354,8 +373,9 @@ public class TenantsController : ControllerBase
         UpdateRolePermissionsRequest request,
         CancellationToken cancellationToken)
     {
+        var updatedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _updateTenantRolePermissionsHandler.HandleAsync(
-            new UpdateTenantRolePermissionsCommand(id, role, request.Permissions), cancellationToken);
+            new UpdateTenantRolePermissionsCommand(id, role, request.Permissions, updatedByUserId), cancellationToken);
 
         if (result.IsInvalidRole)
         {
@@ -369,10 +389,11 @@ public class TenantsController : ControllerBase
 
         _logger.LogInformation("{Role} role permissions for tenant {TenantId} updated.", role, id);
         await RecordSecurityEventAsync(id, $"{role} role permissions updated", cancellationToken);
-        return Ok(new RolePermissionsResponse(role, result.Permissions!, null));
+        var updatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, updatedByUserId, cancellationToken);
+        return Ok(new RolePermissionsResponse(role, result.Permissions!, result.UpdatedAtUtc, updatedByUserId, updatedByName));
     }
 
-    private static TenantResponse ToResponse(Tenant tenant) =>
+    private static TenantResponse ToResponse(Tenant tenant, string? createdByName) =>
         new(
             tenant.Id,
             tenant.Name,
@@ -389,7 +410,9 @@ public class TenantsController : ControllerBase
             tenant.City,
             tenant.State,
             tenant.PostalCode,
-            tenant.Country);
+            tenant.Country,
+            tenant.CreatedByUserId,
+            createdByName);
 
     // Gives AuditModule.Security (defined but never written anywhere until
     // now) a real purpose - the Super Admin's own tenant-lifecycle actions.

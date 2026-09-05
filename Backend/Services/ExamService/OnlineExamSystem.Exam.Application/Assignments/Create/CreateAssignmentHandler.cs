@@ -103,6 +103,7 @@ public class CreateAssignmentHandler
             AutoSubmitOnTimeOver = command.AutoSubmitOnTimeOver,
             EnableProctoring = command.EnableProctoring,
             EnableLiveVideo = command.EnableLiveVideo,
+            CreatedByUserId = command.CreatedByUserId,
         };
 
         await _examRepository.AddAssignmentAsync(assignment, targetUserIds, cancellationToken);

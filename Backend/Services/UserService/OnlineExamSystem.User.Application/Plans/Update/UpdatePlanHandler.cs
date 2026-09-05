@@ -52,6 +52,7 @@ public class UpdatePlanHandler
         // A tenant's own effective limits only change on creation or an
         // explicit re-assignment (AssignPlanToTenantHandler).
         plan.UpdatedAtUtc = DateTime.UtcNow;
+        plan.UpdatedByUserId = command.UpdatedByUserId;
         await _planRepository.SaveChangesAsync(cancellationToken);
 
         return UpdatePlanResult.Ok(plan);

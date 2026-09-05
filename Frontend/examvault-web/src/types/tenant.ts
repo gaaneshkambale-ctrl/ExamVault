@@ -26,6 +26,8 @@ export interface Tenant {
   state: string | null;
   postalCode: string | null;
   country: string | null;
+  createdByUserId: string | null;
+  createdByName: string | null;
 }
 
 export interface CreateTenantRequest {

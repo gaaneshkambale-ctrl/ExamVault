@@ -21,4 +21,5 @@ public record ExamAssignmentResponse(
     bool EnableProctoring,
     bool EnableLiveVideo,
     DateTime CreatedAtUtc,
-    DateTime? CancelledAtUtc);
+    DateTime? CancelledAtUtc,
+    Guid CreatedByUserId);

@@ -15,4 +15,5 @@ public record UpdatePlanCommand(
     int? MaxExams = null,
     int? MaxQuestions = null,
     int? MaxAiQuestionsPerMonth = null,
-    int? StorageGb = null);
+    int? StorageGb = null,
+    Guid? UpdatedByUserId = null);

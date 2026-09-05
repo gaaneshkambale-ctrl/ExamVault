@@ -418,7 +418,7 @@ export default function OrganizationDetails() {
   const [draftRolePermissions, setDraftRolePermissions] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (rolePermissions) {
-      setDraftRolePermissions(new Set(rolePermissions));
+      setDraftRolePermissions(new Set(rolePermissions.permissions));
     }
   }, [rolePermissions]);
   const toggleRolePermission = (perm: string) => {
@@ -627,6 +627,7 @@ export default function OrganizationDetails() {
                     }
                   />
                   <InfoRow label="Registration Date" value={new Date(tenant.createdAtUtc).toLocaleString()} />
+                  <InfoRow label="Created By" value={tenant.createdByName ?? '—'} />
                   <InfoRow label="Description" value="—" />
                 </Card.Body>
               </Card>
@@ -975,6 +976,12 @@ export default function OrganizationDetails() {
                       <Alert variant="danger" className="mt-3 mb-0 py-2">
                         {extractServerError(updateRolePermissionsMutation.error)}
                       </Alert>
+                    )}
+                    {rolePermissions?.updatedAtUtc && (
+                      <p className="text-muted small mb-0 mt-3">
+                        Last updated by {rolePermissions.updatedByName ?? '—'} on{' '}
+                        {new Date(rolePermissions.updatedAtUtc).toLocaleString()}
+                      </p>
                     )}
                     <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
                       <p className="text-muted small mb-0">

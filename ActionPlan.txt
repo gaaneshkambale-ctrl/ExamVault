@@ -7273,3 +7273,179 @@ Verification: tsc clean, lint clean, build succeeded, 61/61 tests passed.
 Rebuilt the Docker frontend and live-verified by hovering the exact same
 row from the bug report (Test Org, Inactive) - now shows a proper dark
 hover highlight with fully legible text.
+
+DONE (2026-09-05): Security audit - "who created/changed this record" (actor
+accountability) across every real DB table in every service. BaseEntity only
+gives Id + CreatedAtUtc, no CreatedBy at all; that must be added per-entity.
+Grepped every `DbSet<>` across all 5 services' DbContexts (~34 real tables)
+and classified each one. Already correct (no gap): ExamPaper/ExamQuestion
+(CreatedByUserId), Notification (CreatedByAdminUserId), AuditLog (UserId IS
+the actor), ViolationEvent/SystemErrorLog (resolver tracking), every
+self-owned row via its own UserId, every child/detail table that inherits
+accountability from its parent, and system-generated logs with no human
+creator concept. Result/AI/Execution services have no DbSets of their own
+(stateless/aggregator) - nothing to check there.
+
+Found 7 real gaps and fixed all 7 (user confirmed "yes" to full scope, not
+just High severity):
+  High (security-critical config, zero actor tracking before this):
+  - PlatformSettings (User Service) -> UpdatedByUserId
+  - RolePermission (User Service) -> UpdatedByUserId
+  - ProctoringSettings (Exam Service) -> UpdatedByUserId
+  Medium (real records missing creator attribution):
+  - Tenant (User Service) -> CreatedByUserId
+  - Plan (User Service) -> CreatedByUserId + UpdatedByUserId
+  - AppUser/Users (User Service) -> CreatedByUserId (null for
+    self-registered accounts - there is no admin creator for those)
+  - ExamAssignment (Exam Service) -> CreatedByUserId (the Admin who
+    scheduled the sitting - controls proctoring/live-video on
+    potentially many students' attempts)
+Left alone as Low/cosmetic (out of scope): Group, ExamType,
+ReminderSettings, ExamDefaults, NotificationTemplate.
+
+For each of the 7: added the DB column, threaded the real caller's id from
+the controller's own JWT claim (ClaimTypes.NameIdentifier - the same
+pattern ExamPaper/ExamQuestion already used) through Command -> Handler ->
+entity, and surfaced it on the relevant Response DTO. RolePermission was the
+most involved - its diff-based ReplaceForRoleAsync repository method stamps
+UpdatedByUserId on both newly-added AND surviving rows on every save, and is
+called from two separate paths (SuperAdmin's cross-tenant edit via
+TenantsController, and a tenant Admin's own self-service edit via
+RolesController) that both needed the same treatment; GetAllRolePermissionsHandler's
+per-role aggregation was updated to report whichever actor touched the
+rows at the role's own max UpdatedAtUtc. AppUser has two real creation
+paths - CreateUserHandler (Admin adds a user to their own tenant) and
+CreateTenantAdminHandler (SuperAdmin bootstraps a brand-new tenant's first
+Admin) - both wired.
+
+Scope was deliberately backend-only (the data now genuinely exists and is
+captured); no new UI screens were added to display these fields - that's a
+reasonable separate follow-up if wanted, not implied by the original
+security/audit ask.
+
+Caught and fixed 3 real fake/test breakages caused by adding non-defaulted
+new parameters (CreatedAssignmentCommand, UpdateRolePermissionsCommand,
+IRolePermissionRepository.ReplaceForRoleAsync all gained a required Guid,
+which is correct - an actor should never silently default to empty on
+these particular calls): FakeRolePermissionRepository's interface
+implementation, and 4 positional test-call sites across
+CreateAssignmentHandlerTests.cs and UpdateRolePermissionsValidatorTests.cs.
+
+Verification: dotnet build clean on both User Service and Exam Service (0
+warnings, 0 errors). Full test suites green: User Service Application.Tests
+94/94, Exam Service Application.Tests 84/84. Generated (not applied) one EF
+Core migration per service - User Service's AddCreatedByAuditFields (Users,
+Tenants, RolePermissions, PlatformSettings, Plans) and Exam Service's
+AddCreatedByAuditFields (ProctoringSettings, ExamAssignments) - reviewed
+both by hand; ExamAssignment.CreatedByUserId is correctly non-nullable with
+existing rows backfilled to Guid.Empty (that column didn't exist before),
+every other new column is nullable since it only applies going forward.
+Per this session's standing convention, did NOT run `dotnet ef database
+update` - migrations apply automatically on the next local container
+rebuild/restart.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+PLAN (2026-09-05): Follow-up to the CreatedBy audit above - user asked to
+actually SHOW the Created By field everywhere Super Admin is looking, not
+just have it captured in the DB. Scoping: of the 7 tables from the audit,
+only 5 have any Super Admin-facing screen at all - ProctoringSettings
+(ProctoringSettingsPage.tsx) and ExamAssignment (AssignExam.tsx) are both
+Admin-only pages with no Super Admin route, so they're excluded here.
+
+The 5 in scope and where they render for Super Admin:
+  - Tenant/Organizations -> ManageTenants.tsx (list) + OrganizationDetails.tsx
+    (detail, Overview tab) - both already show "Created On" but not who.
+  - Plan -> SubscriptionPlans.tsx (card grid) - shows no metadata at all
+    today, not even the existing CreatedAtUtc/UpdatedAtUtc.
+  - AppUser/Users -> AllUsers.tsx (list) - shows "Joined On" but not who
+    added the account.
+  - PlatformSettings -> PlatformSettings.tsx (single record) - shows no
+    "last updated" metadata at all today.
+  - RolePermission -> OrganizationDetails.tsx (Settings tab, Super Admin's
+    per-tenant Role Permissions editor) - currently returns NO metadata at
+    all (TenantsController's two GET call sites literally hardcode
+    `new RolePermissionsResponse(role, permissions, null)` since
+    GetTenantRolePermissionsHandler only ever fetched permission keys).
+
+Approach: resolve the stored actor Guid into a display name server-side
+and embed it as a new `CreatedByName`/`UpdatedByName` string right on the
+existing Response DTOs - this already matches the one real precedent in
+the codebase, NotificationService's AuditLogResponse.UserName (the
+frontend there just renders `log.userName ?? '-'` with zero client-side
+lookup logic). A small reusable ActorNameResolver helper (User.API) wraps
+the already-existing IUserRepository.GetByIdsAsync batch method - no new
+backend endpoint needed, and no new DB column either (this is a read-time
+join, not a stored value), so no new migration.
+
+RolePermission needs one extra piece: since GetTenantRolePermissionsHandler
+never fetched metadata at all, adding a new IRolePermissionRepository
+method (GetForRoleWithMetadataAsync - deliberately NOT touching the
+existing GetForRoleAsync, which is on the hot path for every login/token-
+refresh) that returns permissions + UpdatedAtUtc + UpdatedByUserId,
+mirroring the aggregation GetAllRolePermissionsHandler already does
+(max UpdatedAtUtc across the role's rows, whichever row(s) share that max
+give the actor).
+
+Frontend: add the new fields to types/tenant.ts, types/plan.ts,
+types/user.ts (PlatformUserListItem), types/platformSettings.ts, and a
+named type for the tenant role-permissions response (replacing the
+inline type in tenantsApi.ts that currently discards everything except
+`.permissions`). New UI: a "Created By" column on ManageTenants.tsx and
+AllUsers.tsx; a "Created By" line on OrganizationDetails.tsx's Overview
+tab and a "Last updated by X on Y" line on its Role Permissions section;
+a "Created by X" / "Updated by Y" line per card on SubscriptionPlans.tsx;
+a "Last updated by X on Y" line on PlatformSettings.tsx. Null name (self-
+registered user, pre-existing/seeded row predating this field) renders as
+"-", matching AuditLog's existing fallback.
+
+Backend-only, no schema change - will verify with dotnet build + the full
+test suites on User Service, then move to the frontend changes and
+live-verify in the browser before marking DONE.
+
+DONE (2026-09-05): Implemented and verified the plan above. Backend: added
+an ActorNameResolver helper (User.API) wrapping IUserRepository's existing
+GetByIdsAsync/GetByIdAsync, embedded CreatedByName/UpdatedByName on
+TenantResponse, PlanResponse, UserListItemResponse, PlatformSettingsResponse,
+and RolePermissionsResponse; added IRolePermissionRepository.
+GetForRoleWithMetadataAsync (a new method, not touching the existing
+login/refresh-path GetForRoleAsync) so GetTenantRolePermissionsHandler
+stopped hardcoding null metadata. Verification: dotnet build clean, User
+Service Application.Tests 94/94. Frontend: added the new fields to
+types/tenant.ts, types/plan.ts, types/user.ts, types/platformSettings.ts;
+replaced tenantsApi.ts's inline discard-everything-but-permissions type
+with the real RolePermissionsEntry; added the "Created By" UI to
+ManageTenants.tsx, OrganizationDetails.tsx (Overview + Role Permissions
+tab), SubscriptionPlans.tsx, AllUsers.tsx, and PlatformSettings.tsx.
+Verification: tsc clean, npm run build succeeded, lint clean (only
+pre-existing unrelated warnings), 61/61 frontend tests passed.
+
+Along the way, hit and resolved a real Docker Desktop incident (unrelated
+to the code, but blocking the live-verify step): the Docker VM's vhdx had
+ballooned to 38GB, almost entirely (22GB) accumulated build cache; the
+first rebuild attempt hung and the Docker daemon itself crashed (500 from
+the daemon API). Restarted Docker Desktop, ran `docker builder prune -af`
+(cache only - zero images/containers/volumes touched, so no data was ever
+at risk), brought all 15 containers back up healthy, then rebuilt
+user-api + frontend and redeployed. Compacting the actual .vhdx file size
+on disk needs admin/UAC elevation this session doesn't have - left as an
+optional manual step for the user, not required for functionality.
+
+Live-verified in the browser as the QA Super Admin: created a brand-new
+test organization and confirmed both its detail page and the Organizations
+list immediately showed "Created By: QA Super Admin" (then deleted the
+test org to clean up) - proving the full pipeline end to end (JWT claim ->
+handler -> DB -> API response -> name resolution -> UI). Confirmed "—"
+correctly renders for the 5 real pre-existing organizations and both real
+Plans (all predate this field). Saved Platform Settings once and confirmed
+"Last updated by QA Super Admin on <timestamp>" appeared, versus "—" for
+its prior pre-existing save. AllUsers.tsx and the Role Permissions tab use
+the identical, already-proven pattern and weren't separately re-verified.
+
+One incident during manual testing: a mis-clicked coordinate on the
+Platform Settings page toggled Maintenance Mode on and saved it - caught
+within the same verification pass (visible in the next screenshot),
+immediately toggled back off and re-saved. Confirmed OFF as the final
+state; no real login disruption window.
+
+NOT committed/pushed - holding per the user's standing rule.

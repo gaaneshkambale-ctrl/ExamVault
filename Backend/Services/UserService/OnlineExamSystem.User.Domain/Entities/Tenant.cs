@@ -30,6 +30,12 @@ public class Tenant : BaseEntity
     public string? OrganizationCode { get; set; }
     public string? OrganizationType { get; set; }
 
+    // Which Super Admin provisioned this organization - real accountability
+    // for a platform-wide provisioning action, not previously tracked.
+    // Nullable only because pre-existing seeded tenants (Default/Platform)
+    // predate this field.
+    public Guid? CreatedByUserId { get; set; }
+
     public string? AddressLine1 { get; set; }
     public string? AddressLine2 { get; set; }
     public string? City { get; set; }

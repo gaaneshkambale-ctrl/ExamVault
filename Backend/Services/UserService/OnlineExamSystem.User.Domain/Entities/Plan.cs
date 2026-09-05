@@ -37,4 +37,11 @@ public class Plan : BaseEntity
     public int? StorageGb { get; set; }
 
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    // Which Super Admin created/last edited this pricing plan - real
+    // accountability for a platform-wide entitlement template, not
+    // previously tracked. Nullable only because pre-existing seeded plans
+    // predate this field.
+    public Guid? CreatedByUserId { get; set; }
+    public Guid? UpdatedByUserId { get; set; }
 }

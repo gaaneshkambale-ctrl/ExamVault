@@ -10,4 +10,5 @@ public record UpdateProctoringSettingsCommand(
     bool CopyPasteBlockingEnabled,
     bool RightClickBlockingEnabled,
     bool MultipleMonitorsEnabled,
+    Guid UpdatedByUserId,
     int SessionTimeoutMinutes = 30);

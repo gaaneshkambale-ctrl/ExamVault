@@ -72,6 +72,7 @@ public class CreateUserHandler
             PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim(),
             RollNumber = string.IsNullOrWhiteSpace(command.RollNumber) ? null : command.RollNumber.Trim(),
             MustChangePassword = true,
+            CreatedByUserId = command.CreatedByUserId,
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, temporaryPassword);
 

@@ -19,4 +19,5 @@ public record UpdatePlatformSettingsCommand(
     int? DefaultMaxStudents,
     string? N8nWebhookUrl,
     bool DefaultInAppNotificationsEnabled,
-    bool DefaultEmailNotificationsEnabled);
+    bool DefaultEmailNotificationsEnabled,
+    Guid UpdatedByUserId);

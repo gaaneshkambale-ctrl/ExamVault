@@ -19,6 +19,8 @@ export interface PlatformSettings {
   defaultInAppNotificationsEnabled: boolean;
   defaultEmailNotificationsEnabled: boolean;
   updatedAtUtc: string;
+  updatedByUserId: string | null;
+  updatedByName: string | null;
 }
 
-export type UpdatePlatformSettingsRequest = Omit<PlatformSettings, 'updatedAtUtc'>;
+export type UpdatePlatformSettingsRequest = Omit<PlatformSettings, 'updatedAtUtc' | 'updatedByUserId' | 'updatedByName'>;

@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
+using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Plans.Create;
 using OnlineExamSystem.User.Application.Plans.Delete;
 using OnlineExamSystem.User.Application.Plans.List;
@@ -24,6 +26,7 @@ public class PlansController : ControllerBase
     private readonly UpdatePlanHandler _updatePlanHandler;
     private readonly DeletePlanHandler _deletePlanHandler;
     private readonly ListPlansHandler _listPlansHandler;
+    private readonly IUserRepository _userRepository;
     private readonly ILogger<PlansController> _logger;
 
     public PlansController(
@@ -31,12 +34,14 @@ public class PlansController : ControllerBase
         UpdatePlanHandler updatePlanHandler,
         DeletePlanHandler deletePlanHandler,
         ListPlansHandler listPlansHandler,
+        IUserRepository userRepository,
         ILogger<PlansController> logger)
     {
         _createPlanHandler = createPlanHandler;
         _updatePlanHandler = updatePlanHandler;
         _deletePlanHandler = deletePlanHandler;
         _listPlansHandler = listPlansHandler;
+        _userRepository = userRepository;
         _logger = logger;
     }
 
@@ -44,7 +49,11 @@ public class PlansController : ControllerBase
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var plans = await _listPlansHandler.HandleAsync(new ListPlansQuery(), cancellationToken);
-        return Ok(plans.Select(ToResponse));
+        var names = await ActorNameResolver.ResolveAsync(
+            _userRepository,
+            plans.SelectMany(p => new[] { p.CreatedByUserId, p.UpdatedByUserId }),
+            cancellationToken);
+        return Ok(plans.Select(p => ToResponse(p, names)));
     }
 
     // Anonymous, real-data pricing feed for the public marketing site
@@ -60,12 +69,14 @@ public class PlansController : ControllerBase
     public async Task<IActionResult> ListPublic(CancellationToken cancellationToken)
     {
         var plans = await _listPlansHandler.HandleAsync(new ListPlansQuery(), cancellationToken);
-        return Ok(plans.Where(p => p.Id != TenantConstants.FullAccessPlanId).Select(ToResponse));
+        var noNames = new Dictionary<Guid, string>();
+        return Ok(plans.Where(p => p.Id != TenantConstants.FullAccessPlanId).Select(p => ToResponse(p, noNames)));
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(CreatePlanRequest request, CancellationToken cancellationToken)
     {
+        var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _createPlanHandler.HandleAsync(
             new CreatePlanCommand(
                 request.Name,
@@ -79,7 +90,8 @@ public class PlansController : ControllerBase
                 request.MaxExams,
                 request.MaxQuestions,
                 request.MaxAiQuestionsPerMonth,
-                request.StorageGb),
+                request.StorageGb,
+                createdByUserId),
             cancellationToken);
 
         if (result.NameAlreadyExists)
@@ -98,12 +110,14 @@ public class PlansController : ControllerBase
 
         var plan = result.Plan!;
         _logger.LogInformation("Plan {PlanId} ({Name}) created.", plan.Id, plan.Name);
-        return StatusCode(StatusCodes.Status201Created, ToResponse(plan));
+        var names = await ActorNameResolver.ResolveAsync(_userRepository, new[] { plan.CreatedByUserId, plan.UpdatedByUserId }, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, ToResponse(plan, names));
     }
 
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdatePlanRequest request, CancellationToken cancellationToken)
     {
+        var updatedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _updatePlanHandler.HandleAsync(
             new UpdatePlanCommand(
                 id,
@@ -118,7 +132,8 @@ public class PlansController : ControllerBase
                 request.MaxExams,
                 request.MaxQuestions,
                 request.MaxAiQuestionsPerMonth,
-                request.StorageGb),
+                request.StorageGb,
+                updatedByUserId),
             cancellationToken);
 
         if (result.NotFound)
@@ -141,7 +156,8 @@ public class PlansController : ControllerBase
         }
 
         _logger.LogInformation("Plan {PlanId} updated.", id);
-        return Ok(ToResponse(result.Plan!));
+        var names = await ActorNameResolver.ResolveAsync(_userRepository, new[] { result.Plan!.CreatedByUserId, result.Plan!.UpdatedByUserId }, cancellationToken);
+        return Ok(ToResponse(result.Plan!, names));
     }
 
     [HttpDelete("{id:guid}")]
@@ -166,7 +182,7 @@ public class PlansController : ControllerBase
     private static List<PlanFeature> ParseFeatures(IReadOnlyList<string> features) =>
         features.Select(f => Enum.Parse<PlanFeature>(f, ignoreCase: true)).ToList();
 
-    private static PlanResponse ToResponse(Plan plan) => new(
+    private static PlanResponse ToResponse(Plan plan, IReadOnlyDictionary<Guid, string> names) => new(
         plan.Id,
         plan.Name,
         plan.Description,
@@ -181,5 +197,9 @@ public class PlansController : ControllerBase
         plan.MaxExams,
         plan.MaxQuestions,
         plan.MaxAiQuestionsPerMonth,
-        plan.StorageGb);
+        plan.StorageGb,
+        plan.CreatedByUserId,
+        plan.UpdatedByUserId,
+        plan.CreatedByUserId.HasValue ? names.GetValueOrDefault(plan.CreatedByUserId.Value) : null,
+        plan.UpdatedByUserId.HasValue ? names.GetValueOrDefault(plan.UpdatedByUserId.Value) : null);
 }

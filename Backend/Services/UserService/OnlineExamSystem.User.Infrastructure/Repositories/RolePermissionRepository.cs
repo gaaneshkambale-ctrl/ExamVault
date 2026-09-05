@@ -26,6 +26,7 @@ public class RolePermissionRepository : IRolePermissionRepository
         string role,
         IReadOnlyList<string> permissionKeys,
         DateTime updatedAtUtc,
+        Guid updatedByUserId,
         CancellationToken cancellationToken = default)
     {
         // IgnoreQueryFilters() + explicit TenantId, matching GetForRoleAsync's
@@ -55,7 +56,7 @@ public class RolePermissionRepository : IRolePermissionRepository
         var existingKeys = existing.Select(rp => rp.PermissionKey).ToHashSet();
         var toAdd = desiredKeys.Where(key => !existingKeys.Contains(key));
         await _dbContext.RolePermissions.AddRangeAsync(
-            toAdd.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key, UpdatedAtUtc = updatedAtUtc }),
+            toAdd.Select(key => new RolePermission { TenantId = tenantId, Role = role, PermissionKey = key, UpdatedAtUtc = updatedAtUtc, UpdatedByUserId = updatedByUserId }),
             cancellationToken);
 
         // Touch every surviving row's timestamp too (not just newly-added
@@ -65,6 +66,7 @@ public class RolePermissionRepository : IRolePermissionRepository
         foreach (var survivor in existing.Where(rp => !toRemoveIds.Contains(rp.Id)))
         {
             survivor.UpdatedAtUtc = updatedAtUtc;
+            survivor.UpdatedByUserId = updatedByUserId;
         }
 
         // Bump the tenant's permission version so already-issued access
@@ -99,6 +101,35 @@ public class RolePermissionRepository : IRolePermissionRepository
             .Where(rp => rp.TenantId == tenantId && rp.Role == role)
             .Select(rp => rp.PermissionKey)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<(IReadOnlyList<string> Permissions, DateTime? UpdatedAtUtc, Guid? UpdatedByUserId)> GetForRoleWithMetadataAsync(
+        Guid tenantId,
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = await _dbContext.RolePermissions
+            .IgnoreQueryFilters()
+            .Where(rp => rp.TenantId == tenantId && rp.Role == role)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            var tenantHasAnyRows = await _dbContext.RolePermissions
+                .IgnoreQueryFilters()
+                .AnyAsync(rp => rp.TenantId == tenantId, cancellationToken);
+            IReadOnlyList<string> permissions = tenantHasAnyRows
+                ? Array.Empty<string>()
+                : RolePermissionCatalog.DefaultsForRole(role);
+            return (permissions, null, null);
+        }
+
+        var updatedAtUtc = rows.Max(r => r.UpdatedAtUtc);
+        var updatedByUserId = rows
+            .Where(r => r.UpdatedAtUtc == updatedAtUtc)
+            .Select(r => r.UpdatedByUserId)
+            .FirstOrDefault();
+        return (rows.Select(r => r.PermissionKey).ToList(), updatedAtUtc, updatedByUserId);
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>

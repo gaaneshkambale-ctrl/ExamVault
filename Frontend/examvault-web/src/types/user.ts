@@ -93,6 +93,8 @@ export interface UserListItem {
   // page has no use for them.
   tenantId: string;
   lastLoginAtUtc: string | null;
+  createdByUserId: string | null;
+  createdByName: string | null;
 }
 
 // GET /api/users returns every role (including SuperAdmin) when called by
@@ -134,6 +136,8 @@ export interface RolePermissionsEntry {
   role: string;
   permissions: string[];
   updatedAtUtc: string | null;
+  updatedByUserId?: string | null;
+  updatedByName?: string | null;
 }
 
 export type UserSessionStatus = 'Active' | 'Expired' | 'Revoked';

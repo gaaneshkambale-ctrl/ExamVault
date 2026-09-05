@@ -22,6 +22,7 @@ public interface IRolePermissionRepository
         string role,
         IReadOnlyList<string> permissionKeys,
         DateTime updatedAtUtc,
+        Guid updatedByUserId,
         CancellationToken cancellationToken = default);
 
     /// <summary>Permission keys currently granted to this role within this tenant -
@@ -35,6 +36,16 @@ public interface IRolePermissionRepository
     /// revoked to zero, which returns an empty list as-is, matching
     /// GetAllRolePermissionsHandler's existing seed-vs-revoked distinction.</summary>
     Task<IReadOnlyList<string>> GetForRoleAsync(Guid tenantId, string role, CancellationToken cancellationToken = default);
+
+    /// <summary>Same permission keys as <see cref="GetForRoleAsync"/> plus this
+    /// role's "last updated" metadata (max UpdatedAtUtc across its rows, and
+    /// whichever row(s) share that max give the actor) - a separate method
+    /// rather than widening GetForRoleAsync itself, since that one is called on
+    /// every login/token-refresh and shouldn't carry the extra column reads.
+    /// Null metadata means this role has never been explicitly saved (still on
+    /// catalog defaults).</summary>
+    Task<(IReadOnlyList<string> Permissions, DateTime? UpdatedAtUtc, Guid? UpdatedByUserId)> GetForRoleWithMetadataAsync(
+        Guid tenantId, string role, CancellationToken cancellationToken = default);
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }
