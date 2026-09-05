@@ -79,6 +79,7 @@ export default function CreateQuestionModal({
   const [errors, setErrors] = useState<ReturnType<typeof validateCreateQuestion>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // The section's planned Marks / Question Count gives a sensible per-question default -
   // re-apply it each time the modal opens, since defaultMarks can change between opens.
@@ -86,8 +87,31 @@ export default function CreateQuestionModal({
     if (show) {
       setMarks(defaultMarks ?? 1);
       setMode('manual');
+      setShowDiscardConfirm(false);
     }
   }, [show, defaultMarks]);
+
+  // Only the Manual Entry tab's typed-in fields count toward "unsaved
+  // changes" - Import CSV already commits each row the moment "Import
+  // Selected" is clicked (see CsvImportPanel), so there's nothing left
+  // pending there for a modal close to lose.
+  const isDirty = () =>
+    mode === 'manual' &&
+    (questionText.trim() !== '' ||
+      marks !== (defaultMarks ?? 1) ||
+      difficulty !== 'Easy' ||
+      shuffleOptions ||
+      questionType !== 'MultipleChoice' ||
+      options.some((o) => o.optionText.trim() !== '') ||
+      starterCode.trim() !== '' ||
+      programmingLanguage !== '' ||
+      allowLanguageChange ||
+      sampleAnswer.trim() !== '' ||
+      signature.functionName.trim() !== '' ||
+      signature.returnType !== '' ||
+      signature.parameters.length > 0 ||
+      signature.testCases.length > 0 ||
+      sqlTestCases.length > 0);
 
   const reset = () => {
     setQuestionType('MultipleChoice');
@@ -110,6 +134,22 @@ export default function CreateQuestionModal({
   const handleClose = () => {
     reset();
     onClose();
+  };
+
+  // Entry point for every dismissal path (X button, Cancel, Escape) - the
+  // backdrop itself is excluded entirely (Modal's backdrop="static" below),
+  // so this is the only way out. Confirms first if there's anything to lose.
+  const requestClose = () => {
+    if (isDirty()) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    handleClose();
+  };
+
+  const confirmDiscard = () => {
+    setShowDiscardConfirm(false);
+    handleClose();
   };
 
   const changeQuestionType = (type: QuestionType) => {
@@ -194,7 +234,8 @@ export default function CreateQuestionModal({
   };
 
   return (
-    <Modal show={show} onHide={handleClose} size="lg" centered>
+    <>
+    <Modal show={show} onHide={requestClose} backdrop="static" size="lg" centered>
       <Modal.Header closeButton>
         <div>
           <Modal.Title>Create Question</Modal.Title>
@@ -466,7 +507,7 @@ export default function CreateQuestionModal({
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button type="button" variant="outline-secondary" onClick={handleClose}>
+          <Button type="button" variant="outline-secondary" onClick={requestClose}>
             {mode === 'import' ? 'Close' : 'Cancel'}
           </Button>
           {mode === 'manual' && (
@@ -484,5 +525,23 @@ export default function CreateQuestionModal({
         </Modal.Footer>
       </Form>
     </Modal>
+
+    <Modal show={showDiscardConfirm} onHide={() => setShowDiscardConfirm(false)} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Discard changes?</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        You have unsaved changes to this question. Closing now will discard them - this can't be undone.
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="outline-secondary" onClick={() => setShowDiscardConfirm(false)}>
+          Keep Editing
+        </Button>
+        <Button variant="danger" onClick={confirmDiscard}>
+          Discard Changes
+        </Button>
+      </Modal.Footer>
+    </Modal>
+    </>
   );
 }
