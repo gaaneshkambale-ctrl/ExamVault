@@ -12,7 +12,8 @@ public class LoginUserHandlerTests
     private static LoginUserHandler CreateHandler(
         FakeUserRepository repository,
         FakeTenantRepository? tenantRepository = null,
-        FakePlatformSettingsRepository? platformSettingsRepository = null) =>
+        FakePlatformSettingsRepository? platformSettingsRepository = null,
+        FakeAuditClient? auditClient = null) =>
         new(
             repository,
             tenantRepository ?? new FakeTenantRepository(),
@@ -22,7 +23,7 @@ public class LoginUserHandlerTests
             new LoginUserValidator(),
             new PasswordHasher<AppUser>(),
             JwtTestHelper.CreateService(),
-            new FakeAuditClient());
+            auditClient ?? new FakeAuditClient());
 
     private static async Task<AppUser> SeedUser(
         FakeUserRepository repository,
@@ -280,6 +281,27 @@ public class LoginUserHandlerTests
 
         var stored = await repository.GetByIdAsync(user.Id);
         Assert.Equal(3, stored!.FailedLoginAttempts);
+    }
+
+    [Fact]
+    public async Task Locking_out_an_account_records_a_distinct_account_locked_audit_event()
+    {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
+        var repository = new FakeUserRepository();
+        await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id);
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { MaxLoginAttempts = 1, LockoutMinutes = 15 },
+        };
+        var auditClient = new FakeAuditClient();
+        var handler = CreateHandler(repository, tenantRepository, platformSettings, auditClient);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "WrongPassword1", TenantSlug: tenant.Slug));
+
+        Assert.True(result.IsAccountLocked);
+        Assert.Contains(auditClient.Entries, e => e.Activity == "Failed login");
+        Assert.Contains(auditClient.Entries, e => e.Activity == "Account locked");
     }
 
     [Fact]

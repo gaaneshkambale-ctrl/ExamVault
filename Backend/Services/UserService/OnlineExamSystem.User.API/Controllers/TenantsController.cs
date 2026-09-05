@@ -110,6 +110,7 @@ public class TenantsController : ControllerBase
 
         var tenant = result.Tenant!;
         _logger.LogInformation("Tenant {TenantId} ({Slug}) created.", tenant.Id, tenant.Slug);
+        await RecordSecurityEventAsync(tenant.Id, "Organization created", cancellationToken);
         var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, tenant.CreatedByUserId, cancellationToken);
         return StatusCode(StatusCodes.Status201Created, ToResponse(tenant, createdByName));
     }

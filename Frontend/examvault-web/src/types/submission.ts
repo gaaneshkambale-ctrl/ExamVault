@@ -38,7 +38,8 @@ export type ProctoringViolationType =
   | 'MultipleTabs'
   | 'CopyPaste'
   | 'RightClick'
-  | 'MultipleMonitors';
+  | 'MultipleMonitors'
+  | 'FullscreenExit';
 
 export interface AttemptAnswerResponse {
   id: string;

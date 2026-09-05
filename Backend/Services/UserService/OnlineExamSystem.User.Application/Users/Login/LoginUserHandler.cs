@@ -135,7 +135,15 @@ public class LoginUserHandler
             // same "never reveal whether it exists" principle already
             // documented there.
             await RecordLoginAuditAsync(user, "Failed login", command.IpAddress, cancellationToken);
-            return justLockedOut ? LoginUserResult.AccountLocked(user.LockoutEndUtc!.Value) : LoginUserResult.InvalidCredentials();
+            if (justLockedOut)
+            {
+                // Distinct from "Failed login" so lockout is its own
+                // filterable event instead of only being inferable by
+                // counting consecutive failures.
+                await RecordLoginAuditAsync(user, "Account locked", command.IpAddress, cancellationToken);
+                return LoginUserResult.AccountLocked(user.LockoutEndUtc!.Value);
+            }
+            return LoginUserResult.InvalidCredentials();
         }
 
         if (!user.IsActive && !user.MustChangePassword)
