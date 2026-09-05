@@ -25,9 +25,10 @@ type ImportKind = 'standard' | 'code';
 
 // Code/Programming questions have an entirely different field set (no
 // Options/Correct Answer - a programming language, starter code, reference
-// solution instead), so they need their own template rather than trying to
-// force both shapes into one generic CSV - see CsvCodeImportRow's own
-// comment for what's deliberately left out of it (test cases/signature).
+// solution, and an optional function signature/test cases instead), so they
+// need their own template rather than trying to force both shapes into one
+// generic CSV - see CsvCodeImportRow's own comment for the signature fields'
+// encoding and what's still deliberately left out (Sql setup scripts).
 type AnyRow =
   | { kind: 'standard'; row: CsvImportRow }
   | { kind: 'code'; row: CsvCodeImportRow };
@@ -121,6 +122,10 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
               programmingLanguage: entry.row.programmingLanguage,
               allowLanguageChange: entry.row.allowLanguageChange,
               sampleAnswer: entry.row.sampleAnswer || null,
+              functionName: entry.row.functionName || null,
+              returnType: entry.row.returnType,
+              parameters: entry.row.parameters,
+              testCases: entry.row.testCases,
             })
           : createQuestion({
               examId,
@@ -181,9 +186,20 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
         <div>
           <Form.Label className="fw-bold mb-1">Upload CSV</Form.Label>
           <div className="text-muted small">
-            {importKind === 'code'
-              ? 'Header row required: Question Text, Difficulty, Marks, Programming Language, Starter Code, Sample Answer / Reference Query, Allow Language Change. Test cases are added afterward via Edit Question.'
-              : 'Header row required: Question Text, Type, Difficulty, Marks, Option A-D, Correct Answer, Shuffle Options.'}
+            {importKind === 'code' ? (
+              <>
+                Header row required: Question Text, Difficulty, Marks, Programming Language, Starter Code, Sample
+                Answer / Reference Query, Allow Language Change, Function Name, Return Type, Parameters, Test Cases.
+                The last four are optional (leave all blank for a manually graded question; SQL never uses them).
+                Parameters: <code>name:type</code> pairs separated by <code>;</code> (e.g.{' '}
+                <code>arr:IntArray;target:Int</code>). Test Cases: one argument per parameter separated by{' '}
+                <code>|</code>, then <code>=&gt;</code> and the expected output, multiple cases separated by{' '}
+                <code>;</code> (e.g. <code>2|3=&gt;5;10|20=&gt;30</code>); array arguments are comma-separated (e.g.{' '}
+                <code>1,2,3</code>).
+              </>
+            ) : (
+              'Header row required: Question Text, Type, Difficulty, Marks, Option A-D, Correct Answer, Shuffle Options.'
+            )}
           </div>
         </div>
         <Button variant="outline-secondary" size="sm" onClick={() => downloadTemplate(importKind)}>
