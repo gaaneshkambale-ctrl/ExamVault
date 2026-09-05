@@ -7727,3 +7727,80 @@ exam-group header rows, and Question Bank's exam/section header rows all
 now render with a proper dark surface and fully legible text.
 
 NOT committed/pushed - holding per the user's standing rule.
+
+PLAN (2026-09-05): User flagged Super Admin's Subscriptions > Usage page
+as "not implemented yet". Read the real current state
+(PlatformUsage.tsx): only "Total Students" was real - Exams Conducted/
+Active Exams/Storage Used/API Calls were honest "—" placeholders, and
+Usage Overview/Top Organizations by Usage/Usage by Plan were all "Not
+connected yet" boxes, per the file's own comment explaining why (no
+cross-tenant attempts endpoint existed anywhere at the time it was
+built).
+
+That's no longer true - this session already built GET /api/exams,
+GET /api/plans, and GET /api/submissions/all (the new Super Admin
+Submissions work), plus the existing cross-tenant GET /api/users. All
+the data this page needs now genuinely exists; it just needs wiring up,
+matching every other Platform page's own client-side cross-tenant-join
+pattern. Scope decision (kept honest, not padded): Storage Used and API
+Calls stay "—" - no metering exists for either anywhere in this
+codebase, so those stay real placeholders, not fabricated numbers.
+
+Plan:
+  - Exams Conducted -> real count of completed submissions (Submitted +
+    AutoSubmitted attempts) - actual exam-taking events, not just
+    authored exams.
+  - Active Exams -> real count of Published exams, matching the
+    Published/Draft/Archived bucket convention already used on
+    PlatformAllExams.tsx.
+  - Usage Overview -> a real LineTrendChart (the same reusable component
+    Dashboard/PlatformUsageReport already use) showing daily New Exams
+    and Submissions over the last 7 days via bucketByDay - a real
+    per-day activity trend, deliberately distinct from Dashboard's own
+    cumulative Organizations/Users/Exams chart rather than duplicating it.
+  - Top Organizations by Usage -> a real ranked list: each tenant's
+    student + exam + submission counts, sorted by total usage
+    descending, top 5 - the same cross-tenant join (tenants + users +
+    exams + submissions by tenantId) every other Platform list page
+    already does client-side.
+  - Usage by Plan -> a real table: for each Plan, how many tenants are
+    on it and their aggregate Students/Admins/Instructors/Exams usage
+    against that plan's Max* limits (only the 4 fields actually
+    server-enforced - see SubscriptionPlans.tsx's own "Server Enforced"
+    distinction - MaxQuestions/MaxAiQuestionsPerMonth/StorageGb are
+    tracked but not enforced, so left out of the vs-limit comparison
+    here too).
+
+Frontend-only, no backend changes - every data source this page needs
+already has a real cross-tenant endpoint. Will verify with tsc/build/
+tests, then rebuild the frontend Docker image and live-verify before
+marking DONE.
+
+DONE (2026-09-05): Implemented and verified the plan above. Rewrote
+PlatformUsage.tsx: Exams Conducted now shows real completed-submission
+count, Active Exams shows real Published-exam count, Usage Overview is a
+real LineTrendChart (New Exams + Submissions per day, last 7 days, via
+bucketByDay), Top Organizations by Usage is a real ranked list (each
+tenant's student/exam/submission counts, sorted by total usage
+descending), and Usage by Plan is a real table (organizations per plan,
+aggregate Students/Admins/Instructors/Exams vs each plan's Max* limits,
+"/ ∞" for unenforced/null limits). Storage Used and API Calls correctly
+stay "—" - genuinely untracked, not fabricated. All frontend-only, no
+backend changes - every data source (exams, users, plans, submissions,
+tenants) already had a real cross-tenant endpoint from this session's
+earlier work.
+
+Verification: tsc clean, npm run build succeeded, lint clean (only
+pre-existing unrelated warnings), 61/61 tests passed. Rebuilt and
+redeployed the frontend Docker image. Live-verified in the browser as
+Super Admin: Total Students 8, Exams Conducted 78, Active Exams 8 (all
+real); the trend chart renders and its hover tooltip shows real per-day
+values (e.g. "Sep 3: New Exams: 0, Submissions: 0"); Top Organizations by
+Usage correctly ranks "Default" first (0 students, 6 exams, 79
+submissions - highest total) ahead of orgs with more students but fewer
+submissions; Usage by Plan correctly shows Full Access's 5 organizations
+with real aggregated usage (8/∞ students, 3/∞ admins, 2/∞ instructors,
+17/∞ exams) and Restricted (No Exams) correctly at 0 across the board
+(unused plan).
+
+NOT committed/pushed - holding per the user's standing rule.
