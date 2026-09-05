@@ -7526,4 +7526,112 @@ Service path.
 
 NOT committed/pushed - holding per the user's standing rule.
 
+PLAN (2026-09-05): User flagged two Super Admin sidebar items - "Questions"
+and "Submissions" - as "not yet implemented" (screenshots: questions.png,
+submission.png). Both already exist as top-level sidebar links/routes
+(distinct from Exams > Question Bank, already built) but both currently
+render PlatformComingSoon's "isn't connected yet" placeholder
+(platformComingSoonRoutes.ts). Investigated the real data model behind
+each mockup before writing any code and found two real gaps, put to the
+user as a scoping decision rather than assumed:
+  - Questions mockup's Subject/Topic/Status(Active-Inactive) columns don't
+    exist anywhere in the Question domain (only Type/Difficulty/Marks do).
+  - Submissions mockup's Score/Percentage are never stored (computed live,
+    per-exam, by the separate Result Service, not a column you can list/
+    sort at scale), and "Not Submitted" isn't a real status - a student
+    who never started an exam has no ExamAttempt row to query at all.
+User chose, for both: build with real data only, skip the fields/states
+that don't exist rather than fabricate them (Recommended options).
+
+Questions page (frontend-only, no backend changes needed): a NEW page,
+distinct from the existing accordion-grouped Question Bank - a flat,
+filterable table using the exact same already-CreatedBy-wired
+`GET /api/questions/all` endpoint and the same client-side
+tenant/exam-name join pattern PlatformQuestionBank.tsx already uses.
+Columns: Question, Type, Difficulty, Marks, Organization, Created On,
+Created By - no Subject/Topic/Status, no Actions column (Super Admin
+browses, doesn't author tenant content - matches the existing Question
+Bank page's own read-only design, not a new capability).
+
+Submissions page: real backend work needed - no Super Admin endpoint
+exists at all today, not even a lesser one to generalize. Plan:
+  - Submission Service gets its own IInternalUserLookupClient +
+    InternalUserServiceClient (mirroring Exam/Question Service's - this
+    is the third service to need this same cross-service name-resolution
+    plumbing) to resolve student name/email for a list of UserIds.
+  - New ISubmissionRepository.GetAllAttemptsAsync() (no params) - relies
+    on SubmissionDbContext's existing IsSuperAdmin query-filter bypass
+    (SubmissionDbContext.cs:40 etc.), the same mechanism every other
+    cross-tenant Super Admin list already uses, not a new one.
+  - New PlatformSubmissionResponse DTO (Id, ExamId, UserId, TenantId,
+    AttemptNumber, Status, StartedAtUtc, SubmittedAtUtc, StudentName,
+    StudentEmail) - deliberately excludes Score/Percentage/proctoring
+    counters, matching the user's pragmatic-scope choice.
+  - New `GET /api/submissions/all` (SuperAdmin-only) on
+    SubmissionsController, following All Exams/Question Bank's own
+    client-side-join architecture (fetch everything once, join
+    tenant/exam names from useTenants()/listExams() already used
+    elsewhere, filter/paginate client-side) - consistent with every
+    other Platform list page in this codebase, not a new pattern.
+  - docker-compose.yml: submission-api needs Services__UserServiceBaseUrl
+    added (it doesn't call User Service for anything today) plus a
+    user-api depends_on, mirroring question-api's own block exactly.
+
+Will verify with dotnet build + full test suites on Submission Service,
+tsc/build/tests on the frontend, then rebuild the affected Docker images
+and live-verify both new pages in the browser before marking DONE.
+
+DONE (2026-09-05): Implemented and verified the plan above.
+
+Questions page (src/pages/platform/PlatformQuestions.tsx): flat,
+filterable, paginated table over the same GET /api/questions/all data
+Question Bank already uses, no backend changes needed. Organization/
+Type/Difficulty filters, free-text search, CSV export, real client-side
+pagination (matches SecurityAuditLogs.tsx's own pattern). No Subject/
+Topic/Status columns, no Add/Edit/Delete actions, per the user's chosen
+scope.
+
+Submissions page - real backend work, Submission Service's first-ever
+Super Admin endpoint:
+  - Added IInternalUserLookupClient + InternalUserServiceClient to
+    Submission Service (the third service to need this exact cross-
+    service name-resolution plumbing, after Exam and Question Service)
+    plus a matching ActorNameResolver in Submission.API.
+  - ISubmissionRepository.GetAllAttemptsAsync() (no params) - relies on
+    SubmissionDbContext's existing IsSuperAdmin query-filter bypass.
+  - New PlatformSubmissionResponse DTO and GET /api/submissions/all
+    (SuperAdmin-only) on SubmissionsController, resolving student name/
+    email for every attempt's UserId in one batch call.
+  - docker-compose.yml: submission-api gained Services__UserServiceBaseUrl
+    and a user-api depends_on (it never called User Service before this).
+  - Frontend (PlatformSubmissions.tsx): same client-side cross-tenant
+    join pattern as every other Platform list page (useTenants() +
+    listExams()), Organization/Exam/Status/Date-range filters, search,
+    CSV export, real pagination. Stat cards are Total/Completed/
+    In Progress/Auto-Submitted - deliberately no Score/Percentage column
+    and no fake "Not Submitted" row, matching the user's chosen scope.
+
+Caught and fixed one real test breakage: FakeSubmissionRepository (test
+fake) didn't implement the new GetAllAttemptsAsync interface member -
+added it, mirroring the real repository's implementation.
+
+Verification: dotnet build clean on Submission Service (0 warnings, 0
+errors). Full test suite green: Submission Service Application.Tests
+87/87. Frontend: tsc clean, npm run build succeeded, lint clean (only
+pre-existing unrelated warnings), 61/61 tests passed. Rebuilt and
+redeployed submission-api and frontend Docker images; confirmed
+submission-api started cleanly against the new User Service dependency
+(no crash, migrations already up to date).
+
+Live-verified in the browser as Super Admin: Questions page shows 183
+real questions with working filters and real Created By names. Submissions
+page shows 87 real attempts with resolved student names/emails/exam
+titles/organizations spanning 4 different tenants (Platform, QA Demo
+Institute, Test Org, DY), stat cards mathematically correct (58 Completed
++ 9 In Progress + 20 Auto-Submitted = 87 Total), a genuine In-Progress row
+correctly shows "—" for Submitted At/Time Taken rather than fabricating
+values, and rows referencing a deleted exam or an unresolvable student
+correctly fall back to "—" instead of erroring - real data, real gaps,
+nothing faked. Pagination confirmed working (9 pages at 10/page).
+
 NOT committed/pushed - holding per the user's standing rule.

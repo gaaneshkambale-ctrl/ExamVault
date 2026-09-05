@@ -117,6 +117,8 @@ import PlatformExamCategories from '../pages/platform/PlatformExamCategories';
 import PlatformSections from '../pages/platform/PlatformSections';
 import PlatformQuestionBank from '../pages/platform/PlatformQuestionBank';
 import PlatformExamTags from '../pages/platform/PlatformExamTags';
+import PlatformQuestions from '../pages/platform/PlatformQuestions';
+import PlatformSubmissions from '../pages/platform/PlatformSubmissions';
 import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
 import { platformComingSoonRoutes } from './platformComingSoonRoutes';
 
@@ -880,6 +882,22 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <PlatformExamTags />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/questions"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformQuestions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/submissions"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformSubmissions />
           </ProtectedRoute>
         }
       />

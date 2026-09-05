@@ -10,8 +10,5 @@ export interface PlatformComingSoonRoute {
 }
 
 export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
-  { path: '/platform/questions', active: 'questions', parent: 'Platform Admin', title: 'Questions' },
-  { path: '/platform/submissions', active: 'submissions', parent: 'Platform Admin', title: 'Submissions' },
-
   { path: '/platform/monitoring/api-health', active: 'mon-api-health', parent: 'System Monitoring', title: 'API Health' },
 ];

@@ -88,6 +88,10 @@ public class FakeSubmissionRepository : ISubmissionRepository
                 .OrderByDescending(a => a.StartedAtUtc)
                 .ToList());
 
+    public Task<IReadOnlyList<ExamAttempt>> GetAllAttemptsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamAttempt>>(
+            _attempts.OrderByDescending(a => a.StartedAtUtc).ToList());
+
     public Task<ILookup<Guid, AttemptAnswer>> GetAnswersByAttemptIdsAsync(
         IReadOnlyList<Guid> attemptIds,
         CancellationToken cancellationToken = default) =>

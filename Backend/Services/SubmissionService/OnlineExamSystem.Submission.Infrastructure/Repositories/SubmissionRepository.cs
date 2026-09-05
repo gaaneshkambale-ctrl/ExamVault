@@ -57,6 +57,11 @@ public class SubmissionRepository : ISubmissionRepository
             .OrderByDescending(a => a.StartedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<ExamAttempt>> GetAllAttemptsAsync(CancellationToken cancellationToken = default) =>
+        await _dbContext.ExamAttempts
+            .OrderByDescending(a => a.StartedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<AttemptAnswer>> GetAnswersByAttemptIdAsync(
         Guid attemptId,
         CancellationToken cancellationToken = default) =>

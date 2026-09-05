@@ -7,11 +7,13 @@ using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
 using OnlineExamSystem.Submission.Application.Attempts.Grade;
 using OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
+using OnlineExamSystem.Submission.Application.Attempts.ListAll;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListUngradedByExam;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
+using OnlineExamSystem.Submission.Application.Interfaces;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
 using OnlineExamSystem.Submission.Application.Attempts.ListViolationsByExam;
@@ -53,6 +55,8 @@ public class SubmissionsController : ControllerBase
     private readonly CompleteSectionHandler _completeSectionHandler;
     private readonly GradeAnswerHandler _gradeAnswerHandler;
     private readonly ListUngradedAnswersByExamHandler _listUngradedAnswersByExamHandler;
+    private readonly ListAllAttemptsHandler _listAllAttemptsHandler;
+    private readonly IInternalUserLookupClient _userLookupClient;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -75,6 +79,8 @@ public class SubmissionsController : ControllerBase
         CompleteSectionHandler completeSectionHandler,
         GradeAnswerHandler gradeAnswerHandler,
         ListUngradedAnswersByExamHandler listUngradedAnswersByExamHandler,
+        ListAllAttemptsHandler listAllAttemptsHandler,
+        IInternalUserLookupClient userLookupClient,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
@@ -96,7 +102,36 @@ public class SubmissionsController : ControllerBase
         _completeSectionHandler = completeSectionHandler;
         _gradeAnswerHandler = gradeAnswerHandler;
         _listUngradedAnswersByExamHandler = listUngradedAnswersByExamHandler;
+        _listAllAttemptsHandler = listAllAttemptsHandler;
+        _userLookupClient = userLookupClient;
         _logger = logger;
+    }
+
+    // Super Admin platform-wide Submissions browse across every tenant, not
+    // one exam's own attempts. Score/Percentage are deliberately absent -
+    // see PlatformSubmissionResponse's own comment.
+    [HttpGet("all")]
+    [Authorize(Roles = "SuperAdmin")]
+    public async Task<IActionResult> ListAll(CancellationToken cancellationToken)
+    {
+        var attempts = await _listAllAttemptsHandler.HandleAsync(new ListAllAttemptsQuery(), cancellationToken);
+        var usersById = await ActorNameResolver.ResolveAsync(_userLookupClient, attempts.Select(a => a.UserId), cancellationToken);
+
+        return Ok(attempts.Select(a =>
+        {
+            usersById.TryGetValue(a.UserId, out var user);
+            return new PlatformSubmissionResponse(
+                a.Id,
+                a.ExamId,
+                a.UserId,
+                a.TenantId,
+                a.AttemptNumber,
+                a.Status.ToString(),
+                a.StartedAtUtc,
+                a.SubmittedAtUtc,
+                user?.FullName,
+                user?.Email);
+        }));
     }
 
     [HttpPost("start")]
