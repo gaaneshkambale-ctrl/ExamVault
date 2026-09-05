@@ -11,6 +11,7 @@ import { useTenants } from '../../hooks/useTenants';
 import { useAuth } from '../../hooks/useAuth';
 import { listAllUsers } from '../../api/userApi';
 import { listExams } from '../../api/examApi';
+import { listAllSubmissions } from '../../api/submissionApi';
 import { listPlans } from '../../api/plansApi';
 import { listServiceStatus } from '../../api/monitoringApi';
 import { timeAgo } from '../../utils/timeAgo';
@@ -19,20 +20,18 @@ import type { ExamResponse } from '../../types/exam';
 
 const REFRESH_INTERVAL_MS = 30000;
 
-// Matches dashboard-superadmin.png. Total Organizations/Users/Exams,
-// Platform Overview's trend lines, Recent Organizations, Subscription
-// Overview and System Health are all real now - listAllUsers/listExams
-// already power the platform Users/Exams pages, Tenant.isTrial/
-// TrialEndsAtUtc is the real (non-billing) subscription-expiry model
-// OrganizationsAndPlans.tsx established, and listServiceStatus already
-// powers System Monitoring's Service Status page. Total Submissions and
-// Top Active Exams' "Attempts" stay honest "not connected yet" - there is
-// still no cross-tenant attempts endpoint anywhere (see ExamUsageReport's
-// own note on SubmissionsController) - so the mockup's Submissions line
-// is dropped from the trend chart entirely rather than faked as zero, and
-// the mockup's "Active Subscriptions" card is repointed at the platform's
-// actual real subscription-adjacent metric (Trials Expiring Soon) instead
-// of restating the Active Organizations count under a different name.
+// Matches dashboard-superadmin.png. Total Organizations/Users/Exams/
+// Submissions, Platform Overview's trend lines, Recent Organizations,
+// Subscription Overview and System Health are all real now -
+// listAllUsers/listExams already power the platform Users/Exams pages,
+// listAllSubmissions (GET /api/submissions/all) is the same cross-tenant
+// endpoint PlatformSubmissions.tsx uses, Tenant.isTrial/TrialEndsAtUtc is
+// the real (non-billing) subscription-expiry model OrganizationsAndPlans.tsx
+// established, and listServiceStatus already powers System Monitoring's
+// Service Status page. The mockup's "Active Subscriptions" card is
+// repointed at the platform's actual real subscription-adjacent metric
+// (Trials Expiring Soon) instead of restating the Active Organizations
+// count under a different name.
 function StatCard({
   icon,
   iconBg,
@@ -102,6 +101,11 @@ export default function PlatformDashboard() {
     queryFn: listExams,
     refetchInterval: REFRESH_INTERVAL_MS,
   });
+  const { data: allSubmissions, isLoading: isLoadingSubmissions } = useQuery({
+    queryKey: ['platform-submissions'],
+    queryFn: listAllSubmissions,
+    refetchInterval: REFRESH_INTERVAL_MS,
+  });
   const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
   const { data: services, isLoading: isLoadingServices } = useQuery({
     queryKey: ['monitoring-services'],
@@ -119,6 +123,8 @@ export default function PlatformDashboard() {
 
   const totalUsers = allUsers?.length ?? 0;
   const totalExams = allExams?.length ?? 0;
+  const totalSubmissions = allSubmissions?.length ?? 0;
+  const submissionsThisWeek = allSubmissions?.filter((s) => new Date(s.startedAtUtc).getTime() >= oneWeekAgo).length ?? 0;
 
   const expiringSoonCount = (tenants ?? []).filter(
     (t) => t.isTrial && t.trialEndsAtUtc && daysRemaining(t.trialEndsAtUtc) >= 0 && daysRemaining(t.trialEndsAtUtc) <= 30,
@@ -189,8 +195,16 @@ export default function PlatformDashboard() {
           value: (allExams ?? []).filter((e) => new Date(e.createdOn) <= d).length,
         })),
       },
+      {
+        name: 'Submissions',
+        color: '#2563eb',
+        data: trendDays.map((d) => ({
+          label: fmtDay(d),
+          value: (allSubmissions ?? []).filter((s) => new Date(s.startedAtUtc) <= d).length,
+        })),
+      },
     ],
-    [trendDays, tenants, allUsers, allExams],
+    [trendDays, tenants, allUsers, allExams, allSubmissions],
   );
 
   const dateRangeLabel = `${fmtDay(trendDays[0])} - ${trendDays[6].toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
@@ -200,6 +214,7 @@ export default function PlatformDashboard() {
     queryClient.invalidateQueries({ queryKey: ['tenants'] });
     queryClient.invalidateQueries({ queryKey: ['platform-users'] });
     queryClient.invalidateQueries({ queryKey: ['platform-exams'] });
+    queryClient.invalidateQueries({ queryKey: ['platform-submissions'] });
     queryClient.invalidateQueries({ queryKey: ['plans'] });
     queryClient.invalidateQueries({ queryKey: ['monitoring-services'] });
   };
@@ -273,7 +288,8 @@ export default function PlatformDashboard() {
             />
             <StatCard
               label="Total Submissions"
-              value="—"
+              value={isLoadingSubmissions ? <Spinner animation="border" size="sm" /> : totalSubmissions}
+              trend={submissionsThisWeek > 0 ? `+${submissionsThisWeek} this week` : undefined}
               iconBg="#dbeafe"
               icon={
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2">
@@ -302,14 +318,13 @@ export default function PlatformDashboard() {
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
                   <h2 className="h6 fw-bold mb-3">Platform Overview</h2>
-                  {isLoadingUsers || isLoadingExams ? (
+                  {isLoadingUsers || isLoadingExams || isLoadingSubmissions ? (
                     <div className="d-flex justify-content-center py-5">
                       <Spinner animation="border" size="sm" />
                     </div>
                   ) : (
                     <LineTrendChart series={overviewSeries} />
                   )}
-                  <div className="text-muted small mt-2">Submissions - not connected yet (no cross-tenant attempts endpoint).</div>
                 </Card.Body>
               </Card>
             </Col>
