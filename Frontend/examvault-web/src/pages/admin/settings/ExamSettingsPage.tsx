@@ -25,7 +25,7 @@ const FACTORY_DEFAULTS: Omit<ExamDefaultsResponse, 'updatedAtUtc'> = {
 
 function SectionBar({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
   return (
-    <div className="d-flex align-items-center gap-2 px-3 py-3 rounded-3 mb-3" style={{ background: '#f5f5ff' }}>
+    <div className="d-flex align-items-center gap-2 px-3 py-3 rounded-3 mb-3 bg-primary-subtle">
       <div
         className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
         style={{ width: 36, height: 36, background: '#e0e7ff', color: '#4f46e5' }}

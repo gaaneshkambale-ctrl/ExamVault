@@ -319,7 +319,7 @@ export default function CreateNotification() {
                   <Col md={6}>
                     <Form.Group className="mb-3">
                       <Form.Label className="fw-bold">&nbsp;</Form.Label>
-                      <div className="form-control bg-light text-muted">
+                      <div className="form-control bg-body-tertiary text-muted">
                         {recipientCount === null
                           ? 'Recipients determined at send time'
                           : `${recipientCount} recipient${recipientCount === 1 ? '' : 's'} selected`}
@@ -521,7 +521,7 @@ export default function CreateNotification() {
                 <Badge bg={canSubmit ? 'success' : 'secondary'}>{canSubmit ? 'Ready to Send' : 'Incomplete'}</Badge>
               </div>
 
-              <Card className="border-0" style={{ background: '#eef2ff' }}>
+              <Card className="border-0 bg-primary-subtle">
                 <Card.Body className="p-3">
                   <div className="fw-bold text-primary mb-2">Preview</div>
                   <div className="fw-bold small">{previewTitle}</div>

@@ -214,7 +214,7 @@ export default function NotificationTemplates() {
           {!isLoading && !isError && items.length > 0 && (
             <div className="table-responsive">
               <Table hover className="mb-0 align-middle">
-                <thead className="text-muted small text-uppercase bg-light">
+                <thead className="text-muted small text-uppercase bg-body-tertiary">
                   <tr>
                     <th>Template Name</th>
                     <th>Type</th>
@@ -281,7 +281,7 @@ export default function NotificationTemplates() {
             </div>
           )}
 
-          <Card className="border-0 mt-4" style={{ background: '#eef2ff' }}>
+          <Card className="border-0 mt-4 bg-primary-subtle">
             <Card.Body className="p-4">
               <div className="d-flex align-items-center gap-2 mb-3">
                 <BulbIcon />

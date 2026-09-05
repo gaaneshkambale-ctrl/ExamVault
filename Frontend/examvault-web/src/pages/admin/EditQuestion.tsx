@@ -398,7 +398,7 @@ export default function EditQuestion() {
                   {options.map((option, index) => (
                     <div key={option.key} className="d-flex align-items-center gap-2 mb-2">
                       <span
-                        className="d-inline-flex align-items-center justify-content-center rounded-circle bg-light border fw-bold flex-shrink-0"
+                        className="d-inline-flex align-items-center justify-content-center rounded-circle bg-body-tertiary border fw-bold flex-shrink-0"
                         style={{ width: 32, height: 32 }}
                       >
                         {optionLetter(index)}

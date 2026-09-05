@@ -448,7 +448,7 @@ export default function ManageUsers() {
                 )}
               </div>
               <Table responsive hover className="mb-0 align-middle">
-                <thead className="text-muted small text-uppercase bg-light">
+                <thead className="text-muted small text-uppercase bg-body-tertiary">
                   <tr>
                     <th className="ps-4" style={{ width: 40 }}></th>
                     <th>User</th>

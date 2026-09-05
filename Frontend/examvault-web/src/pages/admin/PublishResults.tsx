@@ -193,7 +193,7 @@ export default function PublishResults() {
 
           {!loading && rows.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   {activeTab === 'ready' && <th className="ps-4" style={{ width: 40 }} />}
                   <th className={activeTab === 'ready' ? '' : 'ps-4'}>Exam Name</th>

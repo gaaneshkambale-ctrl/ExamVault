@@ -350,7 +350,7 @@ export default function RolesPermissions() {
           </div>
 
           <Table responsive hover className="mb-0 align-middle">
-            <thead className="text-muted small text-uppercase bg-light">
+            <thead className="text-muted small text-uppercase bg-body-tertiary">
               <tr>
                 <th className="ps-2">Role Name</th>
                 <th>Description</th>

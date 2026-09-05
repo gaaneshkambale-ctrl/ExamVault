@@ -335,7 +335,7 @@ export default function SecuritySettingsPage() {
           </Col>
 
           <Col lg={4}>
-            <Card className="border-0 shadow-sm mb-3" style={{ background: '#ecfdf5' }}>
+            <Card className="border-0 shadow-sm mb-3 bg-success-subtle">
               <Card.Body className="p-4">
                 <div className="d-flex align-items-center gap-2 mb-2">
                   <span
@@ -364,7 +364,7 @@ export default function SecuritySettingsPage() {
               </Card.Body>
             </Card>
 
-            <Card className="border-0 shadow-sm" style={{ background: '#eef2ff' }}>
+            <Card className="border-0 shadow-sm bg-primary-subtle">
               <Card.Body className="p-4">
                 <div className="d-flex align-items-center gap-2 mb-2">
                   <span className="text-primary">

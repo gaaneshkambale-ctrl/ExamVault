@@ -334,7 +334,7 @@ export default function ImportUsers() {
             )}
 
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th>Row</th>
                   <th>Full Name</th>

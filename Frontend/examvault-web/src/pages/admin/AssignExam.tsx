@@ -557,7 +557,7 @@ export default function AssignExam() {
               ) : (
                 <>
                 <Table hover className="align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th></th>
                       <th>Exam Title</th>
@@ -715,8 +715,8 @@ export default function AssignExam() {
                     <div className="fw-medium small mb-2">Selected Students ({selectedStudents.length})</div>
                     {selectedStudents.length === 0 ? (
                       <div
-                        className="d-flex flex-column align-items-center justify-content-center text-center border rounded-3 p-4"
-                        style={{ minHeight: 280, background: '#f8f9ff' }}
+                        className="d-flex flex-column align-items-center justify-content-center text-center border rounded-3 p-4 bg-body-tertiary"
+                        style={{ minHeight: 280 }}
                       >
                         <div
                           className="d-flex align-items-center justify-content-center rounded-circle mb-3"

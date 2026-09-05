@@ -104,13 +104,13 @@ export default function QuestionDetails() {
                   {question.starterCode && (
                     <>
                       <div className="text-muted small mb-2">Starter Code</div>
-                      <pre className="bg-light border rounded p-3 mb-3">{question.starterCode}</pre>
+                      <pre className="bg-body-tertiary border rounded p-3 mb-3">{question.starterCode}</pre>
                     </>
                   )}
                   {question.sampleAnswer && (
                     <>
                       <div className="text-muted small mb-2">Sample Answer (grading reference)</div>
-                      <pre className="bg-light border rounded p-3 mb-0">{question.sampleAnswer}</pre>
+                      <pre className="bg-body-tertiary border rounded p-3 mb-0">{question.sampleAnswer}</pre>
                     </>
                   )}
                 </>
