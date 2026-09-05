@@ -388,7 +388,7 @@ export default function ExamDetails() {
               })}
             </div>
 
-            <Card className="border bg-light mb-4">
+            <Card className="border bg-body-tertiary mb-4">
               <Card.Body>
                 <h2 className="h6 fw-bold mb-3">Exam Rules</h2>
                 <Form.Check

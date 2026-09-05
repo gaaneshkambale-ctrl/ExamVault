@@ -226,7 +226,7 @@ export default function ExamScheduled() {
 
           {!isLoading && !isError && filteredRows.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase table-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">#</th>
                   <th>Exam Name</th>

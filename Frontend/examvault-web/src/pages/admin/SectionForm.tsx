@@ -744,12 +744,11 @@ export default function SectionForm() {
                         <Card
                           role="button"
                           onClick={() => updateField('navigationType', nav.value)}
-                          className="h-100"
+                          className={`h-100${selected ? ' bg-primary-subtle' : ''}`}
                           style={{
                             cursor: 'pointer',
                             borderColor: selected ? '#4f46e5' : undefined,
                             borderWidth: selected ? 2 : 1,
-                            background: selected ? '#f5f3ff' : undefined,
                           }}
                         >
                           <Card.Body className="p-3">
@@ -1000,7 +999,7 @@ export default function SectionForm() {
                   {!isLoadingUnassigned && filteredQuestions.length > 0 && (
                     <>
                       <Table responsive hover className="align-middle">
-                        <thead className="text-muted small text-uppercase table-light">
+                        <thead className="text-muted small text-uppercase bg-body-tertiary">
                           <tr>
                             <th style={{ width: 40 }}></th>
                             <th>Question</th>

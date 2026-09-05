@@ -270,7 +270,7 @@ export default function ExamDetails() {
 
             {!isLoadingAssignments && assignments && assignments.length > 0 && (
               <Table responsive hover className="align-middle mb-0">
-                <thead className="text-muted small text-uppercase table-light">
+                <thead className="text-muted small text-uppercase bg-body-tertiary">
                   <tr>
                     <th>Assignment ID</th>
                     <th>Assigned To</th>

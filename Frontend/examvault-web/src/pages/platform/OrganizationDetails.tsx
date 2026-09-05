@@ -900,7 +900,7 @@ export default function OrganizationDetails() {
                         onClick={() => setSelectedRole(role)}
                         className="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border"
                         style={{
-                          background: active ? style.iconBg : '#fff',
+                          background: active ? style.iconBg : undefined,
                           borderColor: active ? style.iconColor : '#dee2e6',
                           borderWidth: active ? 2 : 1,
                           cursor: 'pointer',
@@ -912,7 +912,9 @@ export default function OrganizationDetails() {
                         >
                           {style.icon}
                         </span>
-                        <span className={active ? 'fw-semibold' : 'text-muted'}>{role}</span>
+                        <span className={active ? 'fw-semibold' : 'text-muted'} style={active ? { color: style.iconColor } : undefined}>
+                          {role}
+                        </span>
                       </button>
                     );
                   })}
@@ -933,8 +935,8 @@ export default function OrganizationDetails() {
                           <Col xs={12} md={6} key={perm}>
                             <label
                               htmlFor={`org-role-perm-${perm}`}
-                              className="d-flex align-items-start gap-2 p-2 rounded-3 border h-100"
-                              style={{ cursor: 'pointer', background: checked ? '#f8fafc' : '#fff' }}
+                              className={`d-flex align-items-start gap-2 p-2 rounded-3 border h-100${checked ? ' bg-body-tertiary' : ''}`}
+                              style={{ cursor: 'pointer' }}
                             >
                               <span
                                 className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"

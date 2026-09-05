@@ -88,7 +88,7 @@ export default function SectionDetails() {
 
               {questions && questions.length > 0 && (
                 <Table responsive hover className="align-middle mb-0">
-                  <thead className="text-muted small text-uppercase table-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th>Question</th>
                       <th>Type</th>

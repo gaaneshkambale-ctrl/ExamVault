@@ -1394,7 +1394,7 @@ export default function TakeExam() {
                           </div>
 
                           <div className="border rounded-3 overflow-hidden mb-3">
-                            <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-light border-bottom">
+                            <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
                               <span className="d-flex align-items-center gap-2 fw-semibold small">
                                 <SectionCodeIcon /> Your Code
                               </span>
@@ -1449,8 +1449,8 @@ export default function TakeExam() {
                               className="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column p-3"
                               style={{ zIndex: 1050, background: 'rgba(15, 15, 20, 0.75)' }}
                             >
-                              <div className="bg-white rounded-3 shadow d-flex flex-column flex-grow-1 overflow-hidden">
-                                <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-light border-bottom">
+                              <div className="bg-body rounded-3 shadow d-flex flex-column flex-grow-1 overflow-hidden">
+                                <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
                                   <span className="d-flex align-items-center gap-2 fw-semibold small">
                                     <SectionCodeIcon /> Your Code
                                   </span>
@@ -1485,7 +1485,7 @@ export default function TakeExam() {
 
                           {hasTestCases && (
                             <div className="border rounded-3 overflow-hidden mt-3">
-                              <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-light border-bottom">
+                              <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
                                 <span className="d-flex align-items-center gap-2 fw-semibold small">
                                   <TestCaseIcon /> Test Cases
                                   {runResult && (
@@ -1524,10 +1524,7 @@ export default function TakeExam() {
                                       return (
                                         <div
                                           key={index}
-                                          className="rounded-3 border px-3 py-2 d-flex align-items-start gap-2"
-                                          style={{
-                                            background: outcome ? (outcome.passed ? '#f0fdf4' : '#fef2f2') : '#fff',
-                                          }}
+                                          className={`rounded-3 border px-3 py-2 d-flex align-items-start gap-2${outcome ? (outcome.passed ? ' bg-success-subtle' : ' bg-danger-subtle') : ''}`}
                                         >
                                           <span className="mt-1 flex-shrink-0">
                                             <TestCaseStatusIcon passed={outcome ? outcome.passed : null} />
@@ -1588,10 +1585,7 @@ export default function TakeExam() {
                                       return (
                                         <div
                                           key={index}
-                                          className="rounded-3 border px-3 py-2 d-flex align-items-start gap-2"
-                                          style={{
-                                            background: outcome ? (outcome.passed ? '#f0fdf4' : '#fef2f2') : '#fff',
-                                          }}
+                                          className={`rounded-3 border px-3 py-2 d-flex align-items-start gap-2${outcome ? (outcome.passed ? ' bg-success-subtle' : ' bg-danger-subtle') : ''}`}
                                         >
                                           <span className="mt-1 flex-shrink-0">
                                             <TestCaseStatusIcon passed={outcome ? outcome.passed : null} />
@@ -1640,11 +1634,10 @@ export default function TakeExam() {
                           <label
                             key={option.id}
                             htmlFor={`option-${option.id}`}
-                            className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2"
+                            className={`d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2${selected ? ' bg-success-subtle' : ''}`}
                             style={{
                               cursor: 'pointer',
                               borderColor: selected ? '#16a34a' : undefined,
-                              background: selected ? '#f0fdf4' : undefined,
                             }}
                           >
                             <Form.Check
@@ -1829,7 +1822,7 @@ export default function TakeExam() {
             <h1 className="h5 fw-bold mb-1">Exam Submitted Successfully!</h1>
             <p className="text-muted mb-4">Thank you for completing the exam.</p>
 
-            <Card className="border-0 bg-light text-start mb-4">
+            <Card className="border-0 bg-body-tertiary text-start mb-4">
               <Card.Body>
                 <h2 className="h6 fw-bold mb-3">{exam?.title ?? 'Exam'}</h2>
                 <Row className="g-2">

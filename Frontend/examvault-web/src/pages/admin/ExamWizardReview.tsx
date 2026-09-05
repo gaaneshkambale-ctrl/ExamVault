@@ -250,7 +250,7 @@ export default function ExamWizardReview() {
                   <div className="text-muted small">No sections added yet.</div>
                 ) : (
                   <Table responsive className="mb-0 align-middle">
-                    <thead className="text-muted small text-uppercase table-light">
+                    <thead className="text-muted small text-uppercase bg-body-tertiary">
                       <tr>
                         <th>Section Name</th>
                         <th>Questions</th>
