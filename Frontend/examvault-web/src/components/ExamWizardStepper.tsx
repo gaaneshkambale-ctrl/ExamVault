@@ -21,7 +21,13 @@ function CheckIcon() {
 }
 
 export default function ExamWizardStepper({ currentStep, containsSections }: ExamWizardStepperProps) {
-  const steps = containsSections ? STEPS : STEPS.filter((s) => s.step !== 2);
+  // Non-sectioned exams still need a step 2 (see CreateExam.tsx's own
+  // comment - questions attach to one hidden default section behind the
+  // scenes) - relabeled rather than hidden, so progress still reads
+  // correctly instead of jumping from step 1 straight to step 3.
+  const steps = containsSections
+    ? STEPS
+    : STEPS.map((s) => (s.step === 2 ? { ...s, label: 'Questions', sublabel: 'Add questions' } : s));
 
   return (
     <div className="d-flex align-items-start mb-4">

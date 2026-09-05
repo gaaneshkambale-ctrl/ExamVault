@@ -6,6 +6,7 @@ import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import { createExam } from '../../api/examApi';
+import { getOrCreateDefaultSection } from '../../api/sectionApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreateExamRequest, CreationMethod } from '../../types/exam';
@@ -150,11 +151,20 @@ export default function CreateExam() {
     setServerError('');
     try {
       const exam = await createExam(form);
-      navigate(
-        exam.containsSections
-          ? `/admin/exams/${exam.id}/wizard/sections`
-          : `/admin/exams/${exam.id}/wizard/configuration`,
-      );
+      if (exam.containsSections) {
+        navigate(`/admin/exams/${exam.id}/wizard/sections`);
+        return;
+      }
+      // No sections: there's no Sections & Questions list to show, but
+      // questions still need a section to attach to behind the scenes -
+      // same hidden "default section" ExamDetails' own Manage Questions
+      // button already relies on. Send the wizard straight to that
+      // section's Question Assignment step instead of skipping past
+      // question assignment entirely (previously the only way to add
+      // questions to a non-sectioned exam was via Manage Questions
+      // *after* finishing this wizard, which isn't obvious from here).
+      const section = await getOrCreateDefaultSection(exam.id);
+      navigate(`/admin/exams/${exam.id}/sections/${section.id}/edit?step=3&wizard=true`);
     } catch (error) {
       setStatus('error');
       setServerError(extractServerError(error));

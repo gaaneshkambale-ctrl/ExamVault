@@ -467,9 +467,16 @@ export default function SectionForm() {
       }
 
       invalidateAll();
-      navigate(
-        fromWizard ? `/admin/exams/${examId}/wizard/sections` : `/admin/exams/${examId}/sections`,
-      );
+      if (!fromWizard) {
+        navigate(`/admin/exams/${examId}/sections`);
+      } else if (exam?.containsSections) {
+        navigate(`/admin/exams/${examId}/wizard/sections`);
+      } else {
+        // Non-sectioned exam: this is its one hidden default section, so
+        // there's no Sections & Questions list to return to - continue the
+        // wizard straight on to Exam Configuration instead.
+        navigate(`/admin/exams/${examId}/wizard/configuration`);
+      }
     } catch (error) {
       setSubmitError(extractServerError(error));
     } finally {
