@@ -13,6 +13,9 @@ public class FakeTenantRepository : ITenantRepository
     public Task<Tenant?> GetBySlugAsync(string slug, CancellationToken cancellationToken = default) =>
         Task.FromResult(_tenants.FirstOrDefault(t => t.Slug == slug));
 
+    public Task<Tenant?> GetByOrganizationCodeAsync(string organizationCode, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_tenants.FirstOrDefault(t => t.OrganizationCode == organizationCode));
+
     public Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Tenant>>(_tenants.ToList());
 
@@ -21,6 +24,15 @@ public class FakeTenantRepository : ITenantRepository
         _tenants.Add(tenant);
         return Task.CompletedTask;
     }
+
+    public Task RemoveAsync(Tenant tenant, CancellationToken cancellationToken = default)
+    {
+        _tenants.RemoveAll(t => t.Id == tenant.Id);
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteUsersAndGroupsForTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

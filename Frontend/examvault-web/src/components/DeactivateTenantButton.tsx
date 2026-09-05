@@ -32,7 +32,7 @@ export default function DeactivateTenantButton({ tenantId, tenantName }: Deactiv
         </Modal.Header>
         <Modal.Body>
           Are you sure you want to deactivate <strong>{tenantName}</strong>? Its subdomain will stop
-          resolving and its users won't be able to log in. This cannot be undone from here yet.
+          resolving and its users won't be able to log in. You can reactivate it again any time.
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={() => setShowConfirm(false)}>

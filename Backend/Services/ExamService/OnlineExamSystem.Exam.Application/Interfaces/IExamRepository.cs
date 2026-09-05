@@ -12,9 +12,29 @@ public interface IExamRepository
     Task<IReadOnlyList<ExamPaper>> GetAllAsync(CancellationToken cancellationToken = default);
     Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default);
 
+    /// <summary>Real Tenant Settings > Default Limits "Max Exams" enforcement point -
+    /// CreateExamHandler checks this against the tenant's own MaxExams (fetched
+    /// cross-service from UserService) before creating a new exam. Always called
+    /// inside the transaction BeginSerializableTransactionAsync opens, so the count
+    /// is race-safe against a concurrent request creating an exam for the same
+    /// tenant.</summary>
+    Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
+
+    /// <summary>Opens a Serializable-isolation transaction - wrap a count-then-insert
+    /// sequence in it (count, compare to MaxExams, AddAsync, SaveChangesAsync, then
+    /// CommitAsync) so two concurrent requests can never both pass the same limit
+    /// check before either commits. See IUnitOfWorkTransaction's own comment for why
+    /// this isolation level specifically.</summary>
+    Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default);
+
     Task AddSectionAsync(Section section, CancellationToken cancellationToken = default);
     Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Section>> GetSectionsByExamIdAsync(Guid examId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every section across every tenant, with its exam's title - Super Admin
+    /// platform-wide browse only. Relies on the DbContext's own IsSuperAdmin query-filter
+    /// bypass on Section for cross-tenant scoping, same as GetAllAssignmentsAsync's pattern.</summary>
+    Task<IReadOnlyList<SectionWithExamTitle>> GetAllSectionsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Returns true if the section was found and removed.</summary>
     Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default);
@@ -26,6 +46,12 @@ public interface IExamRepository
 
     Task<IReadOnlyList<ExamPaper>> GetAssignedPublishedExamsAsync(
         Guid userId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Every exam this tenant's caller created themselves - the Instructor
+    /// ownership scope (Admin/SuperAdmin use GetAllAsync instead, unrestricted).</summary>
+    Task<IReadOnlyList<ExamPaper>> GetOwnedAsync(
+        Guid createdByUserId,
         CancellationToken cancellationToken = default);
 
     Task<bool> IsUserAssignedAsync(Guid examId, Guid userId, CancellationToken cancellationToken = default);
@@ -101,10 +127,6 @@ public interface IExamRepository
     /// <summary>Returns the single global ProctoringSettings row, creating it with every
     /// detector enabled (the pre-existing default behavior) if it doesn't exist yet.</summary>
     Task<ProctoringSettings> GetOrCreateProctoringSettingsAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>Returns the single global GeneralSettings row, creating it with the
-    /// entity's own defaults if it doesn't exist yet.</summary>
-    Task<GeneralSettings> GetOrCreateGeneralSettingsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Returns the single global ExamDefaults row, creating it with the
     /// entity's own defaults if it doesn't exist yet.</summary>

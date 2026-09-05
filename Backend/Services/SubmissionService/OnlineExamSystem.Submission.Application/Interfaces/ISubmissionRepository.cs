@@ -44,11 +44,29 @@ public interface ISubmissionRepository
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    // Super Admin platform-wide browse across every tenant - relies on
+    // SubmissionDbContext's own IsSuperAdmin query-filter bypass (same
+    // mechanism every other cross-tenant list in this codebase uses), not a
+    // new scoping mechanism.
+    Task<IReadOnlyList<ExamAttempt>> GetAllAttemptsAsync(CancellationToken cancellationToken = default);
+
     Task<ILookup<Guid, AttemptAnswer>> GetAnswersByAttemptIdsAsync(
         IReadOnlyList<Guid> attemptIds,
         CancellationToken cancellationToken = default);
 
-    Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default);
+    // Atomic insert-or-update, keyed on the unique (AttemptId, QuestionId)
+    // index - two near-simultaneous saves for the same question (autosave
+    // racing "Save & Next") must never lose one to an unhandled unique-
+    // constraint violation.
+    Task<AttemptAnswer> UpsertAnswerAsync(
+        Guid attemptId,
+        Guid questionId,
+        Guid? selectedOptionId,
+        string? selectedOptionIdsJson,
+        bool isMarkedForReview,
+        string? answerText,
+        DateTime answeredAtUtc,
+        CancellationToken cancellationToken = default);
 
     Task<AttemptSectionState?> GetSectionStateAsync(
         Guid attemptId,

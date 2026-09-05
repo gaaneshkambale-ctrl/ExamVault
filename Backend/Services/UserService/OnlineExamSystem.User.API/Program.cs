@@ -12,6 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.User.API.Authorization;
+using OnlineExamSystem.User.API.Jobs;
 using OnlineExamSystem.User.Application.Plans.Create;
 using OnlineExamSystem.User.Application.Plans.Delete;
 using OnlineExamSystem.User.Application.Plans.List;
@@ -23,6 +24,8 @@ using OnlineExamSystem.User.Application.Groups.Delete;
 using OnlineExamSystem.User.Application.Groups.GetById;
 using OnlineExamSystem.User.Application.Groups.List;
 using OnlineExamSystem.User.Application.Groups.RemoveMember;
+using OnlineExamSystem.User.Application.Users.RolePermissions.GetAll;
+using OnlineExamSystem.User.Application.Users.RolePermissions.Update;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
@@ -42,9 +45,22 @@ using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
+using OnlineExamSystem.User.Application.Tenants.Delete;
 using OnlineExamSystem.User.Application.Tenants.GetBySlug;
+using OnlineExamSystem.User.Application.Tenants.GetPermissionVersion;
+using OnlineExamSystem.User.Application.Tenants.GetLimits;
+using OnlineExamSystem.User.Application.Tenants.GetRolePermissions;
 using OnlineExamSystem.User.Application.Tenants.List;
+using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
 using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
+using OnlineExamSystem.User.Application.Tenants.SetTrial;
+using OnlineExamSystem.User.Application.Tenants.Update;
+using OnlineExamSystem.User.Application.Tenants.UpdateRolePermissions;
+using OnlineExamSystem.User.Application.Settings.GetEmailConnectionStatus;
+using OnlineExamSystem.User.Application.Settings.GetEmailSummary;
+using OnlineExamSystem.User.Application.Settings.GetPlatformSettings;
+using OnlineExamSystem.User.Application.Settings.UpdatePlatformSettings;
+using OnlineExamSystem.User.Application.Security;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
@@ -84,13 +100,23 @@ public class Program
             .AddDbContextCheck<UserDbContext>("database");
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<IGroupRepository, GroupRepository>();
+        builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
         builder.Services.AddScoped<ITenantRepository, TenantRepository>();
         builder.Services.AddScoped<IPlanRepository, PlanRepository>();
+        builder.Services.AddScoped<IPlatformSettingsRepository, PlatformSettingsRepository>();
+        builder.Services.AddScoped<IPasswordPolicyProvider, PasswordPolicyProvider>();
+        builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
+        builder.Services.Configure<AppUrlSettings>(builder.Configuration.GetSection(AppUrlSettings.SectionName));
+        builder.Services.AddSingleton<ITenantUrlBuilder, TenantUrlBuilder>();
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
+        // Short timeout - this backs a Super Admin "Check Connection" button
+        // click, it must fail fast rather than hang the request.
+        builder.Services.AddHttpClient<IEmailConnectionChecker, N8nConnectionChecker>(client =>
+            client.Timeout = TimeSpan.FromSeconds(5));
 
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
@@ -100,6 +126,11 @@ public class Program
         {
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
+        });
+        builder.Services.AddHttpClient<IEmailDeliverySummaryClient, EmailDeliverySummaryClient>(client =>
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(5);
         });
         builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
         builder.Services.AddScoped<RegisterUserHandler>();
@@ -138,14 +169,34 @@ public class Program
         builder.Services.AddScoped<AddGroupMemberHandler>();
         builder.Services.AddScoped<RemoveGroupMemberHandler>();
 
+        builder.Services.AddScoped<GetAllRolePermissionsHandler>();
+        builder.Services.AddScoped<IValidator<UpdateRolePermissionsCommand>, UpdateRolePermissionsValidator>();
+        builder.Services.AddScoped<UpdateRolePermissionsHandler>();
+
         builder.Services.AddScoped<IValidator<CreateTenantCommand>, CreateTenantValidator>();
         builder.Services.AddScoped<CreateTenantHandler>();
         builder.Services.AddScoped<ListTenantsHandler>();
         builder.Services.AddScoped<SetTenantActiveStatusHandler>();
         builder.Services.AddScoped<GetTenantBySlugHandler>();
+        builder.Services.AddScoped<GetTenantPermissionVersionHandler>();
+        builder.Services.AddScoped<GetTenantLimitsHandler>();
         builder.Services.AddScoped<IValidator<CreateTenantAdminCommand>, CreateTenantAdminValidator>();
         builder.Services.AddScoped<CreateTenantAdminHandler>();
         builder.Services.AddScoped<AssignPlanToTenantHandler>();
+        builder.Services.AddScoped<IValidator<UpdateTenantCommand>, UpdateTenantValidator>();
+        builder.Services.AddScoped<UpdateTenantHandler>();
+        builder.Services.AddScoped<DeleteTenantHandler>();
+        builder.Services.AddScoped<ResetTenantAdminPasswordHandler>();
+        builder.Services.AddScoped<SetTenantTrialHandler>();
+        builder.Services.AddScoped<GetTenantRolePermissionsHandler>();
+        builder.Services.AddScoped<UpdateTenantRolePermissionsHandler>();
+        builder.Services.AddHostedService<TrialExpiryCheckService>();
+
+        builder.Services.AddScoped<GetPlatformSettingsHandler>();
+        builder.Services.AddScoped<IValidator<UpdatePlatformSettingsCommand>, UpdatePlatformSettingsValidator>();
+        builder.Services.AddScoped<UpdatePlatformSettingsHandler>();
+        builder.Services.AddScoped<GetEmailConnectionStatusHandler>();
+        builder.Services.AddScoped<GetEmailSummaryHandler>();
 
         builder.Services.AddScoped<IValidator<CreatePlanCommand>, CreatePlanValidator>();
         builder.Services.AddScoped<CreatePlanHandler>();
@@ -185,7 +236,11 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
 

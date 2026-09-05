@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import { updateExam } from '../../api/examApi';
 import { createNotification } from '../../api/notificationApi';
 import { getGroup } from '../../api/groupApi';
@@ -9,6 +10,15 @@ import { useExams } from '../../hooks/useExams';
 import { useGroups } from '../../hooks/useGroups';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import type { ExamResponse, UpdateExamRequest } from '../../types/exam';
+
+function GearIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
 
 function toUpdateRequest(exam: ExamResponse, overrides: Partial<UpdateExamRequest>): UpdateExamRequest {
   const { id: _id, status: _status, totalQuestions: _totalQuestions, createdOn: _createdOn, ...form } = exam;
@@ -183,7 +193,7 @@ export default function PublishResults() {
 
           {!loading && rows.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   {activeTab === 'ready' && <th className="ps-4" style={{ width: 40 }} />}
                   <th className={activeTab === 'ready' ? '' : 'ps-4'}>Exam Name</th>
@@ -240,7 +250,7 @@ export default function PublishResults() {
       {activeTab === 'ready' && readyExams.length > 0 && (
         <Card className="border-0 shadow-sm">
           <Card.Body className="p-4">
-            <h2 className="h6 fw-bold mb-3">Publishing Options</h2>
+            <SectionHeader icon={<GearIcon />} title="Publishing Options" />
             <Row className="g-4">
               <Col md={6}>
                 <Form.Label className="fw-bold small">Result Visibility</Form.Label>

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Exam.API.Authorization;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
+using OnlineExamSystem.Exam.Application.Assignments.Cancel;
 using OnlineExamSystem.Exam.Application.Assignments.Create;
 using OnlineExamSystem.Exam.Application.Assignments.Delete;
 using OnlineExamSystem.Exam.Application.Assignments.GetById;
@@ -25,6 +26,7 @@ using OnlineExamSystem.Exam.Application.Exams.Update;
 using OnlineExamSystem.Exam.Application.ExamTypes.Create;
 using OnlineExamSystem.Exam.Application.ExamTypes.Delete;
 using OnlineExamSystem.Exam.Application.ExamTypes.List;
+using OnlineExamSystem.Exam.Application.ExamTypes.Update;
 using OnlineExamSystem.Exam.API.Jobs;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Application.Proctoring.GetProctoringSettings;
@@ -32,14 +34,13 @@ using OnlineExamSystem.Exam.Application.Proctoring.UpdateProctoringSettings;
 using OnlineExamSystem.Exam.Application.Reminders.GetReminderSettings;
 using OnlineExamSystem.Exam.Application.Reminders.UpdateReminderSettings;
 using OnlineExamSystem.Exam.Application.Settings.GetExamDefaults;
-using OnlineExamSystem.Exam.Application.Settings.GetGeneralSettings;
 using OnlineExamSystem.Exam.Application.Settings.UpdateExamDefaults;
-using OnlineExamSystem.Exam.Application.Settings.UpdateGeneralSettings;
 using OnlineExamSystem.Exam.Application.Sections.Create;
 using OnlineExamSystem.Exam.Application.Sections.Delete;
 using OnlineExamSystem.Exam.Application.Sections.GetById;
 using OnlineExamSystem.Exam.Application.Sections.GetOrCreateDefault;
 using OnlineExamSystem.Exam.Application.Sections.List;
+using OnlineExamSystem.Exam.Application.Sections.ListAll;
 using OnlineExamSystem.Exam.Application.Sections.Reorder;
 using OnlineExamSystem.Exam.Application.Sections.Update;
 using OnlineExamSystem.Exam.Infrastructure;
@@ -93,6 +94,12 @@ public class Program
             client.BaseAddress = userServiceBaseUri);
         builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
             client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddHttpClient<ITenantLimitsClient, TenantLimitsClient>(client =>
+            client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var questionServiceBaseUrl = builder.Configuration["Services:QuestionServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:QuestionServiceBaseUrl\" configuration.");
@@ -113,6 +120,8 @@ public class Program
         builder.Services.AddScoped<CreateExamTypeHandler>();
         builder.Services.AddScoped<ListExamTypesHandler>();
         builder.Services.AddScoped<DeleteExamTypeHandler>();
+        builder.Services.AddScoped<IValidator<UpdateExamTypeCommand>, UpdateExamTypeValidator>();
+        builder.Services.AddScoped<UpdateExamTypeHandler>();
 
         builder.Services.AddScoped<IValidator<CreateSectionCommand>, CreateSectionValidator>();
         builder.Services.AddScoped<CreateSectionHandler>();
@@ -121,6 +130,7 @@ public class Program
         builder.Services.AddScoped<DeleteSectionHandler>();
         builder.Services.AddScoped<GetSectionHandler>();
         builder.Services.AddScoped<ListSectionsHandler>();
+        builder.Services.AddScoped<ListAllSectionsHandler>();
         builder.Services.AddScoped<ReorderSectionsHandler>();
         builder.Services.AddScoped<GetOrCreateDefaultSectionHandler>();
 
@@ -132,14 +142,13 @@ public class Program
         builder.Services.AddScoped<ListAssignmentsForExamHandler>();
         builder.Services.AddScoped<GetAssignmentHandler>();
         builder.Services.AddScoped<DeleteAssignmentHandler>();
+        builder.Services.AddScoped<CancelAssignmentHandler>();
         builder.Services.AddScoped<GetMyAssignmentForExamHandler>();
 
         builder.Services.AddScoped<GetReminderSettingsHandler>();
         builder.Services.AddScoped<UpdateReminderSettingsHandler>();
         builder.Services.AddScoped<GetProctoringSettingsHandler>();
         builder.Services.AddScoped<UpdateProctoringSettingsHandler>();
-        builder.Services.AddScoped<GetGeneralSettingsHandler>();
-        builder.Services.AddScoped<UpdateGeneralSettingsHandler>();
         builder.Services.AddScoped<GetExamDefaultsHandler>();
         builder.Services.AddScoped<UpdateExamDefaultsHandler>();
 
@@ -177,7 +186,11 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
 

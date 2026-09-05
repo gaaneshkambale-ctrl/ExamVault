@@ -83,7 +83,9 @@ public class ServiceBusUserRegisteredConsumer : BackgroundService
             recipients: [new NotificationRecipient(userRegistered.UserId, userRegistered.Email, userRegistered.FullName)],
             type: NotificationType.Account,
             title: "Welcome to ExamVault!",
-            message: $"Hello {userRegistered.FullName}, welcome to ExamVault! Your account has been created successfully.",
+            // No leading "Hello {name}," here - the n8n email template
+            // already renders its own greeting from toName.
+            message: "Welcome to ExamVault! Your account has been created successfully.",
             cancellationToken: args.CancellationToken);
     }
 

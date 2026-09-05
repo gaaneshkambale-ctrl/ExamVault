@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Exam.Application.Assignments;
 using OnlineExamSystem.Exam.Application.Interfaces;
@@ -29,11 +30,29 @@ public class ExamRepository : IExamRepository
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        _dbContext.Exams.CountAsync(e => e.TenantId == tenantId, cancellationToken);
+
+    public async Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        return new EfUnitOfWorkTransaction(transaction);
+    }
+
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
     {
         _dbContext.Exams.Remove(exam);
         return Task.CompletedTask;
     }
+
+    public async Task<IReadOnlyList<ExamPaper>> GetOwnedAsync(
+        Guid createdByUserId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.Exams
+            .Include(e => e.ExamType)
+            .Where(e => e.CreatedByUserId == createdByUserId)
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
 
     public Task AddSectionAsync(Section section, CancellationToken cancellationToken = default) =>
         _dbContext.Sections.AddAsync(section, cancellationToken).AsTask();
@@ -48,6 +67,18 @@ public class ExamRepository : IExamRepository
             .Where(s => s.ExamId == examId)
             .OrderBy(s => s.DisplayOrder)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<SectionWithExamTitle>> GetAllSectionsAsync(CancellationToken cancellationToken = default)
+    {
+        var sections = await _dbContext.Sections
+            .OrderBy(s => s.DisplayOrder)
+            .ToListAsync(cancellationToken);
+        var examTitles = await _dbContext.Exams.ToDictionaryAsync(e => e.Id, e => e.Title, cancellationToken);
+
+        return sections
+            .Select(s => new SectionWithExamTitle(s, examTitles.GetValueOrDefault(s.ExamId, "Unknown Exam")))
+            .ToList();
+    }
 
     public async Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
     {
@@ -328,19 +359,6 @@ public class ExamRepository : IExamRepository
         {
             settings = new ProctoringSettings();
             await _dbContext.ProctoringSettings.AddAsync(settings, cancellationToken);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        return settings;
-    }
-
-    public async Task<GeneralSettings> GetOrCreateGeneralSettingsAsync(CancellationToken cancellationToken = default)
-    {
-        var settings = await _dbContext.GeneralSettings.FirstOrDefaultAsync(cancellationToken);
-        if (settings is null)
-        {
-            settings = new GeneralSettings();
-            await _dbContext.GeneralSettings.AddAsync(settings, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 

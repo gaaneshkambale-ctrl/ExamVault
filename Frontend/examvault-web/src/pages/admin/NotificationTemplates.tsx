@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import { useNotificationTemplates } from '../../hooks/useNotifications';
 import {
   createNotificationTemplate,
@@ -19,6 +20,25 @@ const CHANNEL_OPTIONS: { value: NotificationChannelFilter; label: string }[] = [
   { value: 'InApp', label: 'In-App Only' },
   { value: 'Email', label: 'Email Only' },
 ];
+
+function TemplateIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+function BulbIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+      <path d="M12 2a7 7 0 0 0-4 12.7c.5.4.9 1.1.9 1.8v.5h6.2v-.5c0-.7.4-1.4.9-1.8A7 7 0 0 0 12 2Z" />
+    </svg>
+  );
+}
 
 const RECOMMENDED_VARIABLES = ['{{studentName}}', '{{examName}}', '{{startDate}}', '{{endDate}}', '{{duration}}', '{{resultUrl}}'];
 
@@ -128,14 +148,17 @@ export default function NotificationTemplates() {
       <p className="text-muted mb-4">Create reusable professional templates for common ExamVault events.</p>
 
       <Card className="border-0 shadow-sm mb-4">
-        <Card.Body className="p-4 d-flex justify-content-between align-items-start flex-wrap gap-3">
-          <div>
-            <h2 className="h6 fw-bold mb-1">Notification Templates</h2>
-            <p className="text-muted small mb-0">Reusable templates keep email and in-app communication consistent.</p>
-          </div>
-          <Button variant="primary" onClick={openCreate}>
-            + Create Template
-          </Button>
+        <Card.Body className="p-4">
+          <SectionHeader
+            icon={<TemplateIcon />}
+            title="Notification Templates"
+            subtitle="Reusable templates keep email and in-app communication consistent."
+            action={
+              <Button variant="primary" onClick={openCreate}>
+                + Create Template
+              </Button>
+            }
+          />
         </Card.Body>
       </Card>
 
@@ -191,7 +214,7 @@ export default function NotificationTemplates() {
           {!isLoading && !isError && items.length > 0 && (
             <div className="table-responsive">
               <Table hover className="mb-0 align-middle">
-                <thead className="text-muted small text-uppercase bg-light">
+                <thead className="text-muted small text-uppercase bg-body-tertiary">
                   <tr>
                     <th>Template Name</th>
                     <th>Type</th>
@@ -258,9 +281,12 @@ export default function NotificationTemplates() {
             </div>
           )}
 
-          <Card className="border-0 mt-4" style={{ background: '#eef2ff' }}>
+          <Card className="border-0 mt-4 bg-primary-subtle">
             <Card.Body className="p-4">
-              <h3 className="h6 fw-bold text-primary mb-3">Recommended Template Variables</h3>
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <BulbIcon />
+                <h3 className="h6 fw-bold text-primary mb-0">Recommended Template Variables</h3>
+              </div>
               <div className="d-flex flex-wrap gap-2 mb-2">
                 {RECOMMENDED_VARIABLES.map((v) => (
                   <code key={v} className="px-2 py-1 rounded bg-white border small">

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
+import { useEffect, useMemo, useState } from 'react';
+import { Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import LineTrendChart from '../../components/charts/LineTrendChart';
@@ -14,6 +15,8 @@ import { violationLabel } from '../../utils/proctoring';
 import { bucketByDay, getDefaultRange, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 import type { AuditModule } from '../../types/audit';
+
+const PAGE_SIZE = 20;
 
 const MODULE_OPTIONS: { value: AuditModule | 'All'; label: string }[] = [
   { value: 'All', label: 'All Activities' },
@@ -39,6 +42,7 @@ export default function AuditReports() {
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [moduleFilter, setModuleFilter] = useState<AuditModule | 'All'>('All');
   const [userFilter, setUserFilter] = useState('All');
+  const [page, setPage] = useState(1);
 
   const { data: exams } = useExams();
   const { data: users, isLoading: isLoadingUsers } = useUsers();
@@ -108,6 +112,16 @@ export default function AuditReports() {
     }),
     [filteredRows],
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [moduleFilter, userFilter, range]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredRows.length);
 
   const activityOverview = useMemo(
     () => bucketByDay(filteredRows.map((r) => r.timestampUtc), range),
@@ -219,7 +233,7 @@ export default function AuditReports() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Activity Overview</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><ActivityIcon /></span>} title="Activity Overview" />
                   <LineTrendChart
                     series={[{ name: 'Activities', color: '#4f46e5', data: activityOverview.map((b) => ({ label: b.label, value: b.count })) }]}
                   />
@@ -229,7 +243,7 @@ export default function AuditReports() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Activity by Type</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><DatabaseIcon /></span>} title="Activity by Type" />
                   <DonutChart data={activityByType} centerLabel="Activities" />
                 </Card.Body>
               </Card>
@@ -238,12 +252,14 @@ export default function AuditReports() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Recent Activities</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<span className="text-primary d-flex"><BookIcon /></span>} title="Recent Activities" />
+              </div>
               {filteredRows.length === 0 ? (
                 <div className="text-center text-muted py-5">No activity in this range yet.</div>
               ) : (
                 <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th className="ps-4">Time</th>
                       <th>User</th>
@@ -254,7 +270,7 @@ export default function AuditReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.slice(0, 100).map((r) => (
+                    {pagedRows.map((r) => (
                       <tr key={r.id}>
                         <td className="ps-4">{new Date(r.timestampUtc).toLocaleString()}</td>
                         <td className="fw-medium">{r.userName}</td>
@@ -267,9 +283,23 @@ export default function AuditReports() {
                   </tbody>
                 </Table>
               )}
-              {filteredRows.length > 100 && (
-                <div className="text-center text-muted small py-2 border-top">
-                  Showing latest 100 of {filteredRows.length}. Use Export for the full range.
+              {filteredRows.length > 0 && (
+                <div className="d-flex justify-content-between align-items-center p-3 border-top">
+                  <div className="text-muted small">
+                    Showing {rangeStart} to {rangeEnd} of {filteredRows.length} activities
+                  </div>
+                  <Pagination className="mb-0">
+                    <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                        {p}
+                      </Pagination.Item>
+                    ))}
+                    <Pagination.Next
+                      disabled={currentPage === totalPages}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    />
+                  </Pagination>
                 </div>
               )}
             </Card.Body>

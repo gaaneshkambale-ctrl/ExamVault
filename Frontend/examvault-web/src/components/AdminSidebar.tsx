@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Offcanvas } from 'react-bootstrap';
 import BrandMark from './BrandMark';
+import { useFeatures } from '../hooks/useFeatures';
 
 export type AdminNavItem =
   | 'Dashboard'
@@ -12,6 +13,7 @@ export type AdminNavItem =
   | 'User Groups'
   | 'Exams'
   | 'Exam Types'
+  | 'Exam Scheduled'
   | 'Live Monitoring'
   | 'Active Exams'
   | 'Student Attempts'
@@ -27,6 +29,7 @@ export type AdminNavItem =
   | 'Student Reports'
   | 'Performance Reports'
   | 'Audit Reports'
+  | 'Exam Type Wise Report'
   | 'Notifications'
   | 'Create Notification'
   | 'History'
@@ -37,12 +40,25 @@ export type AdminNavItem =
 interface NavChild {
   label: AdminNavItem;
   path: string;
+  // Same PlanFeature gating as NavItem.feature below, but per-child - a
+  // group can mix children gated by different features (Live Monitoring's
+  // own children span LiveMonitoring/ExamSecurity/Proctoring, split
+  // 2026-09-04, see ActionPlan.txt's "SPLIT LiveMonitoring" plan).
+  feature?: string;
 }
 
 interface NavItem {
   label: AdminNavItem;
   path: string | null;
   children?: NavChild[];
+  // Matches a PlanFeature name (Backend/Shared/.../Multitenancy/
+  // PlanFeature.cs) - hidden whenever the current user's tenant Plan
+  // doesn't include it (SuperAdmin always sees everything). Only set on
+  // groups gated end-to-end (nav + route), see useFeatures.ts. A group
+  // with children instead gates via each child's own `feature` (see
+  // visibleNavItems below) - this field is for groups with no children,
+  // or a blanket gate that applies before any per-child one.
+  feature?: string;
 }
 
 const navItems: NavItem[] = [
@@ -57,16 +73,22 @@ const navItems: NavItem[] = [
       { label: 'User Groups', path: '/admin/users/groups' },
     ],
   },
-  { label: 'Exams', path: '/admin/exams' },
-  { label: 'Exam Types', path: '/admin/exam-types' },
+  {
+    label: 'Exams',
+    path: '/admin/exams',
+    children: [
+      { label: 'Exam Types', path: '/admin/exam-types' },
+      { label: 'Exam Scheduled', path: '/admin/exams/scheduled' },
+    ],
+  },
   {
     label: 'Live Monitoring',
     path: '/admin/live-monitoring/active-exams',
     children: [
-      { label: 'Active Exams', path: '/admin/live-monitoring/active-exams' },
-      { label: 'Student Attempts', path: '/admin/live-monitoring/student-attempts' },
-      { label: 'Security Violations', path: '/admin/live-monitoring/security-violations' },
-      { label: 'Proctoring', path: '/admin/live-monitoring/proctoring' },
+      { label: 'Active Exams', path: '/admin/live-monitoring/active-exams', feature: 'LiveMonitoring' },
+      { label: 'Student Attempts', path: '/admin/live-monitoring/student-attempts', feature: 'LiveMonitoring' },
+      { label: 'Security Violations', path: '/admin/live-monitoring/security-violations', feature: 'ExamSecurity' },
+      { label: 'Proctoring', path: '/admin/live-monitoring/proctoring', feature: 'Proctoring' },
     ],
   },
   {
@@ -87,6 +109,7 @@ const navItems: NavItem[] = [
       { label: 'Student Reports', path: '/admin/reports/students' },
       { label: 'Performance Reports', path: '/admin/reports/performance' },
       { label: 'Audit Reports', path: '/admin/reports/audit' },
+      { label: 'Exam Type Wise Report', path: '/admin/reports/exam-type-wise' },
     ],
   },
   {
@@ -196,8 +219,21 @@ function isSectionActive(item: NavItem, active: AdminNavItem): boolean {
 }
 
 export default function AdminSidebar({ active, show = false, onClose = () => {} }: AdminSidebarProps) {
+  const { hasFeature } = useFeatures();
+  // Groups with children gate per-child (a group is visible if ANY child
+  // is - e.g. an org with only ExamSecurity still sees "Live Monitoring"
+  // with just Security Violations under it, not the whole section
+  // vanishing); a childless item falls back to its own `feature`, if set.
+  const visibleNavItems = navItems.flatMap((item) => {
+    if (item.children) {
+      const visibleChildren = item.children.filter((child) => !child.feature || hasFeature(child.feature));
+      return visibleChildren.length > 0 ? [{ ...item, children: visibleChildren }] : [];
+    }
+    return !item.feature || hasFeature(item.feature) ? [item] : [];
+  });
+
   const [openSections, setOpenSections] = useState<Set<AdminNavItem>>(
-    () => new Set(navItems.filter((item) => item.children && isSectionActive(item, active)).map((item) => item.label)),
+    () => new Set(visibleNavItems.filter((item) => item.children && isSectionActive(item, active)).map((item) => item.label)),
   );
 
   const toggleSection = (label: AdminNavItem) => {
@@ -227,7 +263,7 @@ export default function AdminSidebar({ active, show = false, onClose = () => {} 
           ExamVault
         </div>
         <nav className="d-flex flex-column gap-1 flex-grow-1">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isOpen = item.children ? openSections.has(item.label) : false;
           return (
             <div key={item.label}>

@@ -20,6 +20,8 @@ import SqlTestCaseEditor from './SqlTestCaseEditor';
 import type { SqlTestCaseRow } from './SqlTestCaseEditor';
 import { parseTypedValue } from '../utils/typedValue';
 
+const QUESTION_TEXT_MAX = 2000;
+
 let nextOptionKey = 0;
 
 interface OptionFormState extends CreateQuestionOptionRequest {
@@ -77,6 +79,7 @@ export default function CreateQuestionModal({
   const [errors, setErrors] = useState<ReturnType<typeof validateCreateQuestion>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // The section's planned Marks / Question Count gives a sensible per-question default -
   // re-apply it each time the modal opens, since defaultMarks can change between opens.
@@ -84,8 +87,31 @@ export default function CreateQuestionModal({
     if (show) {
       setMarks(defaultMarks ?? 1);
       setMode('manual');
+      setShowDiscardConfirm(false);
     }
   }, [show, defaultMarks]);
+
+  // Only the Manual Entry tab's typed-in fields count toward "unsaved
+  // changes" - Import CSV already commits each row the moment "Import
+  // Selected" is clicked (see CsvImportPanel), so there's nothing left
+  // pending there for a modal close to lose.
+  const isDirty = () =>
+    mode === 'manual' &&
+    (questionText.trim() !== '' ||
+      marks !== (defaultMarks ?? 1) ||
+      difficulty !== 'Easy' ||
+      shuffleOptions ||
+      questionType !== 'MultipleChoice' ||
+      options.some((o) => o.optionText.trim() !== '') ||
+      starterCode.trim() !== '' ||
+      programmingLanguage !== '' ||
+      allowLanguageChange ||
+      sampleAnswer.trim() !== '' ||
+      signature.functionName.trim() !== '' ||
+      signature.returnType !== '' ||
+      signature.parameters.length > 0 ||
+      signature.testCases.length > 0 ||
+      sqlTestCases.length > 0);
 
   const reset = () => {
     setQuestionType('MultipleChoice');
@@ -108,6 +134,22 @@ export default function CreateQuestionModal({
   const handleClose = () => {
     reset();
     onClose();
+  };
+
+  // Entry point for every dismissal path (X button, Cancel, Escape) - the
+  // backdrop itself is excluded entirely (Modal's backdrop="static" below),
+  // so this is the only way out. Confirms first if there's anything to lose.
+  const requestClose = () => {
+    if (isDirty()) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    handleClose();
+  };
+
+  const confirmDiscard = () => {
+    setShowDiscardConfirm(false);
+    handleClose();
   };
 
   const changeQuestionType = (type: QuestionType) => {
@@ -192,7 +234,8 @@ export default function CreateQuestionModal({
   };
 
   return (
-    <Modal show={show} onHide={handleClose} size="lg" centered>
+    <>
+    <Modal show={show} onHide={requestClose} backdrop="static" size="lg" centered>
       <Modal.Header closeButton>
         <div>
           <Modal.Title>Create Question</Modal.Title>
@@ -273,15 +316,19 @@ export default function CreateQuestionModal({
             <Form.Control
               as="textarea"
               rows={3}
+              maxLength={QUESTION_TEXT_MAX}
               placeholder="Enter your question here"
               value={questionText}
               onChange={(e) => setQuestionText(e.target.value)}
               isInvalid={!!errors.questionText}
             />
-            <Form.Control.Feedback type="invalid">{errors.questionText}</Form.Control.Feedback>
+            <div className="d-flex justify-content-between">
+              <Form.Control.Feedback type="invalid">{errors.questionText}</Form.Control.Feedback>
+              <div className="text-muted small ms-auto">{questionText.length}/{QUESTION_TEXT_MAX}</div>
+            </div>
           </Form.Group>
 
-          <Form.Group className="mb-4" controlId="modalQuestionMarks" style={{ maxWidth: 160 }}>
+          <Form.Group className="mb-2" controlId="modalQuestionMarks" style={{ maxWidth: 160 }}>
             <Form.Label className="fw-bold">Marks</Form.Label>
             <Form.Control
               type="number"
@@ -292,6 +339,11 @@ export default function CreateQuestionModal({
             />
             <Form.Control.Feedback type="invalid">{errors.marks}</Form.Control.Feedback>
           </Form.Group>
+          {marks > 0 && (
+            <Alert variant="info" className="py-2 px-3 small d-inline-block mb-4">
+              This question will carry <strong>{marks}</strong> mark{marks === 1 ? '' : 's'}.
+            </Alert>
+          )}
 
           {questionType === 'CodeProgram' ? (
             <>
@@ -376,7 +428,7 @@ export default function CreateQuestionModal({
               {options.map((option, index) => (
                 <div key={option.key} className="d-flex align-items-center gap-2 mb-2">
                   <span
-                    className="d-inline-flex align-items-center justify-content-center rounded-circle bg-light border fw-bold flex-shrink-0"
+                    className="d-inline-flex align-items-center justify-content-center rounded-circle bg-body-tertiary border fw-bold flex-shrink-0"
                     style={{ width: 32, height: 32 }}
                   >
                     {optionLetter(index)}
@@ -388,6 +440,16 @@ export default function CreateQuestionModal({
                     disabled={questionType === 'TrueFalse'}
                     onChange={(e) => updateOptionText(option.key, e.target.value)}
                   />
+                  {(questionType === 'MultipleChoice' || questionType === 'TrueFalse') && (
+                    <Form.Check
+                      type="radio"
+                      name="modalInlineCorrect"
+                      checked={option.isCorrect}
+                      onChange={() => markCorrect(option.key)}
+                      title="Mark as correct answer"
+                      className="flex-shrink-0"
+                    />
+                  )}
                   {(questionType === 'MultipleChoice' || questionType === 'MultiSelect') && options.length > 2 && (
                     <Button variant="link" className="text-danger" onClick={() => removeOption(option.key)}>
                       Remove
@@ -434,6 +496,9 @@ export default function CreateQuestionModal({
                       </option>
                     ))}
                   </Form.Select>
+                  <Alert variant="success" className="py-2 px-3 small mt-2 mb-0">
+                    Select the correct option that represents the right answer.
+                  </Alert>
                 </Form.Group>
               )}
             </>
@@ -442,7 +507,7 @@ export default function CreateQuestionModal({
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="outline-secondary" onClick={handleClose}>
+          <Button type="button" variant="outline-secondary" onClick={requestClose}>
             {mode === 'import' ? 'Close' : 'Cancel'}
           </Button>
           {mode === 'manual' && (
@@ -460,5 +525,23 @@ export default function CreateQuestionModal({
         </Modal.Footer>
       </Form>
     </Modal>
+
+    <Modal show={showDiscardConfirm} onHide={() => setShowDiscardConfirm(false)} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Discard changes?</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        You have unsaved changes to this question. Closing now will discard them - this can't be undone.
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="outline-secondary" onClick={() => setShowDiscardConfirm(false)}>
+          Keep Editing
+        </Button>
+        <Button variant="danger" onClick={confirmDiscard}>
+          Discard Changes
+        </Button>
+      </Modal.Footer>
+    </Modal>
+    </>
   );
 }

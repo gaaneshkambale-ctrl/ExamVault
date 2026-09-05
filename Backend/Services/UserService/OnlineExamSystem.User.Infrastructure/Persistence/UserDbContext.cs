@@ -22,6 +22,9 @@ public class UserDbContext : DbContext
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Plan> Plans => Set<Plan>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -86,6 +89,9 @@ public class UserDbContext : DbContext
             entity.Property(p => p.IncludedFeatures)
                 .HasConversion(featuresConverter, featuresComparer)
                 .HasMaxLength(200);
+
+            entity.Property(p => p.MonthlyPrice).HasColumnType("decimal(10,2)");
+            entity.Property(p => p.AnnualPrice).HasColumnType("decimal(10,2)");
 
             // Every Tenant seeded above (and every one that existed before
             // subscription plans shipped) points at this - full access,
@@ -181,6 +187,36 @@ public class UserDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(m => m.GroupId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // One row per (tenant, role, permission) granted - purely a
+        // persisted preview for the admin Roles & Permissions page, not
+        // enforced by any [Authorize] check. Same tenant guardrail as
+        // Group above - only ever touched by an authenticated Admin.
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.HasKey(rp => rp.Id);
+            entity.Property(rp => rp.Role).IsRequired().HasMaxLength(100);
+            entity.Property(rp => rp.PermissionKey).IsRequired().HasMaxLength(100);
+            entity.HasIndex(rp => new { rp.TenantId, rp.Role, rp.PermissionKey }).IsUnique();
+            entity.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(rp => rp.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(rp =>
+                _currentTenant.IsSuperAdmin || (_currentTenant.IsAuthenticated && rp.TenantId == _currentTenant.TenantId));
+        });
+
+        // No HasQueryFilter - a platform-wide operational log, same reasoning
+        // as PlatformSettings/SystemErrorLog, not per-organization data.
+        modelBuilder.Entity<EmailDeliveryLog>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+            entity.HasIndex(l => l.CreatedAtUtc);
+            entity.Property(l => l.ToEmail).IsRequired().HasMaxLength(320);
+            entity.Property(l => l.Subject).IsRequired().HasMaxLength(200);
+            entity.Property(l => l.ErrorMessage).HasMaxLength(1000);
         });
     }
 }

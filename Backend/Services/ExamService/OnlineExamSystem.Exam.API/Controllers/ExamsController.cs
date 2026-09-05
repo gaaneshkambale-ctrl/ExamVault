@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Exam.Application.Exams;
 using OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 using OnlineExamSystem.Exam.Application.Exams.Create;
 using OnlineExamSystem.Exam.Application.Exams.Delete;
@@ -13,6 +14,7 @@ using OnlineExamSystem.Exam.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Exam.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -27,6 +29,7 @@ public class ExamsController : ControllerBase
     private readonly UpdateExamHandler _updateExamHandler;
     private readonly ChangeExamStatusHandler _changeExamStatusHandler;
     private readonly DeleteExamHandler _deleteExamHandler;
+    private readonly IInternalUserLookupClient _userLookupClient;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<ExamsController> _logger;
 
@@ -37,6 +40,7 @@ public class ExamsController : ControllerBase
         UpdateExamHandler updateExamHandler,
         ChangeExamStatusHandler changeExamStatusHandler,
         DeleteExamHandler deleteExamHandler,
+        IInternalUserLookupClient userLookupClient,
         IAuditClient auditClient,
         ILogger<ExamsController> logger)
     {
@@ -46,13 +50,15 @@ public class ExamsController : ControllerBase
         _updateExamHandler = updateExamHandler;
         _changeExamStatusHandler = changeExamStatusHandler;
         _deleteExamHandler = deleteExamHandler;
+        _userLookupClient = userLookupClient;
         _auditClient = auditClient;
         _logger = logger;
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsCreate)]
     public async Task<IActionResult> Create(CreateExamRequest request, CancellationToken cancellationToken)
     {
         var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -68,7 +74,8 @@ public class ExamsController : ControllerBase
             request.Instructions,
             createdByUserId,
             request.ExamCode,
-            request.ExamTypeId);
+            request.ExamTypeId,
+            request.Tags);
 
         var result = await _createExamHandler.HandleAsync(command, cancellationToken);
 
@@ -97,43 +104,58 @@ public class ExamsController : ControllerBase
             User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
-        return StatusCode(StatusCodes.Status201Created, ToResponse(exam));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, exam.CreatedByUserId, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, ToResponse(exam, createdByName));
     }
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        // SuperAdmin counts as "admin" here so the Reports console can list
-        // exams across every tenant - GetAllAsync's own EF query filter
-        // (IsSuperAdmin bypass) is what actually scopes the result, this
-        // flag only decides which repository method gets called.
-        var isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
-
-        var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(callerId, isAdmin), cancellationToken);
-        return Ok(exams.Select(ToResponse));
+        var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(callerId, GetCallerExamAccessScope()), cancellationToken);
+        var names = await ActorNameResolver.ResolveAsync(_userLookupClient, exams.Select(e => (Guid?)e.CreatedByUserId), cancellationToken);
+        return Ok(exams.Select(e => ToResponse(e, names.GetValueOrDefault(e.CreatedByUserId))));
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var isAdmin = User.IsInRole("Admin");
-
-        var exam = await _getExamHandler.HandleAsync(new GetExamQuery(id, callerId, isAdmin), cancellationToken);
+        var exam = await _getExamHandler.HandleAsync(new GetExamQuery(id, callerId, GetCallerExamAccessScope()), cancellationToken);
         if (exam is null)
         {
             return NotFound(new { message = "Exam not found." });
         }
 
-        return Ok(ToResponse(exam));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, exam.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(exam, createdByName));
     }
 
+    // SuperAdmin/Admin get unrestricted tenant-wide (or cross-tenant, for
+    // SuperAdmin - GetAllAsync's own EF query filter IsSuperAdmin bypass is
+    // what actually scopes that) access. Instructor is now scoped to exams
+    // they created themselves - same ownership principle Update enforces.
+    // Student keeps its separate published+assigned scope (handled inside
+    // the handlers, not here).
+    private ExamAccessScope GetCallerExamAccessScope() =>
+        User.IsInRole("Admin") || User.IsInRole("SuperAdmin")
+            ? ExamAccessScope.All
+            : User.IsInRole("Instructor")
+                ? ExamAccessScope.OwnedOnly
+                : ExamAccessScope.AssignedPublishedOnly;
+
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Update(Guid id, UpdateExamRequest request, CancellationToken cancellationToken)
     {
+        // Instructor is restricted to exams they created themselves; Admin/
+        // SuperAdmin remain unrestricted (null = no ownership check).
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         var command = new UpdateExamCommand(
             id,
             request.Title,
@@ -159,13 +181,19 @@ public class ExamsController : ControllerBase
             request.AutoSubmitOnTimeEnd,
             request.ConfirmBeforeSubmit,
             request.ExamCode,
-            request.ExamTypeId);
+            request.ExamTypeId,
+            ownerUserId);
 
         var result = await _updateExamHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Exam not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (!result.Success)
@@ -182,7 +210,8 @@ public class ExamsController : ControllerBase
         }
 
         _logger.LogInformation("Exam {ExamId} updated.", id);
-        return Ok(ToResponse(result.Exam!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, result.Exam!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Exam!, createdByName));
     }
 
     [HttpDelete("{id:guid}")]
@@ -198,23 +227,34 @@ public class ExamsController : ControllerBase
         }
 
         _logger.LogInformation("Exam {ExamId} deleted.", id);
+        var deletedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await _auditClient.RecordAsync(
+            result.TenantId,
+            "Exams",
+            "Deleted exam",
+            result.Title,
+            id.ToString(),
+            deletedByUserId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return NoContent();
     }
 
     [HttpPost("{id:guid}/publish")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
     public Task<IActionResult> Publish(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Published, cancellationToken);
 
     [HttpPost("{id:guid}/unpublish")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
     public Task<IActionResult> Unpublish(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Draft, cancellationToken);
 
     [HttpPost("{id:guid}/archive")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
     public Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Archived, cancellationToken);
@@ -224,13 +264,28 @@ public class ExamsController : ControllerBase
         ExamStatus targetStatus,
         CancellationToken cancellationToken)
     {
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+
+        // Instructor is restricted to exams they created themselves, same
+        // ownership rule Update already enforces; Admin/SuperAdmin remain
+        // unrestricted (null = no ownership check).
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         var result = await _changeExamStatusHandler.HandleAsync(
-            new ChangeExamStatusCommand(id, targetStatus),
+            new ChangeExamStatusCommand(id, targetStatus, bearerToken, ownerUserId),
             cancellationToken);
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Exam not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (result.InvalidTransition)
@@ -265,10 +320,11 @@ public class ExamsController : ControllerBase
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken);
         }
-        return Ok(ToResponse(result.Exam!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, result.Exam!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Exam!, createdByName));
     }
 
-    private static ExamResponse ToResponse(ExamPaper exam) =>
+    private static ExamResponse ToResponse(ExamPaper exam, string? createdByName) =>
         new(
             exam.Id,
             exam.Title,
@@ -301,5 +357,8 @@ public class ExamsController : ControllerBase
             exam.ConfirmBeforeSubmit,
             exam.ExamTypeId,
             exam.ExamType?.Name,
-            exam.TenantId);
+            exam.TenantId,
+            exam.Tags,
+            exam.CreatedByUserId,
+            createdByName);
 }

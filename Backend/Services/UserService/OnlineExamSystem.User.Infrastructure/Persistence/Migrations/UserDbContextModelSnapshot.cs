@@ -35,6 +35,9 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("DateOfBirth")
                         .HasColumnType("datetime2");
 
@@ -42,10 +45,16 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Designation")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -66,6 +75,9 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.Property<string>("Location")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("LockoutEndUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("MustChangePassword")
                         .HasColumnType("bit");
@@ -114,6 +126,39 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.EmailDeliveryLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ToEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.ToTable("EmailDeliveryLogs");
                 });
 
             modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.Group", b =>
@@ -170,8 +215,14 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("AnnualPrice")
+                        .HasColumnType("decimal(10,2)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -182,13 +233,40 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int?>("MaxAdmins")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxAiQuestionsPerMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxExams")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxInstructors")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxQuestions")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxStudents")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("MonthlyPrice")
+                        .HasColumnType("decimal(10,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int?>("StorageGb")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
@@ -200,10 +278,89 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
                             CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Every Admin console module included - the default for every organization until Super Admin assigns a different plan.",
-                            IncludedFeatures = "Users,Exams,ExamTypes,LiveMonitoring,Results,Reports,Notifications,Settings",
+                            IncludedFeatures = "Users,Exams,ExamTypes,LiveMonitoring,Results,Reports,Notifications,Settings,ExamSecurity,Proctoring",
                             Name = "Full Access",
                             UpdatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.PlatformSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AllowSelfRegistration")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("DefaultEmailNotificationsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("DefaultInAppNotificationsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("DefaultMaxExams")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DefaultMaxStudents")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DefaultMaxUsers")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DefaultTrialDurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LockoutMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("MaintenanceModeEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxLoginAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("N8nWebhookUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PasswordMinLength")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("PasswordRequireDigit")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("PasswordRequireLowercase")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("PasswordRequireSpecialChar")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("PasswordRequireUppercase")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PlatformName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PlatformTagline")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SessionTimeoutMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlatformSettings");
                 });
 
             modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.RefreshToken", b =>
@@ -247,7 +404,7 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
-            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.Tenant", b =>
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.RolePermission", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -256,23 +413,110 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PermissionKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Role", "PermissionKey")
+                        .IsUnique();
+
+                    b.ToTable("RolePermissions");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.Tenant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AddressLine1")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AddressLine2")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("City")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Country")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
+
+                    b.Property<bool>("IsTrial")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("MaxAdmins")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxExams")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxInstructors")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxStudents")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxUsers")
+                        .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("OrganizationCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OrganizationType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PermissionVersion")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PostalCode")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("State")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("TrialEndsAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -289,7 +533,9 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
+                            IsTrial = false,
                             Name = "Default",
+                            PermissionVersion = 0,
                             PlanId = new Guid("33333333-3333-3333-3333-333333333333"),
                             Slug = "default"
                         },
@@ -298,7 +544,9 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
                             CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
+                            IsTrial = false,
                             Name = "Platform",
+                            PermissionVersion = 0,
                             PlanId = new Guid("33333333-3333-3333-3333-333333333333"),
                             Slug = "platform"
                         });
@@ -380,6 +628,15 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.RolePermission", b =>
+                {
+                    b.HasOne("OnlineExamSystem.User.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

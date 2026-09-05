@@ -15,6 +15,7 @@ using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
 using OnlineExamSystem.Submission.Application.Attempts.Grade;
 using OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
+using OnlineExamSystem.Submission.Application.Attempts.ListAll;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
@@ -61,8 +62,16 @@ public class Program
             .AddDbContextCheck<SubmissionDbContext>("database");
         builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
 
-        builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
-        builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
+        {
+            builder.Services.Configure<ServiceBusSettings>(builder.Configuration.GetSection("ServiceBus"));
+            builder.Services.AddSingleton<IEventPublisher, ServiceBusEventPublisher>();
+        }
+        else
+        {
+            builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+            builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        }
 
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
@@ -73,6 +82,11 @@ public class Program
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
         builder.Services.AddHttpClient<IAssignmentLookupClient, AssignmentServiceClient>(client =>
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
+
+        var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
 
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
@@ -126,6 +140,7 @@ public class Program
         builder.Services.AddScoped<IValidator<GradeAnswerCommand>, GradeAnswerValidator>();
         builder.Services.AddScoped<GradeAnswerHandler>();
         builder.Services.AddScoped<ListUngradedAnswersByExamHandler>();
+        builder.Services.AddScoped<ListAllAttemptsHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");

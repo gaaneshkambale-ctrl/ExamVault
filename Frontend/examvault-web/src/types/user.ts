@@ -16,7 +16,7 @@ export interface UserProfile {
   id: string;
   fullName: string;
   email: string;
-  role: 'Student' | 'Admin' | 'SuperAdmin';
+  role: 'Student' | 'Admin' | 'SuperAdmin' | 'Instructor';
   mustChangePassword: boolean;
   phoneNumber: string | null;
   hasPhoto: boolean;
@@ -26,6 +26,7 @@ export interface UserProfile {
   dateOfBirth: string | null;
   location: string | null;
   department: string | null;
+  designation: string | null;
   lastLoginAtUtc: string | null;
   joinedOnUtc: string | null;
   formattedUserId: string | null;
@@ -41,6 +42,7 @@ export interface UpdateMyProfileRequest {
   dateOfBirth?: string | null;
   location?: string | null;
   department?: string | null;
+  designation?: string | null;
 }
 
 export type TimeFormat = 'Hour12' | 'Hour24';
@@ -74,7 +76,7 @@ export interface RefreshTokenResponse {
   refreshToken: string;
 }
 
-export type UserRole = 'Admin' | 'Student';
+export type UserRole = 'Admin' | 'Student' | 'Instructor';
 
 export interface UserListItem {
   id: string;
@@ -91,6 +93,8 @@ export interface UserListItem {
   // page has no use for them.
   tenantId: string;
   lastLoginAtUtc: string | null;
+  createdByUserId: string | null;
+  createdByName: string | null;
 }
 
 // GET /api/users returns every role (including SuperAdmin) when called by
@@ -107,7 +111,6 @@ export interface CreateUserRequest {
   fullName: string;
   email: string;
   role: UserRole;
-  isActive: boolean;
   phoneNumber: string;
   rollNumber?: string | null;
 }
@@ -127,6 +130,14 @@ export interface ResetPasswordRequest {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface RolePermissionsEntry {
+  role: string;
+  permissions: string[];
+  updatedAtUtc: string | null;
+  updatedByUserId?: string | null;
+  updatedByName?: string | null;
 }
 
 export type UserSessionStatus = 'Active' | 'Expired' | 'Revoked';

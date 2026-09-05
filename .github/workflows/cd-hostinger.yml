@@ -1,0 +1,69 @@
+name: CD - Hostinger VPS
+
+# Only fires after the "CI" workflow (ci.yml) finishes successfully on
+# dev - gates deployment on backend+frontend build/test passing, rather
+# than deploying in parallel with (and possibly ahead of) test results.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [dev]
+
+jobs:
+  deploy:
+    name: Deploy to Hostinger VPS
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      # VPS_SSH_PRIVATE_KEY is stored base64-encoded (one unbroken line,
+      # produced on the VPS with `base64 -w0 ~/.ssh/github_deploy_key`) and
+      # decoded back to a real multi-line key file here - five straight
+      # attempts pasting the raw multi-line key directly into the secret
+      # box all failed with "ssh: no key found" (the multi-line PEM format
+      # kept getting corrupted somewhere between terminal copy and
+      # GitHub's textarea, across both direct terminal copy and a
+      # scp+Notepad copy). Base64 has no newlines to lose, so this
+      # sidesteps the corruption entirely regardless of its cause.
+      - name: Decode deploy key
+        # ssh-action runs as an isolated Docker container that only shares
+        # the GitHub workspace with the runner, not /tmp - a key written to
+        # /tmp/deploy_key on the runner is invisible inside that container
+        # (confirmed live: "open /tmp/deploy_key: no such file or
+        # directory"). Writing inside github.workspace instead, since
+        # that's the one path both the plain runner step and the
+        # container-based action step actually share.
+        run: |
+          echo "${{ secrets.VPS_SSH_PRIVATE_KEY }}" | base64 -d > "${{ github.workspace }}/deploy_key"
+          # 644 not 600: ssh-action's container runs as a different UID
+          # than the runner user that just created this file (confirmed
+          # live: 600 caused "permission denied" reading it from inside
+          # the container). This action talks SSH via Go's crypto/ssh
+          # library directly, not the OpenSSH CLI, so it doesn't enforce
+          # the usual "private key must not be group/world readable"
+          # rejection the way a real `ssh` binary would - safe here, and
+          # the runner VM is destroyed immediately after this job anyway.
+          chmod 644 "${{ github.workspace }}/deploy_key"
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key_path: ${{ github.workspace }}/deploy_key
+          # Default is 10m - too short once Compose Bake mode is disabled
+          # below and a deploy needs a real (not fully cached) rebuild.
+          command_timeout: 40m
+          script: |
+            set -e
+            cd ~/ExamVault
+            git pull
+            # Compose Bake mode rebuilds every service defined across all
+            # three compose files in one combined buildx invocation
+            # regardless of which actually changed, ignoring each
+            # service's own Docker layer cache - confirmed locally: a
+            # frontend-only change took 40+ minutes instead of the ~1
+            # minute a properly-cached scoped build takes, which is what
+            # blew past this step's (previously default 10m) timeout.
+            # Disabling it restores normal per-service layer caching, so
+            # only what actually changed rebuilds.
+            COMPOSE_BAKE=false docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build
+            docker image prune -f

@@ -1,5 +1,6 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  cancelAssignment,
   getAssignment,
   getMyAssignmentForExam,
   listAllAssignments,
@@ -57,5 +58,15 @@ export function useMyAssignmentForExam(examId: string | undefined) {
     queryKey: ['assignments', 'mine', examId],
     queryFn: () => getMyAssignmentForExam(examId!),
     enabled: !!examId,
+  });
+}
+
+export function useCancelAssignment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: cancelAssignment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assignments'] });
+    },
   });
 }

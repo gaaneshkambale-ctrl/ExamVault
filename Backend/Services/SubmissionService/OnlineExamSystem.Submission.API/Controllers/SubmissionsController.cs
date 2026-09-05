@@ -7,11 +7,13 @@ using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
 using OnlineExamSystem.Submission.Application.Attempts.Grade;
 using OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
+using OnlineExamSystem.Submission.Application.Attempts.ListAll;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListUngradedByExam;
 using OnlineExamSystem.Submission.Application.Attempts.Mine;
+using OnlineExamSystem.Submission.Application.Interfaces;
 using OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
 using OnlineExamSystem.Submission.Application.Attempts.RecordProctoringViolation;
 using OnlineExamSystem.Submission.Application.Attempts.ListViolationsByExam;
@@ -53,6 +55,8 @@ public class SubmissionsController : ControllerBase
     private readonly CompleteSectionHandler _completeSectionHandler;
     private readonly GradeAnswerHandler _gradeAnswerHandler;
     private readonly ListUngradedAnswersByExamHandler _listUngradedAnswersByExamHandler;
+    private readonly ListAllAttemptsHandler _listAllAttemptsHandler;
+    private readonly IInternalUserLookupClient _userLookupClient;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -75,6 +79,8 @@ public class SubmissionsController : ControllerBase
         CompleteSectionHandler completeSectionHandler,
         GradeAnswerHandler gradeAnswerHandler,
         ListUngradedAnswersByExamHandler listUngradedAnswersByExamHandler,
+        ListAllAttemptsHandler listAllAttemptsHandler,
+        IInternalUserLookupClient userLookupClient,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
@@ -96,7 +102,36 @@ public class SubmissionsController : ControllerBase
         _completeSectionHandler = completeSectionHandler;
         _gradeAnswerHandler = gradeAnswerHandler;
         _listUngradedAnswersByExamHandler = listUngradedAnswersByExamHandler;
+        _listAllAttemptsHandler = listAllAttemptsHandler;
+        _userLookupClient = userLookupClient;
         _logger = logger;
+    }
+
+    // Super Admin platform-wide Submissions browse across every tenant, not
+    // one exam's own attempts. Score/Percentage are deliberately absent -
+    // see PlatformSubmissionResponse's own comment.
+    [HttpGet("all")]
+    [Authorize(Roles = "SuperAdmin")]
+    public async Task<IActionResult> ListAll(CancellationToken cancellationToken)
+    {
+        var attempts = await _listAllAttemptsHandler.HandleAsync(new ListAllAttemptsQuery(), cancellationToken);
+        var usersById = await ActorNameResolver.ResolveAsync(_userLookupClient, attempts.Select(a => a.UserId), cancellationToken);
+
+        return Ok(attempts.Select(a =>
+        {
+            usersById.TryGetValue(a.UserId, out var user);
+            return new PlatformSubmissionResponse(
+                a.Id,
+                a.ExamId,
+                a.UserId,
+                a.TenantId,
+                a.AttemptNumber,
+                a.Status.ToString(),
+                a.StartedAtUtc,
+                a.SubmittedAtUtc,
+                user?.FullName,
+                user?.Email);
+        }));
     }
 
     [HttpPost("start")]
@@ -275,6 +310,7 @@ public class SubmissionsController : ControllerBase
     // student's assignment, or the video provider is unconfigured/down -
     // the frontend just doesn't attempt to join anything in that case.
     [HttpPost("{attemptId:guid}/recording/join")]
+    [Authorize(Policy = Proctoring)]
     public async Task<IActionResult> JoinRecording(Guid attemptId, CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -309,7 +345,7 @@ public class SubmissionsController : ControllerBase
     // until this has been explicitly turned on for the attempt in question.
     [HttpPut("{attemptId:guid}/live-watch")]
     [Authorize(Roles = "Admin")]
-    [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = Proctoring)]
     public async Task<IActionResult> SetLiveWatch(
         Guid attemptId,
         SetLiveWatchRequest request,
@@ -338,7 +374,7 @@ public class SubmissionsController : ControllerBase
     // not grant watch access.
     [HttpPost("{attemptId:guid}/recording/watch")]
     [Authorize(Roles = "Admin")]
-    [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = Proctoring)]
     public async Task<IActionResult> WatchRecording(Guid attemptId, CancellationToken cancellationToken)
     {
         var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -478,6 +514,11 @@ public class SubmissionsController : ControllerBase
             return Conflict(new { message = "This section is locked until earlier sections are completed." });
         }
 
+        if (result.IsSectionAlreadyCompleted)
+        {
+            return Conflict(new { message = "This section has already been completed and can't be re-entered." });
+        }
+
         return Ok(ToResponse(result.State!));
     }
 
@@ -528,8 +569,17 @@ public class SubmissionsController : ControllerBase
             result.SectionStates.Select(ToResponse).ToList()));
     }
 
+    // Roles here must stay in lockstep with ResultService's own
+    // ResultsController.ByExam ([Authorize(Roles = "Admin,Instructor")]) -
+    // that endpoint calls this one server-to-server to build its report,
+    // so a narrower role list here 403s the whole feature for whichever
+    // role got left out (found live: Instructor could open exam results in
+    // the UI, but the report always failed because this endpoint didn't
+    // recognize the Instructor role yet). Every other action on this
+    // controller (proctoring, grading, force-submit, live-watch) is
+    // deliberately Admin-only and unaffected by this change.
     [HttpGet("by-exam/{examId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = ResultsOrReports)]
     public async Task<IActionResult> ByExam(Guid examId, CancellationToken cancellationToken)
     {
@@ -582,7 +632,7 @@ public class SubmissionsController : ControllerBase
     // on ExamAttempt), each with its own timestamp/severity/status.
     [HttpGet("by-exam/{examId:guid}/violations")]
     [Authorize(Roles = "Admin")]
-    [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = ExamSecurity)]
     public async Task<IActionResult> ViolationsByExam(Guid examId, CancellationToken cancellationToken)
     {
         var events = await _listViolationsByExamHandler.HandleAsync(
@@ -594,7 +644,7 @@ public class SubmissionsController : ControllerBase
 
     [HttpPut("violations/{violationId:guid}/status")]
     [Authorize(Roles = "Admin")]
-    [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = ExamSecurity)]
     public async Task<IActionResult> UpdateViolationStatus(
         Guid violationId,
         UpdateViolationStatusRequest request,

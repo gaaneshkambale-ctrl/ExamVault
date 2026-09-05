@@ -1,22 +1,29 @@
-import { useState } from 'react';
-import { Alert, Badge, Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap';
+import { useMemo, useState } from 'react';
+import { Badge, Card, Form, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
+import ReactivateTenantButton from '../../components/ReactivateTenantButton';
+import StartTrialButton from '../../components/StartTrialButton';
+import EndTrialButton from '../../components/EndTrialButton';
 import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
-import { createTenantAdmin } from '../../api/tenantsApi';
-import { extractServerError } from '../../utils/apiError';
-import type { Tenant } from '../../types/tenant';
+import { listPlans } from '../../api/plansApi';
+import { listAllUsers } from '../../api/userApi';
+import { listExams } from '../../api/examApi';
 
 interface ManageTenantsProps {
   // Undefined = "All Organizations". PlatformSidebar's nav key for
-  // highlighting derives from this page being mounted at one of three
-  // routes (org-all/active/suspended) - see AppRoutes.tsx. Create and
+  // highlighting derives from this page being mounted at one of four
+  // routes (org-all/active/suspended/trial) - see AppRoutes.tsx. Create and
   // per-org Details are their own dedicated pages (CreateOrganization.tsx,
   // OrganizationDetails.tsx), not modals/panels on this list anymore.
-  statusFilter?: 'active' | 'suspended';
+  statusFilter?: 'active' | 'suspended' | 'trial';
+}
+
+function daysRemaining(trialEndsAtUtc: string): number {
+  return Math.ceil((new Date(trialEndsAtUtc).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
 export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
@@ -24,24 +31,50 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
 
   const [searchText, setSearchText] = useState('');
 
-  const [adminTarget, setAdminTarget] = useState<Tenant | null>(null);
-  const [adminFullName, setAdminFullName] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
+  // Same real, already-SuperAdmin-accessible cross-tenant queries
+  // OrganizationDetails.tsx/AllUsers.tsx/ExamUsageReport.tsx already use -
+  // same query keys so React Query dedupes the cache across pages instead
+  // of re-fetching.
+  const { data: plans, isLoading: isLoadingPlans } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
+  const { data: allUsers, isLoading: isLoadingUsers } = useQuery({ queryKey: ['platform-users'], queryFn: listAllUsers });
+  const { data: allExams, isLoading: isLoadingExams } = useQuery({ queryKey: ['platform-exams'], queryFn: listExams });
 
-  const createAdminMutation = useMutation({
-    mutationFn: () => createTenantAdmin(adminTarget!.id, { fullName: adminFullName, email: adminEmail }),
-  });
+  const planNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (plans ?? []).forEach((p) => map.set(p.id, p.name));
+    return map;
+  }, [plans]);
 
-  const openAddAdmin = (tenant: Tenant) => {
-    createAdminMutation.reset();
-    setAdminFullName('');
-    setAdminEmail('');
-    setAdminTarget(tenant);
-  };
+  const adminsByTenantId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    (allUsers ?? [])
+      .filter((u) => u.role === 'Admin')
+      .forEach((u) => {
+        const existing = map.get(u.tenantId) ?? [];
+        existing.push(u.email);
+        map.set(u.tenantId, existing);
+      });
+    return map;
+  }, [allUsers]);
+
+  const userCountByTenantId = useMemo(() => {
+    const map = new Map<string, number>();
+    (allUsers ?? []).forEach((u) => map.set(u.tenantId, (map.get(u.tenantId) ?? 0) + 1));
+    return map;
+  }, [allUsers]);
+
+  const examCountByTenantId = useMemo(() => {
+    const map = new Map<string, number>();
+    (allExams ?? []).forEach((e) => map.set(e.tenantId, (map.get(e.tenantId) ?? 0) + 1));
+    return map;
+  }, [allExams]);
 
   const statusFiltered = tenants?.filter((tenant) => {
     if (statusFilter === 'active') return tenant.isActive;
     if (statusFilter === 'suspended') return !tenant.isActive;
+    // Trial is independent of Active/Suspended - an org can be either
+    // while on a trial, so this doesn't partition the other two tabs.
+    if (statusFilter === 'trial') return tenant.isTrial;
     return true;
   });
 
@@ -53,15 +86,26 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
   const totalCount = tenants?.length ?? 0;
   const activeCount = tenants?.filter((t) => t.isActive).length ?? 0;
   const suspendedCount = totalCount - activeCount;
+  const trialCount = tenants?.filter((t) => t.isTrial).length ?? 0;
 
-  const activeNavKey = statusFilter === 'active' ? 'org-active' : statusFilter === 'suspended' ? 'org-suspended' : 'org-all';
-  const pageTitle =
-    statusFilter === 'active' ? 'Active Organizations' : statusFilter === 'suspended' ? 'Suspended Organizations' : 'Organizations';
+  const navKeyByFilter: Record<string, string> = {
+    active: 'org-active',
+    suspended: 'org-suspended',
+    trial: 'org-trial',
+  };
+  const activeNavKey = statusFilter ? navKeyByFilter[statusFilter] : 'org-all';
+  const titleByFilter: Record<string, string> = {
+    active: 'Active Organizations',
+    suspended: 'Suspended Organizations',
+    trial: 'Trial Organizations',
+  };
+  const pageTitle = statusFilter ? titleByFilter[statusFilter] : 'Organizations';
 
-  const tabs: Array<{ label: string; count: number; path: string; filter?: 'active' | 'suspended' }> = [
+  const tabs: Array<{ label: string; count: number; path: string; filter?: 'active' | 'suspended' | 'trial' }> = [
     { label: 'All', count: totalCount, path: '/platform/organizations' },
     { label: 'Active', count: activeCount, path: '/platform/organizations/active', filter: 'active' },
     { label: 'Suspended', count: suspendedCount, path: '/platform/organizations/suspended', filter: 'suspended' },
+    { label: 'Trial', count: trialCount, path: '/platform/organizations/trial', filter: 'trial' },
   ];
 
   return (
@@ -99,47 +143,6 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
         })}
       </div>
 
-      <Modal show={adminTarget !== null} onHide={() => setAdminTarget(null)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Add Admin to {adminTarget?.name}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {createAdminMutation.isError && (
-            <Alert variant="danger">{extractServerError(createAdminMutation.error)}</Alert>
-          )}
-          {createAdminMutation.isSuccess ? (
-            <Alert variant="success" className="mb-0">
-              Admin created. They can log in at {adminTarget?.slug}.examvault.com once a password is set.
-            </Alert>
-          ) : (
-            <>
-              <Form.Group className="mb-3" controlId="tenantAdminFullName">
-                <Form.Label>Full Name</Form.Label>
-                <Form.Control value={adminFullName} onChange={(e) => setAdminFullName(e.target.value)} />
-              </Form.Group>
-              <Form.Group controlId="tenantAdminEmail">
-                <Form.Label>Email</Form.Label>
-                <Form.Control type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
-              </Form.Group>
-            </>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="outline-secondary" onClick={() => setAdminTarget(null)}>
-            {createAdminMutation.isSuccess ? 'Close' : 'Cancel'}
-          </Button>
-          {!createAdminMutation.isSuccess && (
-            <Button
-              variant="primary"
-              disabled={!adminFullName.trim() || !adminEmail.trim() || createAdminMutation.isPending}
-              onClick={() => createAdminMutation.mutate()}
-            >
-              {createAdminMutation.isPending ? 'Creating...' : 'Create Admin'}
-            </Button>
-          )}
-        </Modal.Footer>
-      </Modal>
-
       <Card className="border-0 shadow-sm mb-3">
         <Card.Body className={isLoading || isError || filteredTenants?.length === 0 ? '' : 'p-0'}>
           {isLoading && (
@@ -162,15 +165,17 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
 
           {!isLoading && !isError && filteredTenants && filteredTenants.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Organization</th>
                   <th>Admin Contact</th>
                   <th>Plan</th>
                   <th>Status</th>
+                  {statusFilter === 'trial' && <th>Trial Ends</th>}
                   <th>Users</th>
                   <th>Exams</th>
                   <th>Created On</th>
+                  <th>Created By</th>
                   <th className="pe-4">Actions</th>
                 </tr>
               </thead>
@@ -183,21 +188,54 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                         <div>
                           <div className="fw-medium">{tenant.name}</div>
                           <div className="text-muted" style={{ fontSize: 12 }}>
-                            {tenant.slug}.examvault.com
+                            {tenant.slug}.examvaults.in
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="text-muted">&mdash;</td>
-                    <td className="text-muted">&mdash;</td>
+                    <td className="text-muted">
+                      {isLoadingUsers ? (
+                        <Spinner animation="border" size="sm" />
+                      ) : (
+                        (() => {
+                          const admins = adminsByTenantId.get(tenant.id) ?? [];
+                          if (admins.length === 0) return '—';
+                          return admins.length > 1 ? `${admins[0]} (+${admins.length - 1} more)` : admins[0];
+                        })()
+                      )}
+                    </td>
+                    <td className="text-muted">
+                      {isLoadingPlans ? <Spinner animation="border" size="sm" /> : (planNameById.get(tenant.planId) ?? '—')}
+                    </td>
                     <td>
                       <Badge bg={tenant.isActive ? 'success' : 'secondary'}>
                         {tenant.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </td>
-                    <td className="text-muted">&mdash;</td>
-                    <td className="text-muted">&mdash;</td>
+                    {statusFilter === 'trial' && (
+                      <td>
+                        {tenant.trialEndsAtUtc ? (
+                          (() => {
+                            const remaining = daysRemaining(tenant.trialEndsAtUtc);
+                            return (
+                              <Badge bg={remaining < 0 ? 'danger' : remaining <= 3 ? 'warning' : 'info'}>
+                                {remaining < 0 ? 'Expired' : `${remaining}d left`}
+                              </Badge>
+                            );
+                          })()
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    )}
+                    <td className="text-muted">
+                      {isLoadingUsers ? <Spinner animation="border" size="sm" /> : (userCountByTenantId.get(tenant.id) ?? 0)}
+                    </td>
+                    <td className="text-muted">
+                      {isLoadingExams ? <Spinner animation="border" size="sm" /> : (examCountByTenantId.get(tenant.id) ?? 0)}
+                    </td>
                     <td>{new Date(tenant.createdAtUtc).toLocaleDateString()}</td>
+                    <td className="text-muted">{tenant.createdByName ?? '—'}</td>
                     <td className="pe-4">
                       <div className="d-flex gap-2">
                         <Link
@@ -210,10 +248,17 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                             <circle cx="12" cy="12" r="3" />
                           </svg>
                         </Link>
-                        <Button variant="outline-primary" size="sm" onClick={() => openAddAdmin(tenant)}>
-                          Add Admin
-                        </Button>
-                        {tenant.isActive && <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />}
+                        {tenant.isActive ? (
+                          <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />
+                        ) : (
+                          <ReactivateTenantButton tenantId={tenant.id} />
+                        )}
+                        {statusFilter === 'trial' &&
+                          (tenant.isTrial ? (
+                            <EndTrialButton tenantId={tenant.id} />
+                          ) : (
+                            <StartTrialButton tenantId={tenant.id} tenantName={tenant.name} />
+                          ))}
                       </div>
                     </td>
                   </tr>
@@ -225,7 +270,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
       </Card>
 
       <div className="row g-3">
-        <div className="col-md-4">
+        <div className="col-md-3">
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Active Organizations</div>
@@ -239,7 +284,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
             </Card.Body>
           </Card>
         </div>
-        <div className="col-md-4">
+        <div className="col-md-3">
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Suspended Organizations</div>
@@ -253,7 +298,21 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
             </Card.Body>
           </Card>
         </div>
-        <div className="col-md-4">
+        <div className="col-md-3">
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small mb-1">Trial Organizations</div>
+              <div className="h4 fw-bold mb-1">{trialCount}</div>
+              <div className="text-muted small mb-2">
+                {totalCount === 0 ? 0 : ((trialCount / totalCount) * 100).toFixed(1)}% of total
+              </div>
+              <Link to="/platform/organizations/trial" className="small text-decoration-none">
+                View all trial &rarr;
+              </Link>
+            </Card.Body>
+          </Card>
+        </div>
+        <div className="col-md-3">
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Total Organizations</div>

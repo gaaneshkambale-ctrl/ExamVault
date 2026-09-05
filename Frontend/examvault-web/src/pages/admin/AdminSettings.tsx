@@ -1,24 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import SettingsCard from '../../components/settings/SettingsCard';
 import type { SettingsCardRow } from '../../components/settings/SettingsCard';
-import {
-  useExamDefaults,
-  useGeneralSettings,
-  useProctoringSettings,
-  useReminderSettings,
-} from '../../hooks/useExams';
-import { useSystemSettings } from '../../hooks/useSystemSettings';
+import { useExamDefaults, useProctoringSettings, useReminderSettings } from '../../hooks/useExams';
 import { useMyPreferences } from '../../hooks/useNotifications';
+import { useFeatures } from '../../hooks/useFeatures';
 
 const icon = {
-  general: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  ),
   exam: (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 11l3 3L22 4" />
@@ -43,7 +33,7 @@ const icon = {
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   ),
-  system: (
+  overview: (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="3" width="20" height="8" rx="2" />
       <rect x="2" y="13" width="20" height="8" rx="2" />
@@ -66,15 +56,14 @@ function withinLastDays(iso: string | undefined, days: number): boolean {
 
 export default function AdminSettings() {
   const [search, setSearch] = useState('');
+  const { hasFeature } = useFeatures();
 
-  const { data: general, isLoading: loadingGeneral } = useGeneralSettings();
   const { data: examDefaults, isLoading: loadingExamDefaults } = useExamDefaults();
   const { data: proctoring, isLoading: loadingProctoring } = useProctoringSettings();
   const { data: reminders, isLoading: loadingReminders } = useReminderSettings();
-  const { data: system, isLoading: loadingSystem } = useSystemSettings();
   const { data: preferences } = useMyPreferences();
 
-  const isLoading = loadingGeneral || loadingExamDefaults || loadingProctoring || loadingReminders || loadingSystem;
+  const isLoading = loadingExamDefaults || loadingProctoring || loadingReminders;
 
   const resultPref = (preferences ?? []).find((p) => p.type === 'Result');
   const anyEmailEnabled = (preferences ?? []).some((p) => p.emailEnabled);
@@ -84,16 +73,6 @@ export default function AdminSettings() {
   ).length;
 
   const cards = useMemo(() => {
-    const generalRows: SettingsCardRow[] = general
-      ? [
-          { label: 'Organization Profile', value: general.organizationName },
-          { label: 'Language', value: general.language },
-          { label: 'Timezone', value: general.timezone },
-          { label: 'Date Format', value: general.dateFormat },
-          { label: 'Support Email', value: general.supportEmail || '—' },
-        ]
-      : [];
-
     const examRows: SettingsCardRow[] = examDefaults
       ? [
           { label: 'Default Exam Duration', value: `${examDefaults.defaultDurationMinutes} Minutes` },
@@ -138,28 +117,7 @@ export default function AdminSettings() {
         ]
       : [];
 
-    const systemRows: SettingsCardRow[] = system
-      ? [
-          { label: 'Maintenance Mode', value: <YesBadge on={system.maintenanceModeEnabled} /> },
-          { label: 'Backup Frequency', value: system.backupFrequency },
-          { label: 'Audit Log Retention', value: `${system.auditLogRetentionDays} Days` },
-          { label: 'System Environment', value: system.environment },
-          { label: 'Log Level', value: system.logLevel },
-        ]
-      : [];
-
     return [
-      {
-        key: 'general',
-        icon: icon.general,
-        iconBg: '#ede9fe',
-        iconColor: '#7c3aed',
-        title: 'General Settings',
-        subtitle: 'Basic information about your organization and system preferences.',
-        rows: generalRows,
-        manageLabel: 'Manage General Settings',
-        manageTo: '/admin/settings/general',
-      },
       {
         key: 'exam',
         icon: icon.exam,
@@ -204,33 +162,34 @@ export default function AdminSettings() {
         manageLabel: 'Manage Notification Settings',
         manageTo: '/admin/settings/notifications',
       },
-      {
-        key: 'system',
-        icon: icon.system,
-        iconBg: '#e0e7ff',
-        iconColor: '#4f46e5',
-        title: 'System Settings',
-        subtitle: 'Configure system behavior, maintenance and operational settings.',
-        rows: systemRows,
-        manageLabel: 'Manage System Settings',
-        manageTo: '/admin/settings/system',
-      },
     ];
-  }, [general, examDefaults, proctoring, reminders, system, preferences, resultPref, anyEmailEnabled, anyInAppEnabled, remindersEnabledCount]);
+  }, [examDefaults, proctoring, reminders, preferences, resultPref, anyEmailEnabled, anyInAppEnabled, remindersEnabledCount]);
 
   const filteredCards = useMemo(() => {
+    // Security/Proctoring Settings edit the same ProctoringSettings entity
+    // real exam-security/camera capabilities the org's plan may no longer
+    // include (see ActionPlan.txt's "SPLIT LiveMonitoring" plan) - their
+    // routes already redirect away via ProtectedRoute's own feature gate,
+    // so drop the card here too rather than link to a page that'll just
+    // bounce the admin back to their dashboard.
+    const entitled = cards.filter((c) => {
+      if (c.key === 'security') return hasFeature('ExamSecurity');
+      if (c.key === 'proctoring') return hasFeature('Proctoring');
+      return true;
+    });
+
     const q = search.trim().toLowerCase();
-    if (!q) return cards;
-    return cards.filter(
+    if (!q) return entitled;
+    return entitled.filter(
       (c) =>
         c.title.toLowerCase().includes(q) ||
         c.rows.some((r) => r.label.toLowerCase().includes(q)),
     );
-  }, [cards, search]);
+  }, [cards, search, hasFeature]);
 
   // Real, documented rules (not a vibes-based number) - see ActionPlan.txt.
   const stats = useMemo(() => {
-    if (!general || !examDefaults || !proctoring || !reminders || !system) {
+    if (!examDefaults || !proctoring || !reminders) {
       return null;
     }
 
@@ -249,22 +208,16 @@ export default function AdminSettings() {
       examDefaults.negativeMarkingEnabled,
       examDefaults.autoSaveEnabled,
       examDefaults.autoSubmitEnabled,
-      system.maintenanceModeEnabled,
     ];
     const totalConfigurations =
       boolFields.length +
-      5 /* General: name/email/language/timezone/dateFormat */ +
       1 /* ProctoringSettings.sessionTimeoutMinutes */ +
-      6 /* ExamDefaults: duration/passing/attempts/negValue/navMode/publishMode */ +
-      3 /* System: backupFrequency/retentionDays/logLevel */;
+      6 /* ExamDefaults: duration/passing/attempts/negValue/navMode/publishMode */;
     const enabled = boolFields.filter(Boolean).length;
 
-    const recentlyUpdated = [general, examDefaults, proctoring, reminders, system].filter((s) =>
-      withinLastDays(s.updatedAtUtc, 7),
-    ).length;
+    const recentlyUpdated = [examDefaults, proctoring, reminders].filter((s) => withinLastDays(s.updatedAtUtc, 7)).length;
 
     const requireAttention =
-      (system.maintenanceModeEnabled ? 1 : 0) +
       (!proctoring.proctoringEnabled ? 1 : 0) +
       [
         proctoring.fullscreenExitEnabled,
@@ -274,7 +227,7 @@ export default function AdminSettings() {
       ].filter((v) => !v).length;
 
     return { totalConfigurations, enabled, recentlyUpdated, requireAttention };
-  }, [general, examDefaults, proctoring, reminders, system]);
+  }, [examDefaults, proctoring, reminders]);
 
   return (
     <AdminLayout active="Settings">
@@ -328,11 +281,11 @@ export default function AdminSettings() {
               <Card.Body className="p-4">
                 <Row className="align-items-center g-4">
                   <Col xs={12} lg={4}>
-                    <h2 className="h6 fw-bold mb-1">Settings Overview</h2>
-                    <p className="text-muted small mb-0">
-                      These settings apply globally to the entire system. Changes take effect immediately after
-                      saving.
-                    </p>
+                    <SectionHeader
+                      icon={<span style={{ color: '#4f46e5' }}>{icon.overview}</span>}
+                      title="Settings Overview"
+                      subtitle="These settings apply globally to the entire system. Changes take effect immediately after saving."
+                    />
                   </Col>
                   <Col xs={6} lg={2}>
                     <div className="h4 fw-bold mb-0">{stats.totalConfigurations}</div>

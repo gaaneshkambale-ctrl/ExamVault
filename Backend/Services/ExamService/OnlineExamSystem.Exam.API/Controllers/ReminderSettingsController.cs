@@ -6,6 +6,7 @@ using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using ReminderSettingsEntity = OnlineExamSystem.Exam.Domain.Entities.ReminderSettings;
 using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Exam.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -29,6 +30,7 @@ public class ReminderSettingsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = SettingsView)]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
         var settings = await _getReminderSettingsHandler.HandleAsync(new GetReminderSettingsQuery(), cancellationToken);
@@ -36,6 +38,7 @@ public class ReminderSettingsController : ControllerBase
     }
 
     [HttpPut]
+    [Authorize(Policy = SettingsEdit)]
     public async Task<IActionResult> Update(UpdateReminderSettingsRequest request, CancellationToken cancellationToken)
     {
         var settings = await _updateReminderSettingsHandler.HandleAsync(

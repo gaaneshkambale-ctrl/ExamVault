@@ -38,7 +38,8 @@ export type ProctoringViolationType =
   | 'MultipleTabs'
   | 'CopyPaste'
   | 'RightClick'
-  | 'MultipleMonitors';
+  | 'MultipleMonitors'
+  | 'FullscreenExit';
 
 export interface AttemptAnswerResponse {
   id: string;
@@ -80,6 +81,23 @@ export interface UngradedAnswerResponse {
   userId: string;
   answerText: string;
   answeredAtUtc: string;
+}
+
+// Super Admin platform-wide Submissions browse only - deliberately separate
+// from ExamAttemptResponse (used for grading/monitoring one exam). No
+// Score/Percentage - scoring is computed live, per-exam, by Result
+// Service, not a stored column this list can page/sort on at scale.
+export interface PlatformSubmissionResponse {
+  id: string;
+  examId: string;
+  userId: string;
+  tenantId: string;
+  attemptNumber: number;
+  status: AttemptStatus;
+  startedAtUtc: string;
+  submittedAtUtc: string | null;
+  studentName: string | null;
+  studentEmail: string | null;
 }
 
 export type ViolationSeverity = 'Low' | 'Medium' | 'Critical';

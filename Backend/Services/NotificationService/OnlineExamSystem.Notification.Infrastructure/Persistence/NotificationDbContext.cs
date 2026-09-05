@@ -17,8 +17,8 @@ public class NotificationDbContext : TenantScopedDbContext
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
-    public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<SystemErrorLog> SystemErrorLogs => Set<SystemErrorLog>();
+    public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. Forcing Kind=Utc on
@@ -81,16 +81,6 @@ public class NotificationDbContext : TenantScopedDbContext
                 CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && t.TenantId == CurrentTenant.TenantId));
         });
 
-        modelBuilder.Entity<SystemSettings>(entity =>
-        {
-            entity.HasKey(s => s.Id);
-            entity.Property(s => s.BackupFrequency).HasConversion<string>();
-            entity.Property(s => s.LogLevel).HasConversion<string>();
-            entity.HasIndex(s => s.TenantId);
-            entity.HasQueryFilter(s =>
-                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && s.TenantId == CurrentTenant.TenantId));
-        });
-
         modelBuilder.Entity<SystemErrorLog>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -106,6 +96,16 @@ public class NotificationDbContext : TenantScopedDbContext
             entity.Property(e => e.RequestPath).HasMaxLength(500);
             entity.Property(e => e.RequestMethod).HasMaxLength(16);
             // No HasQueryFilter - deliberately cross-tenant, see SystemErrorLog's own comment.
+        });
+
+        modelBuilder.Entity<EmailDeliveryLog>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+            entity.HasIndex(l => l.CreatedAtUtc);
+            entity.Property(l => l.ToEmail).IsRequired().HasMaxLength(320);
+            entity.Property(l => l.Subject).IsRequired().HasMaxLength(200);
+            entity.Property(l => l.ErrorMessage).HasMaxLength(1000);
+            // No HasQueryFilter - platform-wide operational log, same reasoning as SystemErrorLog.
         });
     }
 }

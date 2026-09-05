@@ -122,7 +122,6 @@ const navGroups: NavGroup[] = [
       { key: 'org-active', label: 'Active Organizations', path: '/platform/organizations/active' },
       { key: 'org-trial', label: 'Trial Organizations', path: '/platform/organizations/trial' },
       { key: 'org-suspended', label: 'Suspended Organizations', path: '/platform/organizations/suspended' },
-      { key: 'org-details', label: 'Organization Details', path: '/platform/organizations/details' },
     ],
   },
   {
@@ -135,7 +134,6 @@ const navGroups: NavGroup[] = [
       { key: 'users-org-admins', label: 'Organization Admins', path: '/platform/users/organization-admins' },
       { key: 'users-students', label: 'Students', path: '/platform/users/students' },
       { key: 'users-platform-admins', label: 'Platform Admins', path: '/platform/users/platform-admins' },
-      { key: 'users-roles', label: 'Roles & Permissions', path: '/platform/users/roles' },
     ],
   },
   {
@@ -171,6 +169,7 @@ const navGroups: NavGroup[] = [
     path: '/platform/monitoring',
     icon: groupIcons.monitoring,
     children: [
+      { key: 'mon-overview', label: 'Overview', path: '/platform/monitoring' },
       { key: 'mon-active-orgs', label: 'Active Organizations', path: '/platform/monitoring/active-organizations' },
       { key: 'mon-active-exams', label: 'Active Exams', path: '/platform/monitoring/active-exams' },
       { key: 'mon-system-health', label: 'System Health', path: '/platform/monitoring/system-health' },

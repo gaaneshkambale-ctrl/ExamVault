@@ -1,0 +1,3 @@
+namespace OnlineExamSystem.User.Application.Settings.GetEmailConnectionStatus;
+
+public record GetEmailConnectionStatusQuery;

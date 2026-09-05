@@ -76,7 +76,7 @@ export default function SessionsPanel() {
               ) : (
                 <div className="table-responsive">
                   <Table hover className="mb-0 align-middle">
-                    <thead className="text-muted small text-uppercase bg-light">
+                    <thead className="text-muted small text-uppercase bg-body-tertiary">
                       <tr>
                         <th className="ps-4">Device / Browser</th>
                         <th>IP Address</th>

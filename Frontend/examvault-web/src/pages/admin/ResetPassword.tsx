@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import UserAvatar from '../../components/UserAvatar';
 import { resetUserPassword } from '../../api/userApi';
 import { useUser } from '../../hooks/useUsers';
@@ -12,7 +13,17 @@ import type { UserRole } from '../../types/user';
 const roleVariant: Record<UserRole, string> = {
   Admin: 'primary',
   Student: 'secondary',
+  Instructor: 'info',
 };
+
+function KeyIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="M21 2l-9.6 9.6" /><path d="M15.5 7.5L18 5" /><path d="M18 5l3 3" />
+    </svg>
+  );
+}
 
 const requirements: Array<{ label: string; test: (value: string) => boolean }> = [
   { label: 'At least 8 characters', test: (v) => v.length >= 8 },
@@ -96,7 +107,7 @@ export default function ResetPassword() {
 
               {step === 'select' && (
                 <>
-                  <h2 className="h6 fw-bold mb-3">Select Reset Method</h2>
+                  <SectionHeader icon={<KeyIcon />} title="Select Reset Method" />
                   <Form.Check
                     type="radio"
                     id="reset-method-link"
@@ -165,7 +176,7 @@ export default function ResetPassword() {
                     />
                   </Form.Group>
 
-                  <Card body className="bg-light border-0 mb-4">
+                  <Card body className="bg-body-tertiary border-0 mb-4">
                     <div className="fw-bold small mb-2">Password must contain:</div>
                     <ul className="list-unstyled mb-0 small">
                       {requirements.map((req) => {

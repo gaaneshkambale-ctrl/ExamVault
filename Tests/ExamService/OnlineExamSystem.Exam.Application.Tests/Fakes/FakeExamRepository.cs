@@ -16,7 +16,6 @@ public class FakeExamRepository : IExamRepository
     private readonly List<ExamType> _examTypes = [];
     private ReminderSettings? _reminderSettings;
     private ProctoringSettings? _proctoringSettings;
-    private GeneralSettings? _generalSettings;
     private ExamDefaults? _examDefaults;
 
     public IReadOnlyList<ExamPaper> Exams => _exams;
@@ -45,11 +44,33 @@ public class FakeExamRepository : IExamRepository
     public Task<IReadOnlyList<ExamPaper>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ExamPaper>>(_exams.OrderByDescending(e => e.CreatedAtUtc).ToList());
 
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_exams.Count(e => e.TenantId == tenantId));
+
+    // No real database to isolate here - the fake's in-memory list is never touched
+    // concurrently in a test, so a no-op transaction that always commits is enough
+    // to satisfy the interface.
+    public Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IUnitOfWorkTransaction>(new NoOpUnitOfWorkTransaction());
+
+    private sealed class NoOpUnitOfWorkTransaction : IUnitOfWorkTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
     {
         _exams.RemoveAll(e => e.Id == exam.Id);
         return Task.CompletedTask;
     }
+
+    public Task<IReadOnlyList<ExamPaper>> GetOwnedAsync(
+        Guid createdByUserId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamPaper>>(
+            _exams.Where(e => e.CreatedByUserId == createdByUserId).OrderByDescending(e => e.CreatedAtUtc).ToList());
 
     public Task AddSectionAsync(Section section, CancellationToken cancellationToken = default)
     {
@@ -65,6 +86,15 @@ public class FakeExamRepository : IExamRepository
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Section>>(
             _sections.Where(s => s.ExamId == examId).OrderBy(s => s.DisplayOrder).ToList());
+
+    public Task<IReadOnlyList<SectionWithExamTitle>> GetAllSectionsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = _sections
+            .OrderBy(s => s.DisplayOrder)
+            .Select(s => new SectionWithExamTitle(s, _exams.FirstOrDefault(e => e.Id == s.ExamId)?.Title ?? "Unknown Exam"))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<SectionWithExamTitle>>(result);
+    }
 
     public Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
     {
@@ -258,12 +288,6 @@ public class FakeExamRepository : IExamRepository
     {
         _proctoringSettings ??= new ProctoringSettings();
         return Task.FromResult(_proctoringSettings);
-    }
-
-    public Task<GeneralSettings> GetOrCreateGeneralSettingsAsync(CancellationToken cancellationToken = default)
-    {
-        _generalSettings ??= new GeneralSettings();
-        return Task.FromResult(_generalSettings);
     }
 
     public Task<ExamDefaults> GetOrCreateExamDefaultsAsync(CancellationToken cancellationToken = default)

@@ -27,6 +27,7 @@ using OnlineExamSystem.User.Application.Users.UpdateMyPreferences;
 using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Domain.Enums;
+using static OnlineExamSystem.User.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.User.API.Controllers;
 
@@ -54,6 +55,7 @@ public class UsersController : ControllerBase
     private readonly RevokeSessionHandler _revokeSessionHandler;
     private readonly GetMyPreferencesHandler _getMyPreferencesHandler;
     private readonly UpdateMyPreferencesHandler _updateMyPreferencesHandler;
+    private readonly IUserRepository _userRepository;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<UsersController> _logger;
 
@@ -87,6 +89,7 @@ public class UsersController : ControllerBase
         RevokeSessionHandler revokeSessionHandler,
         GetMyPreferencesHandler getMyPreferencesHandler,
         UpdateMyPreferencesHandler updateMyPreferencesHandler,
+        IUserRepository userRepository,
         IAuditClient auditClient,
         ILogger<UsersController> logger)
     {
@@ -110,6 +113,7 @@ public class UsersController : ControllerBase
         _revokeSessionHandler = revokeSessionHandler;
         _getMyPreferencesHandler = getMyPreferencesHandler;
         _updateMyPreferencesHandler = updateMyPreferencesHandler;
+        _userRepository = userRepository;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -164,6 +168,26 @@ public class UsersController : ControllerBase
                 new { message = "Your account has been deactivated. Contact an administrator." });
         }
 
+        if (result.IsAccountLocked)
+        {
+            _logger.LogWarning("Login blocked for locked account {Email} until {LockoutEndUtc}.", request.Email, result.LockoutEndUtc);
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message = $"Too many failed login attempts. Try again after {result.LockoutEndUtc:HH:mm} UTC.",
+                    lockoutEndUtc = result.LockoutEndUtc,
+                });
+        }
+
+        if (result.IsMaintenanceMode)
+        {
+            _logger.LogWarning("Login blocked for {Email} - platform is in maintenance mode.", request.Email);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The platform is currently undergoing maintenance. Please try again shortly." });
+        }
+
         if (!result.Success)
         {
             _logger.LogWarning("Login failed for email {Email}.", request.Email);
@@ -172,16 +196,6 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} logged in successfully.", user.Id);
-        await _auditClient.RecordAsync(
-            user.TenantId,
-            "Auth",
-            "User login",
-            null,
-            null,
-            user.Id,
-            user.FullName,
-            HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
         var profile = ToProfileResponse(user);
         var response = new LoginResponse(profile, result.AccessToken!, result.RefreshToken!);
         return Ok(response);
@@ -218,26 +232,30 @@ public class UsersController : ControllerBase
     // regular Admin still only ever sees their own tenant's users through
     // it (see UserRepository.GetAllAsync's own comment).
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = UsersView)]
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var users = await _listUsersHandler.HandleAsync(new ListUsersQuery(), cancellationToken);
-        return Ok(users.Select(ToResponse));
+        var names = await ActorNameResolver.ResolveAsync(_userRepository, users.Select(u => u.CreatedByUserId), cancellationToken);
+        return Ok(users.Select(u => ToResponse(u, u.CreatedByUserId.HasValue ? names.GetValueOrDefault(u.CreatedByUserId.Value) : null)));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost]
     public async Task<IActionResult> Create(CreateUserRequest request, CancellationToken cancellationToken)
     {
         var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
+        var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var command = new CreateUserCommand(
             tenantId,
             request.FullName,
             request.Email,
             request.Role,
-            request.IsActive,
             request.PhoneNumber,
-            request.RollNumber);
+            request.RollNumber,
+            createdByUserId);
         var result = await _createUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.EmailAlreadyExists)
@@ -261,10 +279,12 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} created by admin.", user.Id);
-        return StatusCode(StatusCodes.Status201Created, ToResponse(user));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, ToResponse(user, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateUserRequest request, CancellationToken cancellationToken)
     {
@@ -311,11 +331,13 @@ public class UsersController : ControllerBase
             adminId,
             User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
-        return Ok(ToResponse(result.User!));
+            cancellationToken: cancellationToken);
+        var updatedUserCreatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, updatedUserCreatedByName));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
@@ -337,6 +359,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
     {
@@ -356,10 +379,12 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} deactivated by admin {AdminId}.", id, currentUserId);
-        return Ok(ToResponse(result.User!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken)
     {
@@ -373,10 +398,12 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} reactivated by admin.", id);
-        return Ok(ToResponse(result.User!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPut("{id:guid}/reset-password")]
     public async Task<IActionResult> ResetPassword(
         Guid id,
@@ -436,6 +463,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersView)]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
@@ -445,7 +473,8 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "User not found." });
         }
 
-        return Ok(ToResponse(user));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(user, createdByName));
     }
 
     // Admin-only counterpart to GetMyPhoto - lets admin screens (e.g. Live
@@ -502,7 +531,8 @@ public class UsersController : ControllerBase
             request.Gender,
             request.DateOfBirth,
             request.Location,
-            request.Department);
+            request.Department,
+            request.Designation);
         var result = await _updateMyProfileHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
@@ -582,7 +612,7 @@ public class UsersController : ControllerBase
             userId,
             result.User!.FullName,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
         return NoContent();
     }
 
@@ -696,7 +726,7 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
-    private static UserListItemResponse ToResponse(AppUser user) =>
+    private static UserListItemResponse ToResponse(AppUser user, string? createdByName) =>
         new(
             user.Id,
             user.FullName,
@@ -708,7 +738,9 @@ public class UsersController : ControllerBase
             user.PhotoData is not null,
             user.RollNumber,
             user.TenantId,
-            user.LastLoginAtUtc);
+            user.LastLoginAtUtc,
+            user.CreatedByUserId,
+            createdByName);
 
     private static UserSessionResponse ToResponse(RefreshToken token)
     {
@@ -737,6 +769,7 @@ public class UsersController : ControllerBase
         {
             UserRole.Admin => "ADM",
             UserRole.SuperAdmin => "SUP",
+            UserRole.Instructor => "INS",
             _ => "STU",
         };
         return $"EV-{roleCode}-{user.UserNumber:D4}";
@@ -757,6 +790,7 @@ public class UsersController : ControllerBase
             user.DateOfBirth,
             user.Location,
             user.Department,
+            user.Designation,
             user.LastLoginAtUtc,
             user.CreatedAtUtc,
             FormatUserId(user),

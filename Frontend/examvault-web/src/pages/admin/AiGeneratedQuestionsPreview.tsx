@@ -7,6 +7,8 @@ import DraftEditorModal from '../../components/DraftEditorModal';
 import { EditIcon, TrashIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { generateQuestions } from '../../api/aiApi';
 import { createQuestion } from '../../api/questionApi';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { DraftQuestion, GenerateDifficulty, GenerateQuestionsRequest, GenerateQuestionType } from '../../types/ai';
 import { extractServerError } from '../../utils/apiError';
 
@@ -36,6 +38,9 @@ export default function AiGeneratedQuestionsPreview() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const initialState = location.state as PreviewState | undefined;
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canCreateQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Create');
 
   const [drafts, setDrafts] = useState<DraftQuestion[]>(initialState?.drafts ?? []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
@@ -211,7 +216,7 @@ export default function AiGeneratedQuestionsPreview() {
           )}
           {drafts.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4" style={{ width: 40 }}>
                     <Form.Check
@@ -307,20 +312,22 @@ export default function AiGeneratedQuestionsPreview() {
               'Regenerate'
             )}
           </Button>
-          <Button
-            variant="primary"
-            onClick={() => void handleApprove()}
-            disabled={isApproving || selectedIds.size === 0}
-          >
-            {isApproving ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Adding...
-              </>
-            ) : (
-              `Add Selected to Exam (${selectedIds.size})`
-            )}
-          </Button>
+          {canCreateQuestions && (
+            <Button
+              variant="primary"
+              onClick={() => void handleApprove()}
+              disabled={isApproving || selectedIds.size === 0}
+            >
+              {isApproving ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Adding...
+                </>
+              ) : (
+                `Add Selected to Exam (${selectedIds.size})`
+              )}
+            </Button>
+          )}
         </div>
       </div>
 

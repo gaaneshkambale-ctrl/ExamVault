@@ -24,6 +24,6 @@ public class DeleteExamHandler
         await _examRepository.RemoveAsync(exam, cancellationToken);
         await _examRepository.SaveChangesAsync(cancellationToken);
 
-        return DeleteExamResult.Ok();
+        return DeleteExamResult.Ok(exam.TenantId, exam.Title);
     }
 }

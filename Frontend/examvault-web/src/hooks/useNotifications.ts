@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import {
   getMyNotifications,
   getMyPreferences,
@@ -15,6 +16,16 @@ import type {
   NotificationTemplateStatus,
   NotificationType,
 } from '../types/notification';
+
+// Admin/SuperAdmin notification-history endpoints are also gated by the tenant's
+// subscription plan (Feature:Notifications policy) - a 403 there means "not on this
+// plan", not a transient failure, so retrying it is pointless.
+function retryUnlessClientError(failureCount: number, error: unknown) {
+  if (isAxiosError(error) && (error.response?.status ?? 0) >= 400 && (error.response?.status ?? 0) < 500) {
+    return false;
+  }
+  return failureCount < 3;
+}
 
 export function useMyNotifications(unreadOnly = false, page = 1, pageSize = 20, enabled = true) {
   return useQuery({
@@ -58,6 +69,7 @@ export function useNotificationHistory(
   return useQuery({
     queryKey: ['notifications', 'admin', 'history', type ?? 'All', page, pageSize, search ?? '', channel ?? 'All', status ?? 'All'],
     queryFn: () => getNotificationHistory(type, page, pageSize, search, channel, status),
+    retry: retryUnlessClientError,
   });
 }
 
@@ -65,6 +77,7 @@ export function useNotificationHistoryStats() {
   return useQuery({
     queryKey: ['notifications', 'admin', 'history', 'stats'],
     queryFn: getNotificationHistoryStats,
+    retry: retryUnlessClientError,
   });
 }
 
@@ -73,6 +86,7 @@ export function useNotificationBatchDetails(batchId: string | undefined) {
     queryKey: ['notifications', 'admin', 'history', batchId],
     queryFn: () => getNotificationBatchDetails(batchId!),
     enabled: !!batchId,
+    retry: retryUnlessClientError,
   });
 }
 

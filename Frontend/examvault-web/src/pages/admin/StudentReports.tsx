@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import DonutChart from '../../components/charts/DonutChart';
@@ -220,7 +221,7 @@ export default function StudentReports() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Score Distribution</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><TargetIcon /></span>} title="Score Distribution" />
                   <DonutChart data={distribution} centerLabel="Students" />
                 </Card.Body>
               </Card>
@@ -228,7 +229,9 @@ export default function StudentReports() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className="p-0">
-                  <h2 className="h6 fw-bold p-3 pb-2 mb-0">Top Students</h2>
+                  <div className="p-3 pb-0">
+                    <SectionHeader icon={<span className="text-primary d-flex"><UserCheckIcon /></span>} title="Top Students" />
+                  </div>
                   {topStudents.length === 0 ? (
                     <div className="text-center text-muted py-5">No attempts yet.</div>
                   ) : (
@@ -267,12 +270,14 @@ export default function StudentReports() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Student Performance Overview</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<span className="text-primary d-flex"><CheckCircleIcon /></span>} title="Student Performance Overview" />
+              </div>
               {activeStudents.length === 0 ? (
                 <div className="text-center text-muted py-5">No students match your filters.</div>
               ) : (
                 <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th className="ps-4">Student</th>
                       <th>Exams Attempted</th>

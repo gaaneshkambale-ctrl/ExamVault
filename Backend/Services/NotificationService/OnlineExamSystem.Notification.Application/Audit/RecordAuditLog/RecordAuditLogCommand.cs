@@ -10,4 +10,5 @@ public record RecordAuditLogCommand(
     string? EntityId,
     Guid? UserId,
     string? UserName,
-    string? IpAddress);
+    string? IpAddress,
+    bool IsSuperAdminActor = false);

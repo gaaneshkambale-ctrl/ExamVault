@@ -37,7 +37,22 @@ public class UpdatePlanHandler
         plan.Name = command.Name;
         plan.Description = command.Description;
         plan.IncludedFeatures = command.IncludedFeatures.Distinct().ToList();
+        plan.MonthlyPrice = command.MonthlyPrice;
+        plan.AnnualPrice = command.AnnualPrice;
+        plan.MaxStudents = command.MaxStudents;
+        plan.MaxAdmins = command.MaxAdmins;
+        plan.MaxInstructors = command.MaxInstructors;
+        plan.MaxExams = command.MaxExams;
+        plan.MaxQuestions = command.MaxQuestions;
+        plan.MaxAiQuestionsPerMonth = command.MaxAiQuestionsPerMonth;
+        plan.StorageGb = command.StorageGb;
+        // Deliberately no cascade to tenants already assigned this plan -
+        // matches the existing precedent (editing PlatformSettings'
+        // DefaultMax* never retroactively changed existing tenants either).
+        // A tenant's own effective limits only change on creation or an
+        // explicit re-assignment (AssignPlanToTenantHandler).
         plan.UpdatedAtUtc = DateTime.UtcNow;
+        plan.UpdatedByUserId = command.UpdatedByUserId;
         await _planRepository.SaveChangesAsync(cancellationToken);
 
         return UpdatePlanResult.Ok(plan);

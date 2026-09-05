@@ -8,10 +8,12 @@ namespace OnlineExamSystem.Exam.Application.Exams.ChangeStatus;
 public class ChangeExamStatusHandler
 {
     private readonly IExamRepository _examRepository;
+    private readonly IQuestionServiceClient _questionServiceClient;
 
-    public ChangeExamStatusHandler(IExamRepository examRepository)
+    public ChangeExamStatusHandler(IExamRepository examRepository, IQuestionServiceClient questionServiceClient)
     {
         _examRepository = examRepository;
+        _questionServiceClient = questionServiceClient;
     }
 
     public async Task<ChangeExamStatusResult> HandleAsync(
@@ -24,20 +26,45 @@ public class ChangeExamStatusHandler
             return ChangeExamStatusResult.NotFound();
         }
 
+        // Instructor is restricted to exams they created themselves, same
+        // ownership rule Update already enforces; Admin/SuperAdmin remain
+        // unrestricted (null = no ownership check).
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return ChangeExamStatusResult.Forbidden();
+        }
+
         if (!ExamStatusTransitions.CanTransition(exam.Status, command.TargetStatus))
         {
             return ChangeExamStatusResult.Invalid();
         }
 
-        // Non-sectioned exams get an implicit single "General" section purely so Question
-        // Assignment has somewhere to save to (GetOrCreateDefaultSectionHandler) - its
-        // Marks/QuestionCount are never surfaced to the admin and stay 0, so this check would
-        // misfire on every non-sectioned exam. Only exams built via the section wizard, where
-        // the admin explicitly typed per-section totals, can actually have this mismatch.
-        if (command.TargetStatus == ExamStatus.Published && exam.ContainsSections)
+        if (command.TargetStatus == ExamStatus.Published)
         {
-            var sections = await _examRepository.GetSectionsByExamIdAsync(exam.Id, cancellationToken);
-            var errors = ValidatePublishTotals(exam, sections);
+            var errors = new List<string>();
+
+            // exam.TotalQuestions (and section.QuestionCount below) are just admin-*declared*
+            // numbers, never synced to what's actually in Question Service (a different
+            // microservice/DB) - the real count has to come from there, or an exam with zero
+            // real questions can be published with no warning at all.
+            var realQuestionCount = await _questionServiceClient.GetQuestionCountAsync(
+                exam.Id, command.BearerToken, cancellationToken);
+            if (realQuestionCount == 0)
+            {
+                errors.Add("This exam has no questions yet. Add at least one question before publishing.");
+            }
+
+            // Non-sectioned exams get an implicit single "General" section purely so Question
+            // Assignment has somewhere to save to (GetOrCreateDefaultSectionHandler) - its
+            // Marks/QuestionCount are never surfaced to the admin and stay 0, so this check would
+            // misfire on every non-sectioned exam. Only exams built via the section wizard, where
+            // the admin explicitly typed per-section totals, can actually have this mismatch.
+            if (exam.ContainsSections)
+            {
+                var sections = await _examRepository.GetSectionsByExamIdAsync(exam.Id, cancellationToken);
+                errors.AddRange(ValidatePublishTotals(exam, sections));
+            }
+
             if (errors.Count > 0)
             {
                 return ChangeExamStatusResult.ValidationFailed(errors);

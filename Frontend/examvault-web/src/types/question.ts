@@ -128,3 +128,21 @@ export interface QuestionResponse {
   testCases?: QuestionTestCaseResponse[] | null;
   sqlTestCases?: QuestionSqlTestCaseResponse[] | null;
 }
+
+// Super Admin platform-wide Question Bank browse only - separate shape
+// from QuestionResponse (no options/test-cases/answer-masking concerns,
+// adds tenantId). No examTitle - QuestionService has no Exams table of
+// its own; join examId against the platform's own cross-tenant exam list.
+export interface PlatformQuestionResponse {
+  id: string;
+  examId: string;
+  sectionId: string | null;
+  tenantId: string;
+  questionType: QuestionType;
+  questionText: string;
+  marks: number;
+  difficulty: QuestionDifficulty;
+  createdAtUtc: string;
+  createdByUserId: string;
+  createdByName: string | null;
+}

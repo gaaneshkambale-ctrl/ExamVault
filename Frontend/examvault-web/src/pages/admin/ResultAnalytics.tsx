@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import LineTrendChart from '../../components/charts/LineTrendChart';
 import DonutChart from '../../components/charts/DonutChart';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
-import { TargetIcon, CheckCircleIcon, UserCheckIcon, ArrowUpIcon, ArrowDownIcon, ActivityIcon } from '../../components/reports/ReportIcons';
+import { TargetIcon, CheckCircleIcon, UserCheckIcon, ArrowUpIcon, ArrowDownIcon, ActivityIcon, BookIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { EXAM_CATEGORIES } from '../../types/exam';
@@ -193,7 +194,7 @@ export default function ResultAnalytics() {
             <Col lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Score Distribution</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><TargetIcon /></span>} title="Score Distribution" />
                   <ScoreDistributionChart data={scoreDistribution} />
                 </Card.Body>
               </Card>
@@ -201,7 +202,7 @@ export default function ResultAnalytics() {
             <Col lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Pass/Fail Trend</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><ActivityIcon /></span>} title="Pass/Fail Trend" />
                   <LineTrendChart
                     series={[
                       { name: 'Pass %', color: '#22c55e', data: passFailTrend.passSeries, isPercent: true },
@@ -217,7 +218,9 @@ export default function ResultAnalytics() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className="p-0">
-                  <h2 className="h6 fw-bold p-3 pb-2 mb-0">Top Performing Exams</h2>
+                  <div className="p-3 pb-0">
+                    <SectionHeader icon={<span className="text-primary d-flex"><UserCheckIcon /></span>} title="Top Performing Exams" />
+                  </div>
                   {topPerformingExams.length === 0 ? (
                     <div className="text-center text-muted py-5">No attempts match your filters.</div>
                   ) : (
@@ -250,7 +253,7 @@ export default function ResultAnalytics() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Category-wise Performance</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><BookIcon /></span>} title="Category-wise Performance" />
                   <DonutChart data={categoryPerformance} centerLabel="Attempts" />
                 </Card.Body>
               </Card>

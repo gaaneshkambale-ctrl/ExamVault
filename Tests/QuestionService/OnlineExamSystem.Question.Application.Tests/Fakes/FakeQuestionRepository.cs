@@ -62,6 +62,9 @@ public class FakeQuestionRepository : IQuestionRepository
             query.OrderByDescending(q => q.CreatedAtUtc).ToList());
     }
 
+    public Task<IReadOnlyList<ExamQuestion>> GetAllQuestionsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamQuestion>>(_questions.OrderByDescending(q => q.CreatedAtUtc).ToList());
+
     public Task BulkSetSectionIdAsync(
         Guid? sectionId,
         IReadOnlyList<Guid> questionIds,

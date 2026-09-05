@@ -1,3 +1,4 @@
+using OnlineExamSystem.Notification.Application.Interfaces;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.Preferences;
 using OnlineExamSystem.Notification.Application.Tests.Fakes;
 using OnlineExamSystem.Notification.Domain.Entities;
@@ -11,7 +12,7 @@ public class GetMyPreferencesHandlerTests
     public async Task No_saved_rows_defaults_every_type_to_in_app_and_email_enabled()
     {
         var repository = new FakeNotificationRepository();
-        var handler = new GetMyPreferencesHandler(repository);
+        var handler = new GetMyPreferencesHandler(repository, new FakeNotificationDefaultsClient());
 
         var items = await handler.HandleAsync(new GetMyPreferencesQuery(Guid.NewGuid()));
 
@@ -29,7 +30,7 @@ public class GetMyPreferencesHandlerTests
         {
             UserId = userId, Type = NotificationType.Exam, InAppEnabled = true, EmailEnabled = false,
         });
-        var handler = new GetMyPreferencesHandler(repository);
+        var handler = new GetMyPreferencesHandler(repository, new FakeNotificationDefaultsClient());
 
         var items = await handler.HandleAsync(new GetMyPreferencesQuery(userId));
 
@@ -37,5 +38,18 @@ public class GetMyPreferencesHandlerTests
         Assert.False(exam.EmailEnabled);
         var result = items.Single(i => i.Type == NotificationType.Result);
         Assert.True(result.EmailEnabled);
+    }
+
+    [Fact]
+    public async Task Platform_wide_defaults_apply_to_every_type_the_user_never_saved_a_preference_for()
+    {
+        var repository = new FakeNotificationRepository();
+        var defaultsClient = new FakeNotificationDefaultsClient { Defaults = new NotificationDefaults(false, false) };
+        var handler = new GetMyPreferencesHandler(repository, defaultsClient);
+
+        var items = await handler.HandleAsync(new GetMyPreferencesQuery(Guid.NewGuid()));
+
+        Assert.All(items, i => Assert.False(i.InAppEnabled));
+        Assert.All(items, i => Assert.False(i.EmailEnabled));
     }
 }

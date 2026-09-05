@@ -5,10 +5,10 @@ import type {
   ExamDefaultsResponse,
   ExamResponse,
   ExamTypeOption,
-  GeneralSettingsResponse,
   ProctoringSettingsResponse,
   ReminderSettingsResponse,
   UpdateExamRequest,
+  UpdateExamTypeRequest,
 } from '../types/exam';
 
 export async function createExam(request: CreateExamRequest): Promise<ExamResponse> {
@@ -60,6 +60,11 @@ export async function createExamType(request: CreateExamTypeRequest): Promise<Ex
   return data;
 }
 
+export async function updateExamType(id: string, request: UpdateExamTypeRequest): Promise<ExamTypeOption> {
+  const { data } = await apiClient.put<ExamTypeOption>(`/api/exam-types/${id}`, request);
+  return data;
+}
+
 export async function deleteExamType(id: string): Promise<void> {
   await apiClient.delete(`/api/exam-types/${id}`);
 }
@@ -85,18 +90,6 @@ export async function updateProctoringSettings(
   request: ProctoringSettingsResponse,
 ): Promise<ProctoringSettingsResponse> {
   const { data } = await apiClient.put<ProctoringSettingsResponse>('/api/exams/proctoring-settings', request);
-  return data;
-}
-
-export async function getGeneralSettings(): Promise<GeneralSettingsResponse> {
-  const { data } = await apiClient.get<GeneralSettingsResponse>('/api/exams/general-settings');
-  return data;
-}
-
-export async function updateGeneralSettings(
-  request: Omit<GeneralSettingsResponse, 'updatedAtUtc'>,
-): Promise<GeneralSettingsResponse> {
-  const { data } = await apiClient.put<GeneralSettingsResponse>('/api/exams/general-settings', request);
   return data;
 }
 

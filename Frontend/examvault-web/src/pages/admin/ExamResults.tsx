@@ -172,7 +172,7 @@ export default function ExamResults() {
 
           {!loading && pagedStats.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Exam Name</th>
                   <th>Exam Code</th>

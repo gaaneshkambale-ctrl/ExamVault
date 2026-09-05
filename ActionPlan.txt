@@ -5434,3 +5434,2373 @@ VERIFICATION
 8. Rebuild + restart all 9 services one at a time (per this session's own
    lesson: this machine's ~8GB RAM crashes Docker's engine under parallel
    .NET builds - see feedback memory). `npm run build` for the frontend.
+
+ORGANIZATION DETAILS: WIRE UP THE 4 DISABLED ACTIONS
+------------------------------------------------------
+OrganizationDetails.tsx's Actions panel has 4 buttons already sitting there
+disabled with "Not connected yet" - Edit Organization, Reset Admin
+Password, View Activity Log, Delete Organization. This makes all 4 real.
+
+BACKEND (UserService)
+
+1. `ITenantRepository` gets two new members: `RemoveAsync(Tenant)` and
+   `DeleteUsersAndGroupsForTenantAsync(Guid tenantId)`. The second one is
+   bulk `ExecuteDeleteAsync` on `Groups`/`Users` filtered to that tenantId
+   (`IgnoreQueryFilters` - the caller is SuperAdmin resolving a tenant that
+   isn't their own ambient one) - AppUser->Tenant and Group->Tenant are
+   both `DeleteBehavior.Restrict` (confirmed in UserDbContext), so the
+   Tenant row itself cannot be deleted until its Users/Groups are gone
+   first. RefreshTokens/UserPreferences/GroupMembers all cascade
+   automatically at the DB level once their owning User/Group is deleted -
+   no need to touch those tables directly.
+
+2. `Tenants/Update/` (new): `UpdateTenantCommand(Guid TenantId, string
+   Name, string Slug)`, `UpdateTenantHandler`, `UpdateTenantResult`
+   (Success/NotFound/SlugAlreadyExists/ValidationErrors), validator reuses
+   CreateTenantValidator's exact Name/Slug rules. Slug uniqueness check
+   excludes the tenant's own current row. Note for the UI copy: since
+   Gateway resolves tenants by subdomain (yesterday's pull), changing Slug
+   changes this org's login URL immediately - existing bookmarks break,
+   which is expected for a rename, not a bug.
+
+3. `Tenants/Delete/` (new): `DeleteTenantCommand(Guid TenantId)`,
+   `DeleteTenantHandler`, `DeleteTenantResult`
+   (Success/NotFound/CannotDeletePlatformTenant). Hard delete, matching
+   this codebase's existing convention (DeleteUserHandler has no soft-
+   delete either) - guarded so `TenantConstants.PlatformTenantId` (the
+   seeded Super Admin's own tenant) can never be targeted. Sequence:
+   `DeleteUsersAndGroupsForTenantAsync` then `RemoveAsync(tenant)`.
+   Scope call-out: Tenant only exists in UserDb (confirmed - no other
+   service defines a Tenant entity); Exam/Question/Submission/
+   Notification DBs just carry a bare TenantId column with no cross-DB FK.
+   Deleting the tenant here does not touch those rows - they become
+   permanently unreachable (no tenant to resolve the subdomain, no user
+   left who could log in as it), the same reachability a Deactivated
+   tenant already has today, just irreversible. A full cross-service purge
+   is out of scope for this pass; flagging it here rather than silently
+   deciding it doesn't matter.
+
+4. `Tenants/ResetAdminPassword/` (new): `ResetTenantAdminPasswordCommand
+   (Guid TenantId, Guid AdminUserId)`, `ResetTenantAdminPasswordHandler`,
+   `ResetTenantAdminPasswordResult`
+   (Success+TemporaryPassword/TenantNotFound/UserNotFound/
+   UserNotAdminOfTenant). Mirrors CreateTenantAdminHandler's shape:
+   generates a temp password via the existing `IPasswordGenerator`, hashes
+   it with `IPasswordHasher<AppUser>`, sets `MustChangePassword = true`
+   (forces a real change on next login, same as a freshly-created admin),
+   emails it via `IEmailDispatcher`/`ITenantUrlBuilder` the same way
+   CreateAdmin's invite does, AND returns the plaintext temp password in
+   the response so the Super Admin can relay it directly too (email
+   delivery in this app is best-effort/non-blocking, per N8nEmailDispatcher's
+   own contract - the UI showing it directly is the reliable path).
+
+5. `TenantsController`: `PUT {id}` (Update), `DELETE {id}` (Delete),
+   `POST {id}/admins/{userId}/reset-password` (ResetAdminPassword) - all
+   `[Authorize(Roles = "SuperAdmin")]` like the rest of this controller.
+
+6. New request/response contracts in Shared.Contracts: `UpdateTenantRequest
+   (string Name, string Slug)`,
+   `ResetTenantAdminPasswordResponse(string TemporaryPassword)`. Register
+   the 2 new handlers + validator in Program.cs next to the existing
+   Tenant ones.
+
+FRONTEND
+
+7. `api/tenantsApi.ts`: `updateTenant(id, request)`, `deleteTenant(id)`,
+   `resetTenantAdminPassword(tenantId, adminUserId)`.
+
+8. OrganizationDetails.tsx Actions panel:
+   - Edit Organization: opens a modal (Name/Slug fields, pre-filled),
+     same Alert/Modal.Footer shape as the existing Add Admin/Change Plan
+     modals on this page. On success, invalidate `['tenants']`.
+   - Reset Admin Password: filters the org's existing users (already
+     fetched cross-tenant via `listAllUsers` on AllUsers.tsx's pattern -
+     reuse `useQuery(['platform-users'], listAllUsers)` here too) down to
+     `tenantId === tenant.id && role === 'Admin'`. Zero admins -> button
+     stays disabled with a "No admin found for this organization" tooltip
+     (real, not the placeholder "Not connected yet" text). One admin ->
+     confirm modal, reset directly. More than one -> confirm modal adds a
+     `<Form.Select>` to pick which admin first. On success, show the
+     returned temporary password in the modal (copy-to-clipboard button,
+     same idea as this component library's other one-time-secret displays)
+     rather than auto-closing.
+   - Delete Organization: destructive and irreversible (no undo, unlike
+     Deactivate) - the one action in this whole console with real
+     permanent data loss, so its confirm modal deliberately asks the
+     Super Admin to type the organization's exact name before the Delete
+     button enables, a stricter bar than every other confirm modal here
+     (DeactivateTenantButton's plain Cancel/Deactivate). On success,
+     navigate back to `/platform/organizations` (the tenant this page was
+     showing no longer exists) and invalidate `['tenants']`.
+   - View Activity Log: no backend change needed - `GET /api/audit-logs`
+     already returns every tenant's entries with a `tenantId` field for a
+     Super Admin caller (confirmed: SecurityAuditLogs.tsx already does
+     exactly this cross-tenant fetch). The Activity Log tab reuses
+     `getAuditLogs` with the same 365-day default range as
+     SecurityAuditLogs.tsx, filtered client-side to `log.tenantId ===
+     tenant.id`, rendered as the same Table shape (Time/User/Action/
+     Module/Details/IP, minus the Organization column since it's implied
+     by the page).
+
+VERIFICATION
+
+9. Rebuild + restart `user-api` only (the only service touched). Through
+   the real UI as the seeded Super Admin: rename a test org and confirm
+   its subdomain changes accordingly; reset a real admin's password and
+   log in as that admin with the returned temp password, confirming the
+   forced change-password redirect fires; view a test org's Activity Log
+   tab and confirm it only shows that org's own entries, not another
+   tenant's; create a disposable throwaway org, delete it, confirm it
+   disappears from All Organizations and its former admin can no longer
+   log in. Confirm attempting to delete the Platform tenant is rejected
+   (there's no UI path to it, so this one's a direct API call check).
+
+REACTIVATE ORGANIZATION
+------------------------
+Deactivate exists (`POST /api/tenants/{id}/deactivate`) but there's no way
+back - `SetTenantActiveStatusHandler` already takes an `isActive` bool, it's
+just never been called with `true` from anywhere. Adds the missing other
+half.
+
+BACKEND
+
+1. `TenantsController`: new `POST {id}/reactivate`, calls the existing
+   `SetTenantActiveStatusHandler` with `SetTenantActiveStatusCommand(id,
+   true)` - no new Application-layer code needed, this handler was already
+   generic.
+
+FRONTEND
+
+2. `api/tenantsApi.ts`: `reactivateTenant(tenantId)`.
+3. `ManageTenants.tsx` (All Organizations list): where `tenant.isActive`
+   currently renders `DeactivateTenantButton`, the `else` branch currently
+   renders nothing - add a "Reactivate" button there.
+4. `OrganizationDetails.tsx` Actions panel: replace the disabled "Already
+   Suspended" button (inactive branch) with a working "Reactivate" button.
+   Unlike Deactivate, no confirm modal - reactivating isn't destructive
+   (nothing to lose, fully reversible by deactivating again), so a direct
+   click-to-act button matches this console's existing risk-proportionate
+   confirmation pattern (compare Delete Organization's stricter type-to-
+   confirm vs Deactivate's plain Cancel/Confirm vs a two-way toggle needing
+   none at all).
+5. Both call sites invalidate `['tenants']` on success, same as
+   DeactivateTenantButton already does.
+
+VERIFICATION
+
+6. Rebuild + restart `user-api` only. Deactivate a test org, confirm its
+   subdomain 404s ("Unknown or inactive organization"); reactivate it from
+   both the All Organizations list and Organization Details, confirm the
+   subdomain resolves again and its users can log in.
+
+ALL ORGANIZATIONS LIST: FILL IN ADMIN CONTACT/PLAN/USERS/EXAMS COLUMNS
+------------------------------------------------------------------------
+`ManageTenants.tsx`'s table has these 4 columns rendering as "—" placeholders.
+No backend work needed - every piece of data already exists and is already
+SuperAdmin-accessible cross-tenant, just never wired into this one table:
+- Plan: `listPlans()` + `tenant.planId`, same lookup `OrganizationDetails.tsx`
+  already does.
+- Admin Contact: `listAllUsers()` (already used by `AllUsers.tsx` and
+  `OrganizationDetails.tsx`'s Reset Admin Password flow) filtered to
+  `tenantId === tenant.id && role === 'Admin'` - show the first admin's
+  email, "—" if none, "+N more" suffix if more than one.
+- Users: same `listAllUsers()` fetch, count of all entries (any role) for
+  that tenantId.
+- Exams: `listExams()` (already used by `ExamUsageReport.tsx`, real per its
+  own comment - ExamsController.List already accepts SuperAdmin) filtered
+  by `tenantId === tenant.id`, count.
+
+FRONTEND ONLY
+
+1. `ManageTenants.tsx`: add 3 new queries (`listPlans`, `listAllUsers`,
+   `listExams`) alongside the existing `useTenants()`, each keyed the same
+   as their other real usages elsewhere (`['plans']`, `['platform-users']`,
+   `['platform-exams']`) so React Query dedupes the cache instead of
+   re-fetching if the user already visited AllUsers/ExamUsageReport/an
+   Organization Details page this session. Build 3 small per-tenant lookup
+   Maps (planNameById, adminByTenantId, userCountByTenantId,
+   examCountByTenantId) with `useMemo`, same pattern `OrganizationDetails.tsx`
+   and `AllUsers.tsx` already use for their own tenant-name lookups.
+2. Replace the 4 "—" cells with the real values. Loading state: while any
+   of the 3 new queries are still pending, show a small inline spinner per
+   cell rather than blocking the whole table (the Organization/Status
+   columns are already populated from `useTenants()` alone and shouldn't
+   wait on unrelated data).
+
+VERIFICATION
+
+3. `npm run build`, then through the real UI: confirm Plan/Users/Exams
+   match what Organization Details already shows for the same org (cross-
+   check against a page already known to be correct rather than trusting a
+   new page in isolation), and Admin Contact shows the right email for an
+   org with exactly one admin.
+
+ORGANIZATIONS & PLANS (SUBSCRIPTIONS PAGE): SAME TREATMENT
+------------------------------------------------------------------------
+`OrganizationsAndPlans.tsx` (subscription.png's screen) has the same kind
+of "-" placeholders for Plan/Students/Exams - same real data sources as
+the All Organizations pass above, just a different table. Students here
+specifically means `role === 'Student'` (the column is literally labeled
+"Students", unlike All Organizations' generic "Users" total) - narrower
+filter than that page used.
+
+Next Billing and Amount are explicitly NOT implementable here - there is
+no billing/subscription-cycle model anywhere in this codebase (Plans have
+no price or renewal cadence, Tenants have no billing-date field), and this
+was already called out as out of scope in multi_tenant_saas.txt. Left as
+the honest "-" placeholders they already are, matching this page's own
+header comment - not silently faked.
+
+FRONTEND ONLY
+
+1. `OrganizationsAndPlans.tsx`: same 2 queries as ManageTenants.tsx
+   (`listPlans` keyed `['plans']`, `listAllUsers` keyed `['platform-users']`,
+   `listExams` keyed `['platform-exams']` - same keys, so no duplicate
+   fetch if the user already visited either page this session), same
+   per-tenant Map-building pattern, Students filtered to `role ===
+   'Student'` specifically.
+
+VERIFICATION
+
+2. `npm run build`. Confirm Plan/Exams match ManageTenants.tsx for the same
+   org, and Students only counts Student-role users (not Admins).
+
+NEW ORGANIZATIONS START INACTIVE, ACTIVATE ON ADMIN'S FIRST LOGIN
+------------------------------------------------------------------------
+Explicit ask (2026-08-28): a newly created org should not be Active
+immediately - it should stay Inactive until its admin actually logs in
+with the temp password and completes the forced first password change.
+
+Real conflict this runs into, found before writing any code: the admin's
+invite email links to `<slug>.examvaults.in/login` (TenantUrlBuilder). If
+that tenant is Inactive, the Gateway's TenantResolutionMiddleware 404s the
+ENTIRE request before it ever reaches User Service - the admin could never
+even load the login page, let alone log in, at the exact subdomain their
+invite email sends them to. Fixing only LoginUserHandler would not be
+enough; the Gateway gate happens first and doesn't know anything about
+"this specific login is a legitimate pending-activation attempt."
+
+Resolution, verified against the actual login code path (not assumed):
+`AuthProvider.login()` only sends `TenantSlug` when
+`extractTenantSlug(window.location.hostname)` returns something - the
+apex domain (`examvaults.in`, no subdomain) yields `undefined`, and
+`LoginUserHandler` skips its tenant-active check ENTIRELY when no slug is
+given (existing "today's single-tenant Azure setup" behavior, not new).
+So: send a pending (not-yet-active) tenant's invite email to the APEX
+login URL instead of its own subdomain - this never touches the Gateway's
+subdomain gate at all, no change needed to TenantResolutionMiddleware or
+LoginUserHandler's tenant check. `GetByEmailAsync` with no tenant scope
+already matches by email globally, exactly the "no slug yet" behavior this
+codebase already relies on elsewhere.
+
+(Side finding, out of scope for this ask, flagged not fixed: this same
+apex-domain no-slug path means ANY inactive tenant's admin - including one
+Deactivated by a Super Admin, not just a pending new one - can already log
+in via the apex domain today, bypassing the subdomain-level suspension.
+Pre-existing, unrelated to this feature, not touched here.)
+
+BACKEND
+
+1. `CreateTenantHandler`: new `Tenant { IsActive = false, ... }` instead of
+   relying on the entity's `IsActive = true` default. Applies to every new
+   org regardless of whether an admin is added at creation time or later -
+   an org created with no admin yet just stays Inactive until a Super
+   Admin either adds one (who then logs in) or manually clicks Reactivate.
+2. `ITenantUrlBuilder.GetLoginUrl(string? tenantSlug, bool isActive)` - new
+   `isActive` param, same special-case shape as the existing Default/
+   Platform-slug branch: `!isActive` also returns the apex login URL. All
+   3 call sites (`CreateTenantAdminHandler`, `ResetTenantAdminPasswordHandler`,
+   `CreateUserHandler`) pass `tenant.IsActive` (or `tenant?.IsActive ?? true`
+   where tenant is nullable).
+3. `ChangePasswordHandler` (the self-service forced-first-login flow):
+   after the existing `user.MustChangePassword = false; user.IsActive =
+   true;`, if `user.Role == UserRole.Admin`, fetch their tenant via the
+   newly-injected `ITenantRepository` and if `!tenant.IsActive`, set it
+   true. No extra `SaveChangesAsync` call needed - `ITenantRepository` and
+   `IUserRepository` share the same scoped `UserDbContext`, so the
+   handler's existing single save call persists both changes in one
+   transaction (confirmed: `TenantRepository.GetByIdAsync` doesn't
+   `AsNoTracking()`, so the mutation is tracked).
+
+VERIFICATION
+
+4. Rebuild + restart `user-api`. Create a real throwaway org (with an
+   admin), confirm it shows Inactive immediately; confirm the invite
+   email's login URL is the apex one, not the subdomain; log in as that
+   admin from the apex URL with the temp password, confirm the forced
+   change-password flow fires; complete it; confirm the org now shows
+   Active in All Organizations without touching Reactivate manually; THEN
+   confirm the admin's own subdomain (`<slug>.examvaults.in`) now resolves
+   correctly for their next login.
+
+SAME PATTERN, ONE LEVEL DOWN: ADMIN'S "ADD USER" (STUDENTS)
+------------------------------------------------------------------------
+Explicit ask (2026-08-28): same policy as the org-activation feature above,
+applied to an Admin creating a User (Student/Admin) within their own
+tenant - new users should always start Inactive, activating automatically
+on their own forced first password change. Remove the manual Status
+picker from Add User entirely (no longer a real choice).
+
+Good news found before writing code: the activation trigger already
+exists and needs no changes - `ChangePasswordHandler` already sets
+`user.IsActive = true` unconditionally on a successful password change
+(this predates today's org-activation work, it just wasn't being exercised
+consistently because `CreateUserHandler` let the caller pick `IsActive` at
+creation, often defaulting to `true`). Also found: `ImportUsers.tsx` (Bulk
+Import) already hardcodes `isActive: false` for every imported row - this
+already-established convention is now made the ONLY behavior for Add User
+too, not the exception.
+
+BACKEND
+
+1. `CreateUserRequest`/`CreateUserCommand`: remove the `IsActive` parameter
+   entirely (not just default it) - it's no longer a real, caller-
+   controlled choice.
+2. `UsersController.Create`: stop passing `request.IsActive` into the
+   command.
+3. `CreateUserHandler`: hardcode `IsActive = false` on the new `AppUser`
+   instead of `command.IsActive`.
+
+FRONTEND
+
+4. `types/user.ts` `CreateUserRequest`: remove `isActive`.
+5. `CreateUser.tsx`: remove the "Status" `Form.Select` from the Role &
+   Access tab, the "Status" badge from the Additional Details review tab,
+   and `isActive` from `CreateUserFormState`/`initialFormState`.
+6. `ImportUsers.tsx`: remove the now-nonexistent `isActive: false` line
+   from its `CreateUserRequest` object literal (behavior unchanged - the
+   backend enforces it unconditionally now regardless of what's sent).
+
+VERIFICATION
+
+7. `dotnet build ExamVault.sln` (full solution, not just User.API - past
+   lesson in this session: a shared contract change can break a test fake
+   in a project never built in isolation) + `dotnet test` + `npm run
+   build`. Through the real UI: create a Student via Add User, confirm
+   Inactive immediately with no Status picker shown; log in as that
+   student with the temp password, complete the forced change, confirm
+   they now show Active in Manage Users.
+
+SUPER ADMIN "EXAMS" MENU: BUILD ALL 5 SUBMENU ITEMS FOR REAL
+------------------------------------------------------------------------
+Explicit ask (2026-08-28): all 5 items under the Platform sidebar's Exams
+group (All Exams, Exam Categories, Sections, Question Bank, Tags) were
+`PlatformComingSoon` placeholders - build all of them for real. Researched
+each one's actual buildability before writing any code (see the
+conversation's own investigation): 2 needed zero backend work (All Exams,
+Categories - `GET /api/exams` already has a SuperAdmin cross-tenant bypass
+from the Exam Usage report work), 2 needed a small new cross-tenant
+aggregate endpoint (Sections, Question Bank - the DB-level SuperAdmin
+bypass already existed via each entity's own `IsSuperAdmin` EF query
+filter, there was just no platform-wide "list all" route, only per-exam
+ones), and 1 (Tags) didn't exist as a concept ANYWHERE in the app, not
+even for a regular Admin - confirmed via a full-repo search before
+assuming otherwise.
+
+BACKEND - Exam Service
+
+1. `ExamPaper.Tags` (new `string`, default `""`, `HasMaxLength(500)`) -
+   genuinely free-text (unlike `Category`, which is UI-constrained to
+   `EXAM_CATEGORIES`), single comma-separated string column rather than a
+   normalized many-to-many table - matches this codebase's own prior
+   stated intent for Tags ("a simple string field... matching how
+   Category is handled"). New migration `AddTagsToExamPaper`. Threaded
+   through `CreateExamRequest`/`CreateExamCommand`/`ExamResponse`/
+   `ExamsController` (both the Create mapping and `ToResponse`).
+2. New cross-tenant Sections endpoint: `GET /api/exams/sections`
+   (absolute route on `SectionsController`, escapes its
+   `{examId:guid}` prefix), `[Authorize(Roles = "SuperAdmin")]`. New
+   `SectionWithExamTitle` record + `IExamRepository.GetAllSectionsAsync`
+   (mirrors the existing `GetAllAssignmentsAsync`/`AssignmentWithExamTitle`
+   pattern exactly - sections joined against an in-memory exam-id→title
+   dictionary, not a second round trip per row). New
+   `PlatformSectionResponse` DTO, separate from the existing
+   `SectionResponse` (used by a tenant Admin's own per-exam Section
+   management) rather than adding ExamTitle/TenantId to that shared
+   contract.
+
+BACKEND - Question Service
+
+3. New cross-tenant endpoint: `GET /api/questions/all`,
+   `[Authorize(Roles = "SuperAdmin")]`. New
+   `IQuestionRepository.GetAllQuestionsAsync` + new `PlatformQuestionResponse`
+   DTO (separate from `QuestionResponse`, which carries options/test-cases/
+   answer-masking a Question Bank browse doesn't need). No `ExamTitle` on
+   this DTO - QuestionService has no `Exams` table of its own (different
+   database/service entirely); the frontend joins `ExamId` against the
+   platform's own already-fetched cross-tenant exam list instead, same
+   `AllUsers.tsx`-style client-side join this console already uses
+   elsewhere for tenant names. Also widened `RevealAnswers` (`User.IsInRole
+   ("Admin")` -> `|| User.IsInRole("SuperAdmin")`) so a Super Admin's
+   Question Bank browse doesn't get every correct answer masked.
+4. Test fakes: `FakeExamRepository`/`FakeQuestionRepository` both needed
+   the new interface members (same lesson as earlier this session - build
+   the full solution, not just the touched service, to catch this before
+   pushing).
+
+FRONTEND
+
+5. `types/exam.ts`: `tags?: string` on `CreateExamRequest`, `tags: string`
+   on `ExamResponse`. `CreateExam.tsx` gets a real Tags text input
+   (comma-separated, genuinely free text unlike the Category dropdown) -
+   `EditExam.tsx` deliberately NOT touched, matching that Category itself
+   isn't editable there either (`UpdateExamRequest` has no Category field) -
+   consistent with existing precedent, not a new gap.
+6. `types/section.ts`/`api/sectionApi.ts`: `PlatformSectionResponse` +
+   `listAllSections()`. `types/question.ts`/`api/questionApi.ts`:
+   `PlatformQuestionResponse` + `listAllQuestions()`.
+7. 5 new pages replacing their `PlatformComingSoon` placeholders (removed
+   from `platformComingSoonRoutes.ts`, routed for real in `AppRoutes.tsx`):
+   `PlatformAllExams`, `PlatformExamCategories` (groups the same cross-
+   tenant exam list by Category, `Accordion`), `PlatformExamTags` (same
+   grouping, split on the new Tags field's commas - an exam with multiple
+   tags appears under each), `PlatformSections`, `PlatformQuestionBank`.
+   All reuse the SAME query keys (`['platform-exams']`, `['platform-
+   sections']`, `['platform-questions']`) already used elsewhere in this
+   console (Exam Usage report, etc.) so React Query dedupes fetches across
+   pages instead of re-hitting the same endpoint.
+
+VERIFICATION
+
+8. `dotnet build ExamVault.sln` + `dotnet test` (all 8 test projects, 335
+   tests) + `npm run build` + `npm test` (60 tests) - all green. Verified
+   live via real API calls (not just unit tests): `GET /api/exams` returns
+   `tags` on every row (empty string for pre-existing exams, confirming no
+   silent data loss); `GET /api/exams/sections` and `GET /api/questions/all`
+   both return real cross-tenant rows with correct `tenantId`/`examTitle`
+   joins; a regular Admin's JWT gets 403 from both new endpoints (the
+   SuperAdmin-only gate actually works, not just present in source).
+
+SUPER ADMIN SECURITY: SECURITY EVENTS + FAILED LOGIN ATTEMPTS
+------------------------------------------------------------------------
+Explicit ask (2026-08-28): implement the 2 remaining `PlatformComingSoon`
+placeholders under the Security menu (`sec-events`, `sec-failed-logins`) -
+Login Activity and Audit Logs were already real. Researched both first:
+failed-login auditing didn't exist ANYWHERE (only a successful login wrote
+an `Auth`/`"User login"` entry - `UsersController.Login`'s two failure
+branches did nothing but log a warning), and `AuditModule.Security` was
+defined in the enum but never written to by anything, ever - "Security
+Events" had no real concept behind it at all, not just a missing UI.
+
+BACKEND
+
+1. Moved login auditing from `UsersController.Login` into `LoginUserHandler`
+   itself (the controller's original success-only `RecordAsync` call is
+   gone) - only the handler has a resolved `user` at the exact moment a
+   wrong password or a deactivated-account attempt gets rejected, which is
+   what makes failures auditable at all. New `RecordLoginAuditAsync`
+   private helper records `Auth`/`"Failed login"` on both failure branches
+   with known identity (wrong password for a real user; a real user whose
+   account is deactivated) and `Auth`/`"User login"` on success (same
+   Activity string as before, unchanged for Login Activity's own filter).
+   Deliberately NOT audited: unknown tenant slug and unknown email/user -
+   no real identity to attach, and would start approaching probe-detection
+   rather than "a real account had a failed attempt," matching the
+   handler's own pre-existing "never reveal whether it exists" principle.
+2. `TenantsController` gained a `RecordSecurityEventAsync` helper (new
+   `IAuditClient` dependency) - gives `AuditModule.Security` a first real
+   purpose. Records `TenantId` = the affected org, `UserId`/`UserName` =
+   the acting Super Admin (from their own JWT claims), on: Deactivate
+   ("Organization deactivated"), Reactivate ("Organization reactivated"),
+   Delete ("Organization deleted" - recorded after removal, using the
+   already-known `id`, since the row is gone by then), and Reset Admin
+   Password ("Admin password reset", `entityId` = the target admin's own
+   user id).
+3. New `FakeAuditClient` test double (`Tests/UserService/.../Fakes/`) -
+   `LoginUserHandlerTests` needed one now that the handler takes a real
+   `IAuditClient` dependency.
+
+FRONTEND
+
+4. `FailedLoginAttempts.tsx` - same shape/query key as `LoginActivity.tsx`
+   (dedupes the fetch), filtered to `activity === 'Failed login'` instead
+   of `'User login'`.
+5. `SecurityEvents.tsx` - `getAuditLogs(from, to, 'Security')`, a
+   genuinely different server-side-filtered query (own query key, not
+   deduped against the other Security pages' unfiltered fetch). Table:
+   Time/Event badge/Organization/Performed By.
+6. Both routed for real in `AppRoutes.tsx` (including the Security group's
+   own base path `/platform/security`, which also pointed at `sec-events`)
+   and removed from `platformComingSoonRoutes.ts`.
+
+VERIFICATION
+
+7. Full solution build + all 335 backend tests + frontend build + all 60
+   frontend tests, all green. Verified live: a wrong-password attempt
+   against a real local account produced a real `Failed login` row (real
+   name/IP/timestamp, confirmed via direct SQL); deactivating then
+   reactivating a real test org produced both `Security`-module rows with
+   the correct actor (Super Admin) and target org; `GET /api/audit-logs?
+   module=Security` returns exactly those 2 rows in the shape
+   `SecurityEvents.tsx` expects.
+
+================================================================================
+SUPER ADMIN SUBSCRIPTIONS: SUBSCRIPTION HISTORY
+================================================================================
+Explicit ask (2026-08-28): implement the last `PlatformComingSoon` placeholder
+under Subscriptions (`subs-history`, `/platform/subscriptions/history`).
+
+Researched first: no history of plan CHANGES exists anywhere. `Tenant.PlanId`
+is a single always-set field that gets silently overwritten by
+`AssignPlanToTenantHandler` on every `PUT /api/tenants/{id}/plan` call - no
+prior value is kept, and `TenantsController.AssignPlan` (unlike Deactivate/
+Reactivate/Delete/Reset Admin Password, all wired to `RecordSecurityEventAsync`
+in the last feature) writes no audit entry at all today. So "Subscription
+History" cannot show billing/invoices (no billing model exists anywhere - see
+multi_tenant_saas.txt's own scope notes, same class of gap as "Next
+Billing/Amount" flagged earlier and left honestly unfaked), but a real "which
+org moved from which plan to which plan, when, by whom" trail is entirely
+buildable using the same `AuditModule.Security` mechanism just built for
+Security Events - it just isn't wired to plan changes yet.
+
+Decision: build it as a plan-assignment history log, Activity = "Plan
+changed", reusing `AuditModule.Security` (not a new module - it's the same
+class of "sensitive platform action" as the other 4 events already there).
+Skip writing an entry when the assigned plan is unchanged (re-saving the same
+plan is a no-op, not a history event).
+
+BACKEND
+
+1. `AssignPlanToTenantResult` gains `PreviousPlanName` (string?, null only if
+   somehow no prior plan existed - shouldn't happen since `PlanId` is always
+   set) and `NewPlanName` (string) so the controller can build a human Details
+   string without a second `IPlanRepository` dependency of its own.
+2. `AssignPlanToTenantHandler`: look up the tenant's CURRENT plan (by its
+   existing `PlanId`) before overwriting it, for its name. If the current
+   `PlanId` already equals `command.PlanId`, still succeed (unchanged
+   behavior) but flag "no real change" so the controller skips the audit
+   write.
+3. `TenantsController.AssignPlan`: on a real change, call
+   `RecordSecurityEventAsync(id, "Plan changed", cancellationToken,
+   entityId: request.PlanId.ToString())` with a new `details` parameter
+   threaded through (`RecordSecurityEventAsync` currently hardcodes `null`
+   for `details` - extend it with an optional `string? details = null`) set
+   to `"{PreviousPlanName} -> {NewPlanName}"`.
+4. Update `FakeTenantRepository`/`FakePlanRepository`-adjacent test fakes and
+   `AssignPlanToTenantHandler` unit tests for the new lookup + result shape;
+   full solution build to catch any other break.
+
+FRONTEND
+
+5. New `SubscriptionHistory.tsx` (`pages/platform/`) - `getAuditLogs(from,
+   to, 'Security')` (same query key as `SecurityEvents.tsx`, dedupes the
+   fetch), filtered client-side to `activity === 'Plan changed'`. Table:
+   Time / Organization / Plan Change (renders `details` as "Old -> New") /
+   Changed By. Reuses `useTenants()` for org-name lookup, same pattern as
+   `SecurityEvents.tsx`.
+6. Routed for real in `AppRoutes.tsx` at `/platform/subscriptions/history`
+   (`active="subs-history"`), removed from `platformComingSoonRoutes.ts`.
+
+VERIFICATION
+
+7. Full solution build + full backend test suite + frontend build + frontend
+   test suite, all green. Live: assign a real test tenant to a different real
+   plan via the existing Organizations & Plans UI, confirm exactly one new
+   `Security`/`"Plan changed"` row appears with the correct old/new plan
+   names and acting Super Admin; re-assigning the SAME plan produces no new
+   row. Sequential Docker rebuild of `user-api` + `frontend` only. Commit,
+   push, confirm CD deploy via `az containerapp show --query
+   properties.template.containers[0].image` (GitHub API rate limit still
+   assumed exhausted).
+
+================================================================================
+SUPER ADMIN ORGANIZATIONS: TRIAL ORGANIZATIONS
+================================================================================
+Explicit ask (2026-08-28): implement `/platform/organizations/trial`
+("Trial Organizations"). Unlike Security Events/Subscription History (which
+reused already-real infrastructure that just wasn't wired up), this one is
+different: `ExamVault Super Admin Menu.txt` and `Modules-Details.txt` both
+document that this was PREVIOUSLY, DELIBERATELY dropped - "no plan/trial
+field exists on Tenant... user chose not to add one now." No trial concept
+exists anywhere (`Tenant` is just Name/Slug/IsActive/PlanId). Building this
+for real means inventing the concept, not wiring existing data - asked the
+user how it should work rather than guessing. Decision: a manual flag,
+Super Admin controlled - `Tenant.IsTrial` + `TrialEndsAtUtc`, settable at
+Create Organization time or toggled later on an existing org. NOT automatic/
+time-based-from-creation (that was the rejected alternative - too rigid,
+hardcoded platform-wide duration, no per-org control).
+
+BACKEND
+
+1. `Tenant.cs`: `bool IsTrial { get; set; } = false` + `DateTime?
+   TrialEndsAtUtc { get; set; }`. New EF Core migration
+   `AddTrialFieldsToTenant` (`dotnet ef migrations add ... --project
+   OnlineExamSystem.User.Infrastructure --startup-project
+   OnlineExamSystem.User.API -o Persistence/Migrations`).
+2. `CreateTenantCommand`/`CreateTenantRequest`/`CreateTenantHandler`: two
+   new trailing optional params, `IsTrial = false`, `TrialEndsAtUtc = null`
+   - non-breaking for existing callers. `CreateTenantValidator` gains a
+   rule: `IsTrial` true requires `TrialEndsAtUtc` set and in the future.
+3. New `SetTenantTrialCommand(TenantId, IsTrial, TrialEndsAtUtc)` /
+   `SetTenantTrialHandler` / `SetTenantTrialResult` (mirrors
+   `SetTenantActiveStatus`, reuses `ITenantRepository` as-is - no interface
+   change). Same future-date rule as Create; ending a trial (`IsTrial =
+   false`) always clears `TrialEndsAtUtc` to null regardless of what's
+   passed. New `PUT /api/tenants/{id}/trial` action on `TenantsController`
+   (`SetTenantTrialRequest` contract), Super Admin only, records a
+   `Security` audit entry via the existing `RecordSecurityEventAsync`
+   helper - "Trial started" (`details` = end date) or "Trial ended" - same
+   pattern as Plan changed/Deactivate/Reactivate. Creation itself stays
+   unaudited, matching Create's existing (also unaudited) behavior - not
+   introducing audit-on-create as new scope here.
+4. `TenantResponse` gains trailing `IsTrial = false, TrialEndsAtUtc = null`
+   so the frontend can render it - update the controller's `ToResponse`.
+
+FRONTEND
+
+5. `types/tenant.ts`/`tenantsApi.ts`: `isTrial`, `trialEndsAtUtc` on
+   `Tenant`; `isTrial`/`trialEndsAtUtc` optional on `CreateTenantRequest`;
+   new `setTenantTrial(tenantId, isTrial, trialEndsAtUtc)` API call.
+6. `ManageTenants.tsx` gains a 4th tab, `statusFilter="trial"` (filters
+   `tenant.isTrial`, independent of Active/Suspended - an org can be both),
+   a "Trial Ends" column (days remaining / "Expired" badge) shown only on
+   that tab, and a 4th summary card, all reusing the exact same
+   list/actions/query pattern as Active/Suspended. Routed at
+   `/platform/organizations/trial` (`active="org-trial"`), removed from
+   `platformComingSoonRoutes.ts`.
+7. New `StartTrialButton`/toggle in `OrganizationDetails.tsx`'s Actions
+   panel (mirrors `DeactivateTenantButton`'s confirm-modal pattern for
+   starting a trial - needs a date input; ending one is a direct action
+   like `ReactivateTenantButton`, non-destructive/reversible).
+8. `CreateOrganization.tsx`: "Mark as trial" checkbox + end-date field in
+   the create form; its own already-existing "Trial Organizations" side
+   card (currently hardcoded "Not connected yet") now shows real trial
+   tenants, same list style as the Active/Suspended cards beside it.
+
+VERIFICATION
+
+9. Full solution build + full backend test suite + frontend build + test
+   suite, all green. Live: create a real test org marked as trial with a
+   future end date, confirm it appears on `/platform/organizations/trial`
+   with the correct days-remaining; end its trial via Organization Details,
+   confirm it drops off that list and a "Trial ended" Security audit row
+   appears (visible on Subscription History's sibling Security Events
+   page); confirm CreateOrganization's Trial Organizations card now shows
+   real data. Sequential Docker rebuild of `user-api` + `frontend` only.
+   Commit, push, confirm CD deploy via `az containerapp show --query
+   properties.template.containers[0].image`.
+
+================================================================================
+BUG FIX: CREATE ORGANIZATION ADMIN EMAIL SILENTLY DROPPED
+================================================================================
+User report (2026-08-28): "create organization email not work expected."
+Reproduced live: `CreateOrganization.tsx` has no wrapping `<form>` element
+(only `Form.Group`/`Form.Control` subcomponents), so the Admin Email
+field's `type="email"` never actually validated anything - native HTML5
+validation only fires on real form submission, and this page's Create
+button is a plain `onClick` handler. Entering a malformed admin email let
+the org get created (tenant creation doesn't touch admin email at all),
+then `createTenantAdmin` correctly got rejected by the backend's
+FluentValidation `EmailAddress()` rule - but the resulting `adminWarning`
+was set in state right before `onSuccess` immediately called `navigate()`
+away from the page, so the warning was set but NEVER rendered. Net effect:
+org created with a silently-missing admin and zero visible error.
+
+Fix: added `utils/email.ts` (`isValidEmail`), wired into
+`CreateOrganization.tsx` (inline `isInvalid` feedback + disables the
+Create button on a malformed email) and restructured its mutation so
+`onSuccess` only navigates away when there's NO admin-creation warning to
+show - if there is one, it stays on the page instead. Same gap existed
+(minus the losing-the-warning part, which didn't apply there) in
+`OrganizationDetails.tsx`'s "Add Admin" modal and
+`PersonalInfoPanel.tsx`'s Alternate Email field - both use the identical
+`createTenantAdmin`/profile-update path, fixed the same way for
+consistency. Verified live: bad email now disables the button with a red
+inline message; fixing the email re-enables it and creates the org with a
+real, Active admin visible on the Admins tab.
+
+================================================================================
+BUG FIXES: 3-ROLE END-TO-END TEST FINDINGS (SuperAdmin/Admin/Student)
+================================================================================
+Explicit ask (2026-08-28): "test dev superadmin,admin,student end to end
+every functionality" then "fix four bug" from the findings. Ran 3 parallel/
+sequential fork agents against the local Docker `dev` stack (same code as
+Azure `dev`) covering every sidebar route + real interactive flows per
+role. Full findings already reported to the user. 4 real bugs identified;
+1 (duplicate `<svg height="auto">` report) was already fixed as part of
+the SuperAdmin pass's `Home.tsx` fix - confirmed via grep no second
+instance exists in source, so nothing further needed there. The other 3:
+
+1. SCORING BUG (most severe) - `TakeExam.tsx`'s `sectionGroups` useMemo
+   (lines ~423-444) recomputes `shuffle()` (unseeded `Math.random()`)
+   whenever `questions` gets a new array reference from a React Query
+   refetch (window refocus, background poll) - reshuffling mid-attempt
+   desyncs `displayQuestions[currentIndex]` from the "Question X of Y"
+   header, and one save landed with `selectedOptionId: null` for a
+   question the student actually answered correctly, corrupting the
+   score. Fix: lock `sectionGroups` into a ref once per `attemptId`, only
+   after `questions` AND (if `exam.containsSections`) `sections` have
+   both loaded - never recompute again for that attempt regardless of
+   later refetches.
+
+2. RACE CONDITION / 500 - `SaveAnswerHandler.cs:46-69` (Submission
+   service) does check-then-insert on `AttemptAnswers`, which has a
+   unique index on `(AttemptId, QuestionId)`. Two near-simultaneous saves
+   for the same question (autosave racing "Save & Next") can both pass
+   the `GetAnswerAsync` check as "no existing row," then collide on
+   insert - second one throws an unhandled `SqlException`. Fix: move the
+   insert-or-update into a new `ISubmissionRepository.UpsertAnswerAsync`
+   at the Infrastructure layer (where EF Core types belong), catching
+   `DbUpdateException` on the insert attempt, detaching the failed
+   tracked entity, and falling back to updating the row that won the
+   race - so the racing save is never silently lost.
+
+3. VALIDATION GAP - an exam with zero real questions can be published.
+   `ChangeExamStatusHandler.cs`'s existing publish-time validation only
+   runs `if (exam.ContainsSections)` and only cross-checks
+   admin-*declared* section question-count totals against each other -
+   it never checks the REAL question count in Question Service (a
+   different microservice/DB), and non-sectioned exams get no check at
+   all. Fix: call the already-existing `IQuestionServiceClient` (used by
+   `DeleteSectionHandler` for the same cross-service pattern) with a new
+   `GetQuestionCountAsync` method that hits Question Service's existing
+   internal `answer-key` endpoint and takes the count - block publishing
+   (for both sectioned and non-sectioned exams) when it's 0, same
+   `ValidationFailed` result path as the existing section-totals checks.
+   `ChangeExamStatusCommand` gains a `BearerToken` field, same pattern
+   `DeleteSectionCommand` already uses to call across services.
+
+NOT touched here (separate, smaller finding, not one of the 4 selected):
+`GET /api/exams/{id}` returning a stale `totalQuestions` - already a
+long-documented, deliberately-accepted architectural limit (every other
+consuming page already works around it with a real per-exam question
+count fetched from Question Service, e.g. `useQuestionCountsByExam` -
+comments to this effect exist in `useQuestions.ts`,
+`AdminDashboard.tsx`, `ExamDetails.tsx` x2). The one place that doesn't
+follow this established pattern, `PlatformAllExams.tsx:97`, is an easy
+one-line fix reusing the existing shared hook - doing it now for
+consistency since it's the same bug class and trivially cheap, not
+starting new scope.
+
+VERIFICATION: full solution build + full backend test suite (update
+`FakeSubmissionRepository` for the new `UpsertAnswerAsync` method) +
+frontend build + frontend test suite, all green. Live: reproduce the
+original shuffle-desync and race-condition failures against the local
+Docker stack pre-fix if feasible, confirm they're gone post-fix; confirm
+publishing a 0-question exam is now rejected with a clear message for
+both a sectioned and a non-sectioned exam; confirm `PlatformAllExams.tsx`
+now shows the real question count. Sequential Docker rebuild of the
+affected services only (submission-api, exam-api, question-api if
+touched, frontend). Commit, push, confirm CD deploy via `az containerapp
+show --query properties.template.containers[0].image` per service.
+
+================================================================================
+CREATE ORGANIZATION: ADMIN PHONE NUMBER + DESIGNATION
+================================================================================
+Explicit ask (2026-08-29): "create organizations phone number, designatation
+implement" - the 2 disabled Admin Information fields on Create Organization
+("Not saved yet - no backend field exists"). `PhoneNumber` already exists on
+`AppUser` (used by the Admin console's own Add User flow) but was never
+threaded through `CreateTenantAdminHandler`. `Designation` doesn't exist
+anywhere - a genuinely new field, added the same way `Department` was
+(nullable, self-editable via My Profile) so it isn't a write-only value with
+no way to ever view/edit it again after org creation.
+
+BACKEND
+
+1. `AppUser.cs`: new `string? Designation` (mirrors `Department`). New EF
+   Core migration `AddDesignationToAppUser`.
+2. `CreateTenantAdminRequest`/`CreateTenantAdminCommand`/
+   `CreateTenantAdminHandler`: two new optional params, `PhoneNumber` and
+   `Designation`, set on the created `AppUser` (trimmed, null if blank).
+   `CreateTenantAdminValidator` gains the same phone-format rule
+   `UpdateMyProfileValidator` already uses, plus a `Designation` max-length.
+3. `Designation` also wired into the existing self-service profile path for
+   consistency with `Department` (same field class, same precedent):
+   `UpdateMyProfileRequest`/`Command`/`Handler`/`Validator`,
+   `UserProfileResponse`, and `UsersController`'s `UpdateMyProfile`/
+   `ToProfileResponse` mappings.
+
+FRONTEND
+
+4. `CreateOrganization.tsx`: Admin Phone Number and Designation fields
+   enabled (no longer disabled with "no backend field" hint), wired into
+   state and the `createTenantAdmin` call.
+5. `types/tenant.ts` (`CreateTenantAdminRequest`) and `types/user.ts`
+   (`UserProfile`, `UpdateMyProfileRequest`) gain the new fields.
+6. `PersonalInfoPanel.tsx`: Designation field added next to Department,
+   same self-edit pattern - otherwise Designation would be settable only
+   at org-creation time with no way to ever change it again.
+
+VERIFICATION: full solution build + backend test suite (update
+`CreateTenantAdminHandlerTests`-equivalent if any exist, plus profile
+handler tests) + frontend build + test suite, all green. Live: create a
+real test org with an admin including phone/designation, confirm both
+persist (visible via the admin's own My Profile page and/or a direct API
+check); confirm the self-service Personal Info edit path also saves
+Designation correctly. Sequential Docker rebuild of `user-api` + `frontend`
+only. Commit, push, confirm CD deploy.
+
+================================================================================
+CREATE ORGANIZATION: ORGANIZATION CODE + ORGANIZATION TYPE
+================================================================================
+Explicit ask (2026-08-29): "please implement the organization code and
+organization type as well" - the last 2 disabled Create Organization
+fields ("Not saved yet - no backend field exists"). Note: `ExamVault
+Super Admin Menu.txt` (line 246-248) records that in an earlier pass the
+user explicitly chose NOT to add these to the Tenant backend. This ask
+is a deliberate reversal of that - proceeding since it's unambiguous
+("implement... as well"), not re-litigating the old decision.
+
+Design: `OrganizationType` stored as a free string (not a fixed backend
+enum) with a fixed dropdown of options on the frontend - same precedent
+as `ExamPaper.Category` (dropdown-driven classification stored as plain
+string, not a hardcoded backend enum). `OrganizationCode` is a plain
+optional free-text field, no auto-generation. Both wired into BOTH
+Create Organization AND Edit Organization (Organization Details), plus
+the Organization Information card's real display - not just settable
+once at creation with no way to view/edit again (same principle applied
+to Designation last pass).
+
+BACKEND
+
+1. `Tenant.cs`: `string? OrganizationCode`, `string? OrganizationType`.
+   New EF Core migration `AddOrganizationCodeAndTypeToTenant`.
+2. `CreateTenantRequest`/`Command`/`Handler`/`Validator`: two new trailing
+   optional params (max length 50/100), set on the new Tenant.
+3. `UpdateTenantRequest`/`Command`/`Handler`/`Validator`: same two fields,
+   settable on an existing org via the real Edit Organization flow.
+4. `TenantResponse` gains both fields; `TenantsController.ToResponse`
+   updated (both `Create` and `Update` actions already return via it).
+
+FRONTEND
+
+5. `CreateOrganization.tsx`: Organization Code (text) and Organization
+   Type (real `<Form.Select>` with a fixed option list - University,
+   School, Coaching Institute, Corporate Training, Government, Other)
+   enabled, wired into `createTenant`.
+6. `types/tenant.ts`: `Tenant`, `CreateTenantRequest`, `UpdateTenantRequest`
+   gain `organizationCode`/`organizationType`.
+7. `OrganizationDetails.tsx`: Organization Information card's "Organization
+   Code"/"Organization Type" rows show real values instead of "—"; Edit
+   Organization modal gains the same two fields (text + select) so they're
+   editable after creation too.
+
+VERIFICATION: full solution build + backend test suite + frontend build +
+test suite, all green. Live: create a real test org with a real code and
+type, confirm both persist and display correctly on its Organization
+Details page; edit an existing org's code/type via Edit Organization,
+confirm the update persists. Sequential Docker rebuild of `user-api` +
+`frontend`. Commit, push, confirm CD deploy (this includes a schema
+migration, same as last pass).
+
+================================================================================
+BUG FIX: CLICKING BACK INTO A COMPLETED SECTION THROWS AN ERROR
+================================================================================
+User report (2026-08-29): "when exam started and section first completed
+then second started then i have clicked on first section then getting
+error." Reproduced by reading the code path (not live, but root-caused
+exactly): `TakeExam.tsx`'s live "Sections" navigator bar (during 'take'
+mode, as opposed to the Review screen's own section list further down the
+same file) computes whether a section button is clickable via
+`canOpenSection(index)`, which only checks that EARLIER sections are
+completed - it never checks whether the TARGET section itself has already
+been completed and uses a non-Free (Sequential/Locked) navigation type.
+So once section 1 (Sequential) is completed and section 2 becomes current,
+section 1's button stays enabled - clicking it fires `switchToSection(0)`
+-> `enterSection()` -> the backend correctly rejects re-entry into a
+completed gated section (`EnterSectionHandler`'s own
+`existingState.IsCompleted && isGated` check), surfacing as a raw
+`attemptError` to the student. The Review screen's own section list
+already has the correct rule for this exact case (`canReturn =
+section.navigationType === 'Free' || index === sectionIndex`) - the live
+Sections bar just never applied the same rule.
+
+Also noticed while root-causing: the backend's `EnterSectionResult.
+IsSectionLocked` flag (and its controller message, "This section is
+locked until earlier sections are completed.") is shared between two
+different situations - earlier sections not done yet, AND the target
+section itself already being completed-and-gated - the message is
+actively wrong/confusing for the second case. Fixing this too as
+defense-in-depth even though the frontend fix should make it
+unreachable through normal use.
+
+FIX
+
+1. `TakeExam.tsx`'s Sections navigator: block re-entry into an already-
+   completed non-Free section (same rule as the Review screen's
+   `canReturn`) - a completed section stays clickable only if it's Free-
+   navigation or still the current section.
+2. `EnterSectionResult`/`EnterSectionHandler`: split `IsSectionLocked`
+   into two distinct flags so the controller can give an accurate message
+   for "already completed, can't re-enter" vs. "earlier sections not done
+   yet."
+
+VERIFICATION: full solution build + backend test suite (update
+EnterSectionHandler tests if any exist for the new result shape) +
+frontend build + test suite, all green. Live: create a real sectioned
+exam with a Sequential-navigation first section, take it as a student,
+complete section 1, advance to section 2, click back on section 1 -
+confirm the button is now disabled/non-clickable instead of throwing.
+Sequential Docker rebuild of `submission-api` + `frontend`. Commit, push,
+confirm CD deploy.
+
+ADDENDUM (found while live-verifying the fix above): reproducing the exact
+scenario live (sectioned exam, Sequential section 1, complete it, resume
+into section 2) surfaced a SECOND, more severe bug in the SAME
+`sectionGroupsCacheRef` mechanism added earlier this session (the shuffle-
+desync fix) - `sectionsReady = !exam?.containsSections || sections !==
+undefined` evaluated `true` before `exam` itself had loaded (since
+`exam?.containsSections` is `undefined` while `exam` is undefined, and
+`!undefined` is `true`), regardless of whether `sections` had actually
+arrived. If `attemptId` resolved in that same window, the WRONG single-
+group computation (every question merged into one ungrouped section) got
+PERMANENTLY cached for the rest of the attempt - confirmed live via direct
+API checks proving the server's per-question `sectionId` data was correct
+the whole time; the corruption was 100% client-side. Fixed by requiring
+`exam !== undefined` before ever deciding sections are "ready":
+`sectionsReady = exam !== undefined && (!exam.containsSections || sections
+!== undefined)`. Re-verified live after the fix - correct 1-question-per-
+section grouping, Section 1 correctly locked/disabled after completion.
+
+================================================================================
+BUG FIX: PROGRAMMING EXAM CODE AUTO-GRADING WAS COMPLETELY BROKEN
+================================================================================
+User report (2026-08-29): "when programming exam created then debugger not
+working expected." Investigated live, found TWO separate real bugs:
+
+1. INFRA: `examvault-execution-worker-1` had crashed 3 days ago
+   (RabbitMQ connection refused - likely a startup-order race after an
+   uncontrolled Docker Desktop/host restart, since `depends_on: rabbitmq:
+   condition: service_healthy` isn't re-evaluated outside `docker compose
+   up`) and had NO restart policy anywhere in `docker-compose.yml` (only
+   the third-party `piston` image has one) - it silently stayed dead with
+   nothing auto-grading any code submission this whole time. Fixed:
+   restarted it, and added `restart: unless-stopped` to it AND
+   `notification-worker` (the only other RabbitMQ-consumer background
+   service, same vulnerability) in docker-compose.yml.
+
+2. AUTH (the real, deeper bug - present regardless of #1): once the
+   worker WAS running and correctly picked up a `CodeAnswerSubmitted`
+   event, ran the code via Execution Service, and tried to PUT the grade
+   back to Submission Service's `/api/submissions/{attemptId}/answers/
+   {questionId}/grade` endpoint - that call was rejected with 403.
+   Root cause: the endpoint requires BOTH `[Authorize(Roles = "Admin")]`
+   AND `[Authorize(Policy = Exams)]` (a per-tenant plan-feature gate).
+   `SystemTokenProvider` (the worker's own service-to-service JWT minter)
+   set role="Admin" but included NO feature claims at all - only
+   "SuperAdmin" bypasses feature policies, so this token failed the
+   Exams feature check on every single call, unconditionally, regardless
+   of the calling tenant's real plan. This means code-question
+   auto-grading has likely never worked correctly since this pattern was
+   built - not a recent regression. Fixed: added a `Feature:Exams` claim
+   to the minted token.
+
+VERIFICATION: interactive "Run Code" (test-case checking during the
+exam) was independently confirmed working correctly the whole time (a
+separate, synchronous execution-api call unaffected by either bug) -
+live browser test showed 2/2 test cases passing with real Piston
+execution. The auto-grading fix was verified with a real, live,
+end-to-end run: submitted a real Programming exam answer twice (once
+pre-fix, confirming the 403; once post-fix, rebuilt execution-worker
+image, bumped the assignment's maxAttempts to allow a retry) - the
+second submission's grade PUT returned 200 (not 403), and the student's
+own `GET /api/submissions/mine` confirmed `marksAwarded: 10`,
+`gradedByUserId` set to the system sentinel id, `gradedAtUtc` populated.
+Full solution build green (no existing unit tests cover the Worker
+project directly - this is infra/service-to-service auth, verified via
+live integration testing instead). Sequential Docker rebuild of
+execution-worker done as part of verification. Test exam archived and
+deleted afterward.
+
+================================================================================
+PLAN: EXAM TYPE WISE REPORT DRILL-DOWN PAGES (2026-09-01)
+================================================================================
+User supplied `Exam-type-subscreen.png`, a 6-screen wireframe for the
+existing "Exam Type Wise Report" (added earlier today, commit c4690ce) -
+that page was screen 1 (Overview) only, with its row Action icon dead-
+linking to the generic Exam Reports list. This plan adds the other 5
+screens as real drill-down pages, all client-side aggregation over
+already-loaded data (useExams/useExamTypes/useAdminResultsForAllExams/
+useAttemptsByExam) - no backend changes, same pattern as c4690ce.
+
+New shared hook `hooks/useExamTypeReportData.ts`: given a typeId, returns
+{ examType, examsOfType, resultsOfType, attemptsOfType, isLoading } -
+factors out the "filter everything down to one exam type" join that all
+4 new type-scoped pages need, avoiding 4x duplication.
+
+New pages (all `active="Exam Type Wise Report"` in AdminLayout, all
+Admin-only routes under /admin/reports/...):
+1. ExamTypeDetails.tsx (/exam-type/:typeId) - type header (icon/name/
+   purpose), 4 stat cards, search+status+export, paginated table of the
+   type's exams (row action -> existing ExamReportDetails per-exam page,
+   reused as-is), plus 3 link-buttons to the pages below.
+2. ExamTypePerformanceAnalysis.tsx (/exam-type/:typeId/performance) - 5
+   stat cards, tab strip (Score Distribution/Pass vs Fail/Average Score
+   Trend/Completion Rate/Top Performing Exams). Completion Rate reuses
+   useAttemptsByExam's status!=='InProgress' pattern already established
+   in AdminReports.tsx.
+3. ExamTypeStudentPerformance.tsx (/exam-type/:typeId/students) - same
+   per-student aggregation as StudentReports.tsx, scoped to this type's
+   exams only.
+4. ExamTypeComparison.tsx (/exam-type-wise/comparison, reached from the
+   Overview page's new header button, not type-scoped) - tab strip
+   (Average Score/Pass %/Participants/Completion Rate/Attempts) each
+   rendered as a bar chart across all exam types via a new shared
+   `useExamTypeSummaryRows()` hook extracted from ExamTypeWiseReport.tsx's
+   existing `rows` useMemo (so Overview and Comparison compute identical
+   numbers), plus a dynamic "highest/lowest" insight line.
+5. ExamTypeQuestionAnalysis.tsx (/exam-type/:typeId/questions) - 5 stat
+   cards, tab strip (Overall Analysis/Most Difficult/Most Skipped),
+   reuses ExamReportDetails.tsx's per-question correct/incorrect/
+   unanswered aggregation generalized across every exam of the type.
+
+New small shared component `components/reports/ReportTabs.tsx` (a plain
+underline tab strip) - no tab pattern existed yet in Reports.
+
+Two wireframe fields are NOT implemented as fabricated data, per this
+project's no-dead-UI convention: Question Analysis's "Average Difficulty"
+and "Avg Time per Question" have no backing data anywhere in this
+codebase (questions carry no numeric difficulty score, no per-question
+timing is tracked) - substituted with two numbers that ARE real
+("Total Attempts Analyzed", "Questions with 100% Correct"). Most
+Difficult/Skipped Questions tables drop the wireframe's per-row eye-icon
+Action column - no per-question detail page exists in this app and
+adding one is out of scope for this ask.
+
+Existing ExamTypeWiseReport.tsx (Overview) changes: row Action ->
+`/admin/reports/exam-type/{id}` instead of `/admin/reports/exams`; new
+"Compare Exam Types" button next to Export Report -> Comparison page.
+
+================================================================================
+PLAN: SPLIT LiveMonitoring INTO ExamSecurity / LiveMonitoring / Proctoring (2026-09-04)
+================================================================================
+Trigger: shubham-admin@examvaults.in kept seeing/using the whole "Live
+Monitoring" admin console section after Live Monitoring was revoked on
+their org's Plan - traced to the single `LiveMonitoring` PlanFeature
+bundling four unrelated capabilities (Active Exams, Student Attempts,
+Security Violations, camera-based Proctoring) behind one on/off switch.
+User proposed a 3-tier entitlement redesign instead of a 2-tier one:
+ExamSecurity (non-video browser/security controls + violation tracking,
+should be available even on lower plans), LiveMonitoring narrowed to
+real-time non-video oversight (active exams/attempts/progress/violation
+feed/admin intervention), and Proctoring kept as the premium,
+privacy-sensitive webcam/live-video/recording tier. Explicitly NOT adding
+AI Proctoring or Identity Verification - neither exists in this codebase
+today, per the user's own instruction not to invent capabilities.
+
+Inspected first (before writing this plan), per the user's own
+instruction: `PlanFeature` (Backend/Shared/.../Multitenancy/PlanFeature.cs)
+is a shared enum; `Plan.IncludedFeatures` is stored as a comma-separated
+list of enum NAMES (nvarchar(200)) via a ValueConverter in
+UserDbContext.cs, not a bitmask - so appending new enum values is safe
+regardless of position, no int-renumbering risk. Every service
+(Submission/Exam/User) auto-registers a `Feature:{Name}` AuthorizationOptions
+policy for every enum value via `Enum.GetValues<PlanFeature>()` reflection
+in each service's own `FeaturePolicies.AddFeaturePolicies()` - adding a
+new enum value alone creates its policy everywhere already; only need to
+add named consts where a controller actually references one via
+`[Authorize(Policy = ...)]` (which requires a compile-time constant).
+Grepped the ENTIRE backend for `Policy = LiveMonitoring` and confirmed
+all 6 uses live in exactly one file, `SubmissionsController.cs` - no
+other service references this feature. `ProctoringSettingsController`
+(Exam Service, the per-exam detector-config screen matching `7.png`) is
+already gated by `Settings`, not `LiveMonitoring` - confirmed unrelated,
+staying untouched (see scope note below). The seeded "Full Access" plan
+(`TenantConstants.FullAccessPlanId`) auto-includes every enum value via
+`Enum.GetValues<PlanFeature>().ToList()` in its `HasData` seed - EF's
+migration generator re-diffs this automatically when the enum grows, so
+that one row updates itself via the new migration with no manual SQL.
+Any OTHER, manually-created Plan does NOT get this treatment automatically
+(HasData only ever touches its own seeded rows) - needs an explicit
+backward-compat data migration step, see step 3.
+
+Concrete steps:
+
+1. Backend, shared enum: add `ExamSecurity` and `Proctoring` to
+   `PlanFeature` (Backend/Shared/OnlineExamSystem.Shared.Common/
+   Multitenancy/PlanFeature.cs), appended at the end - safe since storage
+   is by name, not numeric position.
+
+2. Backend, re-tag `SubmissionsController.cs` (Submission.API):
+   - `LiveByExam` (GET by-exam/{id}/live, powers Active Exams) and
+     `ForceSubmit` (admin ends an attempt) stay `LiveMonitoring`.
+   - `ViolationsByExam` (GET by-exam/{id}/violations) and
+     `UpdateViolationStatus` (PUT violations/{id}/status) move to the new
+     `ExamSecurity` policy.
+   - `SetLiveWatch` (PUT {id}/live-watch) and `WatchRecording`
+     (POST {id}/recording/watch) move to the new `Proctoring` policy.
+   - `JoinRecording` (POST {id}/recording/join, the student's own camera
+     publish) currently has NO feature gate at all - add `Proctoring`.
+     This is a genuinely new enforcement point, not a re-tag: closes a
+     real gap where a student could still publish video for an org with
+     no Proctoring entitlement at all. Flagged explicitly since it's new
+     behavior, not just a rename.
+   Add `ExamSecurity`/`Proctoring` consts to Submission Service's own
+   `Authorization/FeaturePolicies.cs` (same file `LiveMonitoring`'s const
+   already lives in).
+
+3. Backend, EF migration (`dotnet ef migrations add
+   SplitLiveMonitoringFeature --project ...User.Infrastructure`):
+   auto-picks-up the Full-Access plan's HasData string change as an
+   UpdateData call. Add a hand-written `migrationBuilder.Sql(...)` in the
+   same migration's Up(): for every OTHER Plan row whose IncludedFeatures
+   currently contains "LiveMonitoring", append ",ExamSecurity,Proctoring"
+   (idempotent - only if not already present) so no organization already
+   granted Live Monitoring silently loses Security Violations or
+   Proctoring access it effectively had yesterday. This is the
+   backward-compatibility guarantee the user explicitly asked for.
+   Migration gets applied and verified against a real local DB copy
+   before this is considered done - never assumed blind against the live
+   Hostinger VPS database.
+
+4. Frontend, `types/plan.ts`: add `ExamSecurity`/`Proctoring` to the
+   `PlanFeature` union, `ALL_PLAN_FEATURES`, and `PLAN_FEATURE_LABELS`
+   ("Exam Security", "Proctoring").
+
+5. Frontend, `pages/platform/SubscriptionPlans.tsx`: new `MODULE_INFO`
+   entries (icon/color/description) for both new modules. Regroup the
+   Create/Edit modal's "Included Modules" card grid into labeled
+   sections matching the user's own proposed layout - "Exam Security" as
+   its own section, "Monitoring & Proctoring" grouping Live Monitoring +
+   Proctoring together - rather than the current flat 2-column grid, so
+   the plan-editing screen itself visually teaches the same 3-tier model
+   (why this problem won't recur when a 4th tier like AI Proctoring gets
+   added later).
+
+6. Frontend, `components/AdminSidebar.tsx`: give `NavChild` its own
+   optional `feature` field (currently only `NavItem`/top-level groups
+   have one, added in the prior LiveMonitoring-only fix). Live Monitoring
+   group's children get individual features: Active Exams/Student
+   Attempts -> `LiveMonitoring`, Security Violations -> `ExamSecurity`,
+   Proctoring -> `Proctoring`. The parent group itself is visible if ANY
+   child passes (not one blanket feature check on the group) - an org
+   with only ExamSecurity should still see "Live Monitoring" in the nav
+   with just Security Violations under it, not have the whole section
+   vanish.
+
+7. Frontend, `routes/AppRoutes.tsx`: update the 4 live-monitoring routes'
+   `ProtectedRoute feature=` prop to match step 2's table - Security
+   Violations -> `ExamSecurity`, Proctoring -> `Proctoring`, Active
+   Exams/Student Attempts stay `LiveMonitoring`.
+
+8. Verification: this codebase's own established convention for closing
+   every prior phase/feature gate is live curl/browser adversarial
+   testing with a real JWT (see every "Verified live..." paragraph
+   throughout this file) - there is no WebApplicationFactory-style
+   integration-test project anywhere for controller-level authorization,
+   so this plan follows the same convention rather than introducing new
+   test infrastructure unprompted. Concretely: create a throwaway Plan
+   with only ExamSecurity checked and confirm Security Violations works
+   while Active Exams/Student Attempts/Proctoring 403; repeat with only
+   LiveMonitoring checked and only Proctoring checked; confirm the
+   sidebar shows exactly the right subset of Live Monitoring's children
+   in each case; confirm the backward-compat migration left an existing
+   LiveMonitoring-only Plan with all three now checked.
+
+Explicitly OUT of scope, decided during planning rather than silently
+dropped: `ProctoringSettingsController` (the per-exam detector-config
+screen, `7.png` - Enable Proctoring/Face Detection/Allow Live Video Feed
+toggles) stays gated by `Settings`, untouched - configuring detectors is
+an Admin Settings capability, distinct from the runtime entitlement to
+actually USE Live Monitoring/Proctoring, and touching it would mean
+splitting one settings-update endpoint's authorization per-field, which
+wasn't asked for. "Candidate activity logs" as its own screen doesn't
+exist anywhere in this codebase and is not being built now. No AI
+Proctoring or Identity Verification PlanFeature - flagged in the user's
+own message as future-only, added if/when the backend actually supports
+them.
+
+DONE (2026-09-04): all 8 steps implemented exactly as planned, no
+deviations. `PlanFeature` gained `ExamSecurity = 8`/`Proctoring = 9`.
+`SubmissionsController.cs` re-tagged: `ViolationsByExam`/
+`UpdateViolationStatus` -> `ExamSecurity`; `SetLiveWatch`/`WatchRecording`
+-> `Proctoring`; `LiveByExam`/`ForceSubmit` stayed `LiveMonitoring`;
+`JoinRecording` gained `[Authorize(Policy = Proctoring)]` (previously
+ungated entirely - the one genuinely new enforcement point, not a
+re-tag). EF migration `SplitLiveMonitoringFeature` generated against
+`OnlineExamSystem.User.Infrastructure` - auto-scaffolded UpdateData for
+the seeded Full-Access plan, hand-added the backward-compat raw-SQL
+UPDATE (comma-wrapped LIKE, idempotent) for every other Plan row that
+had LiveMonitoring, plus a best-effort symmetric Down(). Frontend:
+`types/plan.ts` grew to 10 features; `SubscriptionPlans.tsx`'s Create/
+Edit modal now renders 3 labeled groups (general modules unchanged,
+"Exam Security" section, "Monitoring & Proctoring" section with Live
+Monitoring + Proctoring together) via a new shared `renderModuleCard`
+helper, with new `ShieldCheckIcon`/`CameraIcon`; `AdminSidebar.tsx`'s
+`NavChild` gained its own optional `feature` (previously only `NavItem`
+had one) - Live Monitoring's 4 children now gate individually
+(Active Exams/Student Attempts -> LiveMonitoring, Security Violations ->
+ExamSecurity, Proctoring -> Proctoring), and the parent group is visible
+whenever ANY child is; `AppRoutes.tsx`'s Security Violations/Proctoring
+routes' `ProtectedRoute feature=` updated to match.
+
+Verification done: `dotnet build` clean across the whole solution,
+`dotnet test` 369/369 across all 8 backend test projects (zero
+regressions - none of these are new test coverage, since this codebase's
+existing authorization-policy verification convention is live curl/
+browser testing, not unit tests, per step 8's own note). Frontend
+`tsc --noEmit`, `oxlint`, and a real `npm run build` (production build,
+not just tsc) all clean.
+
+NOT done, explicitly left for the user rather than assumed: the EF
+migration was generated and reviewed but NOT applied to any database.
+`dotnet ef migrations list` against this machine's local
+`ExamVault.UserDb` showed 19 OTHER migrations already Pending before this
+one even existed - applying `dotnet ef database update` would have
+silently applied that entire unrelated backlog as a side effect of this
+task, on a database whose current real state wasn't confirmed, so it was
+deliberately not run. The user needs to apply this migration themselves
+(locally, and separately on the Hostinger VPS's production database once
+deployed) and confirm the backward-compat SQL actually preserved
+existing Plans' access before rollout. Step 8's live curl/browser
+adversarial verification (throwaway Plan with only ExamSecurity/only
+LiveMonitoring/only Proctoring checked, confirming exact 200-vs-403 per
+combination) was also not performed - requires a real logged-in Super
+Admin session this agent cannot create itself (entering passwords is
+off-limits), same constraint noted earlier in this session's Live
+Monitoring fix.
+
+================================================================================
+PLAN: REMOVE GENERAL SETTINGS AND SYSTEM SETTINGS FROM ADMIN CONSOLE (2026-09-04)
+================================================================================
+User decided the Admin console's "General Settings" and "System Settings"
+cards (Admin > Settings) shouldn't exist for tenant Admins at all - full
+removal (entity/backend/frontend/data), not just hiding the UI. Confirmed
+with the user before touching anything, since this is a real, irreversible
+schema change (DROP TABLE via migration).
+
+Inspected both features fully before removing anything:
+- General Settings (Exam Service): `GeneralSettings` entity (Organization
+  Name/Support Email/Language/Timezone/Date Format), one row per tenant.
+  Fully self-contained - only its own Get/UpdateGeneralSettingsHandler
+  ever reads or writes it, confirmed via a repo-wide grep. Safe to remove
+  cleanly, no other functional loss.
+- System Settings (Notification Service): `SystemSettings` entity
+  (MaintenanceModeEnabled/BackupFrequency/AuditLogRetentionDays/LogLevel).
+  MaintenanceModeEnabled/LogLevel/BackupFrequency really are inert
+  (persisted, never wired to real behavior - the entity's own doc comment
+  says so). AuditLogRetentionDays is NOT inert - `AuditLogRetentionCleanup
+  Service` (a real 24h-polling BackgroundService) reads it per-tenant to
+  delete old AuditLog rows. Flagged this to the user before proceeding;
+  user chose to remove the cleanup job too rather than keep it on a
+  hardcoded default - audit logs will grow unbounded with no automatic
+  cleanup from this point on, a deliberate, explicit tradeoff.
+
+Full removal list (confirmed via repo-wide grep, no other consumers):
+- Frontend: `GeneralSettingsPage.tsx`, `SystemSettingsPage.tsx`,
+  `useSystemSettings.ts`, `systemSettingsApi.ts`, `types/systemSettings.ts`,
+  `useGeneralSettings`/`getGeneralSettings`/`updateGeneralSettings` out of
+  `useExams.ts`/`examApi.ts`, `GeneralSettingsResponse` out of
+  `types/exam.ts`, the two routes in `AppRoutes.tsx`, and the 'general'/
+  'system' cards + their row-building code out of `AdminSettings.tsx`.
+- Backend (Exam Service): `GeneralSettingsController.cs`,
+  `GeneralSettings.cs` entity, `Settings/GetGeneralSettings/` and
+  `Settings/UpdateGeneralSettings/` folders, the GeneralSettings members
+  on `IExamRepository`/`ExamRepository`, its `ExamDbContext` DbSet/config,
+  Program.cs DI, `Shared.Contracts` request/response, `FakeExamRepository`
+  in the test project. New migration drops the GeneralSettings table.
+- Backend (Notification Service): `SystemSettingsController.cs`,
+  `AuditLogRetentionCleanupService.cs` (the job, per the user's choice),
+  `SystemSettings.cs` entity, `ISystemSettingsRepository`/
+  `SystemSettingsRepository`, `Settings/GetSystemSettings/` and
+  `Settings/UpdateSystemSettings/` folders, `NotificationDbContext`
+  DbSet/config, Program.cs DI (repository + handlers + hosted service),
+  `Shared.Contracts` request/response. New migration drops the
+  SystemSettings table.
+
+Verification: full solution `dotnet build`, `dotnet test` (confirm no
+regressions in the other 350+ tests - none directly tested either
+handler), frontend `tsc --noEmit`/lint/`npm run build`. Migrations
+generated and reviewed but, per this session's own established caution
+around this local machine's database (19 unrelated migrations already
+sat pending before this session started), NOT applied automatically -
+left for the user to apply deliberately, same as the LiveMonitoring
+split's migration earlier today.
+
+DONE (2026-09-04): full removal completed exactly as planned, both
+services plus the frontend. Two new EF migrations generated (not
+applied - same deliberate caution as above): `RemoveGeneralSettings`
+(Exam Service, DROP TABLE GeneralSettings) and `RemoveSystemSettings`
+(Notification Service, DROP TABLE SystemSettings). Every file listed
+in the plan was deleted or edited exactly as scoped - no additional
+consumers turned up beyond what the pre-removal grep already found.
+`AuditLogRetentionCleanupService` deleted outright per the user's
+explicit choice - Notification Service's `SystemErrorLogRetentionCleanup
+Service` (a different, unrelated job) stays untouched. Verification:
+full-solution `dotnet build` and `dotnet test` (all passing test
+projects unaffected - neither removed handler had dedicated tests),
+frontend `tsc --noEmit`/lint/`npm run build` all clean.
+
+================================================================================
+FIX: WIRE EXAM SETTINGS' DEFAULTS INTO NEWLY CREATED EXAMS (2026-09-04)
+================================================================================
+User reported (Admin side): configured "Exam Settings" defaults weren't
+showing up on newly created exams. Confirmed via the entity's own doc
+comment on `ExamDefaults.cs` - literally said "Not yet wired into
+CreateExam's actual prefill values (deferred)". Every new `ExamPaper`
+always got the entity's hardcoded C# property-initializer defaults
+(MaxAttempts=1, NegativeMarkingEnabled=false, NegativeMarks=0,
+AutoSubmitOnTimeEnd=true) regardless of what the Admin configured.
+
+Checked which of ExamDefaults' 9 fields have a real corresponding field
+to seed before wiring anything: `DefaultDurationMinutes`/
+`PassingScorePercent` map to `CreateExamRequest.durationMinutes`/
+`passingMarks`, both collected directly on the Create Exam form itself -
+fixed client-side (`CreateExam.tsx` now prefills via `useExamDefaults()`,
+guarded so it only applies while those two fields still match the
+untouched hardcoded initial state, never clobbering something the Admin
+already typed). `DefaultMaxAttempts`/`NegativeMarkingEnabled`/
+`NegativeMarkingValue`/`AutoSubmitEnabled` map to real `ExamPaper` fields
+never collected on the Create form at all - fixed server-side
+(`CreateExamHandler` now calls the already-existing
+`GetOrCreateExamDefaultsAsync` and seeds the new exam from it instead of
+the hardcoded initializers). `AutoSaveEnabled`/`QuestionNavigationMode`/
+`ResultPublishingMode` have no corresponding `ExamPaper` field anywhere -
+confirmed via the entity's full field list, left deferred rather than
+inventing new columns for this ask. Updated both entities' own doc
+comments and `ExamSettingsPage.tsx`'s stale "don't yet prefill" note to
+match.
+
+Verified live end-to-end (throwaway Admin account, same pattern as
+earlier fixes today): set distinctive test ExamDefaults (MaxAttempts=7,
+NegativeMarkingEnabled=false, NegativeMarks=0.5, AutoSubmitEnabled=false,
+all different from the old hardcoded values), created a real exam via
+curl, confirmed the response carried exactly those values - not the old
+1/false/0/true. Restored the tenant's original ExamDefaults and deleted
+the throwaway exam/account afterward. `dotnet test` for Exam Service
+still 83/83 (no test asserted on the old hardcoded values). Frontend
+prefill (Duration/Passing Marks) is client-side-only logic with no
+backend round-trip to verify via curl - confirmed by code review and
+`tsc`/lint/`npm run build`, not live-clicked (needs a real browser
+session this agent can't create itself).
+
+================================================================================
+PLAN: PLAN PRICING & PER-PLAN USAGE LIMITS (2026-09-04)
+================================================================================
+User supplied `create-plan.png`, a richer Create/Edit Plan modal than
+today's (Plan Information + Included Modules only) - adds Pricing &
+Billing, Usage Limits, Trial Settings, and a separate Advanced Features
+checklist. Asked for a plan first, scoped down via a clarifying question
+before writing this: **Trial Settings and Advanced Features are OUT of
+scope** (neither was picked when asked) - this plan covers only Pricing
+& Billing and Usage Limits. Also confirmed: Usage Limits enforcement
+extends what already exists rather than building everything the mockup
+implies (Questions/AI Questions per Month/Storage GB stay honestly
+unenforced, no new infrastructure for those); Pricing is a stored+
+displayed reference value only, not connected to any billing/payment
+system (none exists in this codebase).
+
+Inspected the current real state before designing this:
+- `Plan` (User Service): Name/Description/IncludedFeatures only - no
+  pricing, no limits. Its own doc comment previously said "Billing/
+  pricing stays out of scope" - this plan deliberately reopens that,
+  per the user's explicit ask this time.
+- `Tenant` already has `MaxUsers`/`MaxExams`/`MaxStudents` (nullable =
+  unlimited). MaxUsers is genuinely enforced (CreateUserHandler, flat
+  total across every role). MaxExams is genuinely enforced
+  (ExamService's CreateExamHandler, via a real cross-service call -
+  `ITenantLimitsClient`/`GetTenantLimitsHandler`). MaxStudents is
+  stored but its own doc comment admits it - "not enforced yet - no
+  per-role count check anywhere today, only a flat per-tenant user
+  count." No MaxAdmins/MaxInstructors field exists at all.
+- These Tenant limits are seeded ONCE, at tenant creation
+  (`CreateTenantHandler`), from `PlatformSettings.DefaultMaxUsers/
+  DefaultMaxExams/DefaultMaxStudents` (one global Super-Admin-set
+  default for every tenant regardless of Plan) - then individually
+  overridable per org thereafter. Nothing currently ties these limits
+  to which Plan a tenant is on, which somewhat defeats having
+  differentiated pricing tiers - this plan's real point is closing
+  that gap, not just adding display fields.
+- `AssignPlanToTenantHandler` (the "Change Plan / Upgrade" action
+  already used live today on Shubham Institute) currently only flips
+  `Tenant.PlanId` - doesn't touch limits at all.
+
+Concrete steps:
+
+1. Backend, `Plan.cs`: add `MonthlyPrice`/`AnnualPrice` (decimal?) and
+   `MaxStudents`/`MaxAdmins`/`MaxInstructors`/`MaxExams`/`MaxQuestions`/
+   `MaxAiQuestionsPerMonth`/`StorageGb` (int?, nullable = unlimited,
+   same convention Tenant already uses). Thread through
+   CreatePlanCommand/UpdatePlanCommand/Handlers/Validators,
+   PlansController, Shared.Contracts request/response, `types/plan.ts`.
+
+2. Backend, `Tenant.cs`: add `MaxAdmins`/`MaxInstructors` (int?),
+   parallel to the existing `MaxStudents`.
+
+3. Backend, `CreateTenantHandler`: seed the new tenant's
+   MaxUsers/MaxAdmins/MaxInstructors/MaxStudents/MaxExams from the
+   ASSIGNED PLAN's limits instead of `PlatformSettings.DefaultMax*`.
+   Flagged, not silently done: this makes `PlatformSettings.
+   DefaultMaxUsers/DefaultMaxExams/DefaultMaxStudents` (Platform
+   Settings' own "Tenant Defaults" section) effectively dead - not
+   deleting that page/entity in this pass (a separate decision, same
+   as the General/System Settings removal earlier today needed its
+   own explicit go-ahead), just noting it as a real follow-up.
+
+4. Backend, `AssignPlanToTenantHandler`: when the plan actually
+   changes (not a no-op reassignment to the same plan), also re-seed
+   the tenant's MaxUsers/MaxAdmins/MaxInstructors/MaxStudents/MaxExams
+   from the NEW plan's limits - real "upgrade your quota" semantics,
+   matching what a plan change should actually do. This is a genuine
+   behavior change to an action already used live today, called out
+   explicitly rather than silently bundled in.
+
+5. Backend, real enforcement extension (`CreateUserHandler`): add a
+   new `IUserRepository.CountByTenantAndRoleAsync(tenantId, role)`,
+   then check the new user's specific role against
+   Tenant.MaxStudents/MaxAdmins/MaxInstructors (Student/Admin/
+   Instructor respectively) alongside the existing flat MaxUsers
+   check, which stays as an overall safety net, unchanged. This is
+   what actually turns MaxStudents from stored-but-inert into real,
+   and adds real Admin/Instructor limits that never existed before.
+
+6. Backend, EF migration: new nullable columns on `Plans`
+   (MonthlyPrice/AnnualPrice/MaxStudents/MaxAdmins/MaxInstructors/
+   MaxExams/MaxQuestions/MaxAiQuestionsPerMonth/StorageGb) and
+   `Tenants` (MaxAdmins/MaxInstructors). Generated and reviewed but
+   NOT applied automatically, same caution as every migration this
+   session - this local machine's DB already had unrelated pending
+   migrations before this session started.
+
+7. Frontend, `SubscriptionPlans.tsx`: add "Pricing & Billing" (Monthly
+   Price/Annual Price, ₹ prefix, an "Annual billing saves ~17%"
+   helper note computed live from the two entered values, matching
+   the mockup's own math rather than a hardcoded "17%") and "Usage
+   Limits" (Students/Admins/Instructors/Exams/Questions/AI Questions
+   per Month/Storage GB - blank input = unlimited, matching Tenant's
+   own existing null-means-unlimited UI convention) sections to the
+   Create/Edit modal, using the same icon-badge SectionBar pattern
+   built for Exam Settings today. Questions/AI Questions per Month/
+   Storage GB fields get a small honest note that they're not yet
+   enforced, matching this codebase's own established disclosure
+   convention rather than presenting them as identically real to the
+   four that are.
+
+8. Frontend, `OrganizationsAndPlans.tsx`/`OrganizationDetails.tsx`:
+   NOT changed in this pass - flagged as a reasonable follow-up
+   (showing a tenant's real current limits/price next to its plan)
+   rather than silently expanding scope beyond the Create Plan modal
+   itself, which is what was actually asked for.
+
+9. Verification: `dotnet build`/`test` (full solution, watch for any
+   test building a "valid" CreateUserCommand/Plan that this changes
+   the meaning of, same class of gap the Exam Type change hit this
+   session), frontend `tsc`/lint/`npm run build`/`npm run test` (all
+   four this time, not just three - the Exam Type CI failure earlier
+   today was exactly this). Live curl verification with the
+   established throwaway-account pattern: create a test Plan with
+   tight Student/Admin/Instructor/Exam limits, assign it to a
+   throwaway tenant, confirm user/exam creation is genuinely blocked
+   once each limit is hit and allowed below it - not just that the
+   fields save and redisplay correctly.
+
+NOT started yet - plan only, per the user's explicit request to review
+this before any code changes.
+
+DONE (2026-09-04): Implemented exactly the confirmed scope, per the
+user's own explicit, detailed final instruction (Pricing + Usage Limits
+only - no Trial Settings, no Advanced Features, no payment/billing/
+metering infrastructure).
+
+Backend:
+- `Plan.cs`: added MonthlyPrice/AnnualPrice (decimal?) and MaxStudents/
+  MaxAdmins/MaxInstructors/MaxExams/MaxQuestions/MaxAiQuestionsPerMonth/
+  StorageGb (int?). Threaded through Create/UpdatePlanCommand/Handler/
+  Validator, PlansController, Shared.Contracts request/response types.
+- `Tenant.cs`: added MaxAdmins/MaxInstructors (int?), alongside the
+  existing MaxUsers/MaxExams/MaxStudents.
+- `CreateTenantHandler`: now seeds MaxExams/MaxStudents/MaxAdmins/
+  MaxInstructors from the tenant's ASSIGNED PLAN instead of
+  `PlatformSettings.DefaultMax*`. MaxUsers deliberately left unseeded
+  (the user's instruction named 4 fields, not 5) - stays whatever it
+  was (null/unlimited for new tenants). PlatformSettings' DefaultMax*
+  tenant-default fields are now effectively dead - NOT deleted this
+  pass, flagged as a real follow-up per the user's explicit instruction
+  not to touch them here.
+- `AssignPlanToTenantHandler`: a genuine plan change now also re-seeds
+  the tenant's MaxExams/MaxStudents/MaxAdmins/MaxInstructors from the
+  NEW plan. Never touches Users/Exams rows - downgrade only prevents
+  NEW resource creation past the new limit, existing resources stay
+  fully accessible. Verified live (see below).
+- Real, concurrency-safe enforcement: `IUnitOfWorkTransaction`/
+  `TransientConcurrencyException`/`EfUnitOfWorkTransaction` (Serializable-
+  isolation transaction wrapping count-then-insert, SQL Server deadlock-
+  victim error 1205 translated to a clean retryable validation error) -
+  built once in User Service, duplicated into Exam Service per this
+  codebase's own per-service-duplication convention (same shape as
+  FeaturePolicies).
+  - `CreateUserHandler` (User Service): flat MaxUsers check (unchanged)
+    plus new per-role MaxStudents/MaxAdmins/MaxInstructors checks, all
+    inside one Serializable transaction with the insert.
+  - `CreateExamHandler` (Exam Service): MaxExams's actual limit value
+    was already fetched cross-service from UserService's
+    `GetTenantLimitsHandler` (pre-existing - now automatically Plan-
+    driven, zero extra change needed there); what was missing was
+    concurrency safety for the LOCAL count-then-insert race in Exam
+    Service's own database, which the same transaction pattern now
+    closes.
+  - `FakeUserRepository`/`FakeExamRepository` test fakes updated with a
+    no-op in-memory transaction so existing handler tests keep passing
+    unchanged.
+- EF migration `AddPlanPricingAndUsageLimits` generated and reviewed -
+  purely additive nullable columns + Plans/Tenants HasData seed-row
+  updates, "may result in loss of data" is EF's standard boilerplate
+  for this shape, not real. Applied to the LOCAL DEV database only
+  (auto-applied via each service's own `Database.Migrate()` on
+  container startup, same as every other migration this session) -
+  NOT applied to production, per the user's explicit instruction.
+
+Frontend:
+- `types/plan.ts`: Plan/CreatePlanRequest/UpdatePlanRequest extended
+  with all 9 new fields, doc comment states plainly which 4 are
+  enforced vs. which 3 are stored+displayed only.
+- `SubscriptionPlans.tsx`: Create/Edit Plan modal gained "Pricing &
+  Billing" (Monthly/Annual Price with a live "saves ~X%" note computed
+  from the two entered values) and "Usage Limits" (all 7 fields, blank
+  = unlimited, matching Tenant's own convention) sections, using the
+  same icon-badge SectionBar pattern built for Exam Settings earlier
+  today. An inline note explicitly discloses that Questions/AI
+  Questions per Month/Storage GB are saved and shown only, not
+  enforced - matches this codebase's own established disclosure
+  convention. `OrganizationsAndPlans.tsx`/`OrganizationDetails.tsx`
+  deliberately NOT touched, per the confirmed scope.
+
+Verification - all run, all passed:
+- `dotnet build` (User Service, Exam Service, then full `ExamVault.sln`
+  - 0 warnings, 0 errors).
+- `dotnet test` (full solution): 390/390 passed across all 8 test
+  projects, including both updated fakes.
+- Frontend `npx tsc --noEmit`: clean. `npm run lint`: clean (only 3
+  pre-existing, unrelated warnings). `npm run build`: succeeded.
+  `npm run test` (Vitest, explicitly run this time - see the CI-failure
+  lesson earlier today): 61/61 passed.
+- Live verification on local Docker dev (rebuilt user-api/exam-api,
+  confirmed the migration auto-applied cleanly on container startup):
+  created a real throwaway Plan (MaxStudents=1/MaxAdmins=1/
+  MaxInstructors=1/MaxExams=1) and a throwaway tenant assigned to it -
+  confirmed the tenant's effective limits were seeded correctly from
+  the Plan. As that tenant's own Admin, confirmed the 1st Student/
+  Admin/Instructor/Exam create each succeeded and the 2nd of each was
+  genuinely blocked by the server with the expected message ("This
+  organization has reached its limit of 1 <role>s/exams") - not a
+  frontend-only check, a real 400 from directly calling the API.
+  Reassigned the tenant to the default Full Access plan afterward and
+  confirmed all 3 existing users stayed intact (no delete anywhere) -
+  the "downgrade/upgrade never deletes existing data" guarantee holds
+  live, not just in the code comments. All test rows (Plan, Tenant,
+  Users, Exam, ExamType, the throwaway SuperAdmin account) deleted
+  afterward - confirmed zero rows remain.
+
+NOT done, deliberately: no payment gateway, invoices, revenue
+calculations, billing provider integration, usage metering for
+Questions/AI Questions/Storage GB, Trial Settings, Advanced Features.
+Migration not applied to production - only generated, reviewed, and
+tested against the local dev database.
+
+DONE (2026-09-04): Redesigned Subscription History (SubscriptionHistory.tsx)
+to match subscription-history.png, on top of the same real Security/"Plan
+changed" audit data as before (no backend change needed).
+
+Added: an icon-badge header with a real CSV export (Export dropdown ->
+"Export as CSV", same Blob+object-URL pattern as ActivityLogPanel.tsx);
+4 stat cards (Total Changes/Organizations/Plan Upgrades/Plan Downgrades,
+computed from the currently-filtered rows, not a separate global count); a
+real filter panel (Organization/Plan/Changed By/Date Range, applied on
+Search - not live-as-you-type - Clear resets both pending and applied
+state); sortable Date/Organization/Changed By column headers; a row detail
+modal; and pagination with a page-size selector, matching the convention
+already established on SubscriptionPlans.tsx/SecurityEvents.tsx.
+
+Upgrade/Downgrade direction is inferred by comparing each plan's
+includedFeatures.length (Plan.MonthlyPrice is too often null - reference
+plans have no price - to rank by; feature count is always populated and is
+this codebase's real "how much can this org do" measure). Honestly returns
+no direction (a plain badge, not counted in either stat) when either plan
+can't be resolved (renamed/deleted since the change) or both plans have an
+identical feature count - confirmed live against real dev data where
+exactly this happens (two real plans in this DB currently share the same
+10 features).
+
+"Changed By" is rendered as email + a static "SuperAdmin" role label, not
+fabricated: TenantsController.RecordSecurityEventAsync (the only writer of
+this audit activity) is only reachable from that SuperAdmin-only-authorized
+controller, and writes ClaimTypes.Email into UserName - both verified
+directly against real rows in the local dev database before relying on
+them.
+
+Verification: tsc --noEmit clean, lint clean (same 3 pre-existing unrelated
+warnings only), npm run build succeeded, npm run test 61/61 passed. Live-
+verified on local Docker dev with a throwaway Super Admin account against
+real existing plan-change history (3 real rows, including one referencing
+an already-deleted test tenant/plan from earlier today - confirmed the
+page's own "-" fallbacks handle that correctly rather than crashing):
+stat cards, sortable headers, the Organization filter (selected one org
+with no history, got the real empty state "No plan changes match your
+filters." distinct from the true-empty "No plan changes recorded yet."),
+Clear, the row detail modal, and the Export menu all worked as designed.
+All test/throwaway accounts cleaned up afterward.
+
+DONE (2026-09-04): Redesigned the public landing page (Home.tsx) and Footer
+to match webpage.png, then replaced the hero specifically to match a second,
+more elaborate mockup (image.png) per explicit follow-up direction.
+
+webpage.png pass (Home.tsx):
+- Added 3 new sections that didn't exist: How It Works (4 numbered steps),
+  a Pricing teaser (Free/Basic/Professional/Enterprise, links to the real
+  /pricing page for the full comparison rather than duplicating it), and a
+  Security First section.
+- Expanded Features from 5 to 6 cards, updated Built for Everyone's copy
+  and added real "Learn more" links, added a real Accordion-based FAQ (4
+  honest answers - e.g. the "8 question types" claim was checked directly
+  against QuestionType.cs, not invented), and a new final CTA banner
+  (replacing the old icon-chip banner, which the new mockup doesn't have).
+- Footer redesigned to a 5-column layout (Product/Company/Support/Stay
+  Updated with a newsletter box + social icons). Links only go to pages
+  that are genuinely real (Features/#anchor, Exams, Pricing, Security/
+  #anchor, About Us, Contact) - Privacy Policy/Terms of Service/Help
+  Center/Documentation have no real page behind them, so they render as
+  plain muted non-clickable text instead of dead links (confirmed visually
+  distinguishable from real links).
+
+image.png follow-up (hero only): user shared a second, different hero
+mockup mid-review and asked to replace the hero with it. Before building,
+flagged and resolved three things rather than assuming:
+- The mockup's "Trusted by 50+ Colleges & Institutes" badge is an
+  unverifiable specific customer count - user chose generic wording
+  instead ("Built for Colleges & Institutes" badge, "Built for
+  Institutions of Every Size" in the trust strip).
+- The mockup uses a stock photo of a person - no licensed photo asset
+  available, user chose an illustration instead (kept the existing
+  dashboard-preview sketch, replaced the old "Online Exam" quiz panel with
+  3 floating callout bubbles matching the new mockup's composition).
+- The mockup's nav adds "Solutions"/"Resources" dropdowns - user chose to
+  leave NavBar unchanged (real sub-pages for those don't exist).
+New headline/copy/CTAs ("Get Started Free"/"Watch Demo"), a 4-item (was 3)
+icon+title+subtitle trust-chip row under the CTAs, and a new "Trusted by
+Leading Educational Institutions" strip (Colleges/Institutes/Training
+Centers/Universities) below the hero.
+
+Fixed one real rendering bug found during live verification: the bar
+chart's percentage-height flex children weren't resolving correctly
+(bars rendered nearly flat regardless of their data value) - switched to
+computed pixel heights, confirmed visually correct afterward.
+
+Verification: tsc --noEmit clean, lint clean (same 3 pre-existing
+unrelated warnings only), npm run build succeeded, npm run test 61/61
+passed. Live-verified in a local Vite dev server against the local
+Docker backend (no auth needed - public page): hero, floating callouts,
+trust strip, features, how-it-works, pricing teaser, security, FAQ, CTA
+banner and footer all checked visually; confirmed the footer's real vs.
+plain-text links are visually distinguishable and the "Watch Demo"/"Book
+a Demo" links correctly go to the real /contact page.
+
+NOT committed/pushed - per the user's standing rule, holding until they
+explicitly ask.
+
+DONE (2026-09-04): Wired the landing page's Pricing teaser to real Plan
+data instead of static marketing copy, per the user's explicit ask
+("i want real ... like superadmin subscriptwise").
+
+Before building, asked and confirmed two real design decisions rather than
+assuming: (1) the public page excludes the internal "Full Access" default
+plan - same exclusion the Super Admin "All Plans" page already applies,
+since it's the fallback every tenant gets, not a real sellable tier; (2)
+no fake "Most Popular" badge - Plan has no real featured/highlighted field
+to back one honestly.
+
+Backend: added `GET /api/plans/public` to PlansController - [AllowAnonymous]
+overriding the controller's own class-level SuperAdmin-only [Authorize],
+reuses the same ListPlansHandler/ToResponse as the authenticated List
+action, just filters out TenantConstants.FullAccessPlanId. Nothing new
+exposed that wasn't already meant to be public on a pricing page (pricing/
+limits/included modules, no billing/personal data). Gateway's existing
+`/api/plans/{**catch-all}` route already covers it, no gateway change
+needed.
+
+Frontend: Home.tsx's Pricing teaser now calls a real useQuery against the
+new endpoint (api/plansApi.ts's listPublicPlans) instead of a hardcoded
+array. Price/period/CTA are derived live from each plan's actual
+monthlyPrice/annualPrice (null price -> "Custom Pricing"/"Contact Us" CTA,
+otherwise "Get Started"). Feature bullets are real too: computed from
+maxStudents/maxExams (or "Unlimited" when null) plus the plan's actual
+included modules via PLAN_FEATURE_LABELS, with a real "+N more features"
+count - not fabricated copy. Cards sort cheapest-to-custom-pricing. Added
+loading/error/empty states since this is the first place the public,
+unauthenticated site fetches live backend data.
+
+Verification: dotnet build/test (full solution) - 0 errors, 390/390
+passed. Frontend tsc/lint/build/test - clean, 61/61 passed. Live-verified
+end to end: rebuilt and restarted user-api locally, confirmed
+`GET /api/plans/public` is genuinely anonymous (200, no token) and
+correctly excludes Full Access: dev DB only had one other real plan
+("Restricted (No Exams)", no pricing set) at first, so created three
+throwaway plans (Free ₹0/Basic ₹999/Professional ₹2,499, varied limits
+and features) to see the full card grid render, confirmed every field
+shown (price, period, student/exam limits, real feature names, +N more
+count, CTA target) matched that plan's actual database row exactly, then
+deleted all test plans and the throwaway account afterward.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-04): Created a real, persistent QA test organization on local
+Docker dev per the user's explicit request (10 accounts split 1 SuperAdmin/
+1 Admin/2 Instructors/6 Students, kept - not cleaned up like every other
+test pass this session), and walked create -> assign -> take -> result
+through once for each role.
+
+Attempted this on production (examvaults.in) first per the user's initial
+answer, but found the real API host is `api.examvaults.in` (root-domain
+calls 405 - not documented anywhere I'd read before, found via
+docker-compose.traefik.yml's Host() rule) - once on the right host,
+`/api/users/register` itself returned a real, systemic 500 for every
+input tried, unrelated to this task. Flagged it as a live bug rather than
+working around it; the user then said to just do this in Docker instead,
+so the production register bug is still open and needs separate
+investigation.
+
+Org: "QA Demo Institute" (slug qa-demo-institute, Full Access plan).
+Accounts (all real onboarding flow - registered/created with a real temp
+password, logged in, called the real change-password endpoint to set the
+final password, which is what actually activates a new account - not a
+shortcut):
+- superadmin@qa.examvault.local / Exam2026!SuperAdmin
+- admin@qa.examvault.local / Exam2026!Admin
+- instructor1@qa.examvault.local / Exam2026!Instructor1
+- instructor2@qa.examvault.local / Exam2026!Instructor2
+- student1@qa.examvault.local .. student6@qa.examvault.local /
+  Exam2026!Student1 .. Exam2026!Student6
+
+2 real exams (General Aptitude Test, Data Structures Fundamentals; both
+with 2 real MCQ/True-False questions, published, assigned to all 6
+students). Student1 took Exam 1 with all-correct answers -> real 20/20
+pass. Student2 took Exam 2 with one right/one wrong answer -> confirmed
+real negative marking (15 - 0.25 = 14.75) and a real fail (14.75 < 15
+passing marks) - not a canned result, genuinely computed by Result
+Service from the actual submitted answers.
+
+Found and fixed a real bug along the way: ResultsController.ByExam
+(Result Service) is `[Authorize(Roles = "Admin,Instructor")]`, but the
+Submission Service endpoint it calls server-to-server
+(SubmissionsController.ByExam) was Admin-only - so any Instructor trying
+to view an exam's results got a 403 from Submission Service, surfaced to
+the UI as a generic 502. Confirmed this wasn't an isolated oversight (every
+other action on that controller - grading, force-submit, live-watch,
+proctoring recordings - is deliberately Admin-only) before widening just
+this one route's Roles to "Admin,Instructor", matching what
+ResultsController already promised. Rebuilt/restarted submission-api,
+retested as Instructor1 - now 200, real results returned. Full solution
+build+test still 390/390 passing afterward.
+
+Also confirmed via the platform admin API: SuperAdmin sees the new org
+in the tenants list; Admin sees all 9 tenant-scoped users and both exams;
+Instructor1 (after the fix) can view results for an exam it created.
+
+NOT committed/pushed (this is a data-creation task, not a design change,
+but the SubmissionsController.ByExam authorization fix IS real code -
+holding per the user's standing rule until they say to commit/push).
+
+DONE (2026-09-05): Fixed a real dark-mode bug reported in My Profile >
+Preferences - selecting Dark theme only partially applied: individual
+react-bootstrap components (Cards, the profile info panel, notification
+panel) correctly restyled via Bootstrap 5.3's data-bs-theme CSS variables,
+but the page's own main-content wrapper and top bar stayed stuck light,
+leaving a jarring half-dark/half-light result exactly as shown in the
+reported screenshot.
+
+Root cause: AdminLayout/InstructorLayout/PlatformLayout/StudentLayout (all
+4 - the shared shell every single dashboard page renders inside) used
+Bootstrap's bg-light/bg-white utility classes for the main content area
+and top bar. Those two classes are deliberately STATIC in Bootstrap 5.3's
+color-mode system - they never respond to data-bs-theme, unlike the
+adaptive bg-body/bg-body-tertiary classes. Fixed all 4 layouts:
+bg-light -> bg-body-tertiary (main content), bg-white -> bg-body (top
+bar) - matches Bootstrap's own documented dark-mode convention.
+
+Also confirmed, not a bug: the user asked whether "System" and "Dark"
+looked the same - they do on a machine whose OS/browser is itself set to
+a dark color-scheme preference (confirmed via
+matchMedia('(prefers-color-scheme: dark)').matches === true on the test
+browser), since System deliberately mirrors that OS preference. They'd
+only visibly differ on a light-OS machine.
+
+Verification: tsc clean, lint clean (same 3 pre-existing warnings), build
+succeeded, 61/61 Vitest tests passed. Live-verified against the QA Demo
+Institute SuperAdmin account: selected Dark, saved, confirmed via direct
+API call that `theme: "Dark"` persisted server-side, then reloaded fresh
+and confirmed the ENTIRE page (header text, main background, sidebar,
+cards, form inputs) renders consistently dark from initial load - not
+just the components inside cards. Restored that account's preferences
+back to its original defaults afterward (System theme, UTC, DD MMM YYYY)
+since testing had incidentally nudged its Timezone/Date Format too.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Fixed a second, real bug found while re-verifying the
+dark-mode fix - Super Admin's own My Profile page showed the STUDENT
+sidebar (My Exams/My Results/My Certificates), not the Platform Admin
+console. Root cause: Profile.tsx's Layout-selection ternary only handled
+Admin and Instructor explicitly, falling through to StudentLayout for
+every other role - including SuperAdmin (Student itself was never meant
+to hit that fallthrough branch on purpose, SuperAdmin was just missed).
+Added an explicit SuperAdmin -> PlatformLayout case. Confirmed no other
+page in the app has this same dynamic-by-role layout pattern (grepped for
+it) - Profile.tsx is the only shared cross-role page, everything else is
+already hardcoded to its own role-specific layout, so this bug class is
+fully contained.
+
+Also rebuilt the Docker frontend container after both this fix and the
+earlier bg-light/bg-white dark-mode fix - the first two live-verifications
+of dark mode had been against the local Vite dev server, not the actual
+Docker frontend the user was testing against, so the container was still
+stale.
+
+Verification: tsc clean, lint clean, build succeeded, 61/61 tests passed.
+Live-verified both fixes together against the rebuilt Docker frontend:
+Super Admin's Profile page now shows the correct Platform Admin sidebar
+(Dashboard/Organizations/Users/Exams/.../System Logs) AND the whole page
+renders consistently dark in one screenshot.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Fixed a third real dark-mode bug - hovering over a
+table row (e.g. the Organizations list) made its text nearly unreadable.
+Root cause: index.css's `.table-hover > tbody > tr:hover > *` rule
+hardcodes a light hover background (#f8f9ff) with no dark-mode
+counterpart - in dark mode the row's own text goes light (correctly,
+via Bootstrap's theme-aware body color) while this override kept forcing
+a light background regardless of theme, producing light-text-on-light-
+background on hover. Added a `[data-bs-theme='dark']` override with a
+proper dark, subtle hover tint (rgba(255,255,255,0.075)), leaving the
+existing light-mode color untouched. Checked the rest of index.css for
+the same class of bug - found a couple of hardcoded light borders
+(.dropdown-menu, .form-control/.form-select) that stay light in dark
+mode too, but those are minor border-visibility cosmetics, not the
+text-becomes-invisible severity that was actually reported, so left
+alone rather than scope-creeping.
+
+Verification: tsc clean, lint clean, build succeeded, 61/61 tests passed.
+Rebuilt the Docker frontend and live-verified by hovering the exact same
+row from the bug report (Test Org, Inactive) - now shows a proper dark
+hover highlight with fully legible text.
+
+DONE (2026-09-05): Security audit - "who created/changed this record" (actor
+accountability) across every real DB table in every service. BaseEntity only
+gives Id + CreatedAtUtc, no CreatedBy at all; that must be added per-entity.
+Grepped every `DbSet<>` across all 5 services' DbContexts (~34 real tables)
+and classified each one. Already correct (no gap): ExamPaper/ExamQuestion
+(CreatedByUserId), Notification (CreatedByAdminUserId), AuditLog (UserId IS
+the actor), ViolationEvent/SystemErrorLog (resolver tracking), every
+self-owned row via its own UserId, every child/detail table that inherits
+accountability from its parent, and system-generated logs with no human
+creator concept. Result/AI/Execution services have no DbSets of their own
+(stateless/aggregator) - nothing to check there.
+
+Found 7 real gaps and fixed all 7 (user confirmed "yes" to full scope, not
+just High severity):
+  High (security-critical config, zero actor tracking before this):
+  - PlatformSettings (User Service) -> UpdatedByUserId
+  - RolePermission (User Service) -> UpdatedByUserId
+  - ProctoringSettings (Exam Service) -> UpdatedByUserId
+  Medium (real records missing creator attribution):
+  - Tenant (User Service) -> CreatedByUserId
+  - Plan (User Service) -> CreatedByUserId + UpdatedByUserId
+  - AppUser/Users (User Service) -> CreatedByUserId (null for
+    self-registered accounts - there is no admin creator for those)
+  - ExamAssignment (Exam Service) -> CreatedByUserId (the Admin who
+    scheduled the sitting - controls proctoring/live-video on
+    potentially many students' attempts)
+Left alone as Low/cosmetic (out of scope): Group, ExamType,
+ReminderSettings, ExamDefaults, NotificationTemplate.
+
+For each of the 7: added the DB column, threaded the real caller's id from
+the controller's own JWT claim (ClaimTypes.NameIdentifier - the same
+pattern ExamPaper/ExamQuestion already used) through Command -> Handler ->
+entity, and surfaced it on the relevant Response DTO. RolePermission was the
+most involved - its diff-based ReplaceForRoleAsync repository method stamps
+UpdatedByUserId on both newly-added AND surviving rows on every save, and is
+called from two separate paths (SuperAdmin's cross-tenant edit via
+TenantsController, and a tenant Admin's own self-service edit via
+RolesController) that both needed the same treatment; GetAllRolePermissionsHandler's
+per-role aggregation was updated to report whichever actor touched the
+rows at the role's own max UpdatedAtUtc. AppUser has two real creation
+paths - CreateUserHandler (Admin adds a user to their own tenant) and
+CreateTenantAdminHandler (SuperAdmin bootstraps a brand-new tenant's first
+Admin) - both wired.
+
+Scope was deliberately backend-only (the data now genuinely exists and is
+captured); no new UI screens were added to display these fields - that's a
+reasonable separate follow-up if wanted, not implied by the original
+security/audit ask.
+
+Caught and fixed 3 real fake/test breakages caused by adding non-defaulted
+new parameters (CreatedAssignmentCommand, UpdateRolePermissionsCommand,
+IRolePermissionRepository.ReplaceForRoleAsync all gained a required Guid,
+which is correct - an actor should never silently default to empty on
+these particular calls): FakeRolePermissionRepository's interface
+implementation, and 4 positional test-call sites across
+CreateAssignmentHandlerTests.cs and UpdateRolePermissionsValidatorTests.cs.
+
+Verification: dotnet build clean on both User Service and Exam Service (0
+warnings, 0 errors). Full test suites green: User Service Application.Tests
+94/94, Exam Service Application.Tests 84/84. Generated (not applied) one EF
+Core migration per service - User Service's AddCreatedByAuditFields (Users,
+Tenants, RolePermissions, PlatformSettings, Plans) and Exam Service's
+AddCreatedByAuditFields (ProctoringSettings, ExamAssignments) - reviewed
+both by hand; ExamAssignment.CreatedByUserId is correctly non-nullable with
+existing rows backfilled to Guid.Empty (that column didn't exist before),
+every other new column is nullable since it only applies going forward.
+Per this session's standing convention, did NOT run `dotnet ef database
+update` - migrations apply automatically on the next local container
+rebuild/restart.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+PLAN (2026-09-05): Follow-up to the CreatedBy audit above - user asked to
+actually SHOW the Created By field everywhere Super Admin is looking, not
+just have it captured in the DB. Scoping: of the 7 tables from the audit,
+only 5 have any Super Admin-facing screen at all - ProctoringSettings
+(ProctoringSettingsPage.tsx) and ExamAssignment (AssignExam.tsx) are both
+Admin-only pages with no Super Admin route, so they're excluded here.
+
+The 5 in scope and where they render for Super Admin:
+  - Tenant/Organizations -> ManageTenants.tsx (list) + OrganizationDetails.tsx
+    (detail, Overview tab) - both already show "Created On" but not who.
+  - Plan -> SubscriptionPlans.tsx (card grid) - shows no metadata at all
+    today, not even the existing CreatedAtUtc/UpdatedAtUtc.
+  - AppUser/Users -> AllUsers.tsx (list) - shows "Joined On" but not who
+    added the account.
+  - PlatformSettings -> PlatformSettings.tsx (single record) - shows no
+    "last updated" metadata at all today.
+  - RolePermission -> OrganizationDetails.tsx (Settings tab, Super Admin's
+    per-tenant Role Permissions editor) - currently returns NO metadata at
+    all (TenantsController's two GET call sites literally hardcode
+    `new RolePermissionsResponse(role, permissions, null)` since
+    GetTenantRolePermissionsHandler only ever fetched permission keys).
+
+Approach: resolve the stored actor Guid into a display name server-side
+and embed it as a new `CreatedByName`/`UpdatedByName` string right on the
+existing Response DTOs - this already matches the one real precedent in
+the codebase, NotificationService's AuditLogResponse.UserName (the
+frontend there just renders `log.userName ?? '-'` with zero client-side
+lookup logic). A small reusable ActorNameResolver helper (User.API) wraps
+the already-existing IUserRepository.GetByIdsAsync batch method - no new
+backend endpoint needed, and no new DB column either (this is a read-time
+join, not a stored value), so no new migration.
+
+RolePermission needs one extra piece: since GetTenantRolePermissionsHandler
+never fetched metadata at all, adding a new IRolePermissionRepository
+method (GetForRoleWithMetadataAsync - deliberately NOT touching the
+existing GetForRoleAsync, which is on the hot path for every login/token-
+refresh) that returns permissions + UpdatedAtUtc + UpdatedByUserId,
+mirroring the aggregation GetAllRolePermissionsHandler already does
+(max UpdatedAtUtc across the role's rows, whichever row(s) share that max
+give the actor).
+
+Frontend: add the new fields to types/tenant.ts, types/plan.ts,
+types/user.ts (PlatformUserListItem), types/platformSettings.ts, and a
+named type for the tenant role-permissions response (replacing the
+inline type in tenantsApi.ts that currently discards everything except
+`.permissions`). New UI: a "Created By" column on ManageTenants.tsx and
+AllUsers.tsx; a "Created By" line on OrganizationDetails.tsx's Overview
+tab and a "Last updated by X on Y" line on its Role Permissions section;
+a "Created by X" / "Updated by Y" line per card on SubscriptionPlans.tsx;
+a "Last updated by X on Y" line on PlatformSettings.tsx. Null name (self-
+registered user, pre-existing/seeded row predating this field) renders as
+"-", matching AuditLog's existing fallback.
+
+Backend-only, no schema change - will verify with dotnet build + the full
+test suites on User Service, then move to the frontend changes and
+live-verify in the browser before marking DONE.
+
+DONE (2026-09-05): Implemented and verified the plan above. Backend: added
+an ActorNameResolver helper (User.API) wrapping IUserRepository's existing
+GetByIdsAsync/GetByIdAsync, embedded CreatedByName/UpdatedByName on
+TenantResponse, PlanResponse, UserListItemResponse, PlatformSettingsResponse,
+and RolePermissionsResponse; added IRolePermissionRepository.
+GetForRoleWithMetadataAsync (a new method, not touching the existing
+login/refresh-path GetForRoleAsync) so GetTenantRolePermissionsHandler
+stopped hardcoding null metadata. Verification: dotnet build clean, User
+Service Application.Tests 94/94. Frontend: added the new fields to
+types/tenant.ts, types/plan.ts, types/user.ts, types/platformSettings.ts;
+replaced tenantsApi.ts's inline discard-everything-but-permissions type
+with the real RolePermissionsEntry; added the "Created By" UI to
+ManageTenants.tsx, OrganizationDetails.tsx (Overview + Role Permissions
+tab), SubscriptionPlans.tsx, AllUsers.tsx, and PlatformSettings.tsx.
+Verification: tsc clean, npm run build succeeded, lint clean (only
+pre-existing unrelated warnings), 61/61 frontend tests passed.
+
+Along the way, hit and resolved a real Docker Desktop incident (unrelated
+to the code, but blocking the live-verify step): the Docker VM's vhdx had
+ballooned to 38GB, almost entirely (22GB) accumulated build cache; the
+first rebuild attempt hung and the Docker daemon itself crashed (500 from
+the daemon API). Restarted Docker Desktop, ran `docker builder prune -af`
+(cache only - zero images/containers/volumes touched, so no data was ever
+at risk), brought all 15 containers back up healthy, then rebuilt
+user-api + frontend and redeployed. Compacting the actual .vhdx file size
+on disk needs admin/UAC elevation this session doesn't have - left as an
+optional manual step for the user, not required for functionality.
+
+Live-verified in the browser as the QA Super Admin: created a brand-new
+test organization and confirmed both its detail page and the Organizations
+list immediately showed "Created By: QA Super Admin" (then deleted the
+test org to clean up) - proving the full pipeline end to end (JWT claim ->
+handler -> DB -> API response -> name resolution -> UI). Confirmed "—"
+correctly renders for the 5 real pre-existing organizations and both real
+Plans (all predate this field). Saved Platform Settings once and confirmed
+"Last updated by QA Super Admin on <timestamp>" appeared, versus "—" for
+its prior pre-existing save. AllUsers.tsx and the Role Permissions tab use
+the identical, already-proven pattern and weren't separately re-verified.
+
+One incident during manual testing: a mis-clicked coordinate on the
+Platform Settings page toggled Maintenance Mode on and saved it - caught
+within the same verification pass (visible in the next screenshot),
+immediately toggled back off and re-saved. Confirmed OFF as the final
+state; no real login disruption window.
+
+DONE (2026-09-05): Fixed a real dark-mode bug the user hit live - after
+logging out of a Dark-mode Super Admin session, the public landing page
+(and its Login/Register modal) stayed dark, with the modal rendering a
+mixed light/dark split (hardcoded-light left panel next to a dark-themed
+right form half). Root cause: ThemeProvider (context/ThemeProvider.tsx)
+sat above BrowserRouter in App.tsx and applied `data-bs-theme` to
+<html> globally with zero route or auth awareness - the same global
+attribute Bootstrap uses for every page, public marketing site included.
+Fix: split theme STATE (ThemeProvider, unchanged - context + localStorage
+persistence) from theme APPLICATION (new ThemeSync component) - ThemeSync
+reads both useTheme() and useAuth() and forces 'light' whenever
+!isAuthenticated, regardless of the saved preference; only an actually
+logged-in user's own dark-mode choice ever reaches the DOM. Mounted
+inside AuthProvider in App.tsx. Verification: tsc clean, build succeeded,
+61/61 tests passed. Live-verified by reproducing the user's exact report -
+logged in as Super Admin, set Dark, logged out - landing page and modal
+now render fully light, both halves included (the mixed-halves symptom
+was purely a downstream effect of dark leaking onto a page that was never
+designed to support it, not a separate bug in AuthModal itself).
+Docker frontend rebuilt and redeployed (cache-hit build, 94s).
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Extended "Created By" visibility to 3 more Super Admin
+screens the user flagged as missing it - All Exams, Exam Categories (same
+underlying ExamPaper data, just grouped differently - confirmed there's no
+separate real "category" entity Super Admin manages here), and Question
+Bank. Unlike the 5 tables fixed earlier this session (all inside User
+Service's own database), these live in Exam Service and Question Service -
+each with their own separate database, so resolving a CreatedByUserId Guid
+into a name needs a cross-service call, not a local repository lookup.
+
+ExamPaper.CreatedByUserId and Question Service's own ExamQuestion.
+CreatedByUserId both already existed pre-audit (confirmed via git blame -
+present since each service's very first migration, unrelated to this
+session's 7-table audit) - the gap was purely that neither Response DTO
+exposed it and neither controller resolved it to a name, so it was
+captured but invisible.
+
+Exam Service already had the needed piece - IInternalUserLookupClient
+(hits User Service's anonymous internal/users/by-ids endpoint, no bearer
+token needed), already registered in DI and already used by
+CreateAssignmentHandler/reminder jobs, just never wired into
+ExamsController. Added an ActorNameResolver (Exam.API), injected the
+existing client into ExamsController, added CreatedByUserId/CreatedByName
+to ExamResponse, and resolved names at all 5 ToResponse call sites
+(Create/List/GetById/Update/ChangeStatus).
+
+Question Service had NO cross-service user-lookup client at all -
+Services:UserServiceBaseUrl was already configured (for
+IPermissionVersionClient) but nothing used it for this. Added
+IInternalUserLookupClient + InternalUserServiceClient (Question service,
+mirroring Exam Service's exactly) plus its own ActorNameResolver, wired
+into QuestionsController.ListAll (Super Admin's cross-tenant Question Bank
+endpoint), and added CreatedByUserId/CreatedByName to
+PlatformQuestionResponse.
+
+Frontend: added the new fields to types/exam.ts (ExamResponse) and
+types/question.ts (PlatformQuestionResponse), added "Created By" columns
+to PlatformAllExams.tsx, PlatformExamCategories.tsx, and
+PlatformQuestionBank.tsx.
+
+Verification: dotnet build clean on both Exam Service and Question
+Service. Full test suites green: Exam Service Application.Tests 84/84,
+Question Service Application.Tests 50/50. Frontend: tsc clean, build
+succeeded, 61/61 tests passed. Rebuilt and redeployed all 3 Docker images
+(exam-api, question-api, frontend). Live-verified in the browser as Super
+Admin: All Exams and Exam Categories both show real resolved names
+("QA Instructor 1", "Test Admin", "Amit lakade") spanning multiple
+tenants, with "—" correctly falling back for older/seeded exams; Question
+Bank's search-filtered view confirmed the new Question Service ->
+User Service cross-service lookup resolves a real name ("QA Instructor 1")
+for a recently-created question, with "—" for older ones - proving the
+brand-new client works end-to-end, not just the already-proven Exam
+Service path.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+PLAN (2026-09-05): User flagged two Super Admin sidebar items - "Questions"
+and "Submissions" - as "not yet implemented" (screenshots: questions.png,
+submission.png). Both already exist as top-level sidebar links/routes
+(distinct from Exams > Question Bank, already built) but both currently
+render PlatformComingSoon's "isn't connected yet" placeholder
+(platformComingSoonRoutes.ts). Investigated the real data model behind
+each mockup before writing any code and found two real gaps, put to the
+user as a scoping decision rather than assumed:
+  - Questions mockup's Subject/Topic/Status(Active-Inactive) columns don't
+    exist anywhere in the Question domain (only Type/Difficulty/Marks do).
+  - Submissions mockup's Score/Percentage are never stored (computed live,
+    per-exam, by the separate Result Service, not a column you can list/
+    sort at scale), and "Not Submitted" isn't a real status - a student
+    who never started an exam has no ExamAttempt row to query at all.
+User chose, for both: build with real data only, skip the fields/states
+that don't exist rather than fabricate them (Recommended options).
+
+Questions page (frontend-only, no backend changes needed): a NEW page,
+distinct from the existing accordion-grouped Question Bank - a flat,
+filterable table using the exact same already-CreatedBy-wired
+`GET /api/questions/all` endpoint and the same client-side
+tenant/exam-name join pattern PlatformQuestionBank.tsx already uses.
+Columns: Question, Type, Difficulty, Marks, Organization, Created On,
+Created By - no Subject/Topic/Status, no Actions column (Super Admin
+browses, doesn't author tenant content - matches the existing Question
+Bank page's own read-only design, not a new capability).
+
+Submissions page: real backend work needed - no Super Admin endpoint
+exists at all today, not even a lesser one to generalize. Plan:
+  - Submission Service gets its own IInternalUserLookupClient +
+    InternalUserServiceClient (mirroring Exam/Question Service's - this
+    is the third service to need this same cross-service name-resolution
+    plumbing) to resolve student name/email for a list of UserIds.
+  - New ISubmissionRepository.GetAllAttemptsAsync() (no params) - relies
+    on SubmissionDbContext's existing IsSuperAdmin query-filter bypass
+    (SubmissionDbContext.cs:40 etc.), the same mechanism every other
+    cross-tenant Super Admin list already uses, not a new one.
+  - New PlatformSubmissionResponse DTO (Id, ExamId, UserId, TenantId,
+    AttemptNumber, Status, StartedAtUtc, SubmittedAtUtc, StudentName,
+    StudentEmail) - deliberately excludes Score/Percentage/proctoring
+    counters, matching the user's pragmatic-scope choice.
+  - New `GET /api/submissions/all` (SuperAdmin-only) on
+    SubmissionsController, following All Exams/Question Bank's own
+    client-side-join architecture (fetch everything once, join
+    tenant/exam names from useTenants()/listExams() already used
+    elsewhere, filter/paginate client-side) - consistent with every
+    other Platform list page in this codebase, not a new pattern.
+  - docker-compose.yml: submission-api needs Services__UserServiceBaseUrl
+    added (it doesn't call User Service for anything today) plus a
+    user-api depends_on, mirroring question-api's own block exactly.
+
+Will verify with dotnet build + full test suites on Submission Service,
+tsc/build/tests on the frontend, then rebuild the affected Docker images
+and live-verify both new pages in the browser before marking DONE.
+
+DONE (2026-09-05): Implemented and verified the plan above.
+
+Questions page (src/pages/platform/PlatformQuestions.tsx): flat,
+filterable, paginated table over the same GET /api/questions/all data
+Question Bank already uses, no backend changes needed. Organization/
+Type/Difficulty filters, free-text search, CSV export, real client-side
+pagination (matches SecurityAuditLogs.tsx's own pattern). No Subject/
+Topic/Status columns, no Add/Edit/Delete actions, per the user's chosen
+scope.
+
+Submissions page - real backend work, Submission Service's first-ever
+Super Admin endpoint:
+  - Added IInternalUserLookupClient + InternalUserServiceClient to
+    Submission Service (the third service to need this exact cross-
+    service name-resolution plumbing, after Exam and Question Service)
+    plus a matching ActorNameResolver in Submission.API.
+  - ISubmissionRepository.GetAllAttemptsAsync() (no params) - relies on
+    SubmissionDbContext's existing IsSuperAdmin query-filter bypass.
+  - New PlatformSubmissionResponse DTO and GET /api/submissions/all
+    (SuperAdmin-only) on SubmissionsController, resolving student name/
+    email for every attempt's UserId in one batch call.
+  - docker-compose.yml: submission-api gained Services__UserServiceBaseUrl
+    and a user-api depends_on (it never called User Service before this).
+  - Frontend (PlatformSubmissions.tsx): same client-side cross-tenant
+    join pattern as every other Platform list page (useTenants() +
+    listExams()), Organization/Exam/Status/Date-range filters, search,
+    CSV export, real pagination. Stat cards are Total/Completed/
+    In Progress/Auto-Submitted - deliberately no Score/Percentage column
+    and no fake "Not Submitted" row, matching the user's chosen scope.
+
+Caught and fixed one real test breakage: FakeSubmissionRepository (test
+fake) didn't implement the new GetAllAttemptsAsync interface member -
+added it, mirroring the real repository's implementation.
+
+Verification: dotnet build clean on Submission Service (0 warnings, 0
+errors). Full test suite green: Submission Service Application.Tests
+87/87. Frontend: tsc clean, npm run build succeeded, lint clean (only
+pre-existing unrelated warnings), 61/61 tests passed. Rebuilt and
+redeployed submission-api and frontend Docker images; confirmed
+submission-api started cleanly against the new User Service dependency
+(no crash, migrations already up to date).
+
+Live-verified in the browser as Super Admin: Questions page shows 183
+real questions with working filters and real Created By names. Submissions
+page shows 87 real attempts with resolved student names/emails/exam
+titles/organizations spanning 4 different tenants (Platform, QA Demo
+Institute, Test Org, DY), stat cards mathematically correct (58 Completed
++ 9 In Progress + 20 Auto-Submitted = 87 Total), a genuine In-Progress row
+correctly shows "—" for Submitted At/Time Taken rather than fabricating
+values, and rows referencing a deleted exam or an unresolvable student
+correctly fall back to "—" instead of erroring - real data, real gaps,
+nothing faked. Pagination confirmed working (9 pages at 10/page).
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Fixed another real dark-mode bug from user screenshots
+(32.png - Dashboard date-range pill nearly unreadable; 31.png - Platform
+Settings' disclosure banner nearly unreadable). Root cause: both used
+Bootstrap's `bg-white` utility (a literal, theme-independent #fff,
+distinct from the theme-aware `bg-body`/`bg-body-tertiary`/Card
+components used everywhere else in this console) paired with
+`text-muted` - in dark mode `text-muted` correctly lightens for a dark
+background, but `bg-white` never changes, producing light-gray-text-on-
+white-background. Grepped for the same `bg-white` pattern across the
+whole Platform Admin section and found 5 total instances, not just the
+2 reported - fixed all of them with `bg-body` (same theme-aware CSS
+variable react-bootstrap's own Card component already uses, so light
+mode renders identically):
+  - components/SettingsDisclosure.tsx (shared by 5 Settings pages -
+    Platform/Email/Notification/Tenant/Security Settings)
+  - pages/platform/PlatformDashboard.tsx (date-range pill - 32.png's bug)
+  - pages/platform/SystemLogs.tsx (same date-range pill pattern)
+  - pages/platform/PlatformAnnouncement.tsx (inlined disclosure banner)
+  - pages/platform/PlatformComingSoon.tsx (the "isn't connected yet"
+    placeholder shown on every still-unbuilt Super Admin page - this fix
+    alone benefits every one of those pages going forward)
+
+Verification: tsc clean, npm run build succeeded, 61/61 tests passed.
+Rebuilt and redeployed the frontend Docker image. Live-verified in dark
+mode as Super Admin: Dashboard's date-range pill and Platform Settings'
+disclosure banner both now render with a proper dark surface and fully
+legible text (reproducing 32.png/31.png exactly, now fixed); System Logs'
+matching date-range pill confirmed fixed too.
+
+Side note (not fixed, flagged for a future pass): PlatformDashboard.tsx
+still shows a stale "Submissions - not connected yet (no cross-tenant
+attempts endpoint)" message under the Platform Overview chart, and Total
+Submissions still shows "—" - both left over from before this session's
+own Submissions page work added a real GET /api/submissions/all endpoint.
+The Dashboard was never updated to use it. Out of scope for this dark-
+mode bug fix; worth a follow-up.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Fixed a much bigger dark-mode bug from 4 more user
+screenshots (41.png Plans, 42.png Email Settings, 43.png Sections, 44.png
+Question Bank). Same bug class as the earlier bg-white fix, but this time
+`bg-light` - Bootstrap's OTHER literal, theme-independent utility (never
+Bootstrap-variable-driven, stays a fixed light gray in dark mode too,
+unlike `bg-body`/`bg-body-tertiary`). Grepped the whole Platform Admin
+section and found it was pervasive - not just the 4 reported pages:
+
+  - 26 files' table `<thead className="text-muted small text-uppercase
+    bg-light">` - nearly every data table in the entire Super Admin
+    console (Users, Organizations, Exams, Questions, Submissions, every
+    Reports/Security page, etc.) had an illegible washed-out header row
+    in dark mode. Bulk-replaced bg-light -> bg-body-tertiary across all
+    26 (identical className string everywhere, safe for a scripted
+    find/replace).
+  - PlatformQuestionBank.tsx and PlatformSections.tsx's exam-group and
+    section-group header rows (`bg-light` div, plus a hardcoded
+    `#fafafa` on the nested section row) - 43.png/44.png's exact bug.
+  - SystemLogs.tsx's stack-trace `<pre className="bg-light">` block.
+  - EmailSettings.tsx's Connection Status badges (`bg="light"
+    text="muted"` for both "Not checked yet" and the "NotConfigured"
+    state) - 42.png's bug - switched to `bg="secondary"` (the same
+    theme-safe neutral already used for "Inactive"-style badges
+    elsewhere in this console).
+  - SubscriptionPlans.tsx's hardcoded hex backgrounds - `#f5f5ff` (the
+    "Full Access" plan card, the create/edit modal's SectionBar, and a
+    selected-module-checkbox highlight) and `#f8f9fb` (the Students/
+    Admins/Instructors/Exams limit stat boxes) - 41.png's bug. Fixed
+    with Bootstrap 5.3's theme-aware `-subtle` background utilities
+    (`bg-primary-subtle` for the indigo-tinted highlights, `bg-body-
+    tertiary` for the neutral stat boxes) - already an established
+    pattern elsewhere in the app (13 other files already use `-subtle`
+    classes), just never applied to these particular elements.
+
+Deliberately left alone: 3 `badge bg-light text-success` instances
+(System Health/API Health/Service Status monitoring pages) - these pair
+a light background with colored (not muted) success-green text, which
+stays sufficiently vivid/readable against a light badge regardless of
+theme, weren't in any reported screenshot, and are a materially
+different risk profile than the confirmed muted-text-on-light-background
+break - left as a possible future check rather than changed
+speculatively.
+
+Verification: tsc clean, npm run build succeeded, lint clean (only
+pre-existing unrelated warnings), 61/61 tests passed. Rebuilt and
+redeployed the frontend Docker image. Live-verified in dark mode as
+Super Admin against all 4 reported screenshots: Plans' "Full Access"
+card and stat boxes, Email Settings' "Not checked yet" badge, Sections'
+exam-group header rows, and Question Bank's exam/section header rows all
+now render with a proper dark surface and fully legible text.
+
+NOT committed/pushed - holding per the user's standing rule.
+
+PLAN (2026-09-05): User flagged Super Admin's Subscriptions > Usage page
+as "not implemented yet". Read the real current state
+(PlatformUsage.tsx): only "Total Students" was real - Exams Conducted/
+Active Exams/Storage Used/API Calls were honest "—" placeholders, and
+Usage Overview/Top Organizations by Usage/Usage by Plan were all "Not
+connected yet" boxes, per the file's own comment explaining why (no
+cross-tenant attempts endpoint existed anywhere at the time it was
+built).
+
+That's no longer true - this session already built GET /api/exams,
+GET /api/plans, and GET /api/submissions/all (the new Super Admin
+Submissions work), plus the existing cross-tenant GET /api/users. All
+the data this page needs now genuinely exists; it just needs wiring up,
+matching every other Platform page's own client-side cross-tenant-join
+pattern. Scope decision (kept honest, not padded): Storage Used and API
+Calls stay "—" - no metering exists for either anywhere in this
+codebase, so those stay real placeholders, not fabricated numbers.
+
+Plan:
+  - Exams Conducted -> real count of completed submissions (Submitted +
+    AutoSubmitted attempts) - actual exam-taking events, not just
+    authored exams.
+  - Active Exams -> real count of Published exams, matching the
+    Published/Draft/Archived bucket convention already used on
+    PlatformAllExams.tsx.
+  - Usage Overview -> a real LineTrendChart (the same reusable component
+    Dashboard/PlatformUsageReport already use) showing daily New Exams
+    and Submissions over the last 7 days via bucketByDay - a real
+    per-day activity trend, deliberately distinct from Dashboard's own
+    cumulative Organizations/Users/Exams chart rather than duplicating it.
+  - Top Organizations by Usage -> a real ranked list: each tenant's
+    student + exam + submission counts, sorted by total usage
+    descending, top 5 - the same cross-tenant join (tenants + users +
+    exams + submissions by tenantId) every other Platform list page
+    already does client-side.
+  - Usage by Plan -> a real table: for each Plan, how many tenants are
+    on it and their aggregate Students/Admins/Instructors/Exams usage
+    against that plan's Max* limits (only the 4 fields actually
+    server-enforced - see SubscriptionPlans.tsx's own "Server Enforced"
+    distinction - MaxQuestions/MaxAiQuestionsPerMonth/StorageGb are
+    tracked but not enforced, so left out of the vs-limit comparison
+    here too).
+
+Frontend-only, no backend changes - every data source this page needs
+already has a real cross-tenant endpoint. Will verify with tsc/build/
+tests, then rebuild the frontend Docker image and live-verify before
+marking DONE.
+
+DONE (2026-09-05): Implemented and verified the plan above. Rewrote
+PlatformUsage.tsx: Exams Conducted now shows real completed-submission
+count, Active Exams shows real Published-exam count, Usage Overview is a
+real LineTrendChart (New Exams + Submissions per day, last 7 days, via
+bucketByDay), Top Organizations by Usage is a real ranked list (each
+tenant's student/exam/submission counts, sorted by total usage
+descending), and Usage by Plan is a real table (organizations per plan,
+aggregate Students/Admins/Instructors/Exams vs each plan's Max* limits,
+"/ ∞" for unenforced/null limits). Storage Used and API Calls correctly
+stay "—" - genuinely untracked, not fabricated. All frontend-only, no
+backend changes - every data source (exams, users, plans, submissions,
+tenants) already had a real cross-tenant endpoint from this session's
+earlier work.
+
+Verification: tsc clean, npm run build succeeded, lint clean (only
+pre-existing unrelated warnings), 61/61 tests passed. Rebuilt and
+redeployed the frontend Docker image. Live-verified in the browser as
+Super Admin: Total Students 8, Exams Conducted 78, Active Exams 8 (all
+real); the trend chart renders and its hover tooltip shows real per-day
+values (e.g. "Sep 3: New Exams: 0, Submissions: 0"); Top Organizations by
+Usage correctly ranks "Default" first (0 students, 6 exams, 79
+submissions - highest total) ahead of orgs with more students but fewer
+submissions; Usage by Plan correctly shows Full Access's 5 organizations
+with real aggregated usage (8/∞ students, 3/∞ admins, 2/∞ instructors,
+17/∞ exams) and Restricted (No Exams) correctly at 0 across the board
+(unused plan).
+
+NOT committed/pushed - holding per the user's standing rule.

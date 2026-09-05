@@ -4,6 +4,7 @@ import { Alert, Button, Form, InputGroup, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { extractServerError } from '../../utils/apiError';
+import { dashboardPathForRole } from '../../utils/roleRouting';
 
 export default function LoginForm() {
   const navigate = useNavigate();
@@ -30,10 +31,8 @@ export default function LoginForm() {
       const profile = await login(email, password, rememberMe);
       if (profile.mustChangePassword) {
         navigate('/change-password', { state: { forced: true } });
-      } else if (profile.role === 'SuperAdmin') {
-        navigate('/platform/dashboard');
       } else {
-        navigate(profile.role === 'Admin' ? '/admin/dashboard' : '/dashboard');
+        navigate(dashboardPathForRole(profile.role));
       }
     } catch (error) {
       setStatus('error');

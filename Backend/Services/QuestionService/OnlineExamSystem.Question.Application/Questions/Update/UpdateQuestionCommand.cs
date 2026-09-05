@@ -16,4 +16,8 @@ public record UpdateQuestionCommand(
     string? ReturnType = null,
     IReadOnlyList<QuestionParameterInput>? Parameters = null,
     IReadOnlyList<QuestionTestCaseInput>? TestCases = null,
-    IReadOnlyList<QuestionSqlTestCaseInput>? SqlTestCases = null);
+    IReadOnlyList<QuestionSqlTestCaseInput>? SqlTestCases = null,
+    // Non-null only for an Instructor caller - Admin/SuperAdmin pass null
+    // for unrestricted access. When set, the handler requires
+    // question.CreatedByUserId to match.
+    Guid? OwnerUserId = null);

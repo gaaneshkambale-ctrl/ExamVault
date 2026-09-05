@@ -3,8 +3,10 @@ import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import { updateQuestion } from '../../api/questionApi';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useQuestion } from '../../hooks/useQuestions';
 import { validateCreateQuestion } from '../../utils/createQuestionValidation';
 import { extractServerError } from '../../utils/apiError';
@@ -99,6 +101,9 @@ export default function EditQuestion() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: question, isLoading, isError } = useQuestion(id);
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Edit');
 
   const [questionType, setQuestionType] = useState<QuestionType>('MultipleChoice');
   const [questionText, setQuestionText] = useState('');
@@ -224,7 +229,7 @@ export default function EditQuestion() {
     : '/admin/exams';
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Edit Question</h1>
       </div>
@@ -393,7 +398,7 @@ export default function EditQuestion() {
                   {options.map((option, index) => (
                     <div key={option.key} className="d-flex align-items-center gap-2 mb-2">
                       <span
-                        className="d-inline-flex align-items-center justify-content-center rounded-circle bg-light border fw-bold flex-shrink-0"
+                        className="d-inline-flex align-items-center justify-content-center rounded-circle bg-body-tertiary border fw-bold flex-shrink-0"
                         style={{ width: 32, height: 32 }}
                       >
                         {optionLetter(index)}
@@ -465,21 +470,23 @@ export default function EditQuestion() {
                 <Link to={backLink} className="btn btn-outline-secondary">
                   Cancel
                 </Link>
-                <Button type="submit" variant="primary" disabled={status === 'loading'}>
-                  {status === 'loading' ? (
-                    <>
-                      <Spinner animation="border" size="sm" className="me-2" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
-                </Button>
+                {canEditQuestions && (
+                  <Button type="submit" variant="primary" disabled={status === 'loading'}>
+                    {status === 'loading' ? (
+                      <>
+                        <Spinner animation="border" size="sm" className="me-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                )}
               </div>
             </Form>
           </Card.Body>
         </Card>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

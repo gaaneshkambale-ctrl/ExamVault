@@ -88,8 +88,7 @@ public class Program
         });
 
         // Allowed frontend origins come from config (Cors:AllowedOrigins, comma-separated)
-        // so each environment (local dev, Azure dev/qa/prod) can allow its own frontend
-        // URL without a code change. Falls back to the local Vite dev server only.
+        // plus dynamic support for any *.localhost subdomain in local dev and *.examvaults.in in production.
         var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "http://localhost:5173")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -97,9 +96,30 @@ public class Program
         builder.Services.AddCors(options =>
         {
             options.AddPolicy(frontendCorsPolicy, policy =>
-                policy.WithOrigins(allowedOrigins)
-                    .AllowAnyHeader()
-                    .AllowAnyMethod());
+                policy.SetIsOriginAllowed(origin =>
+                {
+                    if (string.IsNullOrWhiteSpace(origin)) return false;
+                    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+
+                    // Allow localhost and any *.localhost on any port in local dev
+                    if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                        uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    // Allow explicitly configured origins, the bare apex domains
+                    // themselves (examvaults.in/examvault.com - EndsWith(".x") alone
+                    // misses the apex since it has no leading dot), and any subdomain.
+                    return allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase) ||
+                           uri.Host.Equals("examvaults.in", StringComparison.OrdinalIgnoreCase) ||
+                           uri.Host.EndsWith(".examvaults.in", StringComparison.OrdinalIgnoreCase) ||
+                           uri.Host.Equals("examvault.com", StringComparison.OrdinalIgnoreCase) ||
+                           uri.Host.EndsWith(".examvault.com", StringComparison.OrdinalIgnoreCase);
+                })
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials());
         });
 
         var app = builder.Build();

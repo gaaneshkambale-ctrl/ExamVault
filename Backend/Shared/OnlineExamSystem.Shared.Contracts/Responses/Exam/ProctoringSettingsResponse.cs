@@ -11,4 +11,5 @@ public record ProctoringSettingsResponse(
     bool RightClickBlockingEnabled,
     bool MultipleMonitorsEnabled,
     int SessionTimeoutMinutes = 30,
-    DateTime UpdatedAtUtc = default);
+    DateTime UpdatedAtUtc = default,
+    Guid? UpdatedByUserId = null);

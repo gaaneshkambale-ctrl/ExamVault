@@ -20,7 +20,6 @@ public class ExamDbContext : TenantScopedDbContext
     public DbSet<ExamReminderLog> ExamReminderLogs => Set<ExamReminderLog>();
     public DbSet<ReminderSettings> ReminderSettings => Set<ReminderSettings>();
     public DbSet<ProctoringSettings> ProctoringSettings => Set<ProctoringSettings>();
-    public DbSet<GeneralSettings> GeneralSettings => Set<GeneralSettings>();
     public DbSet<ExamDefaults> ExamDefaults => Set<ExamDefaults>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
@@ -45,6 +44,7 @@ public class ExamDbContext : TenantScopedDbContext
             entity.Property(e => e.ExamCode).HasMaxLength(40);
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Category).HasMaxLength(100);
+            entity.Property(e => e.Tags).HasMaxLength(500);
             entity.Property(e => e.Instructions).HasMaxLength(2000);
             entity.Property(e => e.NegativeMarks).HasColumnType("decimal(5,2)");
             entity.HasIndex(e => e.TenantId);
@@ -132,19 +132,6 @@ public class ExamDbContext : TenantScopedDbContext
             entity.HasIndex(r => r.TenantId);
             entity.HasQueryFilter(r =>
                 CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && r.TenantId == CurrentTenant.TenantId));
-        });
-
-        modelBuilder.Entity<GeneralSettings>(entity =>
-        {
-            entity.HasKey(g => g.Id);
-            entity.Property(g => g.OrganizationName).HasMaxLength(200);
-            entity.Property(g => g.SupportEmail).HasMaxLength(200);
-            entity.Property(g => g.Language).HasMaxLength(100);
-            entity.Property(g => g.Timezone).HasMaxLength(100);
-            entity.Property(g => g.DateFormat).HasMaxLength(50);
-            entity.HasIndex(g => g.TenantId);
-            entity.HasQueryFilter(g =>
-                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && g.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ExamDefaults>(entity =>

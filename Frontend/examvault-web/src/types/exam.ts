@@ -22,6 +22,7 @@ export interface CreateExamRequest {
   passingMarks: number;
   instructions: string;
   examTypeId?: string | null;
+  tags?: string;
 }
 
 export interface ExamSettings {
@@ -51,6 +52,9 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
   createdOn: string;
   examTypeName?: string | null;
   tenantId: string;
+  tags: string;
+  createdByUserId: string;
+  createdByName: string | null;
 }
 
 // Dynamic, admin-manageable exam-purpose classification (Practice/Mock/
@@ -64,6 +68,11 @@ export interface ExamTypeOption {
 }
 
 export interface CreateExamTypeRequest {
+  name: string;
+  purpose?: string | null;
+}
+
+export interface UpdateExamTypeRequest {
   name: string;
   purpose?: string | null;
 }
@@ -86,15 +95,6 @@ export interface ProctoringSettingsResponse {
   multipleMonitorsEnabled: boolean;
   sessionTimeoutMinutes: number;
   updatedAtUtc?: string;
-}
-
-export interface GeneralSettingsResponse {
-  organizationName: string;
-  supportEmail: string;
-  language: string;
-  timezone: string;
-  dateFormat: string;
-  updatedAtUtc: string;
 }
 
 export type QuestionNavigationMode = 'Free' | 'Sequential';

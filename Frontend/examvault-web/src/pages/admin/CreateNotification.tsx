@@ -3,6 +3,7 @@ import { Alert, Badge, Button, Card, Col, Form, ListGroup, Row, Spinner } from '
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import { useExams } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
 import { useGroups } from '../../hooks/useGroups';
@@ -12,6 +13,32 @@ import { createNotification } from '../../api/notificationApi';
 import type { CreateNotificationResponse, NotificationSendToType } from '../../types/notification';
 import { containsExamFieldPlaceholder, substituteExamFields } from '../../utils/notificationTemplates';
 import { extractServerError } from '../../utils/apiError';
+
+function ComposerIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function OptionsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
+function SendIconHeader() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  );
+}
 
 function toDatetimeLocalValue(date: Date): string {
   const offset = date.getTimezoneOffset();
@@ -239,7 +266,7 @@ export default function CreateNotification() {
         <Col lg={8}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body className="p-4">
-              <h2 className="h6 fw-bold mb-3">Notification Composer</h2>
+              <SectionHeader icon={<ComposerIcon />} title="Notification Composer" />
               <Form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -292,7 +319,7 @@ export default function CreateNotification() {
                   <Col md={6}>
                     <Form.Group className="mb-3">
                       <Form.Label className="fw-bold">&nbsp;</Form.Label>
-                      <div className="form-control bg-light text-muted">
+                      <div className="form-control bg-body-tertiary text-muted">
                         {recipientCount === null
                           ? 'Recipients determined at send time'
                           : `${recipientCount} recipient${recipientCount === 1 ? '' : 's'} selected`}
@@ -400,7 +427,9 @@ export default function CreateNotification() {
                   </div>
                 </Form.Group>
 
-                <h2 className="h6 fw-bold mb-2 mt-4">Options</h2>
+                <div className="mt-4">
+                  <SectionHeader icon={<OptionsIcon />} title="Options" />
+                </div>
                 <ListGroup variant="flush" className="mb-3">
                   <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-2">
                     <span className={selectedChannel.sendEmail ? 'text-success' : 'text-muted'}>
@@ -474,7 +503,7 @@ export default function CreateNotification() {
         <Col lg={4}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body className="p-4">
-              <h2 className="h6 fw-bold mb-3">Delivery Summary</h2>
+              <SectionHeader icon={<SendIconHeader />} title="Delivery Summary" />
 
               <div className="text-muted small">Recipients</div>
               <div className="h5 fw-bold mb-3">
@@ -492,7 +521,7 @@ export default function CreateNotification() {
                 <Badge bg={canSubmit ? 'success' : 'secondary'}>{canSubmit ? 'Ready to Send' : 'Incomplete'}</Badge>
               </div>
 
-              <Card className="border-0" style={{ background: '#eef2ff' }}>
+              <Card className="border-0 bg-primary-subtle">
                 <Card.Body className="p-3">
                   <div className="fw-bold text-primary mb-2">Preview</div>
                   <div className="fw-bold small">{previewTitle}</div>

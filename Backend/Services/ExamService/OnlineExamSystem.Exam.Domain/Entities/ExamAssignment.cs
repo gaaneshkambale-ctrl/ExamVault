@@ -10,6 +10,11 @@ public class ExamAssignment : TenantScopedEntity
     public AssignmentTargetType TargetType { get; set; }
     public Guid? GroupId { get; set; }
 
+    // The Admin who scheduled this sitting - real accountability for a
+    // security-relevant action (controls proctoring/live-video on
+    // potentially many students' attempts), not previously tracked at all.
+    public Guid CreatedByUserId { get; set; }
+
     public DateTime StartAtUtc { get; set; }
     public DateTime EndAtUtc { get; set; }
     public string TimeZoneId { get; set; } = "UTC";
@@ -29,4 +34,10 @@ public class ExamAssignment : TenantScopedEntity
     // to Metered at all - JoinRecordingHandler in SubmissionService checks
     // it before creating a room, so it's meaningless without proctoring on.
     public bool EnableLiveVideo { get; set; }
+
+    // Cancelling a scheduled sitting is distinct from deleting it (Delete
+    // hard-removes the row and cascades its targets - cancel keeps the
+    // record so the Exam Scheduled list can still show it happened).
+    // Non-null = cancelled.
+    public DateTime? CancelledAtUtc { get; set; }
 }

@@ -16,6 +16,7 @@ using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.ListAll;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Infrastructure.Clients;
@@ -51,6 +52,7 @@ public class Program
         builder.Services.AddScoped<CreateQuestionHandler>();
         builder.Services.AddScoped<GetQuestionHandler>();
         builder.Services.AddScoped<ListQuestionsHandler>();
+        builder.Services.AddScoped<ListAllQuestionsHandler>();
         builder.Services.AddScoped<IValidator<UpdateQuestionCommand>, UpdateQuestionValidator>();
         builder.Services.AddScoped<UpdateQuestionHandler>();
         builder.Services.AddScoped<DeleteQuestionHandler>();
@@ -66,6 +68,15 @@ public class Program
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
         });
+
+        var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
@@ -89,7 +100,11 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
 

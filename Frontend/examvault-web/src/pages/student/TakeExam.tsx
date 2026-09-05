@@ -113,6 +113,75 @@ function SectionBulbIcon() {
   );
 }
 
+function ResetIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  );
+}
+
+function ExpandIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+    </svg>
+  );
+}
+
+function CollapseIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+      <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+      <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+      <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+    </svg>
+  );
+}
+
+function TestCaseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
+function TestCaseStatusIcon({ passed }: { passed: boolean | null }) {
+  if (passed === null) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#adb5bd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={passed ? '#16a34a' : '#dc3545'}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      {passed ? <path d="M8 12.5l2.5 2.5L16 9.5" /> : <path d="M9 9l6 6M15 9l-6 6" />}
+    </svg>
+  );
+}
+
 function ClockIcon({ color }: { color: string }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -262,6 +331,7 @@ export default function TakeExam() {
   const [runningQuestionId, setRunningQuestionId] = useState<string | null>(null);
   const [runCooldownUntil, setRunCooldownUntil] = useState<Record<string, number>>({});
   const [nowTick, setNowTick] = useState(Date.now());
+  const [isEditorExpanded, setIsEditorExpanded] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [sectionRemainingSeconds, setSectionRemainingSeconds] = useState<number | null>(null);
   const [navFilter, setNavFilter] = useState<NavFilter>('all');
@@ -420,28 +490,66 @@ export default function TakeExam() {
   // is scoped to whichever section is currently open.
   const allQuestions = questions ?? [];
 
+  // Locks the shuffled order in once per attempt (sectionGroupsCacheRef),
+  // rather than recomputing on every `questions`/`sections` refetch (window
+  // refocus, background poll) - `shuffle()` is unseeded, so recomputing mid-
+  // attempt used to produce a NEW random order, desyncing the "Question X of
+  // Y" header/navigator from the actually-displayed question and silently
+  // saving answers against the wrong one. Only locks once `questions` (and
+  // `sections`, if this exam has any) have actually loaded, so an early
+  // computation before sections arrive doesn't get stuck ungrouped.
+  const sectionGroupsCacheRef = useRef<{ attemptId: string | null; groups: SectionGroup[] } | null>(null);
   const sectionGroups = useMemo<SectionGroup[]>(() => {
+    if (sectionGroupsCacheRef.current?.attemptId === attemptId) {
+      return sectionGroupsCacheRef.current.groups;
+    }
     if (!questions) {
       return [];
     }
+
+    let groups: SectionGroup[];
     if (!isSectioned) {
       const ordered = exam?.shuffleQuestions ? shuffle(questions) : questions;
       const withOptions = exam?.shuffleOptions
         ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
         : ordered;
-      return [{ section: null, questions: withOptions }];
+      groups = [{ section: null, questions: withOptions }];
+    } else {
+      groups = orderedSections.map((section) => {
+        const sectionQuestions = questions.filter((q) => q.sectionId === section.id);
+        const ordered = section.shuffleQuestions ? shuffle(sectionQuestions) : sectionQuestions;
+        const withOptions = section.shuffleOptions
+          ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
+          : ordered;
+        return { section, questions: withOptions };
+      });
     }
-    return orderedSections.map((section) => {
-      const sectionQuestions = questions.filter((q) => q.sectionId === section.id);
-      const ordered = section.shuffleQuestions ? shuffle(sectionQuestions) : sectionQuestions;
-      const withOptions = section.shuffleOptions
-        ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
-        : ordered;
-      return { section, questions: withOptions };
-    });
-    // Deliberately keyed on the shuffle flags rather than the whole `exam`
-    // object, so the layout doesn't reshuffle on unrelated exam refetches.
-  }, [questions, isSectioned, orderedSections, exam?.shuffleQuestions, exam?.shuffleOptions]);
+
+    // `exam` itself (not just `sections`) must have loaded before deciding
+    // whether sections are "ready" - while `exam` is still undefined,
+    // `exam?.containsSections` is also undefined, which made this true
+    // regardless of whether the exam actually has sections. That let a
+    // race (attemptId resolving before the exam metadata fetch finishes)
+    // permanently cache every question into one ungrouped section for a
+    // real sectioned exam - the sections query itself is gated on
+    // `exam?.containsSections` (see useSections below) so it never even
+    // starts until `exam` loads, meaning `sections !== undefined` alone
+    // was never a safe proxy for "this exam's real sections are known."
+    const sectionsReady = exam !== undefined && (!exam.containsSections || sections !== undefined);
+    if (sectionsReady) {
+      sectionGroupsCacheRef.current = { attemptId, groups };
+    }
+    return groups;
+  }, [
+    attemptId,
+    questions,
+    isSectioned,
+    orderedSections,
+    sections,
+    exam?.containsSections,
+    exam?.shuffleQuestions,
+    exam?.shuffleOptions,
+  ]);
 
   const currentGroup = sectionIndex >= 0 ? sectionGroups[sectionIndex] : undefined;
   const displayQuestions = useMemo(() => currentGroup?.questions ?? [], [currentGroup]);
@@ -791,6 +899,11 @@ export default function TakeExam() {
   const currentQuestion = displayQuestions[currentIndex];
   const currentAnswer = currentQuestion ? (answers[currentQuestion.id] ?? EMPTY_ANSWER) : null;
 
+  // Never carry a maximized editor over to a different question.
+  useEffect(() => {
+    setIsEditorExpanded(false);
+  }, [currentQuestion?.id]);
+
   // Bucketed off navState (not raw answer flags) so the grid colors, the
   // filter tabs, and the stats row can never disagree with each other - a
   // marked-and-answered question shows as "marked" everywhere consistently.
@@ -840,7 +953,15 @@ export default function TakeExam() {
             const isCurrent = index === sectionIndex;
             const isCompleted = Boolean(sectionStates[section.id]?.isCompleted);
             const isOpenable = canOpenSection(index);
-            const isLocked = !isOpenable && !isCurrent && !isCompleted;
+            // A completed non-Free section can only be re-entered while
+            // it's still the current one - clicking back into it later
+            // used to hit the server's own completed-section rejection
+            // (Sequential/Locked sections lock once finished), surfacing
+            // as a raw error. Same rule the Review screen's own section
+            // list already applies via `canReturn`.
+            const canReenterCompleted = section.navigationType === 'Free' || isCurrent;
+            const isClickable = isCurrent || (isCompleted ? canReenterCompleted : isOpenable);
+            const isLocked = !isClickable;
             const sectionQuestions = sectionGroups[index]?.questions ?? [];
             const total = sectionQuestions.length;
             const answered = sectionQuestions.filter((q) => navState(q) === 'answered').length;
@@ -853,7 +974,7 @@ export default function TakeExam() {
               <button
                 key={section.id}
                 type="button"
-                disabled={sectionEntering || (!isOpenable && !isCurrent)}
+                disabled={sectionEntering || !isClickable}
                 onClick={() => void switchToSection(index)}
                 className="text-start border-0 bg-transparent p-0 flex-shrink-0"
                 style={{ width: 216, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'pointer' }}
@@ -1213,6 +1334,11 @@ export default function TakeExam() {
                     </Alert>
                   )}
 
+                  {currentQuestion.questionType === 'CodeProgram' && (
+                    <h2 className="h6 fw-bold mb-1">
+                      {currentQuestion.programmingLanguage === 'Sql' ? 'SQL Question' : 'Coding Question'}
+                    </h2>
+                  )}
                   <p className="fw-medium mb-4">{currentQuestion.questionText}</p>
 
                   {currentQuestion.questionType === 'CodeProgram' ? (
@@ -1257,13 +1383,47 @@ export default function TakeExam() {
                                 ))}
                               </Form.Select>
                             ) : (
-                              <span className="badge bg-light text-dark border">
+                              <span
+                                className="badge rounded-pill fw-medium"
+                                style={{ background: '#eef2ff', color: '#4338ca' }}
+                              >
                                 Language: {PROGRAMMING_LANGUAGES.find((l) => l.value === effectiveLanguage)?.label ?? effectiveLanguage}
                               </span>
                             )}
                             <span className="text-muted small">{codeValue.length} characters</span>
                           </div>
-                          <div className="border rounded overflow-hidden mb-1">
+
+                          <div className="border rounded-3 overflow-hidden mb-3">
+                            <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
+                              <span className="d-flex align-items-center gap-2 fw-semibold small">
+                                <SectionCodeIcon /> Your Code
+                              </span>
+                              <div className="d-flex align-items-center gap-3">
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-sm text-decoration-none text-secondary p-0 d-flex align-items-center gap-1"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        'Reset your code back to the starter template? This will discard your current changes.',
+                                      )
+                                    ) {
+                                      updateTextAnswer(currentQuestion.id, currentQuestion.starterCode ?? '');
+                                    }
+                                  }}
+                                >
+                                  <ResetIcon /> Reset
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-sm text-decoration-none text-secondary p-0"
+                                  title={isEditorExpanded ? 'Collapse editor' : 'Expand editor'}
+                                  onClick={() => setIsEditorExpanded((prev) => !prev)}
+                                >
+                                  {isEditorExpanded ? <CollapseIcon /> : <ExpandIcon />}
+                                </button>
+                              </div>
+                            </div>
                             <Suspense
                               fallback={
                                 <div
@@ -1284,26 +1444,59 @@ export default function TakeExam() {
                             </Suspense>
                           </div>
 
-                          {hasTestCases && (
+                          {isEditorExpanded && (
                             <div
-                              className="rounded-3 overflow-hidden mt-3"
-                              style={{ background: '#1e1e1e', border: '1px solid #333' }}
+                              className="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column p-3"
+                              style={{ zIndex: 1050, background: 'rgba(15, 15, 20, 0.75)' }}
                             >
-                              <div
-                                className="d-flex justify-content-between align-items-center px-3 py-2"
-                                style={{ borderBottom: '1px solid #333' }}
-                              >
-                                <span className="text-light fw-semibold small">
-                                  Test Cases
+                              <div className="bg-body rounded-3 shadow d-flex flex-column flex-grow-1 overflow-hidden">
+                                <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
+                                  <span className="d-flex align-items-center gap-2 fw-semibold small">
+                                    <SectionCodeIcon /> Your Code
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-secondary btn-sm"
+                                    onClick={() => setIsEditorExpanded(false)}
+                                  >
+                                    Close ✕
+                                  </button>
+                                </div>
+                                <div className="flex-grow-1" style={{ minHeight: 0 }}>
+                                  <Suspense
+                                    fallback={
+                                      <div className="d-flex align-items-center justify-content-center bg-dark text-light h-100">
+                                        <Spinner animation="border" size="sm" className="me-2" />
+                                        Loading editor...
+                                      </div>
+                                    }
+                                  >
+                                    <CodeEditor
+                                      language={effectiveLanguage}
+                                      value={codeValue}
+                                      onChange={(next) => updateTextAnswer(currentQuestion.id, next)}
+                                      height="100%"
+                                    />
+                                  </Suspense>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {hasTestCases && (
+                            <div className="border rounded-3 overflow-hidden mt-3">
+                              <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
+                                <span className="d-flex align-items-center gap-2 fw-semibold small">
+                                  <TestCaseIcon /> Test Cases
                                   {runResult && (
-                                    <span className="text-secondary fw-normal ms-2">
+                                    <span className="text-muted fw-normal">
                                       {runResult.outcomes.filter((o) => o.passed).length} / {runResult.outcomes.length} passed
                                     </span>
                                   )}
                                 </span>
                                 <Button
                                   size="sm"
-                                  variant="success"
+                                  variant="primary"
                                   disabled={isRunning || cooldownRemaining > 0}
                                   onClick={() =>
                                     void (isSql
@@ -1331,51 +1524,52 @@ export default function TakeExam() {
                                       return (
                                         <div
                                           key={index}
-                                          className="rounded-2 px-3 py-2"
-                                          style={{ background: '#252526', border: '1px solid #333' }}
+                                          className={`rounded-3 border px-3 py-2 d-flex align-items-start gap-2${outcome ? (outcome.passed ? ' bg-success-subtle' : ' bg-danger-subtle') : ''}`}
                                         >
-                                          <div className="d-flex justify-content-between align-items-center">
-                                            <span className="text-light small fw-medium">Test Case {index + 1}</span>
+                                          <span className="mt-1 flex-shrink-0">
+                                            <TestCaseStatusIcon passed={outcome ? outcome.passed : null} />
+                                          </span>
+                                          <div className="flex-grow-1">
+                                            <div className="d-flex justify-content-between align-items-center">
+                                              <span className="small fw-medium">Test Case {index + 1}</span>
+                                              {outcome && (
+                                                <Badge bg={outcome.passed ? 'success' : 'danger'}>
+                                                  {outcome.passed ? 'Passed' : 'Failed'}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <pre
+                                              className="text-muted small mt-1 mb-0"
+                                              style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                            >
+                                              {testCase.setupSql}
+                                            </pre>
                                             {outcome && (
-                                              <Badge bg={outcome.passed ? 'success' : 'danger'}>
-                                                {outcome.passed ? 'Passed' : 'Failed'}
-                                              </Badge>
+                                              <>
+                                                <div className="text-muted small mt-1" style={{ fontFamily: 'monospace' }}>
+                                                  Expected:
+                                                </div>
+                                                <pre
+                                                  className="text-muted small mb-1"
+                                                  style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                                >
+                                                  {outcome.expectedOutput || '(no rows)'}
+                                                </pre>
+                                                <div
+                                                  className={outcome.passed ? 'text-success' : 'text-danger'}
+                                                  style={{ fontFamily: 'monospace', fontSize: 13.5 }}
+                                                >
+                                                  Got:
+                                                </div>
+                                                <pre
+                                                  className={outcome.passed ? 'text-success' : 'text-danger'}
+                                                  style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
+                                                >
+                                                  {outcome.error ?? (outcome.actualOutput || '(no rows)')}
+                                                </pre>
+                                              </>
                                             )}
                                           </div>
-                                          <pre
-                                            className="text-light small mt-1 mb-0"
-                                            style={{ fontFamily: 'monospace', opacity: 0.85, whiteSpace: 'pre-wrap' }}
-                                          >
-                                            {testCase.setupSql}
-                                          </pre>
-                                          {outcome && (
-                                            <>
-                                              <div
-                                                className="text-light small mt-1"
-                                                style={{ fontFamily: 'monospace', opacity: 0.85 }}
-                                              >
-                                                Expected:
-                                              </div>
-                                              <pre
-                                                className="text-light small mb-1"
-                                                style={{ fontFamily: 'monospace', opacity: 0.85, whiteSpace: 'pre-wrap' }}
-                                              >
-                                                {outcome.expectedOutput || '(no rows)'}
-                                              </pre>
-                                              <div
-                                                className={outcome.passed ? 'text-success' : 'text-danger'}
-                                                style={{ fontFamily: 'monospace', fontSize: 13.5 }}
-                                              >
-                                                Got:
-                                              </div>
-                                              <pre
-                                                className={outcome.passed ? 'text-success' : 'text-danger'}
-                                                style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
-                                              >
-                                                {outcome.error ?? (outcome.actualOutput || '(no rows)')}
-                                              </pre>
-                                            </>
-                                          )}
                                         </div>
                                       );
                                     })
@@ -1391,37 +1585,35 @@ export default function TakeExam() {
                                       return (
                                         <div
                                           key={index}
-                                          className="rounded-2 px-3 py-2"
-                                          style={{ background: '#252526', border: '1px solid #333' }}
+                                          className={`rounded-3 border px-3 py-2 d-flex align-items-start gap-2${outcome ? (outcome.passed ? ' bg-success-subtle' : ' bg-danger-subtle') : ''}`}
                                         >
-                                          <div className="d-flex justify-content-between align-items-center">
-                                            <span className="text-light small fw-medium">Test Case {index + 1}</span>
+                                          <span className="mt-1 flex-shrink-0">
+                                            <TestCaseStatusIcon passed={outcome ? outcome.passed : null} />
+                                          </span>
+                                          <div className="flex-grow-1">
+                                            <div className="d-flex justify-content-between align-items-center">
+                                              <span className="small fw-medium">Test Case {index + 1}</span>
+                                              {outcome && (
+                                                <Badge bg={outcome.passed ? 'success' : 'danger'}>
+                                                  {outcome.passed ? 'Passed' : 'Failed'}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <div className="text-muted small mt-1" style={{ fontFamily: 'monospace' }}>
+                                              Input: {argsText}
+                                            </div>
+                                            <div className="text-muted small" style={{ fontFamily: 'monospace' }}>
+                                              Expected: {expectedText}
+                                            </div>
                                             {outcome && (
-                                              <Badge bg={outcome.passed ? 'success' : 'danger'}>
-                                                {outcome.passed ? 'Passed' : 'Failed'}
-                                              </Badge>
+                                              <div
+                                                className={outcome.passed ? 'text-success' : 'text-danger'}
+                                                style={{ fontFamily: 'monospace', fontSize: 13.5, marginTop: 2 }}
+                                              >
+                                                Got: {outcome.error ?? outcome.actualOutput}
+                                              </div>
                                             )}
                                           </div>
-                                          <div
-                                            className="text-light small mt-1"
-                                            style={{ fontFamily: 'monospace', opacity: 0.85 }}
-                                          >
-                                            Input: {argsText}
-                                          </div>
-                                          <div
-                                            className="text-light small"
-                                            style={{ fontFamily: 'monospace', opacity: 0.85 }}
-                                          >
-                                            Expected: {expectedText}
-                                          </div>
-                                          {outcome && (
-                                            <div
-                                              className={outcome.passed ? 'text-success' : 'text-danger'}
-                                              style={{ fontFamily: 'monospace', fontSize: 13.5, marginTop: 2 }}
-                                            >
-                                              Got: {outcome.error ?? outcome.actualOutput}
-                                            </div>
-                                          )}
                                         </div>
                                       );
                                     })}
@@ -1442,11 +1634,10 @@ export default function TakeExam() {
                           <label
                             key={option.id}
                             htmlFor={`option-${option.id}`}
-                            className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2"
+                            className={`d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2${selected ? ' bg-success-subtle' : ''}`}
                             style={{
                               cursor: 'pointer',
                               borderColor: selected ? '#16a34a' : undefined,
-                              background: selected ? '#f0fdf4' : undefined,
                             }}
                           >
                             <Form.Check
@@ -1476,12 +1667,16 @@ export default function TakeExam() {
                     </Form>
                   )}
 
-                  <div className="small mt-2" style={{ minHeight: 20 }}>
-                    {saveAnswerMutation.isPending && <span className="text-muted">Saving...</span>}
+                  <div className="mt-2" style={{ minHeight: 20 }}>
+                    {saveAnswerMutation.isPending && <span className="small text-muted">Saving...</span>}
                     {!saveAnswerMutation.isPending && lastSavedAt && (
-                      <span className="text-success">
-                        &#10003; Answer saved &nbsp;|&nbsp; Last saved: {lastSavedAt.toLocaleTimeString()}
-                      </span>
+                      <div
+                        className="small text-success rounded-3 px-3 py-2 d-inline-flex align-items-center gap-2"
+                        style={{ background: '#f0fdf4' }}
+                      >
+                        <TestCaseStatusIcon passed={true} />
+                        Answer saved &nbsp;|&nbsp; Last saved: {lastSavedAt.toLocaleTimeString()}
+                      </div>
                     )}
                   </div>
 
@@ -1627,7 +1822,7 @@ export default function TakeExam() {
             <h1 className="h5 fw-bold mb-1">Exam Submitted Successfully!</h1>
             <p className="text-muted mb-4">Thank you for completing the exam.</p>
 
-            <Card className="border-0 bg-light text-start mb-4">
+            <Card className="border-0 bg-body-tertiary text-start mb-4">
               <Card.Body>
                 <h2 className="h6 fw-bold mb-3">{exam?.title ?? 'Exam'}</h2>
                 <Row className="g-2">
