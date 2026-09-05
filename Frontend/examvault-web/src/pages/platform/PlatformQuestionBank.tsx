@@ -451,7 +451,7 @@ export default function PlatformQuestionBank() {
                   <div className="d-flex flex-column gap-3">
                     {exams.map(({ examId, examTitle, questions: examQuestions, sectionGroups }) => (
                       <div key={examId} className="border rounded-3 overflow-hidden">
-                        <div className="d-flex align-items-center justify-content-between px-3 py-2 bg-light">
+                        <div className="d-flex align-items-center justify-content-between px-3 py-2 bg-body-tertiary">
                           <span className="d-flex align-items-center gap-2">
                             <span
                               className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
@@ -477,7 +477,7 @@ export default function PlatformQuestionBank() {
 
                             return (
                               <div key={sectionKey} className="border rounded-3 overflow-hidden">
-                                <div className="d-flex align-items-center justify-content-between px-3 py-2" style={{ background: '#fafafa' }}>
+                                <div className="d-flex align-items-center justify-content-between px-3 py-2 bg-body-tertiary">
                                   <span className="d-flex align-items-center gap-2 text-muted">
                                     <SectionIcon />
                                     <span className="small fw-medium">{sectionName}</span>

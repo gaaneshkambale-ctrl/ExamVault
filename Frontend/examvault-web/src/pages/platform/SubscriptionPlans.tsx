@@ -74,7 +74,7 @@ function parseOptionalNumber(value: string): number | null {
 
 function SectionBar({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
   return (
-    <div className="d-flex align-items-center gap-2 px-3 py-3 rounded-3 mb-3" style={{ background: '#f5f5ff' }}>
+    <div className="d-flex align-items-center gap-2 px-3 py-3 rounded-3 mb-3 bg-primary-subtle">
       <div
         className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
         style={{ width: 36, height: 36, background: '#e0e7ff', color: '#4f46e5' }}
@@ -355,11 +355,10 @@ function renderModuleCard(mod: ModuleInfo, includedFeatures: Set<PlanFeature>, t
   return (
     <Col xs={12} md={6} key={mod.feature}>
       <label
-        className="d-flex align-items-start gap-2 border rounded-3 p-3 mb-0"
+        className={`d-flex align-items-start gap-2 border rounded-3 p-3 mb-0${checked ? ' bg-primary-subtle' : ''}`}
         style={{
           cursor: 'pointer',
           borderColor: checked ? '#4f46e5' : undefined,
-          background: checked ? '#f5f5ff' : undefined,
         }}
       >
         <Form.Check type="checkbox" className="mt-1" checked={checked} onChange={() => toggleFeature(mod.feature)} />
@@ -523,7 +522,7 @@ export default function SubscriptionPlans() {
       {!isLoading && !isError && (
         <>
           {defaultPlan && (
-            <Card className="border-0 shadow-sm mb-3" style={{ background: '#f5f5ff' }}>
+            <Card className="border-0 shadow-sm mb-3 bg-primary-subtle">
               <Card.Body>
                 <div className="d-flex align-items-start gap-3">
                   <div
@@ -659,7 +658,7 @@ export default function SubscriptionPlans() {
                         <Row className="g-2 mb-3">
                           {limitStats.map((stat) => (
                             <Col xs={3} key={stat.label}>
-                              <div className="text-center border rounded-3 py-2" style={{ background: '#f8f9fb' }}>
+                              <div className="text-center border rounded-3 py-2 bg-body-tertiary">
                                 <div className="fw-bold small">{stat.value ?? '∞'}</div>
                                 <div className="text-muted" style={{ fontSize: 10 }}>
                                   {stat.label}

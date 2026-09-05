@@ -734,7 +734,7 @@ export default function OrganizationDetails() {
                   <div className="text-center text-muted small py-3">No admins yet. Click "+ Add Admin" to add one.</div>
                 ) : (
                   <Table responsive hover size="sm" className="mb-0 align-middle">
-                    <thead className="text-muted small text-uppercase bg-light">
+                    <thead className="text-muted small text-uppercase bg-body-tertiary">
                       <tr>
                         <th>Name</th>
                         <th>Email</th>
@@ -795,7 +795,7 @@ export default function OrganizationDetails() {
                   )}
                   {!isLoadingActivity && !isActivityError && pagedActivityLogs.length > 0 && (
                     <Table responsive hover className="mb-0 align-middle">
-                      <thead className="text-muted small text-uppercase bg-light">
+                      <thead className="text-muted small text-uppercase bg-body-tertiary">
                         <tr>
                           <th className="ps-4">Time</th>
                           <th>User</th>
@@ -1074,7 +1074,7 @@ export default function OrganizationDetails() {
                   )}
                   {pagedTenantUsers.length > 0 && (
                     <Table responsive hover className="mb-0 align-middle">
-                      <thead className="text-muted small text-uppercase bg-light">
+                      <thead className="text-muted small text-uppercase bg-body-tertiary">
                         <tr>
                           <th className="ps-4">User</th>
                           <th>Role</th>
@@ -1186,7 +1186,7 @@ export default function OrganizationDetails() {
                   )}
                   {pagedTenantExams.length > 0 && (
                     <Table responsive hover className="mb-0 align-middle">
-                      <thead className="text-muted small text-uppercase bg-light">
+                      <thead className="text-muted small text-uppercase bg-body-tertiary">
                         <tr>
                           <th className="ps-4">Exam</th>
                           <th>Category</th>

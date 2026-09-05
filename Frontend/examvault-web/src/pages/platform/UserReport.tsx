@@ -290,7 +290,7 @@ export default function UserReport() {
                 <div className="text-center text-muted py-5">No users match your filters.</div>
               ) : (
                 <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th className="ps-4">User</th>
                       <th>Role</th>

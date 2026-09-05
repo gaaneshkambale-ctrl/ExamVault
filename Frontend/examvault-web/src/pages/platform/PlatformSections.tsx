@@ -287,7 +287,7 @@ export default function PlatformSections() {
 
                       return (
                         <div key={examId} className="border rounded-3 overflow-hidden">
-                          <div className="d-flex align-items-center justify-content-between px-3 py-2 bg-light">
+                          <div className="d-flex align-items-center justify-content-between px-3 py-2 bg-body-tertiary">
                             <span className="d-flex align-items-center gap-2">
                               <span
                                 className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"

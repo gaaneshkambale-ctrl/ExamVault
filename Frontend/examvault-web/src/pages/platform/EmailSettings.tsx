@@ -30,7 +30,7 @@ import type { PlatformSettings, UpdatePlatformSettingsRequest } from '../../type
 // separate copy) via a cross-service call. Templates/Signature stay honest
 // placeholders - no template-editing concept exists anywhere.
 const CONNECTION_STATUS_LABEL: Record<EmailConnectionStatusValue, { label: string; variant: string }> = {
-  NotConfigured: { label: 'Not configured', variant: 'light' },
+  NotConfigured: { label: 'Not configured', variant: 'secondary' },
   Reachable: { label: 'Reachable', variant: 'success' },
   Unreachable: { label: 'Unreachable', variant: 'danger' },
 };
@@ -184,15 +184,11 @@ export default function EmailSettings() {
                       <Card.Body>
                         <h2 className="h6 fw-bold mb-3">Connection Status</h2>
                         {connectionStatusMutation.data ? (
-                          <Badge
-                            bg={CONNECTION_STATUS_LABEL[connectionStatusMutation.data.status].variant}
-                            text={connectionStatusMutation.data.status === 'NotConfigured' ? 'muted' : undefined}
-                            className={connectionStatusMutation.data.status === 'NotConfigured' ? 'border mb-2' : 'mb-2'}
-                          >
+                          <Badge bg={CONNECTION_STATUS_LABEL[connectionStatusMutation.data.status].variant} className="mb-2">
                             {CONNECTION_STATUS_LABEL[connectionStatusMutation.data.status].label}
                           </Badge>
                         ) : (
-                          <Badge bg="light" text="muted" className="border mb-2">
+                          <Badge bg="secondary" className="mb-2">
                             Not checked yet
                           </Badge>
                         )}

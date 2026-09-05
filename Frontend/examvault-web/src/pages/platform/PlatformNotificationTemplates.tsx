@@ -182,7 +182,7 @@ export default function PlatformNotificationTemplates() {
           {!isLoading && !isError && items.length > 0 && (
             <div className="table-responsive">
               <Table hover className="mb-0 align-middle">
-                <thead className="text-muted small text-uppercase bg-light">
+                <thead className="text-muted small text-uppercase bg-body-tertiary">
                   <tr>
                     <th>Template Name</th>
                     <th>Type</th>

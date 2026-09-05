@@ -7674,3 +7674,56 @@ The Dashboard was never updated to use it. Out of scope for this dark-
 mode bug fix; worth a follow-up.
 
 NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Fixed a much bigger dark-mode bug from 4 more user
+screenshots (41.png Plans, 42.png Email Settings, 43.png Sections, 44.png
+Question Bank). Same bug class as the earlier bg-white fix, but this time
+`bg-light` - Bootstrap's OTHER literal, theme-independent utility (never
+Bootstrap-variable-driven, stays a fixed light gray in dark mode too,
+unlike `bg-body`/`bg-body-tertiary`). Grepped the whole Platform Admin
+section and found it was pervasive - not just the 4 reported pages:
+
+  - 26 files' table `<thead className="text-muted small text-uppercase
+    bg-light">` - nearly every data table in the entire Super Admin
+    console (Users, Organizations, Exams, Questions, Submissions, every
+    Reports/Security page, etc.) had an illegible washed-out header row
+    in dark mode. Bulk-replaced bg-light -> bg-body-tertiary across all
+    26 (identical className string everywhere, safe for a scripted
+    find/replace).
+  - PlatformQuestionBank.tsx and PlatformSections.tsx's exam-group and
+    section-group header rows (`bg-light` div, plus a hardcoded
+    `#fafafa` on the nested section row) - 43.png/44.png's exact bug.
+  - SystemLogs.tsx's stack-trace `<pre className="bg-light">` block.
+  - EmailSettings.tsx's Connection Status badges (`bg="light"
+    text="muted"` for both "Not checked yet" and the "NotConfigured"
+    state) - 42.png's bug - switched to `bg="secondary"` (the same
+    theme-safe neutral already used for "Inactive"-style badges
+    elsewhere in this console).
+  - SubscriptionPlans.tsx's hardcoded hex backgrounds - `#f5f5ff` (the
+    "Full Access" plan card, the create/edit modal's SectionBar, and a
+    selected-module-checkbox highlight) and `#f8f9fb` (the Students/
+    Admins/Instructors/Exams limit stat boxes) - 41.png's bug. Fixed
+    with Bootstrap 5.3's theme-aware `-subtle` background utilities
+    (`bg-primary-subtle` for the indigo-tinted highlights, `bg-body-
+    tertiary` for the neutral stat boxes) - already an established
+    pattern elsewhere in the app (13 other files already use `-subtle`
+    classes), just never applied to these particular elements.
+
+Deliberately left alone: 3 `badge bg-light text-success` instances
+(System Health/API Health/Service Status monitoring pages) - these pair
+a light background with colored (not muted) success-green text, which
+stays sufficiently vivid/readable against a light badge regardless of
+theme, weren't in any reported screenshot, and are a materially
+different risk profile than the confirmed muted-text-on-light-background
+break - left as a possible future check rather than changed
+speculatively.
+
+Verification: tsc clean, npm run build succeeded, lint clean (only
+pre-existing unrelated warnings), 61/61 tests passed. Rebuilt and
+redeployed the frontend Docker image. Live-verified in dark mode as
+Super Admin against all 4 reported screenshots: Plans' "Full Access"
+card and stat boxes, Email Settings' "Not checked yet" badge, Sections'
+exam-group header rows, and Question Bank's exam/section header rows all
+now render with a proper dark surface and fully legible text.
+
+NOT committed/pushed - holding per the user's standing rule.

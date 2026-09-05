@@ -322,7 +322,7 @@ export default function SystemLogs() {
 
           {!isLoading && !isError && filteredLogs.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Time</th>
                   <th>Service</th>
@@ -426,7 +426,7 @@ export default function SystemLogs() {
             )}
           </div>
           {detailsLog?.stackTrace && (
-            <pre className="bg-light p-3 rounded small" style={{ maxHeight: 320, overflow: 'auto' }}>
+            <pre className="bg-body-tertiary p-3 rounded small" style={{ maxHeight: 320, overflow: 'auto' }}>
               {detailsLog.stackTrace}
             </pre>
           )}
