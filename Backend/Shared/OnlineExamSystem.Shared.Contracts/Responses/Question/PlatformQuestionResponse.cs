@@ -15,4 +15,6 @@ public record PlatformQuestionResponse(
     string QuestionText,
     int Marks,
     string Difficulty,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    Guid CreatedByUserId = default,
+    string? CreatedByName = null);

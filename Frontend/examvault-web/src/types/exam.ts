@@ -53,6 +53,8 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
   examTypeName?: string | null;
   tenantId: string;
   tags: string;
+  createdByUserId: string;
+  createdByName: string | null;
 }
 
 // Dynamic, admin-manageable exam-purpose classification (Practice/Mock/

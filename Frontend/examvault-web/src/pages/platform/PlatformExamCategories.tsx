@@ -338,7 +338,8 @@ export default function PlatformExamCategories() {
                             <th className="ps-4">Exam Name</th>
                             <th>Organization</th>
                             <th>Status</th>
-                            <th className="pe-4">Created On</th>
+                            <th>Created On</th>
+                            <th className="pe-4">Created By</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -360,7 +361,8 @@ export default function PlatformExamCategories() {
                                   {exam.status}
                                 </Badge>
                               </td>
-                              <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
+                              <td>{new Date(exam.createdOn).toLocaleDateString()}</td>
+                              <td className="pe-4 text-muted">{exam.createdByName ?? '—'}</td>
                             </tr>
                           ))}
                         </tbody>

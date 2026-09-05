@@ -33,6 +33,7 @@ public class QuestionsController : ControllerBase
     private readonly DeleteQuestionHandler _deleteQuestionHandler;
     private readonly BulkAssignSectionHandler _bulkAssignSectionHandler;
     private readonly UnassignSectionHandler _unassignSectionHandler;
+    private readonly IInternalUserLookupClient _userLookupClient;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<QuestionsController> _logger;
 
@@ -45,6 +46,7 @@ public class QuestionsController : ControllerBase
         DeleteQuestionHandler deleteQuestionHandler,
         BulkAssignSectionHandler bulkAssignSectionHandler,
         UnassignSectionHandler unassignSectionHandler,
+        IInternalUserLookupClient userLookupClient,
         IAuditClient auditClient,
         ILogger<QuestionsController> logger)
     {
@@ -56,6 +58,7 @@ public class QuestionsController : ControllerBase
         _deleteQuestionHandler = deleteQuestionHandler;
         _bulkAssignSectionHandler = bulkAssignSectionHandler;
         _unassignSectionHandler = unassignSectionHandler;
+        _userLookupClient = userLookupClient;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -143,6 +146,7 @@ public class QuestionsController : ControllerBase
     public async Task<IActionResult> ListAll(CancellationToken cancellationToken)
     {
         var questions = await _listAllQuestionsHandler.HandleAsync(new ListAllQuestionsQuery(), cancellationToken);
+        var names = await ActorNameResolver.ResolveAsync(_userLookupClient, questions.Select(q => (Guid?)q.CreatedByUserId), cancellationToken);
         return Ok(questions.Select(q => new PlatformQuestionResponse(
             q.Id,
             q.ExamId,
@@ -152,7 +156,9 @@ public class QuestionsController : ControllerBase
             q.QuestionText,
             q.Marks,
             q.Difficulty.ToString(),
-            q.CreatedAtUtc)));
+            q.CreatedAtUtc,
+            q.CreatedByUserId,
+            names.GetValueOrDefault(q.CreatedByUserId))));
     }
 
     [HttpPut("bulk-assign-section")]

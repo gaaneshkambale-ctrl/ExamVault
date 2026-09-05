@@ -7448,4 +7448,82 @@ within the same verification pass (visible in the next screenshot),
 immediately toggled back off and re-saved. Confirmed OFF as the final
 state; no real login disruption window.
 
+DONE (2026-09-05): Fixed a real dark-mode bug the user hit live - after
+logging out of a Dark-mode Super Admin session, the public landing page
+(and its Login/Register modal) stayed dark, with the modal rendering a
+mixed light/dark split (hardcoded-light left panel next to a dark-themed
+right form half). Root cause: ThemeProvider (context/ThemeProvider.tsx)
+sat above BrowserRouter in App.tsx and applied `data-bs-theme` to
+<html> globally with zero route or auth awareness - the same global
+attribute Bootstrap uses for every page, public marketing site included.
+Fix: split theme STATE (ThemeProvider, unchanged - context + localStorage
+persistence) from theme APPLICATION (new ThemeSync component) - ThemeSync
+reads both useTheme() and useAuth() and forces 'light' whenever
+!isAuthenticated, regardless of the saved preference; only an actually
+logged-in user's own dark-mode choice ever reaches the DOM. Mounted
+inside AuthProvider in App.tsx. Verification: tsc clean, build succeeded,
+61/61 tests passed. Live-verified by reproducing the user's exact report -
+logged in as Super Admin, set Dark, logged out - landing page and modal
+now render fully light, both halves included (the mixed-halves symptom
+was purely a downstream effect of dark leaking onto a page that was never
+designed to support it, not a separate bug in AuthModal itself).
+Docker frontend rebuilt and redeployed (cache-hit build, 94s).
+
+NOT committed/pushed - holding per the user's standing rule.
+
+DONE (2026-09-05): Extended "Created By" visibility to 3 more Super Admin
+screens the user flagged as missing it - All Exams, Exam Categories (same
+underlying ExamPaper data, just grouped differently - confirmed there's no
+separate real "category" entity Super Admin manages here), and Question
+Bank. Unlike the 5 tables fixed earlier this session (all inside User
+Service's own database), these live in Exam Service and Question Service -
+each with their own separate database, so resolving a CreatedByUserId Guid
+into a name needs a cross-service call, not a local repository lookup.
+
+ExamPaper.CreatedByUserId and Question Service's own ExamQuestion.
+CreatedByUserId both already existed pre-audit (confirmed via git blame -
+present since each service's very first migration, unrelated to this
+session's 7-table audit) - the gap was purely that neither Response DTO
+exposed it and neither controller resolved it to a name, so it was
+captured but invisible.
+
+Exam Service already had the needed piece - IInternalUserLookupClient
+(hits User Service's anonymous internal/users/by-ids endpoint, no bearer
+token needed), already registered in DI and already used by
+CreateAssignmentHandler/reminder jobs, just never wired into
+ExamsController. Added an ActorNameResolver (Exam.API), injected the
+existing client into ExamsController, added CreatedByUserId/CreatedByName
+to ExamResponse, and resolved names at all 5 ToResponse call sites
+(Create/List/GetById/Update/ChangeStatus).
+
+Question Service had NO cross-service user-lookup client at all -
+Services:UserServiceBaseUrl was already configured (for
+IPermissionVersionClient) but nothing used it for this. Added
+IInternalUserLookupClient + InternalUserServiceClient (Question service,
+mirroring Exam Service's exactly) plus its own ActorNameResolver, wired
+into QuestionsController.ListAll (Super Admin's cross-tenant Question Bank
+endpoint), and added CreatedByUserId/CreatedByName to
+PlatformQuestionResponse.
+
+Frontend: added the new fields to types/exam.ts (ExamResponse) and
+types/question.ts (PlatformQuestionResponse), added "Created By" columns
+to PlatformAllExams.tsx, PlatformExamCategories.tsx, and
+PlatformQuestionBank.tsx.
+
+Verification: dotnet build clean on both Exam Service and Question
+Service. Full test suites green: Exam Service Application.Tests 84/84,
+Question Service Application.Tests 50/50. Frontend: tsc clean, build
+succeeded, 61/61 tests passed. Rebuilt and redeployed all 3 Docker images
+(exam-api, question-api, frontend). Live-verified in the browser as Super
+Admin: All Exams and Exam Categories both show real resolved names
+("QA Instructor 1", "Test Admin", "Amit lakade") spanning multiple
+tenants, with "—" correctly falling back for older/seeded exams; Question
+Bank's search-filtered view confirmed the new Question Service ->
+User Service cross-service lookup resolves a real name ("QA Instructor 1")
+for a recently-created question, with "—" for older ones - proving the
+brand-new client works end-to-end, not just the already-proven Exam
+Service path.
+
+NOT committed/pushed - holding per the user's standing rule.
+
 NOT committed/pushed - holding per the user's standing rule.

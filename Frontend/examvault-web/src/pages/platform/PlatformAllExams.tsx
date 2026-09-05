@@ -245,7 +245,8 @@ export default function PlatformAllExams() {
                   <th>Category</th>
                   <th>Status</th>
                   <th>Questions</th>
-                  <th className="pe-4">Created On</th>
+                  <th>Created On</th>
+                  <th className="pe-4">Created By</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,7 +270,8 @@ export default function PlatformAllExams() {
                       </Badge>
                     </td>
                     <td className="text-muted">{questionCounts[exam.id] ?? exam.totalQuestions}</td>
-                    <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
+                    <td>{new Date(exam.createdOn).toLocaleDateString()}</td>
+                    <td className="pe-4 text-muted">{exam.createdByName ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

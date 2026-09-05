@@ -493,7 +493,8 @@ export default function PlatformQuestionBank() {
                                       <th>Type</th>
                                       <th>Difficulty</th>
                                       <th>Marks</th>
-                                      <th className="pe-3">Added On</th>
+                                      <th>Added On</th>
+                                      <th className="pe-3">Created By</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -511,7 +512,8 @@ export default function PlatformQuestionBank() {
                                           <Badge bg={DIFFICULTY_VARIANT[q.difficulty]}>{q.difficulty}</Badge>
                                         </td>
                                         <td className="text-muted">{q.marks}</td>
-                                        <td className="pe-3 text-muted">{new Date(q.createdAtUtc).toLocaleDateString()}</td>
+                                        <td className="text-muted">{new Date(q.createdAtUtc).toLocaleDateString()}</td>
+                                        <td className="pe-3 text-muted">{q.createdByName ?? '—'}</td>
                                       </tr>
                                     ))}
                                   </tbody>

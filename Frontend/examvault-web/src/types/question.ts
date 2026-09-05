@@ -143,4 +143,6 @@ export interface PlatformQuestionResponse {
   marks: number;
   difficulty: QuestionDifficulty;
   createdAtUtc: string;
+  createdByUserId: string;
+  createdByName: string | null;
 }

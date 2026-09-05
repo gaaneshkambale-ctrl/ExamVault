@@ -29,6 +29,7 @@ public class ExamsController : ControllerBase
     private readonly UpdateExamHandler _updateExamHandler;
     private readonly ChangeExamStatusHandler _changeExamStatusHandler;
     private readonly DeleteExamHandler _deleteExamHandler;
+    private readonly IInternalUserLookupClient _userLookupClient;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<ExamsController> _logger;
 
@@ -39,6 +40,7 @@ public class ExamsController : ControllerBase
         UpdateExamHandler updateExamHandler,
         ChangeExamStatusHandler changeExamStatusHandler,
         DeleteExamHandler deleteExamHandler,
+        IInternalUserLookupClient userLookupClient,
         IAuditClient auditClient,
         ILogger<ExamsController> logger)
     {
@@ -48,6 +50,7 @@ public class ExamsController : ControllerBase
         _updateExamHandler = updateExamHandler;
         _changeExamStatusHandler = changeExamStatusHandler;
         _deleteExamHandler = deleteExamHandler;
+        _userLookupClient = userLookupClient;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -101,7 +104,8 @@ public class ExamsController : ControllerBase
             User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
-        return StatusCode(StatusCodes.Status201Created, ToResponse(exam));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, exam.CreatedByUserId, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, ToResponse(exam, createdByName));
     }
 
     [HttpGet]
@@ -109,7 +113,8 @@ public class ExamsController : ControllerBase
     {
         var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var exams = await _listExamsHandler.HandleAsync(new ListExamsQuery(callerId, GetCallerExamAccessScope()), cancellationToken);
-        return Ok(exams.Select(ToResponse));
+        var names = await ActorNameResolver.ResolveAsync(_userLookupClient, exams.Select(e => (Guid?)e.CreatedByUserId), cancellationToken);
+        return Ok(exams.Select(e => ToResponse(e, names.GetValueOrDefault(e.CreatedByUserId))));
     }
 
     [HttpGet("{id:guid}")]
@@ -122,7 +127,8 @@ public class ExamsController : ControllerBase
             return NotFound(new { message = "Exam not found." });
         }
 
-        return Ok(ToResponse(exam));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, exam.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(exam, createdByName));
     }
 
     // SuperAdmin/Admin get unrestricted tenant-wide (or cross-tenant, for
@@ -204,7 +210,8 @@ public class ExamsController : ControllerBase
         }
 
         _logger.LogInformation("Exam {ExamId} updated.", id);
-        return Ok(ToResponse(result.Exam!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, result.Exam!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Exam!, createdByName));
     }
 
     [HttpDelete("{id:guid}")]
@@ -290,10 +297,11 @@ public class ExamsController : ControllerBase
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken);
         }
-        return Ok(ToResponse(result.Exam!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, result.Exam!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.Exam!, createdByName));
     }
 
-    private static ExamResponse ToResponse(ExamPaper exam) =>
+    private static ExamResponse ToResponse(ExamPaper exam, string? createdByName) =>
         new(
             exam.Id,
             exam.Title,
@@ -327,5 +335,7 @@ public class ExamsController : ControllerBase
             exam.ExamTypeId,
             exam.ExamType?.Name,
             exam.TenantId,
-            exam.Tags);
+            exam.Tags,
+            exam.CreatedByUserId,
+            createdByName);
 }

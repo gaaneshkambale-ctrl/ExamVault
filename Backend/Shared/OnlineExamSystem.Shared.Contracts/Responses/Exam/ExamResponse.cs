@@ -33,4 +33,6 @@ public record ExamResponse(
     Guid? ExamTypeId = null,
     string? ExamTypeName = null,
     Guid TenantId = default,
-    string Tags = "");
+    string Tags = "",
+    Guid CreatedByUserId = default,
+    string? CreatedByName = null);

@@ -73,6 +73,8 @@ public class Program
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
             client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
         builder.Services.AddMemoryCache();
         builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MainLayout from './layouts/MainLayout';
 import AppRoutes from './routes/AppRoutes';
 import { AuthProvider } from './context/AuthProvider';
-import { ThemeProvider } from './context/ThemeProvider';
+import { ThemeProvider, ThemeSync } from './context/ThemeProvider';
 
 const queryClient = new QueryClient();
 
@@ -12,6 +12,7 @@ function App() {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
+          <ThemeSync />
           <BrowserRouter>
             <MainLayout>
               <AppRoutes />
