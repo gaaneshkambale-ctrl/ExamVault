@@ -18,10 +18,11 @@ interface ImportRow {
   email: string;
   role: string;
   phoneNumber: string;
+  rollNumber: string;
   status: 'Valid' | string;
 }
 
-const TEMPLATE_HEADERS = ['Full Name', 'Email', 'Role', 'Phone Number'];
+const TEMPLATE_HEADERS = ['Full Name', 'Email', 'Role', 'Phone Number', 'Roll Number'];
 
 function UploadIcon() {
   return (
@@ -80,10 +81,11 @@ async function downloadTemplate() {
       { value: 'jane.doe@example.com' },
       { value: 'Student' },
       { value: '9876543210' },
+      { value: 'R-1001' },
     ],
   ];
   await writeXlsxFile(data, {
-    columns: [{ width: 24 }, { width: 28 }, { width: 14 }, { width: 18 }],
+    columns: [{ width: 24 }, { width: 28 }, { width: 14 }, { width: 18 }, { width: 16 }],
   }).toFile('user-import-template.xlsx');
 }
 
@@ -123,6 +125,7 @@ export default function ImportUsers() {
         email: cells[1] ? String(cells[1]).trim() : '',
         role: cells[2] ? String(cells[2]).trim() : '',
         phoneNumber: cells[3] ? String(cells[3]).trim() : '',
+        rollNumber: cells[4] ? String(cells[4]).trim() : '',
         status: 'Valid',
       }));
       const validated = parsed.map((row) => ({ ...row, status: validateRow(row, parsed) }));
@@ -159,6 +162,7 @@ export default function ImportUsers() {
           email: row.email,
           role: row.role as UserRole,
           phoneNumber: row.phoneNumber,
+          rollNumber: row.rollNumber || null,
         };
         return createUser(request);
       }),
@@ -295,7 +299,7 @@ export default function ImportUsers() {
                 </li>
                 <li className="mb-2">Email must be unique, both within the file and across existing users.</li>
                 <li className="mb-2">Password isn't collected here - it's auto-generated and emailed on creation.</li>
-                <li>Phone Number is optional.</li>
+                <li>Phone Number and Roll Number are both optional.</li>
               </ul>
             </Card.Body>
           </Card>
@@ -340,6 +344,7 @@ export default function ImportUsers() {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Phone Number</th>
+                  <th>Roll Number</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -351,6 +356,7 @@ export default function ImportUsers() {
                     <td>{row.email}</td>
                     <td>{row.role}</td>
                     <td>{row.phoneNumber || '-'}</td>
+                    <td>{row.rollNumber || '-'}</td>
                     <td>
                       <Badge bg={row.status === 'Valid' ? 'success' : 'danger'}>{row.status}</Badge>
                     </td>
