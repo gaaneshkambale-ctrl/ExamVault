@@ -187,4 +187,49 @@ public class ChangeExamStatusHandlerTests
         Assert.False(result.Success);
         Assert.True(result.IsNotFound);
     }
+
+    [Fact]
+    public async Task Owner_instructor_can_publish_their_own_exam()
+    {
+        var repository = new FakeExamRepository();
+        var ownerId = Guid.NewGuid();
+        var exam = new ExamPaper
+        {
+            Title = "C# Fundamentals",
+            Status = ExamStatus.Draft,
+            ContainsSections = false,
+            CreatedByUserId = ownerId,
+        };
+        await repository.AddAsync(exam);
+        var questionServiceClient = new FakeQuestionServiceClient();
+        questionServiceClient.QuestionCountsByExamId[exam.Id] = 1;
+        var handler = new ChangeExamStatusHandler(repository, questionServiceClient);
+
+        var result = await handler.HandleAsync(
+            new ChangeExamStatusCommand(exam.Id, ExamStatus.Published, OwnerUserId: ownerId));
+
+        Assert.True(result.Success);
+        Assert.Equal(ExamStatus.Published, result.Exam!.Status);
+    }
+
+    [Fact]
+    public async Task Non_owner_instructor_cannot_publish_another_instructors_exam()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper
+        {
+            Title = "C# Fundamentals",
+            Status = ExamStatus.Draft,
+            CreatedByUserId = Guid.NewGuid(),
+        };
+        await repository.AddAsync(exam);
+        var handler = new ChangeExamStatusHandler(repository, new FakeQuestionServiceClient());
+
+        var result = await handler.HandleAsync(
+            new ChangeExamStatusCommand(exam.Id, ExamStatus.Published, OwnerUserId: Guid.NewGuid()));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsForbidden);
+        Assert.Equal(ExamStatus.Draft, exam.Status);
+    }
 }

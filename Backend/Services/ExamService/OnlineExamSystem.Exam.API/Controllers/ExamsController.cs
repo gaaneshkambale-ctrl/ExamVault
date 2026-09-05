@@ -242,19 +242,19 @@ public class ExamsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/publish")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
     public Task<IActionResult> Publish(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Published, cancellationToken);
 
     [HttpPost("{id:guid}/unpublish")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
     public Task<IActionResult> Unpublish(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Draft, cancellationToken);
 
     [HttpPost("{id:guid}/archive")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
     public Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken) =>
         ChangeStatus(id, ExamStatus.Archived, cancellationToken);
@@ -267,13 +267,25 @@ public class ExamsController : ControllerBase
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
 
+        // Instructor is restricted to exams they created themselves, same
+        // ownership rule Update already enforces; Admin/SuperAdmin remain
+        // unrestricted (null = no ownership check).
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         var result = await _changeExamStatusHandler.HandleAsync(
-            new ChangeExamStatusCommand(id, targetStatus, bearerToken),
+            new ChangeExamStatusCommand(id, targetStatus, bearerToken, ownerUserId),
             cancellationToken);
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Exam not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (result.InvalidTransition)

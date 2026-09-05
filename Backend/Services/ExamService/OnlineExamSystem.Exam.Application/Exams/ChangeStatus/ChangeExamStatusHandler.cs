@@ -26,6 +26,14 @@ public class ChangeExamStatusHandler
             return ChangeExamStatusResult.NotFound();
         }
 
+        // Instructor is restricted to exams they created themselves, same
+        // ownership rule Update already enforces; Admin/SuperAdmin remain
+        // unrestricted (null = no ownership check).
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return ChangeExamStatusResult.Forbidden();
+        }
+
         if (!ExamStatusTransitions.CanTransition(exam.Status, command.TargetStatus))
         {
             return ChangeExamStatusResult.Invalid();
