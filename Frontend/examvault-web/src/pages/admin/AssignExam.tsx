@@ -17,7 +17,7 @@ import { extractServerError } from '../../utils/apiError';
 
 type WizardStep = 1 | 2 | 3 | 4;
 
-const EXAMS_PAGE_SIZE = 10;
+const EXAMS_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function SearchIcon() {
   return (
@@ -149,6 +149,7 @@ export default function AssignExam() {
   const [showExamFilters, setShowExamFilters] = useState(false);
   const [examCategoryFilter, setExamCategoryFilter] = useState('All');
   const [examPage, setExamPage] = useState(1);
+  const [examPageSize, setExamPageSize] = useState(EXAMS_PAGE_SIZE_OPTIONS[0]);
 
   const [targetType, setTargetType] = useState<AssignmentTargetType>('Students');
   const [studentSearch, setStudentSearch] = useState('');
@@ -235,14 +236,14 @@ export default function AssignExam() {
     setExamPage(1);
   }, [examSearch, examCategoryFilter]);
 
-  const examTotalPages = Math.max(1, Math.ceil(filteredExams.length / EXAMS_PAGE_SIZE));
+  const examTotalPages = Math.max(1, Math.ceil(filteredExams.length / examPageSize));
   const examCurrentPage = Math.min(examPage, examTotalPages);
   const pagedExams = filteredExams.slice(
-    (examCurrentPage - 1) * EXAMS_PAGE_SIZE,
-    examCurrentPage * EXAMS_PAGE_SIZE,
+    (examCurrentPage - 1) * examPageSize,
+    examCurrentPage * examPageSize,
   );
-  const examRangeStart = filteredExams.length === 0 ? 0 : (examCurrentPage - 1) * EXAMS_PAGE_SIZE + 1;
-  const examRangeEnd = Math.min(examCurrentPage * EXAMS_PAGE_SIZE, filteredExams.length);
+  const examRangeStart = filteredExams.length === 0 ? 0 : (examCurrentPage - 1) * examPageSize + 1;
+  const examRangeEnd = Math.min(examCurrentPage * examPageSize, filteredExams.length);
 
   const availableStudents = students.filter(
     (s) => !selectedStudentIds.includes(s.id) && s.fullName.toLowerCase().includes(studentSearch.trim().toLowerCase()),
@@ -604,6 +605,9 @@ export default function AssignExam() {
                     rangeEnd={examRangeEnd}
                     totalCount={filteredExams.length}
                     onPageChange={setExamPage}
+                    pageSize={examPageSize}
+                    pageSizeOptions={EXAMS_PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setExamPageSize}
                   />
                 )}
                 </>

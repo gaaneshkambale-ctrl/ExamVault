@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteGroupButton from '../../components/DeleteGroupButton';
+import { getPaginationRange } from '../../utils/paginationRange';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import { CheckCircleIcon, MinusCircleIcon } from '../../components/reports/ReportIcons';
 import { UsersIcon } from '../../components/icons/ActionIcons';
@@ -35,7 +36,7 @@ function PersonIcon() {
   );
 }
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE_OPTIONS = [5, 25, 50];
 
 export default function ManageGroups() {
   const { data: groups, isLoading, isError } = useGroups();
@@ -43,6 +44,7 @@ export default function ManageGroups() {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
@@ -62,11 +64,11 @@ export default function ManageGroups() {
     setPage(1);
   }, [searchText]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedGroups = filteredGroups.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredGroups.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredGroups.length);
+  const pagedGroups = filteredGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredGroups.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredGroups.length);
 
   const openCreate = () => {
     createMutation.reset();
@@ -247,18 +249,38 @@ export default function ManageGroups() {
           <div className="text-muted small">
             Showing {rangeStart} to {rangeEnd} of {filteredGroups.length} groups
           </div>
-          <Pagination className="mb-0">
-            <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                {p}
-              </Pagination.Item>
-            ))}
-            <Pagination.Next
-              disabled={currentPage === totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            />
-          </Pagination>
+          <div className="d-flex align-items-center gap-3">
+            <Pagination className="mb-0">
+              <Pagination.First disabled={currentPage === 1} onClick={() => setPage(1)} />
+              <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+              {getPaginationRange(currentPage, totalPages).map((p, i) =>
+                p === 'ellipsis' ? (
+                  <Pagination.Ellipsis key={`ellipsis-${i}`} disabled />
+                ) : (
+                  <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                    {p}
+                  </Pagination.Item>
+                ),
+              )}
+              <Pagination.Next
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              />
+              <Pagination.Last disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} />
+            </Pagination>
+            <Form.Select
+              size="sm"
+              style={{ width: 100 }}
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </Form.Select>
+          </div>
         </div>
       )}
     </AdminLayout>

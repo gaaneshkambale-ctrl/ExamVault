@@ -18,7 +18,7 @@ const statusVariant: Record<string, string> = {
   Processing: 'secondary',
 };
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE_OPTIONS = [8, 25, 50];
 
 export default function ExamResults() {
   const { data: exams, isLoading: isLoadingExams } = useExams();
@@ -28,6 +28,7 @@ export default function ExamResults() {
 
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const loading = isLoadingExams || isLoadingResults || isLoadingAttempts;
 
@@ -106,11 +107,11 @@ export default function ExamResults() {
     };
   }, [allResults]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredExamStats.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredExamStats.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedStats = filteredExamStats.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredExamStats.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredExamStats.length);
+  const pagedStats = filteredExamStats.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredExamStats.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredExamStats.length);
 
   return (
     <AdminLayout active="Exam Results">
@@ -224,6 +225,9 @@ export default function ExamResults() {
         rangeEnd={rangeEnd}
         totalCount={filteredExamStats.length}
         onPageChange={setPage}
+        pageSize={pageSize}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        onPageSizeChange={setPageSize}
       />
     </AdminLayout>
   );

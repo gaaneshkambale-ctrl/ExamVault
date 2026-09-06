@@ -11,7 +11,7 @@ import type { ScheduleStatus } from '../../types/assignment';
 import { isWithinRange } from '../../utils/dateRange';
 import { extractServerError } from '../../utils/apiError';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 const STATUS_VARIANT: Record<ScheduleStatus, string> = {
   Upcoming: 'primary',
@@ -66,6 +66,7 @@ export default function ExamScheduled() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; examTitle: string } | null>(null);
 
   // Assignments don't carry an exam-type field of their own - cross
@@ -109,11 +110,11 @@ export default function ExamScheduled() {
     setPage(1);
   }, [search, examTypeFilter, statusFilter, startDate, endDate]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredRows.length);
+  const pagedRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredRows.length);
 
   const counts = {
     total: rows.length,
@@ -242,7 +243,7 @@ export default function ExamScheduled() {
               <tbody>
                 {pagedRows.map((r, i) => (
                   <tr key={r.id}>
-                    <td className="ps-4">{(currentPage - 1) * PAGE_SIZE + i + 1}</td>
+                    <td className="ps-4">{(currentPage - 1) * pageSize + i + 1}</td>
                     <td className="fw-medium">{r.examTitle}</td>
                     <td>{r.examTypeName ?? '—'}</td>
                     <td>{new Date(r.startAtUtc).toLocaleString()}</td>
@@ -298,6 +299,9 @@ export default function ExamScheduled() {
           rangeEnd={rangeEnd}
           totalCount={filteredRows.length}
           onPageChange={setPage}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setPageSize}
         />
       )}
 

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import { useExams } from '../../hooks/useExams';
 import { usePermissions } from '../../hooks/usePermissions';
 import { getMyAttempt } from '../../api/submissionApi';
@@ -88,7 +89,7 @@ function timeLeftLabel(startedAtUtc: string | null, durationMinutes: number): st
   return `${Math.ceil(remainingMs / 60000)} min`;
 }
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE_OPTIONS = [6, 25, 50];
 
 export default function MyExams() {
   const { hasPermission } = usePermissions();
@@ -100,6 +101,7 @@ export default function MyExams() {
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<'All' | CreationMethod>('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   // Only Published exams are relevant to a student.
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
@@ -189,11 +191,11 @@ export default function MyExams() {
     setPage(1);
   }, [tab, typeFilter, searchText]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredExams.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredExams.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedExams = filteredExams.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredExams.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredExams.length);
+  const pagedExams = filteredExams.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredExams.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredExams.length);
 
   const loading = isLoading || isLoadingAttempts;
 
@@ -419,23 +421,17 @@ export default function MyExams() {
       </Card>
 
       {!loading && !isError && filteredExams.length > 0 && (
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <div className="text-muted small">
-            Showing {rangeStart} to {rangeEnd} of {filteredExams.length} exams
-          </div>
-          <Pagination className="mb-0">
-            <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                {p}
-              </Pagination.Item>
-            ))}
-            <Pagination.Next
-              disabled={currentPage === totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            />
-          </Pagination>
-        </div>
+        <TablePagination
+          page={currentPage}
+          totalPages={totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          totalCount={filteredExams.length}
+          onPageChange={setPage}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setPageSize}
+        />
       )}
     </StudentLayout>
   );

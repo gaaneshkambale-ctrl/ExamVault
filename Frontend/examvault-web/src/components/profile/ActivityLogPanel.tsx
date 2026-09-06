@@ -7,7 +7,7 @@ import { DownloadIcon } from '../icons/ActionIcons';
 import type { AuditModule } from '../../types/audit';
 
 const MODULES: AuditModule[] = ['Auth', 'Users', 'Exams', 'Questions', 'Results', 'Security'];
-const PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -47,6 +47,7 @@ export default function ActivityLogPanel() {
   const [toDate, setToDate] = useState(() => toDateInputValue(new Date()));
   const [module, setModule] = useState<AuditModule | 'All'>('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['audit-logs', 'mine', fromDate, toDate, module],
@@ -62,8 +63,8 @@ export default function ActivityLogPanel() {
     () => [...(data ?? [])].sort((a, b) => b.timestampUtc.localeCompare(a.timestampUtc)),
     [data],
   );
-  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
-  const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const pageItems = items.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div>
@@ -163,10 +164,16 @@ export default function ActivityLogPanel() {
         <TablePagination
           page={page}
           totalPages={totalPages}
-          rangeStart={items.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
-          rangeEnd={Math.min(page * PAGE_SIZE, items.length)}
+          rangeStart={items.length === 0 ? 0 : (page - 1) * pageSize + 1}
+          rangeEnd={Math.min(page * pageSize, items.length)}
           totalCount={items.length}
           onPageChange={setPage}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
         />
       )}
     </div>

@@ -22,6 +22,8 @@ function stepFromParam(value: string | null): 1 | 2 | 3 {
   return value === '2' ? 2 : value === '3' ? 3 : 1;
 }
 
+const QUESTIONS_PAGE_SIZE_OPTIONS = [10, 25, 50];
+
 const NAME_MAX = 200;
 const DESCRIPTION_MAX = 2000;
 const INSTRUCTIONS_MAX = 2000;
@@ -312,6 +314,7 @@ export default function SectionForm() {
   const [difficultyFilter, setDifficultyFilter] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [searchText, setSearchText] = useState('');
   const [questionPage, setQuestionPage] = useState(1);
+  const [questionPageSize, setQuestionPageSize] = useState(QUESTIONS_PAGE_SIZE_OPTIONS[0]);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showCreateQuestion, setShowCreateQuestion] = useState(false);
@@ -356,15 +359,14 @@ export default function SectionForm() {
   const allFilteredSelected =
     filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id));
 
-  const QUESTIONS_PAGE_SIZE = 10;
-  const questionTotalPages = Math.max(1, Math.ceil(filteredQuestions.length / QUESTIONS_PAGE_SIZE));
+  const questionTotalPages = Math.max(1, Math.ceil(filteredQuestions.length / questionPageSize));
   const questionCurrentPage = Math.min(questionPage, questionTotalPages);
   const pagedQuestions = filteredQuestions.slice(
-    (questionCurrentPage - 1) * QUESTIONS_PAGE_SIZE,
-    questionCurrentPage * QUESTIONS_PAGE_SIZE,
+    (questionCurrentPage - 1) * questionPageSize,
+    questionCurrentPage * questionPageSize,
   );
-  const questionRangeStart = filteredQuestions.length === 0 ? 0 : (questionCurrentPage - 1) * QUESTIONS_PAGE_SIZE + 1;
-  const questionRangeEnd = Math.min(questionCurrentPage * QUESTIONS_PAGE_SIZE, filteredQuestions.length);
+  const questionRangeStart = filteredQuestions.length === 0 ? 0 : (questionCurrentPage - 1) * questionPageSize + 1;
+  const questionRangeEnd = Math.min(questionCurrentPage * questionPageSize, filteredQuestions.length);
 
   // AI-generated exams get the multi-step AI generator instead of the manual form.
   const useAiGenerate = exam?.creationMethod === 'AiGenerated';
@@ -1077,6 +1079,9 @@ export default function SectionForm() {
                         rangeEnd={questionRangeEnd}
                         totalCount={filteredQuestions.length}
                         onPageChange={setQuestionPage}
+                        pageSize={questionPageSize}
+                        pageSizeOptions={QUESTIONS_PAGE_SIZE_OPTIONS}
+                        onPageSizeChange={setQuestionPageSize}
                       />
                     </>
                   )}

@@ -11,6 +11,7 @@ import { useUsers } from '../../hooks/useUsers';
 import { activateUser, deactivateUser, deleteUser } from '../../api/userApi';
 import { extractServerError } from '../../utils/apiError';
 import { bucketByDay } from '../../utils/dateRange';
+import { getPaginationRange } from '../../utils/paginationRange';
 import type { UserListItem, UserRole } from '../../types/user';
 
 const roleVariant: Record<UserRole, string> = {
@@ -176,7 +177,7 @@ function exportUsersToCsv(users: UserListItem[]) {
   URL.revokeObjectURL(url);
 }
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE_OPTIONS = [8, 25, 50];
 
 export default function ManageUsers() {
   const { data: users, isLoading, isError } = useUsers();
@@ -187,6 +188,7 @@ export default function ManageUsers() {
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [joinedAfter, setJoinedAfter] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
@@ -231,11 +233,11 @@ export default function ManageUsers() {
     setSelected(new Set());
   }, [searchText, roleFilter, statusFilter, joinedAfter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedUsers = filteredUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredUsers.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredUsers.length);
+  const pagedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredUsers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredUsers.length);
 
   const resetFilters = () => {
     setSearchText('');
@@ -544,21 +546,41 @@ export default function ManageUsers() {
           <div className="text-muted small">
             Showing {rangeStart} to {rangeEnd} of {filteredUsers.length} users
           </div>
-          <Pagination className="mb-0">
-            <Pagination.Prev
-              disabled={currentPage === 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            />
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                {p}
-              </Pagination.Item>
-            ))}
-            <Pagination.Next
-              disabled={currentPage === totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            />
-          </Pagination>
+          <div className="d-flex align-items-center gap-3">
+            <Pagination className="mb-0">
+              <Pagination.First disabled={currentPage === 1} onClick={() => setPage(1)} />
+              <Pagination.Prev
+                disabled={currentPage === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              />
+              {getPaginationRange(currentPage, totalPages).map((p, i) =>
+                p === 'ellipsis' ? (
+                  <Pagination.Ellipsis key={`ellipsis-${i}`} disabled />
+                ) : (
+                  <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                    {p}
+                  </Pagination.Item>
+                ),
+              )}
+              <Pagination.Next
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              />
+              <Pagination.Last disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} />
+            </Pagination>
+            <Form.Select
+              size="sm"
+              style={{ width: 100 }}
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </Form.Select>
+          </div>
         </div>
       )}
 

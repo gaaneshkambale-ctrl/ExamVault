@@ -25,7 +25,7 @@ import type { NotificationChannelFilter, NotificationHistoryStatus, Notification
 // page exists for the Super Admin console (Resend/Cancel role gates were
 // widened on the backend but aren't wired into this UI, since no mockup
 // shows what that flow should look like here).
-const PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 const CHANNEL_OPTIONS: { value: NotificationChannelFilter; label: string }[] = [
   { value: 'InAppEmail', label: 'In-App + Email' },
@@ -47,11 +47,12 @@ export default function PlatformNotificationHistory() {
   const [status, setStatus] = useState<NotificationHistoryStatus | 'All'>('All');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const { data, isLoading, isError } = useNotificationHistory(
     type === 'All' ? undefined : type,
     page,
-    PAGE_SIZE,
+    pageSize,
     search,
     channel === 'All' ? undefined : channel,
     status === 'All' ? undefined : status,
@@ -74,7 +75,7 @@ export default function PlatformNotificationHistory() {
 
   const items = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const resetPage = () => setPage(1);
 
@@ -238,10 +239,16 @@ export default function PlatformNotificationHistory() {
       <TablePagination
         page={page}
         totalPages={totalPages}
-        rangeStart={totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
-        rangeEnd={Math.min(page * PAGE_SIZE, totalCount)}
+        rangeStart={totalCount === 0 ? 0 : (page - 1) * pageSize + 1}
+        rangeEnd={Math.min(page * pageSize, totalCount)}
         totalCount={totalCount}
         onPageChange={setPage}
+        pageSize={pageSize}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
       />
     </PlatformLayout>
   );

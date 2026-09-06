@@ -13,6 +13,7 @@ import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { archiveExam, deleteExam } from '../../api/examApi';
 import { extractServerError } from '../../utils/apiError';
 import { bucketByDay } from '../../utils/dateRange';
+import { getPaginationRange } from '../../utils/paginationRange';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreationMethod, ExamResponse, ExamStatus } from '../../types/exam';
 
@@ -612,11 +613,15 @@ export default function ManageExams() {
                 disabled={currentPage === 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               />
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                  {p}
-                </Pagination.Item>
-              ))}
+              {getPaginationRange(currentPage, totalPages).map((p, i) =>
+                p === 'ellipsis' ? (
+                  <Pagination.Ellipsis key={`ellipsis-${i}`} disabled />
+                ) : (
+                  <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                    {p}
+                  </Pagination.Item>
+                ),
+              )}
               <Pagination.Next
                 disabled={currentPage === totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}

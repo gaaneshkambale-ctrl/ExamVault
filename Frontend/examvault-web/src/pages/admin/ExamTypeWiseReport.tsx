@@ -204,7 +204,7 @@ export default function ExamTypeWiseReport() {
                   </tbody>
                 </Table>
               )}
-              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 px-3 pb-3">
+              <div className="px-3 pb-3">
                 <TablePagination
                   page={currentPage}
                   totalPages={totalPages}
@@ -212,17 +212,10 @@ export default function ExamTypeWiseReport() {
                   rangeEnd={rangeEnd}
                   totalCount={rows.length}
                   onPageChange={setPage}
+                  pageSize={pageSize}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                  onPageSizeChange={setPageSize}
                 />
-                <div className="d-flex align-items-center gap-2">
-                  <span className="text-muted small">Rows per page</span>
-                  <Form.Select size="sm" style={{ width: 90 }} value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
-                    {PAGE_SIZE_OPTIONS.map((size) => (
-                      <option key={size} value={size}>
-                        {size} / page
-                      </option>
-                    ))}
-                  </Form.Select>
-                </div>
               </div>
             </Card.Body>
           </Card>

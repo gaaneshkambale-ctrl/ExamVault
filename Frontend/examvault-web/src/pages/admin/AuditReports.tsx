@@ -16,8 +16,9 @@ import { violationLabel } from '../../utils/proctoring';
 import { bucketByDay, getDefaultRange, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 import type { AuditModule } from '../../types/audit';
+import { getPaginationRange } from '../../utils/paginationRange';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 const MODULE_OPTIONS: { value: AuditModule | 'All'; label: string }[] = [
   { value: 'All', label: 'All Activities' },
@@ -44,6 +45,7 @@ export default function AuditReports() {
   const [moduleFilter, setModuleFilter] = useState<AuditModule | 'All'>('All');
   const [userFilter, setUserFilter] = useState('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const { data: exams } = useExams();
   const { data: users, isLoading: isLoadingUsers } = useUsers();
@@ -118,11 +120,11 @@ export default function AuditReports() {
     setPage(1);
   }, [moduleFilter, userFilter, range]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredRows.length);
+  const pagedRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredRows.length);
 
   const activityOverview = useMemo(
     () => bucketByDay(filteredRows.map((r) => r.timestampUtc), range),
@@ -291,18 +293,38 @@ export default function AuditReports() {
                   <div className="text-muted small">
                     Showing {rangeStart} to {rangeEnd} of {filteredRows.length} activities
                   </div>
-                  <Pagination className="mb-0">
-                    <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                      <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                        {p}
-                      </Pagination.Item>
-                    ))}
-                    <Pagination.Next
-                      disabled={currentPage === totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    />
-                  </Pagination>
+                  <div className="d-flex align-items-center gap-3">
+                    <Pagination className="mb-0">
+                      <Pagination.First disabled={currentPage === 1} onClick={() => setPage(1)} />
+                      <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+                      {getPaginationRange(currentPage, totalPages).map((p, i) =>
+                        p === 'ellipsis' ? (
+                          <Pagination.Ellipsis key={`ellipsis-${i}`} disabled />
+                        ) : (
+                          <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                            {p}
+                          </Pagination.Item>
+                        ),
+                      )}
+                      <Pagination.Next
+                        disabled={currentPage === totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      />
+                      <Pagination.Last disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} />
+                    </Pagination>
+                    <Form.Select
+                      size="sm"
+                      style={{ width: 100 }}
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size} / page
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </div>
                 </div>
               )}
             </Card.Body>

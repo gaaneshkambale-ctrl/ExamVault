@@ -23,7 +23,7 @@ const gradeVariant: Record<string, string> = {
   F: 'danger',
 };
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE_OPTIONS = [8, 25, 50];
 
 export default function StudentResults() {
   const { data: exams, isLoading: isLoadingExams } = useExams();
@@ -33,6 +33,7 @@ export default function StudentResults() {
   const [examFilter, setExamFilter] = useState('All');
   const [batchFilter, setBatchFilter] = useState('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const { data: groupDetail } = useGroup(batchFilter === 'All' ? undefined : batchFilter);
   const batchMemberIds = useMemo(
@@ -84,11 +85,11 @@ export default function StudentResults() {
     lowest: percentages.length === 0 ? 0 : Math.round(Math.min(...percentages)),
   };
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredRows.length);
+  const pagedRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredRows.length);
 
   return (
     <AdminLayout active="Student Results">
@@ -244,6 +245,9 @@ export default function StudentResults() {
         rangeEnd={rangeEnd}
         totalCount={filteredRows.length}
         onPageChange={setPage}
+        pageSize={pageSize}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        onPageSizeChange={setPageSize}
       />
     </AdminLayout>
   );

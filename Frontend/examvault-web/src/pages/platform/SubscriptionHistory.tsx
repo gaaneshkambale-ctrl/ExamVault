@@ -8,6 +8,7 @@ import { getAuditLogs } from '../../api/auditApi';
 import { listPlans } from '../../api/plansApi';
 import { DownloadIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { timeAgo } from '../../utils/timeAgo';
+import { getPaginationRange } from '../../utils/paginationRange';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
@@ -641,13 +642,19 @@ export default function SubscriptionHistory() {
           </div>
           <div className="d-flex align-items-center gap-3">
             <Pagination className="mb-0">
+              <Pagination.First disabled={currentPage === 1} onClick={() => setPage(1)} />
               <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                  {p}
-                </Pagination.Item>
-              ))}
+              {getPaginationRange(currentPage, totalPages).map((p, i) =>
+                p === 'ellipsis' ? (
+                  <Pagination.Ellipsis key={`ellipsis-${i}`} disabled />
+                ) : (
+                  <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                    {p}
+                  </Pagination.Item>
+                ),
+              )}
               <Pagination.Next disabled={currentPage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
+              <Pagination.Last disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} />
             </Pagination>
             <Form.Select size="sm" style={{ width: 100 }} value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
               {PAGE_SIZE_OPTIONS.map((size) => (
