@@ -19,6 +19,7 @@ public class NotificationDbContext : TenantScopedDbContext
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
     public DbSet<SystemErrorLog> SystemErrorLogs => Set<SystemErrorLog>();
     public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
+    public DbSet<NewsletterSubscriber> NewsletterSubscribers => Set<NewsletterSubscriber>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
     // reads every DateTime back as Kind=Unspecified. Forcing Kind=Utc on
@@ -106,6 +107,14 @@ public class NotificationDbContext : TenantScopedDbContext
             entity.Property(l => l.Subject).IsRequired().HasMaxLength(200);
             entity.Property(l => l.ErrorMessage).HasMaxLength(1000);
             // No HasQueryFilter - platform-wide operational log, same reasoning as SystemErrorLog.
+        });
+
+        modelBuilder.Entity<NewsletterSubscriber>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.Email).IsRequired().HasMaxLength(320);
+            entity.HasIndex(s => s.Email).IsUnique();
+            // No HasQueryFilter - not tied to any tenant, same reasoning as EmailDeliveryLog.
         });
     }
 }

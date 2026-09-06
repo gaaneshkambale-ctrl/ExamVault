@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Accordion, Card, Col, Container, Row, Spinner } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -527,6 +528,25 @@ export default function Home() {
           ? 'forgot-password'
           : null;
 
+  // NavBar/Footer's #features, #exam-management and #security links are
+  // plain <a href="/#..."> (not React Router <Link>s, since they need to
+  // work from other pages too), so a click from e.g. /pricing does a real
+  // full-page navigation here. The browser's own "scroll to element with
+  // this id" only fires once, right after the initial (still-empty)
+  // index.html paints - long before this page's own content renders that
+  // id into the DOM - so it always lands at the top instead. Retrying once
+  // this component has actually rendered fixes every one of those links at
+  // once, not just re-clicking one of them from the same page (which never
+  // had this problem, since the id was already in the DOM).
+  useEffect(() => {
+    if (!location.hash) {
+      return;
+    }
+    const id = location.hash.slice(1);
+    const target = document.getElementById(id);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [location.hash, plansLoading]);
+
   return (
     <div>
       <NavBar />
@@ -619,7 +639,12 @@ export default function Home() {
         />
         <Row className="g-4">
           {features.map((feature) => (
-            <Col key={feature.title} sm={6} lg={4}>
+            <Col
+              key={feature.title}
+              sm={6}
+              lg={4}
+              id={feature.title === 'Exam Management' ? 'exam-management' : undefined}
+            >
               <Card className="h-100 border-0 shadow-sm">
                 <Card.Body>
                   <div className="mb-3"><IconBadge bg={feature.bg} color={feature.color}>{feature.icon}</IconBadge></div>

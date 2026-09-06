@@ -1,20 +1,10 @@
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { Col, Container, Form, Row } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import BrandMark from './BrandMark';
-
-function SocialIcon({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="d-inline-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-      style={{ width: 32, height: 32, background: '#f3f4f6', color: '#4b5563' }}
-    >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-        {children}
-      </svg>
-    </span>
-  );
-}
+import { subscribeToNewsletter } from '../api/newsletterApi';
+import { extractServerError } from '../utils/apiError';
 
 // A link to a page that genuinely doesn't exist yet (Privacy Policy, Terms
 // of Service, Help Center, Documentation) - rendered as plain muted text
@@ -27,7 +17,25 @@ function PlannedLink({ label }: { label: string }) {
 export default function Footer() {
   const year = new Date().getFullYear();
   const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleSubscribe = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      return;
+    }
+
+    setStatus('loading');
+    setErrorMessage('');
+    try {
+      await subscribeToNewsletter(email.trim());
+      setStatus('success');
+    } catch (error) {
+      setStatus('error');
+      setErrorMessage(extractServerError(error, {}, "Couldn't subscribe right now. Please try again."));
+    }
+  };
 
   return (
     <footer className="border-top bg-white pt-5 pb-4">
@@ -51,9 +59,9 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <Link to="/exams" className="text-decoration-none text-dark small">
+                <a href="/#exam-management" className="text-decoration-none text-dark small">
                   Exams
-                </Link>
+                </a>
               </li>
               <li>
                 <Link to="/pricing" className="text-decoration-none text-dark small">
@@ -110,46 +118,32 @@ export default function Footer() {
           <Col xs={12} md={2}>
             <div className="fw-bold small text-uppercase text-muted mb-3">Stay Updated</div>
             <p className="text-muted small mb-2">Get the latest updates and news.</p>
-            {subscribed ? (
+            {status === 'success' ? (
               <p className="text-success small mb-3">Thanks for subscribing!</p>
             ) : (
-              <Form
-                className="d-flex gap-1 mb-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (email.trim()) setSubscribed(true);
-                }}
-              >
-                <Form.Control
-                  type="email"
-                  required
-                  size="sm"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <button type="submit" className="btn btn-primary btn-sm flex-shrink-0" aria-label="Subscribe">
-                  &rarr;
-                </button>
-              </Form>
+              <>
+                <Form className="d-flex gap-1 mb-2" onSubmit={handleSubscribe}>
+                  <Form.Control
+                    type="email"
+                    required
+                    size="sm"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={status === 'loading'}
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm flex-shrink-0"
+                    aria-label="Subscribe"
+                    disabled={status === 'loading'}
+                  >
+                    &rarr;
+                  </button>
+                </Form>
+                {status === 'error' && <p className="text-danger small mb-3">{errorMessage}</p>}
+              </>
             )}
-            <div className="d-flex gap-2">
-              <a href="https://linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn">
-                <SocialIcon>
-                  <path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM.5 8.25h4V23h-4V8.25zM8.5 8.25h3.83v2.02h.05c.53-1 1.84-2.05 3.79-2.05 4.05 0 4.8 2.67 4.8 6.14V23h-4v-6.68c0-1.6-.03-3.65-2.22-3.65-2.23 0-2.57 1.74-2.57 3.54V23h-4V8.25z" />
-                </SocialIcon>
-              </a>
-              <a href="https://x.com" target="_blank" rel="noreferrer" aria-label="X (Twitter)">
-                <SocialIcon>
-                  <path d="M18.9 1.5h3.7l-8.1 9.3L24 22.5h-7.5l-5.9-7.7-6.7 7.7H0.2l8.7-9.9L0 1.5h7.7l5.3 7.1 5.9-7.1zm-1.3 18.8h2L6.5 3.6h-2.1l13.2 16.7z" />
-                </SocialIcon>
-              </a>
-              <a href="https://youtube.com" target="_blank" rel="noreferrer" aria-label="YouTube">
-                <SocialIcon>
-                  <path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31 31 0 000 12a31 31 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31 31 0 0024 12a31 31 0 00-.5-5.8zM9.6 15.5V8.5l6.3 3.5-6.3 3.5z" />
-                </SocialIcon>
-              </a>
-            </div>
           </Col>
         </Row>
 

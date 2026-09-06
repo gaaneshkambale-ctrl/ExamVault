@@ -1,104 +1,13 @@
-import { Card, Col, Container, Row } from 'react-bootstrap';
+import { Card, Col, Container, Row, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
+import { listPublicPlans } from '../api/plansApi';
+import { PLAN_FEATURE_LABELS } from '../types/plan';
+import type { Plan } from '../types/plan';
 
 const PURPLE = '#4f46e5';
-
-interface PlanTier {
-  key: string;
-  eyebrow: string;
-  eyebrowBg: string;
-  eyebrowColor: string;
-  name: string;
-  price: string;
-  priceSuffix?: string;
-  billingNote?: { text: string; savings: string };
-  period?: string;
-  description: string;
-  features: string[];
-  cta: { label: string; to: string; variant: 'outline-primary' | 'primary' | 'outline-dark' };
-  footNote?: string;
-  highlighted?: boolean;
-}
-
-const PLANS: PlanTier[] = [
-  {
-    key: 'free',
-    eyebrow: 'Free Forever',
-    eyebrowBg: '#dcfce7',
-    eyebrowColor: '#16a34a',
-    name: 'Free',
-    price: '₹0',
-    period: 'Forever',
-    description: 'Perfect for individuals and small trainers getting started.',
-    features: [
-      'Up to 5 active exams',
-      'Up to 100 students',
-      'AI-powered question generation (Up to 50 questions/month)',
-      '5 question types',
-      'Basic reports & analytics',
-      'Email notifications (Limited)',
-      'Secure role-based access',
-      '24/7 Community support',
-    ],
-    cta: { label: 'Get Started Free', to: '/register', variant: 'outline-primary' },
-  },
-  {
-    key: 'professional',
-    eyebrow: 'For Colleges & Institutes',
-    eyebrowBg: '#eef2ff',
-    eyebrowColor: PURPLE,
-    name: 'Professional',
-    price: '₹999',
-    priceSuffix: '/month',
-    billingNote: { text: 'Billed annually at ₹9,999/year', savings: '(Save ₹1,989)' },
-    description: 'Everything you need to conduct and analyze exams efficiently.',
-    features: [
-      'Up to 100 active exams',
-      'Up to 1,000 students',
-      'AI-powered question generation (Up to 1,000 questions/month)',
-      'All question types',
-      'Advanced reports & analytics',
-      'AI exam generation',
-      'PDF/Excel export',
-      'Custom branding',
-      'Email notifications',
-      'Basic proctoring',
-      'Priority email & chat support',
-    ],
-    cta: { label: 'Start 7-Day Free Trial', to: '/register', variant: 'primary' },
-    footNote: 'No credit card required',
-    highlighted: true,
-  },
-  {
-    key: 'business',
-    eyebrow: 'For Organizations & Companies',
-    eyebrowBg: '#eef2ff',
-    eyebrowColor: '#2563eb',
-    name: 'Business',
-    price: '₹2,999',
-    priceSuffix: '/month',
-    billingNote: { text: 'Billed annually at ₹29,999/year', savings: '(Save ₹5,989)' },
-    description: 'Advanced features and security for large organizations.',
-    features: [
-      'Unlimited active exams',
-      'Unlimited students',
-      'AI-powered question generation (Up to 10,000 questions/month)',
-      'All question types',
-      'Advanced reports & analytics',
-      'AI exam generation',
-      'Advanced proctoring',
-      'Custom branding & domains',
-      'SSO (Single Sign-On)',
-      'API access',
-      'Dedicated account manager',
-      'Priority support',
-      '99.9% uptime SLA',
-    ],
-    cta: { label: 'Contact Sales', to: '/contact', variant: 'outline-primary' },
-  },
-];
 
 function CheckIcon({ color }: { color: string }) {
   return (
@@ -162,7 +71,47 @@ const TRUST_ITEMS = [
   { icon: <HeadsetIcon />, title: 'Need Help?', subtitle: "We're here for you" },
 ];
 
+// Real data from GET /api/plans/public - same source and the same honesty
+// rule Home.tsx's own pricing teaser already follows: no hardcoded prices/
+// features, and no "Most Popular" badge (Plan has no real "featured" field
+// to back one). Whenever an Admin edits a real Plan in the Platform Admin
+// console, this page and Home's teaser now show the exact same numbers
+// instead of silently drifting apart.
+function planPriceDisplay(plan: Plan): { price: string; period: string } {
+  if (plan.monthlyPrice === null) {
+    return { price: 'Custom Pricing', period: 'Talk to our team' };
+  }
+  if (plan.monthlyPrice === 0) {
+    return { price: '₹0', period: 'Forever free' };
+  }
+  const period =
+    plan.annualPrice !== null
+      ? `/ month (₹${plan.annualPrice.toLocaleString('en-IN')} / year)`
+      : '/ month';
+  return { price: `₹${plan.monthlyPrice.toLocaleString('en-IN')}`, period };
+}
+
+function planBullets(plan: Plan): string[] {
+  return [
+    `${plan.maxStudents === null ? 'Unlimited' : plan.maxStudents.toLocaleString('en-IN')} students`,
+    `${plan.maxExams === null ? 'Unlimited' : plan.maxExams.toLocaleString('en-IN')} exams`,
+    ...plan.includedFeatures.map((f) => PLAN_FEATURE_LABELS[f]),
+  ];
+}
+
+function planCta(plan: Plan): { label: string; to: string } {
+  return plan.monthlyPrice === null && plan.annualPrice === null
+    ? { label: 'Contact Sales', to: '/contact' }
+    : { label: 'Get Started', to: '/register' };
+}
+
+function sortByPrice(plans: Plan[]): Plan[] {
+  return [...plans].sort((a, b) => (a.monthlyPrice ?? Infinity) - (b.monthlyPrice ?? Infinity));
+}
+
 export default function Pricing() {
+  const { data: plans, isLoading, isError } = useQuery({ queryKey: ['public-plans'], queryFn: listPublicPlans });
+
   return (
     <div>
       <NavBar />
@@ -173,75 +122,62 @@ export default function Pricing() {
             Simple, Transparent Pricing
           </span>
           <h1 className="fw-bold display-5">Choose the plan that's right for you</h1>
-          <p className="text-muted fs-5 mb-0">No hidden fees. No credit card required. Cancel anytime.</p>
+          <p className="text-muted fs-5 mb-0">No hidden fees. Cancel anytime.</p>
         </div>
 
-        <Row className="justify-content-center g-4">
-          {PLANS.map((plan) => (
-            <Col xs={12} md={6} lg={4} key={plan.key} className="d-flex">
-              <Card
-                className={`border-0 shadow-sm w-100 position-relative ${plan.highlighted ? 'shadow-lg' : ''}`}
-                style={plan.highlighted ? { border: `2px solid ${PURPLE}` } : undefined}
-              >
-                {plan.highlighted && (
-                  <div
-                    className="position-absolute top-0 start-50 translate-middle badge rounded-pill px-3 py-2 d-flex align-items-center gap-1"
-                    style={{ background: PURPLE, color: 'white', fontWeight: 600 }}
-                  >
-                    ★ Most Popular
-                  </div>
-                )}
-                <Card.Body className="p-4 d-flex flex-column" style={{ paddingTop: plan.highlighted ? '2.5rem' : undefined }}>
-                  <span
-                    className="badge rounded-pill mb-3 align-self-start px-3 py-2"
-                    style={{ background: plan.eyebrowBg, color: plan.eyebrowColor, fontWeight: 500 }}
-                  >
-                    {plan.eyebrow}
-                  </span>
+        {isLoading && (
+          <div className="d-flex justify-content-center py-5">
+            <Spinner animation="border" />
+          </div>
+        )}
 
-                  <h3 className="fw-bold mb-2">{plan.name}</h3>
+        {isError && (
+          <div className="text-center text-danger py-4">Couldn't load pricing right now. Please try again shortly.</div>
+        )}
 
-                  <div className="d-flex align-items-baseline gap-1 mb-1">
-                    <span className="display-5 fw-bold" style={{ color: plan.highlighted ? PURPLE : undefined }}>
-                      {plan.price}
-                    </span>
-                    {plan.priceSuffix && <span className="text-muted">{plan.priceSuffix}</span>}
-                  </div>
+        {!isLoading && !isError && plans && plans.length === 0 && (
+          <div className="text-center text-muted py-4">Pricing plans are being finalized - check back soon.</div>
+        )}
 
-                  {plan.period && <p className="text-muted mb-3">{plan.period}</p>}
-                  {plan.billingNote && (
-                    <p className="text-muted small mb-3">
-                      {plan.billingNote.text} <span className="text-success fw-medium">{plan.billingNote.savings}</span>
-                    </p>
-                  )}
+        {!isLoading && !isError && plans && plans.length > 0 && (
+          <Row className="justify-content-center g-4">
+            {sortByPrice(plans).map((plan) => {
+              const { price, period } = planPriceDisplay(plan);
+              const cta = planCta(plan);
+              const bullets = planBullets(plan);
+              return (
+                <Col xs={12} md={6} lg={4} key={plan.id} className="d-flex">
+                  <Card className="border-0 shadow-sm w-100 position-relative">
+                    <Card.Body className="p-4 d-flex flex-column">
+                      <h3 className="fw-bold mb-2">{plan.name}</h3>
+                      <p className="text-muted mb-3">{plan.description ?? ' '}</p>
 
-                  <p className="text-muted mb-3">{plan.description}</p>
+                      <div className="d-flex align-items-baseline gap-1 mb-1">
+                        <span className="display-6 fw-bold">{price}</span>
+                      </div>
+                      <p className="text-muted mb-3">{period}</p>
 
-                  <hr />
+                      <hr />
 
-                  <ul className="list-unstyled text-start mb-4 flex-grow-1">
-                    {plan.features.map((item) => (
-                      <li key={item} className="d-flex align-items-start gap-2 mb-2">
-                        <CheckIcon color={plan.highlighted ? PURPLE : '#22c55e'} />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+                      <ul className="list-unstyled text-start mb-4 flex-grow-1">
+                        {bullets.map((item) => (
+                          <li key={item} className="d-flex align-items-start gap-2 mb-2">
+                            <CheckIcon color="#22c55e" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
 
-                  <Link to={plan.cta.to} className={`btn btn-${plan.cta.variant} btn-lg w-100`}>
-                    {plan.cta.label}
-                  </Link>
-
-                  {plan.footNote && (
-                    <p className="text-muted small text-center mt-2 mb-0 d-flex align-items-center justify-content-center gap-1">
-                      🛡 {plan.footNote}
-                    </p>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+                      <Link to={cta.to} className="btn btn-outline-primary btn-lg w-100">
+                        {cta.label}
+                      </Link>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              );
+            })}
+          </Row>
+        )}
 
         <Row className="justify-content-center text-center mt-5 g-4">
           {TRUST_ITEMS.map((item) => (
@@ -258,7 +194,7 @@ export default function Pricing() {
         <div className="border rounded-4 p-4 mt-5 d-flex align-items-center justify-content-center gap-3 flex-wrap text-center">
           <BuildingIcon />
           <span className="text-muted">
-            Need a custom plan for 5,000+ students or multiple organizations?{' '}
+            Need a custom plan for a large organization or multiple institutions?{' '}
             <Link to="/contact" style={{ color: PURPLE, fontWeight: 500 }}>
               Contact our sales team
             </Link>{' '}

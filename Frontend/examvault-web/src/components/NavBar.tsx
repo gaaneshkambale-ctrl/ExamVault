@@ -20,10 +20,10 @@ export default function NavBar() {
             <Nav.Link as={Link} to="/" className="fw-medium text-dark">
               Home
             </Nav.Link>
-            <Nav.Link href="#features" className="fw-medium text-dark">
+            <Nav.Link href="/#features" className="fw-medium text-dark">
               Features
             </Nav.Link>
-            <Nav.Link as={Link} to="/exams" className="fw-medium text-dark">
+            <Nav.Link href="/#exam-management" className="fw-medium text-dark">
               Exams
             </Nav.Link>
             <Nav.Link as={Link} to="/pricing" className="fw-medium text-dark">
