@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Badge, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { auditActivityBadgeVariant } from '../../utils/auditActivityBadge';
 import AdminLayout from '../../layouts/AdminLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
@@ -274,7 +275,9 @@ export default function AuditReports() {
                       <tr key={r.id}>
                         <td className="ps-4">{new Date(r.timestampUtc).toLocaleString()}</td>
                         <td className="fw-medium">{r.userName}</td>
-                        <td>{r.activity}</td>
+                        <td>
+                          <Badge bg={auditActivityBadgeVariant(r.activity)}>{r.activity}</Badge>
+                        </td>
                         <td>{r.module}</td>
                         <td className="text-muted small">{r.details}</td>
                         <td className="pe-4">{r.ipAddress}</td>

@@ -10,6 +10,7 @@ import { listAllUsers } from '../../api/userApi';
 import { getDefaultRange, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 import type { AuditModule } from '../../types/audit';
+import { auditActivityBadgeVariant } from '../../utils/auditActivityBadge';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 const DEFAULT_FROM = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
@@ -267,9 +268,7 @@ export default function AuditReports() {
                           <td className="text-muted">{role ? (ROLE_LABELS[role] ?? role) : '—'}</td>
                           <td className="text-muted">{tenantNameById.get(log.tenantId) ?? '—'}</td>
                           <td>
-                            <Badge bg="light" text="dark" className="border">
-                              {log.activity}
-                            </Badge>
+                            <Badge bg={auditActivityBadgeVariant(log.activity)}>{log.activity}</Badge>
                           </td>
                           <td className="text-muted">{log.module}</td>
                           <td className="text-muted" style={{ fontSize: 13 }}>
