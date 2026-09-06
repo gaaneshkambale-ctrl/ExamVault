@@ -9,6 +9,7 @@ using OnlineExamSystem.Exam.Application.Assignments.GetById;
 using OnlineExamSystem.Exam.Application.Assignments.List;
 using OnlineExamSystem.Exam.Application.Assignments.Mine;
 using OnlineExamSystem.Exam.Application.Assignments.Update;
+using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
@@ -29,6 +30,7 @@ public class AssignmentsController : ControllerBase
     private readonly DeleteAssignmentHandler _deleteAssignmentHandler;
     private readonly CancelAssignmentHandler _cancelAssignmentHandler;
     private readonly GetMyAssignmentForExamHandler _getMyAssignmentForExamHandler;
+    private readonly IAuditClient _auditClient;
     private readonly ILogger<AssignmentsController> _logger;
 
     public AssignmentsController(
@@ -40,6 +42,7 @@ public class AssignmentsController : ControllerBase
         DeleteAssignmentHandler deleteAssignmentHandler,
         CancelAssignmentHandler cancelAssignmentHandler,
         GetMyAssignmentForExamHandler getMyAssignmentForExamHandler,
+        IAuditClient auditClient,
         ILogger<AssignmentsController> logger)
     {
         _createAssignmentHandler = createAssignmentHandler;
@@ -50,6 +53,7 @@ public class AssignmentsController : ControllerBase
         _deleteAssignmentHandler = deleteAssignmentHandler;
         _cancelAssignmentHandler = cancelAssignmentHandler;
         _getMyAssignmentForExamHandler = getMyAssignmentForExamHandler;
+        _auditClient = auditClient;
         _logger = logger;
     }
 
@@ -130,6 +134,16 @@ public class AssignmentsController : ControllerBase
             result.Assignment!.AssignmentNumber,
             request.ExamId,
             result.TargetUserIds.Count);
+        await _auditClient.RecordAsync(
+            result.Assignment!.TenantId,
+            "Exams",
+            "Assigned exam",
+            $"{result.ExamTitle} -> {result.TargetUserIds.Count} student(s)",
+            result.Assignment.Id.ToString(),
+            createdByUserId,
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return StatusCode(
             StatusCodes.Status201Created,
             ToResponse(result.Assignment!, result.TargetUserIds));

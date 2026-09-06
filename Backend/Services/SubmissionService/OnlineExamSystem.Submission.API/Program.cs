@@ -95,6 +95,8 @@ public class Program
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
         });
+        builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
 
         // Optional: student exam recording via Metered.ca. Falls back to a
         // no-op implementation when unconfigured, rather than requiring it

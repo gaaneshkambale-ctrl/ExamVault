@@ -137,6 +137,6 @@ public class CreateAssignmentHandler
             _logger.LogWarning(ex, "Failed to publish ExamAssignedEvent for assignment {AssignmentId}.", assignment.Id);
         }
 
-        return CreateAssignmentResult.Ok(assignment, targetUserIds);
+        return CreateAssignmentResult.Ok(assignment, targetUserIds, exam.Title);
     }
 }

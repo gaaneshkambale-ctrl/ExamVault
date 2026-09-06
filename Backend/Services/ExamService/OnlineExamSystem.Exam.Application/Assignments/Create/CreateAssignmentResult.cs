@@ -11,9 +11,10 @@ public class CreateAssignmentResult
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
     public ExamAssignment? Assignment { get; init; }
     public IReadOnlyList<Guid> TargetUserIds { get; init; } = Array.Empty<Guid>();
+    public string ExamTitle { get; init; } = string.Empty;
 
-    public static CreateAssignmentResult Ok(ExamAssignment assignment, IReadOnlyList<Guid> targetUserIds) =>
-        new() { Success = true, Assignment = assignment, TargetUserIds = targetUserIds };
+    public static CreateAssignmentResult Ok(ExamAssignment assignment, IReadOnlyList<Guid> targetUserIds, string examTitle) =>
+        new() { Success = true, Assignment = assignment, TargetUserIds = targetUserIds, ExamTitle = examTitle };
 
     public static CreateAssignmentResult Invalid(IReadOnlyList<string> errors) =>
         new() { ValidationErrors = errors };

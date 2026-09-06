@@ -33,6 +33,7 @@ public class SectionsController : ControllerBase
     private readonly ReorderSectionsHandler _reorderSectionsHandler;
     private readonly GetOrCreateDefaultSectionHandler _getOrCreateDefaultSectionHandler;
     private readonly IExamRepository _examRepository;
+    private readonly IAuditClient _auditClient;
     private readonly ILogger<SectionsController> _logger;
 
     public SectionsController(
@@ -45,6 +46,7 @@ public class SectionsController : ControllerBase
         ReorderSectionsHandler reorderSectionsHandler,
         GetOrCreateDefaultSectionHandler getOrCreateDefaultSectionHandler,
         IExamRepository examRepository,
+        IAuditClient auditClient,
         ILogger<SectionsController> logger)
     {
         _createSectionHandler = createSectionHandler;
@@ -56,6 +58,7 @@ public class SectionsController : ControllerBase
         _reorderSectionsHandler = reorderSectionsHandler;
         _getOrCreateDefaultSectionHandler = getOrCreateDefaultSectionHandler;
         _examRepository = examRepository;
+        _auditClient = auditClient;
         _logger = logger;
     }
 
@@ -119,6 +122,16 @@ public class SectionsController : ControllerBase
         }
 
         _logger.LogInformation("Section {SectionId} created for exam {ExamId}.", result.Section!.Id, examId);
+        await _auditClient.RecordAsync(
+            result.TenantId,
+            "Exams",
+            "Created section",
+            $"{result.Section!.Name} (in {result.ExamTitle})",
+            result.Section.Id.ToString(),
+            Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return StatusCode(StatusCodes.Status201Created, ToResponse(result.Section!));
     }
 

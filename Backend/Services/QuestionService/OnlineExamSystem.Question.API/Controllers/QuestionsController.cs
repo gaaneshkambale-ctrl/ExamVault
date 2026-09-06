@@ -13,6 +13,7 @@ using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Domain.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.Question;
 using OnlineExamSystem.Shared.Contracts.Responses.Question;
 using static OnlineExamSystem.Question.API.Authorization.FeaturePolicies;
@@ -177,6 +178,24 @@ public class QuestionsController : ControllerBase
             "{Count} question(s) assigned to section {SectionId}.",
             request.QuestionIds.Count,
             request.SectionId);
+
+        if (request.QuestionIds.Count > 0)
+        {
+            // Caller's own ambient tenant, not a fetched entity - BulkAssignSectionHandler
+            // never loads a Question or Section for their TenantId, and this endpoint is
+            // already restricted (via the repository's own tenant scoping) to the caller's
+            // own tenant's questions, same reasoning as RolesController's self-service audit.
+            await _auditClient.RecordAsync(
+                Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!),
+                "Questions",
+                "Assigned questions to section",
+                $"{request.QuestionIds.Count} question(s)",
+                request.SectionId?.ToString(),
+                Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!),
+                User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
+        }
         return NoContent();
     }
 

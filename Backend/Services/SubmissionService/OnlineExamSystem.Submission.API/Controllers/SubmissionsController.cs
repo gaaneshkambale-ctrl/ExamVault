@@ -57,6 +57,7 @@ public class SubmissionsController : ControllerBase
     private readonly ListUngradedAnswersByExamHandler _listUngradedAnswersByExamHandler;
     private readonly ListAllAttemptsHandler _listAllAttemptsHandler;
     private readonly IInternalUserLookupClient _userLookupClient;
+    private readonly IAuditClient _auditClient;
     private readonly ILogger<SubmissionsController> _logger;
 
     public SubmissionsController(
@@ -81,6 +82,7 @@ public class SubmissionsController : ControllerBase
         ListUngradedAnswersByExamHandler listUngradedAnswersByExamHandler,
         ListAllAttemptsHandler listAllAttemptsHandler,
         IInternalUserLookupClient userLookupClient,
+        IAuditClient auditClient,
         ILogger<SubmissionsController> logger)
     {
         _startAttemptHandler = startAttemptHandler;
@@ -104,6 +106,7 @@ public class SubmissionsController : ControllerBase
         _listUngradedAnswersByExamHandler = listUngradedAnswersByExamHandler;
         _listAllAttemptsHandler = listAllAttemptsHandler;
         _userLookupClient = userLookupClient;
+        _auditClient = auditClient;
         _logger = logger;
     }
 
@@ -151,6 +154,16 @@ public class SubmissionsController : ControllerBase
                 result.Attempt!.Id,
                 request.ExamId,
                 userId);
+            await _auditClient.RecordAsync(
+                result.Attempt.TenantId,
+                "Exams",
+                "Started exam attempt",
+                $"Attempt #{result.Attempt.AttemptNumber}",
+                request.ExamId.ToString(),
+                userId,
+                User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
             return Ok(ToResponse(result.Attempt));
         }
 
@@ -441,6 +454,16 @@ public class SubmissionsController : ControllerBase
             attemptId,
             userId,
             request.IsAutoSubmitted);
+        await _auditClient.RecordAsync(
+            result.Attempt!.TenantId,
+            "Exams",
+            "Submitted exam attempt",
+            $"Attempt #{result.Attempt.AttemptNumber}{(request.IsAutoSubmitted ? " (auto-submitted)" : string.Empty)}",
+            result.Attempt.ExamId.ToString(),
+            userId,
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return Ok(ToResponse(result.Attempt!));
     }
 
