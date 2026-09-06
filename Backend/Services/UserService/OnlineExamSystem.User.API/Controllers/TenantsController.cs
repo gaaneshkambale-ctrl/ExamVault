@@ -435,7 +435,7 @@ public class TenantsController : ControllerBase
             details,
             entityId,
             actorId is not null ? Guid.Parse(actorId) : null,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             // This whole controller is [Authorize(Roles = "SuperAdmin")] -
             // every call through here is genuinely a platform staff member

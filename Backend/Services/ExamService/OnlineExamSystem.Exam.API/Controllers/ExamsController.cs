@@ -101,7 +101,7 @@ public class ExamsController : ControllerBase
             exam.Title,
             exam.Id.ToString(),
             createdByUserId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
         var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, exam.CreatedByUserId, cancellationToken);
@@ -218,7 +218,7 @@ public class ExamsController : ControllerBase
             result.Exam!.Title,
             id.ToString(),
             updatedByUserId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
         var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, result.Exam!.CreatedByUserId, cancellationToken);
@@ -246,7 +246,7 @@ public class ExamsController : ControllerBase
             result.Title,
             id.ToString(),
             deletedByUserId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
         return NoContent();
@@ -327,7 +327,7 @@ public class ExamsController : ControllerBase
                 result.Exam!.Title,
                 id.ToString(),
                 Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!),
-                User.FindFirstValue(ClaimTypes.Email),
+                User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken);
         }

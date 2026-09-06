@@ -286,7 +286,7 @@ public class UsersController : ControllerBase
             user.FullName,
             user.Id.ToString(),
             createdByUserId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
         var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
@@ -339,7 +339,7 @@ public class UsersController : ControllerBase
             result.User!.FullName,
             id.ToString(),
             adminId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
         var updatedUserCreatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
@@ -372,7 +372,7 @@ public class UsersController : ControllerBase
             result.FullName,
             id.ToString(),
             currentUserId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
         return NoContent();

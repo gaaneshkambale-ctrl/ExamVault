@@ -31,6 +31,11 @@ public class JwtTokenService : IJwtTokenService
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Email, user.Email),
+            // Lets every downstream service's audit-log calls show the
+            // actor's actual name instead of falling back to their email -
+            // previously the only identity claim in the token besides
+            // Email/NameIdentifier, so most controllers used email there.
+            new(ClaimTypes.Name, user.FullName),
             new(ClaimTypes.Role, user.Role.ToString()),
             new(TenantClaimTypes.TenantId, user.TenantId.ToString()),
             new(PermissionClaimTypes.PermissionVersion, permissionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),

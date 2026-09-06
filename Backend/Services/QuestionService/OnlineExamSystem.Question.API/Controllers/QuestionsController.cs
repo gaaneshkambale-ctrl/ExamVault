@@ -117,7 +117,7 @@ public class QuestionsController : ControllerBase
             request.QuestionText,
             question.Id.ToString(),
             createdByUserId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
         return StatusCode(
@@ -271,7 +271,7 @@ public class QuestionsController : ControllerBase
             result.QuestionText,
             id.ToString(),
             deletedByUserId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
         return NoContent();

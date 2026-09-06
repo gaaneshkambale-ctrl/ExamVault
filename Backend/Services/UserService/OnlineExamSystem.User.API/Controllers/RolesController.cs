@@ -105,7 +105,7 @@ public class RolesController : ControllerBase
             null,
             null,
             actorId is not null ? Guid.Parse(actorId) : null,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
     }
