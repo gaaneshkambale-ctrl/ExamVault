@@ -20,6 +20,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50];
 export default function ExamTypeDetails() {
   const { typeId } = useParams<{ typeId: string }>();
   const { examType, examsOfType, resultsOfType, isLoading } = useExamTypeReportData(typeId);
+  const hasSectionedExams = examsOfType.some((e) => e.containsSections);
   const scheme = getExamResultScheme(examType?.name);
 
   const [search, setSearch] = useState('');
@@ -80,7 +81,7 @@ export default function ExamTypeDetails() {
     <AdminLayout active="Exam Type Wise Report">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
-          <p className="text-muted small mb-1">Reports / Exam Type Wise Report / Exam Type Details</p>
+          <p className="text-muted small mb-1">Results / By Exam Type / Exam Type Details</p>
           <h1 className="h4 fw-bold mb-1 text-primary">Exam Type Details</h1>
         </div>
         <Link to="/admin/reports/exam-type-wise" className="btn btn-outline-secondary btn-sm">
@@ -139,7 +140,7 @@ export default function ExamTypeDetails() {
           </Card>
 
           <Row className="g-2 mb-3">
-            <Col md={4}>
+            <Col md={hasSectionedExams ? 3 : 4}>
               <Link
                 to={`/admin/reports/exam-type/${typeId}/performance`}
                 className="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-between w-100"
@@ -147,7 +148,7 @@ export default function ExamTypeDetails() {
                 Performance Analysis <span>&rarr;</span>
               </Link>
             </Col>
-            <Col md={4}>
+            <Col md={hasSectionedExams ? 3 : 4}>
               <Link
                 to={`/admin/reports/exam-type/${typeId}/students`}
                 className="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-between w-100"
@@ -155,7 +156,7 @@ export default function ExamTypeDetails() {
                 Student Performance <span>&rarr;</span>
               </Link>
             </Col>
-            <Col md={4}>
+            <Col md={hasSectionedExams ? 3 : 4}>
               <Link
                 to={`/admin/reports/exam-type/${typeId}/questions`}
                 className="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-between w-100"
@@ -163,6 +164,16 @@ export default function ExamTypeDetails() {
                 Question Analysis <span>&rarr;</span>
               </Link>
             </Col>
+            {hasSectionedExams && (
+              <Col md={3}>
+                <Link
+                  to={`/admin/reports/exam-type/${typeId}/sections`}
+                  className="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-between w-100"
+                >
+                  Section Performance <span>&rarr;</span>
+                </Link>
+              </Col>
+            )}
           </Row>
 
           <Card className="border-0 shadow-sm">

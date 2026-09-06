@@ -99,6 +99,10 @@ const navItems: NavItem[] = [
       { label: 'Student Results', path: '/admin/results/students' },
       { label: 'Result Analytics', path: '/admin/results/analytics' },
       { label: 'Publish Results', path: '/admin/results/publish' },
+      // Route stays under /admin/reports/... - only the menu placement moved,
+      // to avoid a URL migration across the 6 exam-type-wise pages' own
+      // cross-links for what's otherwise a purely cosmetic reorg.
+      { label: 'Exam Type Wise Report', path: '/admin/reports/exam-type-wise' },
     ],
   },
   {
@@ -109,7 +113,6 @@ const navItems: NavItem[] = [
       { label: 'Student Reports', path: '/admin/reports/students' },
       { label: 'Performance Reports', path: '/admin/reports/performance' },
       { label: 'Audit Reports', path: '/admin/reports/audit' },
-      { label: 'Exam Type Wise Report', path: '/admin/reports/exam-type-wise' },
     ],
   },
   {

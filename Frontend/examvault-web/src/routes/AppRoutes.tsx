@@ -52,6 +52,7 @@ import ExamTypePerformanceAnalysis from '../pages/admin/ExamTypePerformanceAnaly
 import ExamTypeStudentPerformance from '../pages/admin/ExamTypeStudentPerformance';
 import ExamTypeComparison from '../pages/admin/ExamTypeComparison';
 import ExamTypeQuestionAnalysis from '../pages/admin/ExamTypeQuestionAnalysis';
+import ExamTypeSectionPerformance from '../pages/admin/ExamTypeSectionPerformance';
 import AdminSettings from '../pages/admin/AdminSettings';
 import ExamSettingsPage from '../pages/admin/settings/ExamSettingsPage';
 import SecuritySettingsPage from '../pages/admin/settings/SecuritySettingsPage';
@@ -498,6 +499,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <ExamTypeQuestionAnalysis />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId/sections"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <ExamTypeSectionPerformance />
           </ProtectedRoute>
         }
       />

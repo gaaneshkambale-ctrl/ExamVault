@@ -17,6 +17,11 @@ export interface ExamResultScheme {
   showRankPercentile: boolean;
   showCertificate: boolean;
   hasPassFailConcept: boolean;
+  // Attempts beyond a student's first, distinct from the "Total Attempts"
+  // column every type already shows - only meaningful for types where
+  // re-attempting is the normal, expected pattern (Practice/Mock), not one
+  // where a fixed exam sitting is the norm.
+  showRepeatAttempts: boolean;
 }
 
 const DEFAULT_SCHEME: ExamResultScheme = {
@@ -25,6 +30,7 @@ const DEFAULT_SCHEME: ExamResultScheme = {
   showRankPercentile: false,
   showCertificate: false,
   hasPassFailConcept: true,
+  showRepeatAttempts: false,
 };
 
 const SCHEMES: Record<string, ExamResultScheme> = {
@@ -36,6 +42,7 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     showRankPercentile: false,
     showCertificate: true,
     hasPassFailConcept: true,
+    showRepeatAttempts: false,
   },
   'Competitive Exam': {
     passingLabel: 'Qualifying Score',
@@ -43,6 +50,7 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     showRankPercentile: true,
     showCertificate: false,
     hasPassFailConcept: true,
+    showRepeatAttempts: false,
   },
   'Entrance Exam': {
     passingLabel: 'Cut-off',
@@ -50,6 +58,7 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     showRankPercentile: true,
     showCertificate: false,
     hasPassFailConcept: true,
+    showRepeatAttempts: false,
   },
   'Recruitment Exam': {
     passingLabel: 'Cut-off',
@@ -57,6 +66,7 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     showRankPercentile: true,
     showCertificate: false,
     hasPassFailConcept: true,
+    showRepeatAttempts: false,
   },
   'Mock Exam': {
     passingLabel: 'Passing',
@@ -64,6 +74,7 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     showRankPercentile: false,
     showCertificate: false,
     hasPassFailConcept: false,
+    showRepeatAttempts: true,
   },
   'Practice Exam': {
     passingLabel: 'Passing',
@@ -71,6 +82,7 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     showRankPercentile: false,
     showCertificate: false,
     hasPassFailConcept: false,
+    showRepeatAttempts: true,
   },
 };
 

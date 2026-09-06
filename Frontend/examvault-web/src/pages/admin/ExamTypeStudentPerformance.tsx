@@ -58,6 +58,7 @@ export default function ExamTypeStudentPerformance() {
           userId: student.id,
           fullName: student.fullName,
           attempts,
+          repeatAttempts: Math.max(0, attempts.length - 1),
           averagePercent: percentages.reduce((a, b) => a + b, 0) / percentages.length,
           highestPercent: Math.max(...percentages),
           passPercent: (passCount / attempts.length) * 100,
@@ -98,7 +99,7 @@ export default function ExamTypeStudentPerformance() {
     <AdminLayout active="Exam Type Wise Report">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
-          <p className="text-muted small mb-1">Reports / Exam Type Wise Report / Student Performance</p>
+          <p className="text-muted small mb-1">Results / By Exam Type / Student Performance</p>
           <h1 className="h4 fw-bold mb-1 text-primary">
             Student Performance{examType ? ` – ${examType.name}` : ''}
           </h1>
@@ -165,6 +166,7 @@ export default function ExamTypeStudentPerformance() {
                       [
                         'Student',
                         'Total Attempts',
+                        ...(scheme.showRepeatAttempts ? ['Repeat Attempts'] : []),
                         'Average Score %',
                         'Highest Score %',
                         'Last Attempt',
@@ -175,6 +177,7 @@ export default function ExamTypeStudentPerformance() {
                       rows.map((r) => [
                         r.fullName,
                         r.attempts.length,
+                        ...(scheme.showRepeatAttempts ? [r.repeatAttempts] : []),
                         Math.round(r.averagePercent),
                         Math.round(r.highestPercent),
                         new Date(r.lastAttempt.submittedAtUtc).toLocaleDateString(),
@@ -201,6 +204,7 @@ export default function ExamTypeStudentPerformance() {
                     <th className="ps-4">#</th>
                     <th>Student Name</th>
                     <th>Total Attempts</th>
+                    {scheme.showRepeatAttempts && <th>Repeat Attempts</th>}
                     <th>Average Score</th>
                     <th>Highest Score</th>
                     <th>Last Attempt</th>
@@ -221,6 +225,7 @@ export default function ExamTypeStudentPerformance() {
                       <td className="ps-4">{(currentPage - 1) * pageSize + i + 1}</td>
                       <td className="fw-medium">{r.fullName}</td>
                       <td>{r.attempts.length}</td>
+                      {scheme.showRepeatAttempts && <td>{r.repeatAttempts}</td>}
                       <td>{Math.round(r.averagePercent)}%</td>
                       <td>{Math.round(r.highestPercent)}%</td>
                       <td>{new Date(r.lastAttempt.submittedAtUtc).toLocaleDateString()}</td>

@@ -70,7 +70,7 @@ export default function ExamTypeComparison() {
     <AdminLayout active="Exam Type Wise Report">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
-          <p className="text-muted small mb-1">Reports / Exam Type Wise Report / Comparison</p>
+          <p className="text-muted small mb-1">Results / By Exam Type / Comparison</p>
           <h1 className="h4 fw-bold mb-1 text-primary">Exam Type Comparison</h1>
         </div>
         <div className="d-flex gap-2">

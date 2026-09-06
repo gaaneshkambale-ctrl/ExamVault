@@ -46,7 +46,7 @@ export default function ExamTypeWiseReport() {
     <AdminLayout active="Exam Type Wise Report">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
-          <p className="text-muted small mb-1">Reports / Exam Type Wise Report</p>
+          <p className="text-muted small mb-1">Results / By Exam Type</p>
           <h1 className="h4 fw-bold mb-1 text-primary">Exam Type Wise Report</h1>
         </div>
         <Link to="/admin/reports/exam-type-wise/comparison" className="btn btn-outline-primary btn-sm">

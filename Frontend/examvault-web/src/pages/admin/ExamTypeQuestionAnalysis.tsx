@@ -100,7 +100,7 @@ export default function ExamTypeQuestionAnalysis() {
     <AdminLayout active="Exam Type Wise Report">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
-          <p className="text-muted small mb-1">Reports / Exam Type Wise Report / Question Analysis</p>
+          <p className="text-muted small mb-1">Results / By Exam Type / Question Analysis</p>
           <h1 className="h4 fw-bold mb-1 text-primary">
             Question Analysis{examType ? ` – ${examType.name}` : ''}
           </h1>

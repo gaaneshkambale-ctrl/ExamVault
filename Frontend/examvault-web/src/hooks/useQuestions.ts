@@ -5,6 +5,7 @@ import {
   listQuestionsBySection,
   listUnassignedQuestions,
 } from '../api/questionApi';
+import type { QuestionResponse } from '../types/question';
 
 export function useQuestions(examId: string | undefined) {
   return useQuery({
@@ -48,6 +49,29 @@ export function useQuestionCountsByExam(examIds: string[] | undefined) {
     counts[examId] = queries[index]?.data?.length ?? 0;
   });
   return counts;
+}
+
+// Same fan-out as useQuestionCountsByExam, but keeps the full per-exam
+// question list (with each question's sectionId) instead of just a count -
+// used by Exam Type Wise Report's Section Performance page to join scored
+// questions back to the section they belong to. Same query key as
+// useQuestions/useQuestionCountsByExam, so it shares their cache entry
+// instead of re-fetching.
+export function useQuestionsByExamIds(examIds: string[] | undefined) {
+  const ids = examIds ?? [];
+  const queries = useQueries({
+    queries: ids.map((examId) => ({
+      queryKey: ['questions', 'byExam', examId],
+      queryFn: () => listQuestions(examId),
+    })),
+  });
+
+  const questionsByExam: Record<string, QuestionResponse[]> = {};
+  ids.forEach((examId, index) => {
+    questionsByExam[examId] = queries[index]?.data ?? [];
+  });
+  const isLoading = queries.some((q) => q.isLoading);
+  return { questionsByExam, isLoading };
 }
 
 export function useQuestion(id: string | undefined) {
