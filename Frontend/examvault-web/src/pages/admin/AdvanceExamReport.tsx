@@ -16,6 +16,7 @@ import { getExamResultScheme } from '../../utils/examResultScheme';
 import { buildAdvanceExamReport } from '../../utils/advanceExamReport';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
 import { exportAdvanceExamReportExcel } from '../../utils/exportAdvanceExamReportExcel';
+import { exportAdvanceExamReportPdf } from '../../utils/exportAdvanceExamReportPdf';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
@@ -74,6 +75,7 @@ export default function AdvanceExamReport() {
 
   const [downloadingCertFor, setDownloadingCertFor] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   async function handleDownloadCertificate(attemptId: string, attempt: typeof report.studentRows[number]['attempt'], fullName: string) {
     setDownloadingCertFor(attemptId);
@@ -91,6 +93,16 @@ export default function AdvanceExamReport() {
       await exportAdvanceExamReportExcel(exam, scheme, report);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleExportPdf() {
+    if (!exam) return;
+    setExportingPdf(true);
+    try {
+      await exportAdvanceExamReportPdf(exam, scheme, report);
+    } finally {
+      setExportingPdf(false);
     }
   }
 
@@ -114,6 +126,14 @@ export default function AdvanceExamReport() {
           <Link to={backTo} className="btn btn-outline-secondary btn-sm">
             &larr; Back
           </Link>
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2"
+            disabled={loading || exportingPdf || !exam}
+            onClick={handleExportPdf}
+          >
+            <DownloadIcon size={14} /> {exportingPdf ? 'Exporting…' : 'Export PDF'}
+          </button>
           <button
             type="button"
             className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2"
