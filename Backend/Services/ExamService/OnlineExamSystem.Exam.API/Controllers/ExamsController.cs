@@ -210,6 +210,17 @@ public class ExamsController : ControllerBase
         }
 
         _logger.LogInformation("Exam {ExamId} updated.", id);
+        var updatedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await _auditClient.RecordAsync(
+            result.Exam!.TenantId,
+            "Exams",
+            "Updated exam",
+            result.Exam!.Title,
+            id.ToString(),
+            updatedByUserId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         var createdByName = await ActorNameResolver.ResolveOneAsync(_userLookupClient, result.Exam!.CreatedByUserId, cancellationToken);
         return Ok(ToResponse(result.Exam!, createdByName));
     }

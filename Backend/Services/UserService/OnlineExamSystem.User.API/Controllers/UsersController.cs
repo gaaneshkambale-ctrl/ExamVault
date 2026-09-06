@@ -279,6 +279,16 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} created by admin.", user.Id);
+        await _auditClient.RecordAsync(
+            tenantId,
+            "Users",
+            "Created user",
+            user.FullName,
+            user.Id.ToString(),
+            createdByUserId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
         var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
         return StatusCode(StatusCodes.Status201Created, ToResponse(user, createdByName));
     }
@@ -355,6 +365,16 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} deleted by admin {AdminId}.", id, currentUserId);
+        await _auditClient.RecordAsync(
+            Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!),
+            "Users",
+            "Deleted user",
+            result.FullName,
+            id.ToString(),
+            currentUserId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
         return NoContent();
     }
 

@@ -263,6 +263,17 @@ public class QuestionsController : ControllerBase
         }
 
         _logger.LogInformation("Question {QuestionId} deleted.", id);
+        var deletedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await _auditClient.RecordAsync(
+            result.TenantId,
+            "Questions",
+            "Deleted question",
+            result.QuestionText,
+            id.ToString(),
+            deletedByUserId,
+            User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return NoContent();
     }
 

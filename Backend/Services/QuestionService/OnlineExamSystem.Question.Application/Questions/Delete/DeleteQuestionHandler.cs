@@ -24,6 +24,6 @@ public class DeleteQuestionHandler
         await _questionRepository.RemoveQuestionAsync(question, cancellationToken);
         await _questionRepository.SaveChangesAsync(cancellationToken);
 
-        return DeleteQuestionResult.Ok();
+        return DeleteQuestionResult.Ok(question.TenantId, question.QuestionText);
     }
 }
