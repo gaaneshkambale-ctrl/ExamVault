@@ -62,7 +62,23 @@ public class Program
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
-            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            // Fire-and-forget audit write must fail fast, not hang on the default
+            // 100s HttpClient timeout - a down NotificationService would otherwise
+            // make every audited business action (exam/question/user create, etc.)
+            // multi-second-to-100s slow instead of merely un-audited. Same value
+            // as the "system-logs" client below.
+            client.Timeout = TimeSpan.FromSeconds(3);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            // HttpClient.Timeout alone measured ~7-12s against a stopped
+            // container in this environment (DNS-resolution-to-a-torn-down-
+            // endpoint overhead sits partly outside that timeout's reach).
+            // ConnectTimeout bounds the DNS+TCP-connect phase specifically,
+            // giving the fast-fail this client actually needs.
+            ConnectTimeout = TimeSpan.FromSeconds(2),
+        });
         builder.Services.AddHttpClient("system-logs", client =>
         {
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
