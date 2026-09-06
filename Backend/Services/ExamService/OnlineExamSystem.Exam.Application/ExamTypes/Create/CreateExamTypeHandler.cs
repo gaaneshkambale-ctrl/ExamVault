@@ -29,6 +29,12 @@ public class CreateExamTypeHandler
         {
             Name = command.Name,
             Purpose = command.Purpose,
+            DefaultDurationMinutes = command.DefaultDurationMinutes,
+            PassingScorePercent = command.PassingScorePercent,
+            DefaultMaxAttempts = command.DefaultMaxAttempts,
+            NegativeMarkingEnabled = command.NegativeMarkingEnabled,
+            NegativeMarkingValue = command.NegativeMarkingValue,
+            AutoSubmitEnabled = command.AutoSubmitEnabled,
         };
 
         await _examRepository.AddExamTypeAsync(examType, cancellationToken);

@@ -61,6 +61,7 @@ public class ExamDbContext : TenantScopedDbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Purpose).HasMaxLength(500);
+            entity.Property(e => e.NegativeMarkingValue).HasColumnType("decimal(5,2)");
         });
 
         modelBuilder.Entity<Section>(entity =>

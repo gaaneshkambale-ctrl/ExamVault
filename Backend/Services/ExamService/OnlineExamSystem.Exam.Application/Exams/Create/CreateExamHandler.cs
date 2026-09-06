@@ -36,10 +36,14 @@ public class CreateExamHandler
             return CreateExamResult.Invalid(errors);
         }
 
-        if (command.ExamTypeId is { } examTypeId &&
-            await _examRepository.GetExamTypeByIdAsync(examTypeId, cancellationToken) is null)
+        ExamType? examType = null;
+        if (command.ExamTypeId is { } examTypeId)
         {
-            return CreateExamResult.Invalid(["Exam type not found."]);
+            examType = await _examRepository.GetExamTypeByIdAsync(examTypeId, cancellationToken);
+            if (examType is null)
+            {
+                return CreateExamResult.Invalid(["Exam type not found."]);
+            }
         }
 
         // Real Tenant Settings > Default Limits "Max Exams" enforcement - a
@@ -76,6 +80,11 @@ public class CreateExamHandler
         // Admin's (possibly-edited) choice by the time it gets here.
         // AutoSaveEnabled/QuestionNavigationMode/ResultPublishingMode have no
         // corresponding ExamPaper field to seed - stay deferred, unchanged.
+        //
+        // A selected Exam Type's own Default*/NegativeMarking* fields (see
+        // ExamType.cs's own doc comment) take priority when set - null on the
+        // type falls through to the tenant-wide default below, same merge
+        // CreateExam.tsx does client-side for Duration/PassingMarks.
         var defaults = await _examRepository.GetOrCreateExamDefaultsAsync(cancellationToken);
 
         var exam = new ExamPaper
@@ -92,10 +101,10 @@ public class CreateExamHandler
             PassingMarks = command.PassingMarks,
             Instructions = command.Instructions,
             CreatedByUserId = command.CreatedByUserId,
-            MaxAttempts = defaults.DefaultMaxAttempts,
-            NegativeMarkingEnabled = defaults.NegativeMarkingEnabled,
-            NegativeMarks = defaults.NegativeMarkingValue,
-            AutoSubmitOnTimeEnd = defaults.AutoSubmitEnabled,
+            MaxAttempts = examType?.DefaultMaxAttempts ?? defaults.DefaultMaxAttempts,
+            NegativeMarkingEnabled = examType?.NegativeMarkingEnabled ?? defaults.NegativeMarkingEnabled,
+            NegativeMarks = examType?.NegativeMarkingValue ?? defaults.NegativeMarkingValue,
+            AutoSubmitOnTimeEnd = examType?.AutoSubmitEnabled ?? defaults.AutoSubmitEnabled,
         };
         exam.ExamCode = GenerateExamCode(command.Category, exam.Id);
 

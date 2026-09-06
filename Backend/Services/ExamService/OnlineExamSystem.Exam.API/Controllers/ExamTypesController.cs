@@ -40,7 +40,15 @@ public class ExamTypesController : ControllerBase
     [Authorize(Policy = ExamTypes)]
     public async Task<IActionResult> Create(CreateExamTypeRequest request, CancellationToken cancellationToken)
     {
-        var command = new CreateExamTypeCommand(request.Name, request.Purpose);
+        var command = new CreateExamTypeCommand(
+            request.Name,
+            request.Purpose,
+            request.DefaultDurationMinutes,
+            request.PassingScorePercent,
+            request.DefaultMaxAttempts,
+            request.NegativeMarkingEnabled,
+            request.NegativeMarkingValue,
+            request.AutoSubmitEnabled);
         var result = await _createExamTypeHandler.HandleAsync(command, cancellationToken);
 
         if (!result.Success)
@@ -68,7 +76,16 @@ public class ExamTypesController : ControllerBase
     [Authorize(Policy = ExamTypes)]
     public async Task<IActionResult> Update(Guid id, UpdateExamTypeRequest request, CancellationToken cancellationToken)
     {
-        var command = new UpdateExamTypeCommand(id, request.Name, request.Purpose);
+        var command = new UpdateExamTypeCommand(
+            id,
+            request.Name,
+            request.Purpose,
+            request.DefaultDurationMinutes,
+            request.PassingScorePercent,
+            request.DefaultMaxAttempts,
+            request.NegativeMarkingEnabled,
+            request.NegativeMarkingValue,
+            request.AutoSubmitEnabled);
         var result = await _updateExamTypeHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
@@ -106,5 +123,15 @@ public class ExamTypesController : ControllerBase
     }
 
     private static ExamTypeResponse ToResponse(Domain.Entities.ExamType examType) =>
-        new(examType.Id, examType.Name, examType.Purpose, examType.CreatedAtUtc);
+        new(
+            examType.Id,
+            examType.Name,
+            examType.Purpose,
+            examType.CreatedAtUtc,
+            examType.DefaultDurationMinutes,
+            examType.PassingScorePercent,
+            examType.DefaultMaxAttempts,
+            examType.NegativeMarkingEnabled,
+            examType.NegativeMarkingValue,
+            examType.AutoSubmitEnabled);
 }

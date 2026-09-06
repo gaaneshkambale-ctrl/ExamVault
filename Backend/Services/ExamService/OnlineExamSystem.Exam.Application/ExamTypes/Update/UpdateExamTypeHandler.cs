@@ -33,6 +33,12 @@ public class UpdateExamTypeHandler
 
         examType.Name = command.Name;
         examType.Purpose = command.Purpose;
+        examType.DefaultDurationMinutes = command.DefaultDurationMinutes;
+        examType.PassingScorePercent = command.PassingScorePercent;
+        examType.DefaultMaxAttempts = command.DefaultMaxAttempts;
+        examType.NegativeMarkingEnabled = command.NegativeMarkingEnabled;
+        examType.NegativeMarkingValue = command.NegativeMarkingValue;
+        examType.AutoSubmitEnabled = command.AutoSubmitEnabled;
 
         await _examRepository.SaveChangesAsync(cancellationToken);
 

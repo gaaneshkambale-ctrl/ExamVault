@@ -8,6 +8,7 @@ import ReportStatCard from '../../components/reports/ReportStatCard';
 import { EditIcon } from '../../components/icons/ActionIcons';
 import { useExamTypes } from '../../hooks/useExams';
 import { createExamType, updateExamType } from '../../api/examApi';
+import { ClipboardIcon, TagIcon, iconForExamType } from '../../utils/examTypeIcons';
 import type { ExamTypeOption } from '../../types/exam';
 
 function extractError(error: unknown): string {
@@ -44,103 +45,6 @@ function FilterIcon() {
   );
 }
 
-function ClipboardIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-    </svg>
-  );
-}
-
-function AwardIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="6" />
-      <path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12" />
-    </svg>
-  );
-}
-
-function TrophyIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" />
-      <path d="M17 5h3a2 2 0 0 1-2 4M7 5H4a2 2 0 0 0 2 4" />
-    </svg>
-  );
-}
-
-function PersonArrowIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" />
-      <path d="M19 8v6M22 11l-3 3-3-3" />
-    </svg>
-  );
-}
-
-function BuildingIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4" y="2" width="16" height="20" rx="1" />
-      <line x1="9" y1="7" x2="9" y2="7" /><line x1="15" y1="7" x2="15" y2="7" />
-      <line x1="9" y1="11" x2="9" y2="11" /><line x1="15" y1="11" x2="15" y2="11" />
-      <line x1="9" y1="15" x2="9" y2="15" /><line x1="15" y1="15" x2="15" y2="15" />
-    </svg>
-  );
-}
-
-function GraduationCapIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5" />
-    </svg>
-  );
-}
-
-function BookOpenIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-    </svg>
-  );
-}
-
-function BriefcaseIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-    </svg>
-  );
-}
-
-function TagIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z" />
-      <line x1="7" y1="7" x2="7" y2="7" />
-    </svg>
-  );
-}
-
-// Cosmetic per-row icon based on a keyword match against the tenant's
-// current exam-type name - deterministic, not stored anywhere. Falls back
-// to a generic tag for any custom name that doesn't match one of the
-// common defaults.
-function iconForExamType(name: string) {
-  const lower = name.toLowerCase();
-  if (lower.includes('assessment')) return <ClipboardIcon />;
-  if (lower.includes('certif')) return <AwardIcon />;
-  if (lower.includes('competit')) return <TrophyIcon />;
-  if (lower.includes('entrance')) return <PersonArrowIcon />;
-  if (lower.includes('internal')) return <BuildingIcon />;
-  if (lower.includes('mock')) return <GraduationCapIcon />;
-  if (lower.includes('practice')) return <BookOpenIcon />;
-  if (lower.includes('recruit')) return <BriefcaseIcon />;
-  return <TagIcon />;
-}
-
 type PurposeFilter = 'all' | 'with' | 'without';
 type SortDir = 'asc' | 'desc';
 
@@ -153,12 +57,34 @@ export default function ManageExamTypes() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
+  // Blank = "use the platform's Exam Defaults" (Settings > Exam Defaults) -
+  // these are per-type overrides, not required fields. Kept as strings/
+  // tri-state so an empty Form.Control can represent "unset" distinctly
+  // from a real 0.
+  const [defaultDurationMinutes, setDefaultDurationMinutes] = useState('');
+  const [passingScorePercent, setPassingScorePercent] = useState('');
+  const [defaultMaxAttempts, setDefaultMaxAttempts] = useState('');
+  const [negativeMarkingEnabled, setNegativeMarkingEnabled] = useState<'' | 'true' | 'false'>('');
+  const [negativeMarkingValue, setNegativeMarkingValue] = useState('');
+  const [autoSubmitEnabled, setAutoSubmitEnabled] = useState<'' | 'true' | 'false'>('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const queryClient = useQueryClient();
 
+  const numberOrNull = (text: string) => (text.trim() === '' ? null : Number(text));
+  const boolOrNull = (tri: '' | 'true' | 'false') => (tri === '' ? null : tri === 'true');
+
+  const buildDefaultsPayload = () => ({
+    defaultDurationMinutes: numberOrNull(defaultDurationMinutes),
+    passingScorePercent: numberOrNull(passingScorePercent),
+    defaultMaxAttempts: numberOrNull(defaultMaxAttempts),
+    negativeMarkingEnabled: boolOrNull(negativeMarkingEnabled),
+    negativeMarkingValue: numberOrNull(negativeMarkingValue),
+    autoSubmitEnabled: boolOrNull(autoSubmitEnabled),
+  });
+
   const createMutation = useMutation({
-    mutationFn: () => createExamType({ name, purpose: purpose.trim() || null }),
+    mutationFn: () => createExamType({ name, purpose: purpose.trim() || null, ...buildDefaultsPayload() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exam-types'] });
       setShowModal(false);
@@ -166,7 +92,7 @@ export default function ManageExamTypes() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: () => updateExamType(editingId!, { name, purpose: purpose.trim() || null }),
+    mutationFn: () => updateExamType(editingId!, { name, purpose: purpose.trim() || null, ...buildDefaultsPayload() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exam-types'] });
       setShowModal(false);
@@ -181,6 +107,12 @@ export default function ManageExamTypes() {
     setEditingId(null);
     setName('');
     setPurpose('');
+    setDefaultDurationMinutes('');
+    setPassingScorePercent('');
+    setDefaultMaxAttempts('');
+    setNegativeMarkingEnabled('');
+    setNegativeMarkingValue('');
+    setAutoSubmitEnabled('');
     setShowModal(true);
   };
 
@@ -190,6 +122,24 @@ export default function ManageExamTypes() {
     setEditingId(examType.id);
     setName(examType.name);
     setPurpose(examType.purpose ?? '');
+    setDefaultDurationMinutes(examType.defaultDurationMinutes?.toString() ?? '');
+    setPassingScorePercent(examType.passingScorePercent?.toString() ?? '');
+    setDefaultMaxAttempts(examType.defaultMaxAttempts?.toString() ?? '');
+    setNegativeMarkingEnabled(
+      examType.negativeMarkingEnabled === null || examType.negativeMarkingEnabled === undefined
+        ? ''
+        : examType.negativeMarkingEnabled
+          ? 'true'
+          : 'false',
+    );
+    setNegativeMarkingValue(examType.negativeMarkingValue?.toString() ?? '');
+    setAutoSubmitEnabled(
+      examType.autoSubmitEnabled === null || examType.autoSubmitEnabled === undefined
+        ? ''
+        : examType.autoSubmitEnabled
+          ? 'true'
+          : 'false',
+    );
     setShowModal(true);
   };
 
@@ -253,7 +203,7 @@ export default function ManageExamTypes() {
             <Form.Label>Name</Form.Label>
             <Form.Control value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Practice Exam" />
           </Form.Group>
-          <Form.Group controlId="examTypePurpose">
+          <Form.Group className="mb-3" controlId="examTypePurpose">
             <Form.Label>Purpose (optional)</Form.Label>
             <Form.Control
               value={purpose}
@@ -261,6 +211,93 @@ export default function ManageExamTypes() {
               placeholder="e.g. Student practice, usually unlimited/repeated attempts"
             />
           </Form.Group>
+
+          <hr />
+          <div className="fw-bold small mb-1">Recommended Defaults (optional)</div>
+          <p className="text-muted small mb-3">
+            Pre-fills a new exam of this type. Leave any field blank to use the platform's own Exam Defaults
+            (Settings &gt; Exam Defaults) instead.
+          </p>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3" controlId="examTypeDuration">
+                <Form.Label className="small">Default Duration (minutes)</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={1}
+                  placeholder="Use platform default"
+                  value={defaultDurationMinutes}
+                  onChange={(e) => setDefaultDurationMinutes(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3" controlId="examTypePassingScore">
+                <Form.Label className="small">Passing Score (%)</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder="Use platform default"
+                  value={passingScorePercent}
+                  onChange={(e) => setPassingScorePercent(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+          </Row>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3" controlId="examTypeMaxAttempts">
+                <Form.Label className="small">Max Attempts</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={1}
+                  placeholder="Use platform default"
+                  value={defaultMaxAttempts}
+                  onChange={(e) => setDefaultMaxAttempts(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3" controlId="examTypeAutoSubmit">
+                <Form.Label className="small">Auto Submit</Form.Label>
+                <Form.Select value={autoSubmitEnabled} onChange={(e) => setAutoSubmitEnabled(e.target.value as '' | 'true' | 'false')}>
+                  <option value="">Use platform default</option>
+                  <option value="true">On</option>
+                  <option value="false">Off</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+          </Row>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3" controlId="examTypeNegativeMarking">
+                <Form.Label className="small">Negative Marking</Form.Label>
+                <Form.Select
+                  value={negativeMarkingEnabled}
+                  onChange={(e) => setNegativeMarkingEnabled(e.target.value as '' | 'true' | 'false')}
+                >
+                  <option value="">Use platform default</option>
+                  <option value="true">On</option>
+                  <option value="false">Off</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3" controlId="examTypeNegativeMarkingValue">
+                <Form.Label className="small">Negative Marking Value</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  step={0.25}
+                  placeholder="Use platform default"
+                  value={negativeMarkingValue}
+                  onChange={(e) => setNegativeMarkingValue(e.target.value)}
+                  disabled={negativeMarkingEnabled === 'false'}
+                />
+              </Form.Group>
+            </Col>
+          </Row>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={() => setShowModal(false)}>

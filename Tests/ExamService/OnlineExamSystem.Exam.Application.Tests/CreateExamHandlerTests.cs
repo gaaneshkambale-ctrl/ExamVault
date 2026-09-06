@@ -122,6 +122,53 @@ public class CreateExamHandlerTests
     }
 
     [Fact]
+    public async Task Exam_type_overrides_win_over_the_tenant_wide_defaults()
+    {
+        var repository = new FakeExamRepository();
+        var handler = CreateHandler(repository);
+        var examType = new ExamType
+        {
+            Name = "Certification Exam",
+            DefaultMaxAttempts = 1,
+            NegativeMarkingEnabled = false,
+            NegativeMarkingValue = 0m,
+            AutoSubmitEnabled = false,
+        };
+        await repository.AddExamTypeAsync(examType);
+        var command = new CreateExamCommand(
+            "AWS Certification", "Description", "Technical", false, "Manual", 60, 50, 25, "Instructions",
+            Guid.NewGuid(), ExamTypeId: examType.Id);
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.Exam!.MaxAttempts);
+        Assert.False(result.Exam!.NegativeMarkingEnabled);
+        Assert.Equal(0m, result.Exam!.NegativeMarks);
+        Assert.False(result.Exam!.AutoSubmitOnTimeEnd);
+    }
+
+    [Fact]
+    public async Task Exam_type_without_overrides_falls_through_to_the_tenant_wide_defaults()
+    {
+        var repository = new FakeExamRepository();
+        var handler = CreateHandler(repository);
+        var examTypeId = await SeedExamTypeAsync(repository);
+        var command = new CreateExamCommand(
+            "Practice Round", "Description", "Technical", false, "Manual", 60, 50, 25, "Instructions",
+            Guid.NewGuid(), ExamTypeId: examTypeId);
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        // Matches ExamDefaults' own property initializers - see FakeExamRepository.GetOrCreateExamDefaultsAsync.
+        Assert.Equal(3, result.Exam!.MaxAttempts);
+        Assert.True(result.Exam!.NegativeMarkingEnabled);
+        Assert.Equal(0.25m, result.Exam!.NegativeMarks);
+        Assert.True(result.Exam!.AutoSubmitOnTimeEnd);
+    }
+
+    [Fact]
     public async Task Exam_creation_is_unaffected_when_no_limit_is_configured()
     {
         var repository = new FakeExamRepository();

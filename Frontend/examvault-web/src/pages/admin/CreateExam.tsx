@@ -9,9 +9,10 @@ import { createExam } from '../../api/examApi';
 import { getOrCreateDefaultSection } from '../../api/sectionApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import { EXAM_CATEGORIES } from '../../types/exam';
-import type { CreateExamRequest, CreationMethod } from '../../types/exam';
+import type { CreateExamRequest, CreationMethod, ExamTypeOption } from '../../types/exam';
 import { useExamDefaults, useExamTypes } from '../../hooks/useExams';
 import { extractServerError } from '../../utils/apiError';
+import { iconForExamType } from '../../utils/examTypeIcons';
 import ExamWizardStepper from '../../components/ExamWizardStepper';
 
 const TITLE_MAX = 200;
@@ -138,6 +139,24 @@ export default function CreateExam() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Selecting a card applies that type's own Duration/Passing Score override
+  // (if it has one) on top of whatever the tenant-wide Exam Defaults already
+  // prefilled above - same "null means inherit" merge CreateExamHandler does
+  // server-side for the fields collected there instead of on this form. The
+  // Admin can still edit either field afterward; this only sets them once,
+  // at selection time.
+  const selectExamType = (type: ExamTypeOption) => {
+    setForm((prev) => ({
+      ...prev,
+      examTypeId: type.id,
+      durationMinutes: type.defaultDurationMinutes ?? prev.durationMinutes,
+      passingMarks:
+        type.passingScorePercent != null
+          ? Math.round((prev.totalMarks * type.passingScorePercent) / 100)
+          : prev.passingMarks,
+    }));
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -222,7 +241,7 @@ export default function CreateExam() {
                 </Row>
 
                 <Row>
-                  <Col md={4}>
+                  <Col md={6}>
                     <Form.Group className="mb-3" controlId="examCategory">
                       <Form.Label className="fw-bold">Category</Form.Label>
                       <Form.Select
@@ -240,25 +259,7 @@ export default function CreateExam() {
                       <Form.Control.Feedback type="invalid">{fieldErrors.category}</Form.Control.Feedback>
                     </Form.Group>
                   </Col>
-                  <Col md={4}>
-                    <Form.Group className="mb-3" controlId="examTypeId">
-                      <Form.Label className="fw-bold">Exam Type</Form.Label>
-                      <Form.Select
-                        value={form.examTypeId ?? ''}
-                        onChange={(e) => updateField('examTypeId', e.target.value || null)}
-                        isInvalid={!!fieldErrors.examTypeId}
-                      >
-                        <option value="">Select an exam type</option>
-                        {examTypes?.map((type) => (
-                          <option key={type.id} value={type.id}>
-                            {type.name}
-                          </option>
-                        ))}
-                      </Form.Select>
-                      <Form.Control.Feedback type="invalid">{fieldErrors.examTypeId}</Form.Control.Feedback>
-                    </Form.Group>
-                  </Col>
-                  <Col md={4} className="d-flex align-items-start pt-4">
+                  <Col md={6} className="d-flex align-items-start pt-4">
                     <Form.Check
                       type="switch"
                       id="examContainsSections"
@@ -269,6 +270,36 @@ export default function CreateExam() {
                     />
                   </Col>
                 </Row>
+
+                <Form.Group className="mb-3" controlId="examTypeId">
+                  <Form.Label className="fw-bold">Exam Type</Form.Label>
+                  <Row className="g-2">
+                    {examTypes?.map((type) => {
+                      const selected = form.examTypeId === type.id;
+                      return (
+                        <Col xs={6} md={4} key={type.id}>
+                          <Card
+                            role="button"
+                            onClick={() => selectExamType(type)}
+                            className={`h-100 ${selected ? 'border-primary' : ''}`}
+                            bg={selected ? 'primary-subtle' : undefined}
+                          >
+                            <Card.Body className="p-3">
+                              <div className="d-flex align-items-center gap-2 mb-1">
+                                <span className={selected ? 'text-primary' : 'text-muted'}>
+                                  {iconForExamType(type.name)}
+                                </span>
+                                <span className="fw-bold small">{type.name}</span>
+                              </div>
+                              {type.purpose && <div className="text-muted small">{type.purpose}</div>}
+                            </Card.Body>
+                          </Card>
+                        </Col>
+                      );
+                    })}
+                  </Row>
+                  {fieldErrors.examTypeId && <div className="text-danger small mt-1">{fieldErrors.examTypeId}</div>}
+                </Form.Group>
 
                 <Row>
                   <Col md={8}>
