@@ -1,10 +1,13 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Accordion, Badge, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import { useTenants } from '../../hooks/useTenants';
 import { listExams } from '../../api/examApi';
 import type { ExamResponse } from '../../types/exam';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 // Same cross-tenant exam list as All Exams (same query key, dedupes the
 // fetch), grouped client-side by each comma-separated Tags token - an exam
@@ -38,6 +41,13 @@ export default function PlatformExamTags() {
 
   const untaggedCount = (exams ?? []).filter((e) => !(e.tags ?? '').trim()).length;
 
+  const [pageByTag, setPageByTag] = useState<Record<string, number>>({});
+  const [pageSizeByTag, setPageSizeByTag] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setPageByTag({});
+  }, [exams]);
+
   return (
     <PlatformLayout active="exams-tags">
       <p className="text-muted small mb-1">Platform Admin / Exams / Tags</p>
@@ -59,44 +69,72 @@ export default function PlatformExamTags() {
       {!isLoading && !isError && byTag.length > 0 && (
         <>
           <Accordion alwaysOpen>
-            {byTag.map(([tag, tagExams], index) => (
-              <Accordion.Item eventKey={String(index)} key={tag} className="border-0 shadow-sm mb-2">
-                <Accordion.Header>
-                  <span className="fw-medium">{tag}</span>
-                  <Badge bg="light" text="dark" className="border ms-2">
-                    {tagExams.length}
-                  </Badge>
-                </Accordion.Header>
-                <Accordion.Body className="p-0">
-                  <Table responsive hover className="mb-0 align-middle">
-                    <thead className="text-muted small text-uppercase bg-body-tertiary">
-                      <tr>
-                        <th className="ps-4">Exam</th>
-                        <th>Organization</th>
-                        <th>Status</th>
-                        <th className="pe-4">Created On</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tagExams.map((exam) => (
-                        <tr key={exam.id}>
-                          <td className="ps-4">{exam.title}</td>
-                          <td className="text-muted">{tenantNameById.get(exam.tenantId) ?? '—'}</td>
-                          <td>
-                            <Badge
-                              bg={exam.status === 'Published' ? 'success' : exam.status === 'Archived' ? 'secondary' : 'warning'}
-                            >
-                              {exam.status}
-                            </Badge>
-                          </td>
-                          <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
+            {byTag.map(([tag, tagExams], index) => {
+              const pageSize = pageSizeByTag[tag] ?? PAGE_SIZE_OPTIONS[0];
+              const currentPage = pageByTag[tag] ?? 1;
+              const totalPages = Math.max(1, Math.ceil(tagExams.length / pageSize));
+              const clampedPage = Math.min(currentPage, totalPages);
+              const pagedExams = tagExams.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
+              const rangeStart = tagExams.length === 0 ? 0 : (clampedPage - 1) * pageSize + 1;
+              const rangeEnd = Math.min(clampedPage * pageSize, tagExams.length);
+
+              return (
+                <Accordion.Item eventKey={String(index)} key={tag} className="border-0 shadow-sm mb-2">
+                  <Accordion.Header>
+                    <span className="fw-medium">{tag}</span>
+                    <Badge bg="light" text="dark" className="border ms-2">
+                      {tagExams.length}
+                    </Badge>
+                  </Accordion.Header>
+                  <Accordion.Body className="p-0">
+                    <Table responsive hover className="mb-0 align-middle">
+                      <thead className="text-muted small text-uppercase bg-body-tertiary">
+                        <tr>
+                          <th className="ps-4">Exam</th>
+                          <th>Organization</th>
+                          <th>Status</th>
+                          <th className="pe-4">Created On</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </Accordion.Body>
-              </Accordion.Item>
-            ))}
+                      </thead>
+                      <tbody>
+                        {pagedExams.map((exam) => (
+                          <tr key={exam.id}>
+                            <td className="ps-4">{exam.title}</td>
+                            <td className="text-muted">{tenantNameById.get(exam.tenantId) ?? '—'}</td>
+                            <td>
+                              <Badge
+                                bg={exam.status === 'Published' ? 'success' : exam.status === 'Archived' ? 'secondary' : 'warning'}
+                              >
+                                {exam.status}
+                              </Badge>
+                            </td>
+                            <td className="pe-4">{new Date(exam.createdOn).toLocaleDateString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                    {tagExams.length > 0 && (
+                      <div className="p-3">
+                        <TablePagination
+                          page={clampedPage}
+                          totalPages={totalPages}
+                          rangeStart={rangeStart}
+                          rangeEnd={rangeEnd}
+                          totalCount={tagExams.length}
+                          onPageChange={(p) => setPageByTag((prev) => ({ ...prev, [tag]: p }))}
+                          pageSize={pageSize}
+                          pageSizeOptions={PAGE_SIZE_OPTIONS}
+                          onPageSizeChange={(size) => {
+                            setPageSizeByTag((prev) => ({ ...prev, [tag]: size }));
+                            setPageByTag((prev) => ({ ...prev, [tag]: 1 }));
+                          }}
+                        />
+                      </div>
+                    )}
+                  </Accordion.Body>
+                </Accordion.Item>
+              );
+            })}
           </Accordion>
           {untaggedCount > 0 && (
             <div className="text-muted small mt-2">{untaggedCount} exam(s) have no tags yet.</div>

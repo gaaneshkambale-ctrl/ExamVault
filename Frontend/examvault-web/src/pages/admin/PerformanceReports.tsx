@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
+import TablePagination from '../../components/reports/TablePagination';
 import LineTrendChart from '../../components/charts/LineTrendChart';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
 import { TargetIcon, ArrowUpIcon, ArrowDownIcon, CheckCircleIcon, TrendingUpIcon } from '../../components/reports/ReportIcons';
@@ -14,6 +15,8 @@ import { SCORE_BUCKETS } from '../../utils/scoreBuckets';
 import { bucketByDay, computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 import type { AdminAttemptResultResponse } from '../../types/result';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function percentOf(r: AdminAttemptResultResponse): number {
   return r.totalMarks > 0 ? (r.totalScore / r.totalMarks) * 100 : 0;
@@ -26,6 +29,8 @@ export default function PerformanceReports() {
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [category, setCategory] = useState('All');
   const [examFilter, setExamFilter] = useState('All');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const filteredExamIds = useMemo(() => {
     const allowed = (exams ?? []).filter((e) => category === 'All' || e.category === category).map((e) => e.id);
@@ -108,6 +113,16 @@ export default function PerformanceReports() {
         };
       });
   }, [exams, current.results, prior.results, filteredExamIds]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [category, examFilter, range]);
+
+  const totalPages = Math.max(1, Math.ceil(performanceByExam.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedPerformance = performanceByExam.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = performanceByExam.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, performanceByExam.length);
 
   return (
     <AdminLayout active="Performance Reports">
@@ -237,7 +252,7 @@ export default function PerformanceReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {performanceByExam.map((p) => (
+                    {pagedPerformance.map((p) => (
                       <tr key={p.exam.id}>
                         <td className="ps-4 fw-medium">{p.exam.title}</td>
                         <td>{Math.round(p.averageScore)}%</td>
@@ -255,6 +270,21 @@ export default function PerformanceReports() {
                     ))}
                   </tbody>
                 </Table>
+              )}
+              {performanceByExam.length > 0 && (
+                <div className="p-3">
+                  <TablePagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    totalCount={performanceByExam.length}
+                    onPageChange={setPage}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setPageSize}
+                  />
+                </div>
               )}
             </Card.Body>
           </Card>

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Accordion, Card, Col, Form, InputGroup, Pagination, Row, Table } from 'react-bootstrap';
+import { Accordion, Card, Col, Form, InputGroup, Row, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import OrgAvatar from '../../components/OrgAvatar';
 import { BookIcon } from '../../components/reports/ReportIcons';
@@ -320,49 +321,21 @@ export default function PlatformSections() {
                             </tbody>
                           </Table>
                           {examSections.length > PAGE_SIZE_OPTIONS[0] && (
-                            <div className="d-flex justify-content-between align-items-center px-3 py-2 border-top">
-                              <div className="text-muted small">
-                                Showing {rangeStart} to {rangeEnd} of {examSections.length} sections
-                              </div>
-                              <div className="d-flex align-items-center gap-3">
-                                {totalPages > 1 && (
-                                  <Pagination className="mb-0" size="sm">
-                                    <Pagination.Prev
-                                      disabled={clampedPage === 1}
-                                      onClick={() => setPageByGroup((prev) => ({ ...prev, [key]: Math.max(1, clampedPage - 1) }))}
-                                    />
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                      <Pagination.Item
-                                        key={p}
-                                        active={p === clampedPage}
-                                        onClick={() => setPageByGroup((prev) => ({ ...prev, [key]: p }))}
-                                      >
-                                        {p}
-                                      </Pagination.Item>
-                                    ))}
-                                    <Pagination.Next
-                                      disabled={clampedPage === totalPages}
-                                      onClick={() => setPageByGroup((prev) => ({ ...prev, [key]: Math.min(totalPages, clampedPage + 1) }))}
-                                    />
-                                  </Pagination>
-                                )}
-                                <Form.Select
-                                  size="sm"
-                                  style={{ width: 100 }}
-                                  value={pageSize}
-                                  onChange={(e) => {
-                                    const size = Number(e.target.value);
-                                    setPageSizeByGroup((prev) => ({ ...prev, [key]: size }));
-                                    setPageByGroup((prev) => ({ ...prev, [key]: 1 }));
-                                  }}
-                                >
-                                  {PAGE_SIZE_OPTIONS.map((size) => (
-                                    <option key={size} value={size}>
-                                      {size} / page
-                                    </option>
-                                  ))}
-                                </Form.Select>
-                              </div>
+                            <div className="px-3 py-2 border-top">
+                              <TablePagination
+                                page={clampedPage}
+                                totalPages={totalPages}
+                                rangeStart={rangeStart}
+                                rangeEnd={rangeEnd}
+                                totalCount={examSections.length}
+                                onPageChange={(p) => setPageByGroup((prev) => ({ ...prev, [key]: p }))}
+                                pageSize={pageSize}
+                                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                                onPageSizeChange={(size) => {
+                                  setPageSizeByGroup((prev) => ({ ...prev, [key]: size }));
+                                  setPageByGroup((prev) => ({ ...prev, [key]: 1 }));
+                                }}
+                              />
                             </div>
                           )}
                         </div>

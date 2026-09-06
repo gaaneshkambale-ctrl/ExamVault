@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Accordion, Badge, Card, Col, Form, InputGroup, Pagination, Row, Table } from 'react-bootstrap';
+import { Accordion, Badge, Card, Col, Form, InputGroup, Row, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import { BookIcon, CheckCircleIcon, DatabaseIcon, TargetIcon } from '../../components/reports/ReportIcons';
 import { useTenants } from '../../hooks/useTenants';
@@ -367,49 +368,21 @@ export default function PlatformExamCategories() {
                           ))}
                         </tbody>
                       </Table>
-                      <div className="d-flex justify-content-between align-items-center px-3 py-2 border-top">
-                        <div className="text-muted small">
-                          Showing {rangeStart} to {rangeEnd} of {matchedExams.length} exams
-                        </div>
-                        <div className="d-flex align-items-center gap-3">
-                          {totalPages > 1 && (
-                            <Pagination className="mb-0" size="sm">
-                              <Pagination.Prev
-                                disabled={clampedPage === 1}
-                                onClick={() => setPageByCategory((prev) => ({ ...prev, [name]: Math.max(1, clampedPage - 1) }))}
-                              />
-                              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                <Pagination.Item
-                                  key={p}
-                                  active={p === clampedPage}
-                                  onClick={() => setPageByCategory((prev) => ({ ...prev, [name]: p }))}
-                                >
-                                  {p}
-                                </Pagination.Item>
-                              ))}
-                              <Pagination.Next
-                                disabled={clampedPage === totalPages}
-                                onClick={() => setPageByCategory((prev) => ({ ...prev, [name]: Math.min(totalPages, clampedPage + 1) }))}
-                              />
-                            </Pagination>
-                          )}
-                          <Form.Select
-                            size="sm"
-                            style={{ width: 100 }}
-                            value={pageSize}
-                            onChange={(e) => {
-                              const size = Number(e.target.value);
-                              setPageSizeByCategory((prev) => ({ ...prev, [name]: size }));
-                              setPageByCategory((prev) => ({ ...prev, [name]: 1 }));
-                            }}
-                          >
-                            {PAGE_SIZE_OPTIONS.map((size) => (
-                              <option key={size} value={size}>
-                                {size} / page
-                              </option>
-                            ))}
-                          </Form.Select>
-                        </div>
+                      <div className="px-3 py-2 border-top">
+                        <TablePagination
+                          page={clampedPage}
+                          totalPages={totalPages}
+                          rangeStart={rangeStart}
+                          rangeEnd={rangeEnd}
+                          totalCount={matchedExams.length}
+                          onPageChange={(p) => setPageByCategory((prev) => ({ ...prev, [name]: p }))}
+                          pageSize={pageSize}
+                          pageSizeOptions={PAGE_SIZE_OPTIONS}
+                          onPageSizeChange={(size) => {
+                            setPageSizeByCategory((prev) => ({ ...prev, [name]: size }));
+                            setPageByCategory((prev) => ({ ...prev, [name]: 1 }));
+                          }}
+                        />
                       </div>
                     </>
                   )}

@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
+import TablePagination from '../../components/reports/TablePagination';
 import DonutChart from '../../components/charts/DonutChart';
 import { ViewIcon, UsersIcon } from '../../components/icons/ActionIcons';
 import { UserCheckIcon, TargetIcon, CheckCircleIcon, AlertTriangleIcon } from '../../components/reports/ReportIcons';
@@ -14,6 +15,8 @@ import { computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '..
 import type { DateRange } from '../../utils/dateRange';
 import type { AdminAttemptResultResponse } from '../../types/result';
 import { SCORE_BUCKETS } from '../../utils/scoreBuckets';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function statusLabel(avgPercent: number): { text: string; variant: string } {
   if (avgPercent >= 90) return { text: 'Excellent', variant: 'success' };
@@ -43,6 +46,8 @@ export default function StudentReports() {
   const [studentFilter, setStudentFilter] = useState('All');
   const [examFilter, setExamFilter] = useState('All');
   const [modalStudent, setModalStudent] = useState<StudentAgg | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const loading = isLoadingUsers || isLoadingResults;
   const students = useMemo(() => (users ?? []).filter((u) => u.role === 'Student'), [users]);
@@ -118,6 +123,16 @@ export default function StudentReports() {
     () => [...activeStudents].sort((a, b) => b.averagePercent - a.averagePercent).slice(0, 5),
     [activeStudents],
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [studentFilter, examFilter, range]);
+
+  const totalPages = Math.max(1, Math.ceil(activeStudents.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedStudents = activeStudents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = activeStudents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, activeStudents.length);
 
   return (
     <AdminLayout active="Student Reports">
@@ -290,7 +305,7 @@ export default function StudentReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeStudents.map((s) => (
+                    {pagedStudents.map((s) => (
                       <tr key={s.userId}>
                         <td className="ps-4">
                           <div className="fw-medium">{s.fullName}</div>
@@ -318,6 +333,21 @@ export default function StudentReports() {
                     ))}
                   </tbody>
                 </Table>
+              )}
+              {activeStudents.length > 0 && (
+                <div className="p-3">
+                  <TablePagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    totalCount={activeStudents.length}
+                    onPageChange={setPage}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setPageSize}
+                  />
+                </div>
               )}
             </Card.Body>
           </Card>

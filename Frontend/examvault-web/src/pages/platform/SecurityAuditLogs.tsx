@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Card, Form, Pagination, Spinner, Table } from 'react-bootstrap';
+import { Badge, Card, Form, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import { useTenants } from '../../hooks/useTenants';
 import { getAuditLogs } from '../../api/auditApi';
 
@@ -129,29 +130,17 @@ export default function SecurityAuditLogs() {
       </Card>
 
       {!isLoading && !isError && filteredLogs.length > 0 && (
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <div className="text-muted small">
-            Showing {rangeStart} to {rangeEnd} of {filteredLogs.length} entries
-          </div>
-          <div className="d-flex align-items-center gap-3">
-            <Pagination className="mb-0">
-              <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                  {p}
-                </Pagination.Item>
-              ))}
-              <Pagination.Next disabled={currentPage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
-            </Pagination>
-            <Form.Select size="sm" style={{ width: 100 }} value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size}>
-                  {size} / page
-                </option>
-              ))}
-            </Form.Select>
-          </div>
-        </div>
+        <TablePagination
+          page={currentPage}
+          totalPages={totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          totalCount={filteredLogs.length}
+          onPageChange={setPage}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setPageSize}
+        />
       )}
     </PlatformLayout>
   );

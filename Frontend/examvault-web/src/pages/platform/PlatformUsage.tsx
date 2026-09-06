@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import OrgAvatar from '../../components/OrgAvatar';
 import LineTrendChart from '../../components/charts/LineTrendChart';
 import { useTenants } from '../../hooks/useTenants';
@@ -11,6 +12,8 @@ import { listExams } from '../../api/examApi';
 import { listPlans } from '../../api/plansApi';
 import { listAllSubmissions } from '../../api/submissionApi';
 import { bucketByDay, getDefaultRange } from '../../utils/dateRange';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 // Matches subscription.png's Usage screen. Total Students, Exams
 // Conducted, and Active Exams are all real now - the last two only became
@@ -114,6 +117,19 @@ export default function PlatformUsage() {
       };
     });
   }, [plans, tenants, users, exams]);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize, usageByPlan.length]);
+
+  const totalPages = Math.max(1, Math.ceil(usageByPlan.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedUsageByPlan = usageByPlan.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = usageByPlan.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, usageByPlan.length);
 
   return (
     <PlatformLayout active="subs-usage">
@@ -243,7 +259,7 @@ export default function PlatformUsage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {usageByPlan.map(({ plan, organizationCount, studentsUsed, adminsUsed, instructorsUsed, examsUsed }) => (
+                    {pagedUsageByPlan.map(({ plan, organizationCount, studentsUsed, adminsUsed, instructorsUsed, examsUsed }) => (
                       <tr key={plan.id}>
                         <td className="ps-3 fw-medium">{plan.name}</td>
                         <td className="text-muted">{organizationCount}</td>
@@ -255,6 +271,19 @@ export default function PlatformUsage() {
                     ))}
                   </tbody>
                 </Table>
+              )}
+              {usageByPlan.length > 0 && (
+                <TablePagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  rangeStart={rangeStart}
+                  rangeEnd={rangeEnd}
+                  totalCount={usageByPlan.length}
+                  onPageChange={setPage}
+                  pageSize={pageSize}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                  onPageSizeChange={setPageSize}
+                />
               )}
             </Card.Body>
           </Card>

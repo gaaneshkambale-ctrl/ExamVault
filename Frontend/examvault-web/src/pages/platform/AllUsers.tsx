@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card, Form, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import OrgAvatar from '../../components/OrgAvatar';
 import SegmentDonutChart from '../../components/SegmentDonutChart';
 import { useTenants } from '../../hooks/useTenants';
 import { listAllUsers } from '../../api/userApi';
 import { timeAgo } from '../../utils/timeAgo';
 import type { PlatformUserListItem } from '../../types/user';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 // Matches Alluser.png. Everything here is real, unlike most of the rest of
 // this console - fixing UserRepository's missing tenant scoping (see
@@ -126,6 +129,19 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
     );
   });
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [roleTab, organizationFilter, searchQuery, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredUsers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredUsers.length);
+
   const recentRegistrations: PlatformUserListItem[] = [...orgScopedUsers]
     .sort((a, b) => new Date(b.createdAtUtc).getTime() - new Date(a.createdAtUtc).getTime())
     .slice(0, 5);
@@ -211,7 +227,7 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUsers.map((user) => (
+                    {pagedUsers.map((user) => (
                       <tr key={user.id}>
                         <td className="ps-4">
                           <div className="fw-medium">{user.fullName}</div>
@@ -251,6 +267,21 @@ export default function AllUsers({ roleFilter }: AllUsersProps) {
                     ))}
                   </tbody>
                 </Table>
+              )}
+              {filteredUsers.length > 0 && (
+                <div className="p-3">
+                  <TablePagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    totalCount={filteredUsers.length}
+                    onPageChange={setPage}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setPageSize}
+                  />
+                </div>
               )}
             </Card.Body>
           </Card>

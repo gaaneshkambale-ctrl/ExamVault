@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card, Col, Dropdown, Form, InputGroup, Row, Spinner, Table } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import { BookIcon, CheckCircleIcon } from '../../components/reports/ReportIcons';
 import { useTenants } from '../../hooks/useTenants';
@@ -68,6 +69,8 @@ function exportExamsToCsv(exams: ExamResponse[], tenantNameById: Map<string, str
 
 type StatusFilter = 'all' | ExamStatus;
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
 // Real, cross-tenant - ExamsController.List already accepts a SuperAdmin
 // caller (widened for the Exam Usage report), same query key as that page
 // so React Query dedupes the fetch instead of hitting it twice.
@@ -113,6 +116,19 @@ export default function PlatformAllExams() {
       orgName.toLowerCase().includes(searchQuery)
     );
   });
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [organizationFilter, statusFilter, searchQuery, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredExams.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedExams = filteredExams.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredExams.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredExams.length);
 
   return (
     <PlatformLayout active="exams-all">
@@ -250,7 +266,7 @@ export default function PlatformAllExams() {
                 </tr>
               </thead>
               <tbody>
-                {filteredExams.map((exam) => (
+                {pagedExams.map((exam) => (
                   <tr key={exam.id}>
                     <td className="ps-4">
                       <div className="fw-medium">{exam.title}</div>
@@ -276,6 +292,21 @@ export default function PlatformAllExams() {
                 ))}
               </tbody>
             </Table>
+          )}
+          {filteredExams.length > 0 && (
+            <div className="p-3">
+              <TablePagination
+                page={currentPage}
+                totalPages={totalPages}
+                rangeStart={rangeStart}
+                rangeEnd={rangeEnd}
+                totalCount={filteredExams.length}
+                onPageChange={setPage}
+                pageSize={pageSize}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                onPageSizeChange={setPageSize}
+              />
+            </div>
           )}
         </Card.Body>
       </Card>

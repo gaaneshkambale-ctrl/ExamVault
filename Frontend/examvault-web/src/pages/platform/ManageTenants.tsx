@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Form, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import PlatformLayout from '../../layouts/PlatformLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import DeactivateTenantButton from '../../components/DeactivateTenantButton';
 import ReactivateTenantButton from '../../components/ReactivateTenantButton';
 import StartTrialButton from '../../components/StartTrialButton';
@@ -12,6 +13,8 @@ import { useTenants } from '../../hooks/useTenants';
 import { listPlans } from '../../api/plansApi';
 import { listAllUsers } from '../../api/userApi';
 import { listExams } from '../../api/examApi';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 interface ManageTenantsProps {
   // Undefined = "All Organizations". PlatformSidebar's nav key for
@@ -82,6 +85,19 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
   const filteredTenants = statusFiltered?.filter(
     (tenant) => !searchQuery || tenant.name.toLowerCase().includes(searchQuery) || tenant.slug.toLowerCase().includes(searchQuery),
   );
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, searchQuery, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil((filteredTenants?.length ?? 0) / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedTenants = (filteredTenants ?? []).slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = !filteredTenants || filteredTenants.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredTenants?.length ?? 0);
 
   const totalCount = tenants?.length ?? 0;
   const activeCount = tenants?.filter((t) => t.isActive).length ?? 0;
@@ -180,7 +196,7 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                 </tr>
               </thead>
               <tbody>
-                {filteredTenants.map((tenant) => (
+                {pagedTenants.map((tenant) => (
                   <tr key={tenant.id}>
                     <td className="ps-4">
                       <div className="d-flex align-items-center gap-2">
@@ -265,6 +281,21 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                 ))}
               </tbody>
             </Table>
+          )}
+          {filteredTenants && filteredTenants.length > 0 && (
+            <div className="p-3">
+              <TablePagination
+                page={currentPage}
+                totalPages={totalPages}
+                rangeStart={rangeStart}
+                rangeEnd={rangeEnd}
+                totalCount={filteredTenants.length}
+                onPageChange={setPage}
+                pageSize={pageSize}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                onPageSizeChange={setPageSize}
+              />
+            </div>
           )}
         </Card.Body>
       </Card>

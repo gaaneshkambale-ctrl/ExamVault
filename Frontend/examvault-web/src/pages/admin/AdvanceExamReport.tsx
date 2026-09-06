@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -6,6 +6,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
 import DonutChart from '../../components/charts/DonutChart';
+import TablePagination from '../../components/reports/TablePagination';
 import { BookIcon, TargetIcon, CheckCircleIcon, UserCheckIcon } from '../../components/reports/ReportIcons';
 import { DownloadIcon } from '../../components/icons/ActionIcons';
 import { useExam } from '../../hooks/useExams';
@@ -15,6 +16,8 @@ import { getExamResultScheme } from '../../utils/examResultScheme';
 import { buildAdvanceExamReport } from '../../utils/advanceExamReport';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
 import { exportAdvanceExamReportExcel } from '../../utils/exportAdvanceExamReportExcel';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function BulbIcon() {
   return (
@@ -43,6 +46,31 @@ export default function AdvanceExamReport() {
     () => buildAdvanceExamReport(attempts ?? [], users ?? [], scheme),
     [attempts, users, scheme],
   );
+
+  type CombinedRow =
+    | { kind: 'present'; row: (typeof report.studentRows)[number] }
+    | { kind: 'absent'; row: (typeof report.absentStudents)[number] };
+
+  const combinedRows: CombinedRow[] = useMemo(
+    () => [
+      ...report.studentRows.map((row) => ({ kind: 'present' as const, row })),
+      ...report.absentStudents.map((row) => ({ kind: 'absent' as const, row })),
+    ],
+    [report],
+  );
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [examId, combinedRows.length]);
+
+  const totalPages = Math.max(1, Math.ceil(combinedRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = combinedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = combinedRows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, combinedRows.length);
 
   const [downloadingCertFor, setDownloadingCertFor] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -213,59 +241,78 @@ export default function AdvanceExamReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {report.studentRows.map((r) => (
-                      <tr key={r.student.id}>
-                        <td className="ps-4">{r.student.rollNumber ?? '—'}</td>
-                        <td className="fw-medium">{r.student.fullName}</td>
-                        <td><Badge bg="success">Present</Badge></td>
-                        <td>{r.attempt.totalScore} / {r.attempt.totalMarks}</td>
-                        <td>{Math.round(r.percent * 10) / 10}%</td>
-                        <td>
-                          {scheme.hasPassFailConcept ? (
-                            <Badge bg={r.attempt.passed ? 'success' : 'danger'}>
-                              {r.attempt.passed ? scheme.outcomeLabels.pass : scheme.outcomeLabels.fail}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted small">Performance only</span>
-                          )}
-                        </td>
-                        {scheme.showRankPercentile && <td>{r.rank ?? '—'}</td>}
-                        {scheme.showRankPercentile && <td>{r.percentile !== null ? `${r.percentile}%` : '—'}</td>}
-                        <td>{new Date(r.attempt.submittedAtUtc).toLocaleString()}</td>
-                        {scheme.showCertificate && (
-                          <td className="pe-4">
-                            {r.attempt.passed ? (
-                              <button
-                                type="button"
-                                className="btn btn-outline-primary btn-sm"
-                                disabled={downloadingCertFor === r.attempt.attemptId}
-                                onClick={() => handleDownloadCertificate(r.attempt.attemptId, r.attempt, r.student.fullName)}
-                              >
-                                {downloadingCertFor === r.attempt.attemptId ? 'Generating…' : 'Download'}
-                              </button>
+                    {pagedRows.map((entry) =>
+                      entry.kind === 'present' ? (
+                        <tr key={entry.row.student.id}>
+                          <td className="ps-4">{entry.row.student.rollNumber ?? '—'}</td>
+                          <td className="fw-medium">{entry.row.student.fullName}</td>
+                          <td><Badge bg="success">Present</Badge></td>
+                          <td>{entry.row.attempt.totalScore} / {entry.row.attempt.totalMarks}</td>
+                          <td>{Math.round(entry.row.percent * 10) / 10}%</td>
+                          <td>
+                            {scheme.hasPassFailConcept ? (
+                              <Badge bg={entry.row.attempt.passed ? 'success' : 'danger'}>
+                                {entry.row.attempt.passed ? scheme.outcomeLabels.pass : scheme.outcomeLabels.fail}
+                              </Badge>
                             ) : (
-                              <span className="text-muted small">—</span>
+                              <span className="text-muted small">Performance only</span>
                             )}
                           </td>
-                        )}
-                      </tr>
-                    ))}
-                    {report.absentStudents.map((s) => (
-                      <tr key={s.id} className="text-muted">
-                        <td className="ps-4">{s.rollNumber ?? '—'}</td>
-                        <td className="fw-medium">{s.fullName}</td>
-                        <td><Badge bg="secondary">Absent</Badge></td>
-                        <td>—</td>
-                        <td>—</td>
-                        <td><Badge bg="secondary">Absent</Badge></td>
-                        {scheme.showRankPercentile && <td>—</td>}
-                        {scheme.showRankPercentile && <td>—</td>}
-                        <td>—</td>
-                        {scheme.showCertificate && <td className="pe-4">—</td>}
-                      </tr>
-                    ))}
+                          {scheme.showRankPercentile && <td>{entry.row.rank ?? '—'}</td>}
+                          {scheme.showRankPercentile && <td>{entry.row.percentile !== null ? `${entry.row.percentile}%` : '—'}</td>}
+                          <td>{new Date(entry.row.attempt.submittedAtUtc).toLocaleString()}</td>
+                          {scheme.showCertificate && (
+                            <td className="pe-4">
+                              {entry.row.attempt.passed ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary btn-sm"
+                                  disabled={downloadingCertFor === entry.row.attempt.attemptId}
+                                  onClick={() => handleDownloadCertificate(entry.row.attempt.attemptId, entry.row.attempt, entry.row.student.fullName)}
+                                >
+                                  {downloadingCertFor === entry.row.attempt.attemptId ? 'Generating…' : 'Download'}
+                                </button>
+                              ) : (
+                                <span className="text-muted small">—</span>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ) : (
+                        <tr key={entry.row.id} className="text-muted">
+                          <td className="ps-4">{entry.row.rollNumber ?? '—'}</td>
+                          <td className="fw-medium">{entry.row.fullName}</td>
+                          <td><Badge bg="secondary">Absent</Badge></td>
+                          <td>—</td>
+                          <td>—</td>
+                          <td><Badge bg="secondary">Absent</Badge></td>
+                          {scheme.showRankPercentile && <td>—</td>}
+                          {scheme.showRankPercentile && <td>—</td>}
+                          <td>—</td>
+                          {scheme.showCertificate && <td className="pe-4">—</td>}
+                        </tr>
+                      ),
+                    )}
                   </tbody>
                 </Table>
+              )}
+              {combinedRows.length > 0 && (
+                <div className="p-3">
+                  <TablePagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    totalCount={combinedRows.length}
+                    onPageChange={setPage}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={(size) => {
+                      setPageSize(size);
+                      setPage(1);
+                    }}
+                  />
+                </div>
               )}
             </Card.Body>
           </Card>
