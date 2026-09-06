@@ -71,4 +71,18 @@ public class QuestionServiceClient : IQuestionServiceClient
         }
         return counts;
     }
+
+    public async Task DeleteQuestionsForExamAsync(
+        Guid examId,
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"internal/questions/exams/{examId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
 }

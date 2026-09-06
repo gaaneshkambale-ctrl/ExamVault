@@ -82,6 +82,15 @@ public class QuestionRepository : IQuestionRepository
             .ExecuteUpdateAsync(setters => setters.SetProperty(q => q.SectionId, (Guid?)null), cancellationToken);
     }
 
+    public async Task DeleteAllQuestionsForExamAsync(
+        Guid examId,
+        CancellationToken cancellationToken = default)
+    {
+        await _dbContext.Questions
+            .Where(q => q.ExamId == examId)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdsAsync(
         IReadOnlyList<Guid> questionIds,
         CancellationToken cancellationToken = default) =>

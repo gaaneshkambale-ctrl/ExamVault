@@ -230,7 +230,10 @@ public class ExamsController : ControllerBase
     [Authorize(Policy = Exams)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _deleteExamHandler.HandleAsync(new DeleteExamCommand(id), cancellationToken);
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+
+        var result = await _deleteExamHandler.HandleAsync(new DeleteExamCommand(id, bearerToken), cancellationToken);
 
         if (result.IsNotFound)
         {

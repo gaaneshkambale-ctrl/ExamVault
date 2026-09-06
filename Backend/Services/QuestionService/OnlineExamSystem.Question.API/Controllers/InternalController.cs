@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Question.Application.Questions.DeleteForExam;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
@@ -21,15 +22,18 @@ public class InternalController : ControllerBase
     private readonly ListQuestionsHandler _listQuestionsHandler;
     private readonly GetQuestionHandler _getQuestionHandler;
     private readonly UnassignSectionHandler _unassignSectionHandler;
+    private readonly DeleteForExamHandler _deleteForExamHandler;
 
     public InternalController(
         ListQuestionsHandler listQuestionsHandler,
         GetQuestionHandler getQuestionHandler,
-        UnassignSectionHandler unassignSectionHandler)
+        UnassignSectionHandler unassignSectionHandler,
+        DeleteForExamHandler deleteForExamHandler)
     {
         _listQuestionsHandler = listQuestionsHandler;
         _getQuestionHandler = getQuestionHandler;
         _unassignSectionHandler = unassignSectionHandler;
+        _deleteForExamHandler = deleteForExamHandler;
     }
 
     [HttpGet("answer-key")]
@@ -64,6 +68,17 @@ public class InternalController : ControllerBase
     public async Task<IActionResult> UnassignSection(Guid sectionId, CancellationToken cancellationToken)
     {
         await _unassignSectionHandler.HandleAsync(new UnassignSectionCommand(sectionId), cancellationToken);
+        return NoContent();
+    }
+
+    // Called by Exam Service when an Exam itself is deleted - unlike a Section
+    // deletion, there's no surviving exam left for these questions to be
+    // reassigned into, so they're deleted outright (see DeleteAllQuestionsForExamAsync's
+    // own doc comment).
+    [HttpDelete("exams/{examId:guid}")]
+    public async Task<IActionResult> DeleteForExam(Guid examId, CancellationToken cancellationToken)
+    {
+        await _deleteForExamHandler.HandleAsync(new DeleteForExamCommand(examId), cancellationToken);
         return NoContent();
     }
 

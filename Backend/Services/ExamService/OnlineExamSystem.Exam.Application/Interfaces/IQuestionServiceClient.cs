@@ -26,4 +26,12 @@ public interface IQuestionServiceClient
         Guid examId,
         string bearerToken,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes every question belonging to this exam - best-effort, called when the
+    /// Exam itself is deleted so its questions aren't left orphaned (unlike a Section delete,
+    /// there's no surviving exam left for them to be reassigned into).</summary>
+    Task DeleteQuestionsForExamAsync(
+        Guid examId,
+        string bearerToken,
+        CancellationToken cancellationToken = default);
 }

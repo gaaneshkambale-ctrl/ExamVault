@@ -88,6 +88,21 @@ public class FakeQuestionRepository : IQuestionRepository
         return Task.CompletedTask;
     }
 
+    public Task DeleteAllQuestionsForExamAsync(Guid examId, CancellationToken cancellationToken = default)
+    {
+        var toRemove = _questions.Where(q => q.ExamId == examId).ToList();
+        foreach (var question in toRemove)
+        {
+            _questions.Remove(question);
+            _options.RemoveAll(o => o.QuestionId == question.Id);
+            _parameters.RemoveAll(p => p.QuestionId == question.Id);
+            _testCases.RemoveAll(t => t.QuestionId == question.Id);
+            _sqlTestCases.RemoveAll(t => t.QuestionId == question.Id);
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdsAsync(
         IReadOnlyList<Guid> questionIds,
         CancellationToken cancellationToken = default) =>

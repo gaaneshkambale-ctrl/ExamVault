@@ -14,6 +14,7 @@ using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Application.Questions.BulkAssignSection;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
+using OnlineExamSystem.Question.Application.Questions.DeleteForExam;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
 using OnlineExamSystem.Question.Application.Questions.ListAll;
@@ -58,6 +59,7 @@ public class Program
         builder.Services.AddScoped<DeleteQuestionHandler>();
         builder.Services.AddScoped<BulkAssignSectionHandler>();
         builder.Services.AddScoped<UnassignSectionHandler>();
+        builder.Services.AddScoped<DeleteForExamHandler>();
 
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
