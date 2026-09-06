@@ -107,6 +107,38 @@ public class SaveAnswerHandlerTests
     }
 
     [Fact]
+    public async Task Attempt_past_its_expiry_returns_failure()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = InProgressAttempt();
+        attempt.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        repository.SeedAttempt(attempt);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(
+            new SaveAnswerCommand(attempt.Id, QuestionId, OptionId, IsMarkedForReview: false, UserId));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsExpired);
+        Assert.Empty(repository.Answers);
+    }
+
+    [Fact]
+    public async Task Attempt_before_its_expiry_succeeds()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = InProgressAttempt();
+        attempt.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30);
+        repository.SeedAttempt(attempt);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(
+            new SaveAnswerCommand(attempt.Id, QuestionId, OptionId, IsMarkedForReview: false, UserId));
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
     public async Task Attempt_belongs_to_another_user_returns_failure()
     {
         var repository = new FakeSubmissionRepository();

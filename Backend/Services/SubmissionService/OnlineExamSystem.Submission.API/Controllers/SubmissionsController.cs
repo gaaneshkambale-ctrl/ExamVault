@@ -236,6 +236,11 @@ public class SubmissionsController : ControllerBase
             return Conflict(new { message = "This attempt is no longer in progress." });
         }
 
+        if (result.IsExpired)
+        {
+            return Conflict(new { message = "Time is up for this exam. Submit your attempt now." });
+        }
+
         return Ok(ToResponse(result.Answer!));
     }
 

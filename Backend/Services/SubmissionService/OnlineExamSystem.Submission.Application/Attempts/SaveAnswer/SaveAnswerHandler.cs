@@ -42,6 +42,15 @@ public class SaveAnswerHandler
             return SaveAnswerResult.NotInProgress();
         }
 
+        // Server-side backstop for the exam timer: without this, nothing stops a
+        // student from continuing to answer indefinitely if their browser's own
+        // countdown never fires (closed tab, clock tampering, JS disabled). Submit
+        // itself is deliberately NOT blocked the same way - see SubmitAttemptHandler.
+        if (attempt.ExpiresAtUtc is { } expiresAtUtc && DateTime.UtcNow > expiresAtUtc)
+        {
+            return SaveAnswerResult.Expired();
+        }
+
         var selectedOptionIdsJson = command.SelectedOptionIds is { Count: > 0 }
             ? JsonSerializer.Serialize(command.SelectedOptionIds)
             : null;

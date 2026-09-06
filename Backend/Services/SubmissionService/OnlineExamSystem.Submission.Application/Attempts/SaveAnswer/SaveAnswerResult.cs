@@ -9,6 +9,7 @@ public class SaveAnswerResult
     public bool IsAttemptNotFound { get; init; }
     public bool IsNotInProgress { get; init; }
     public bool IsForbidden { get; init; }
+    public bool IsExpired { get; init; }
     public AttemptAnswer? Answer { get; init; }
 
     public static SaveAnswerResult Ok(AttemptAnswer answer) => new() { Success = true, Answer = answer };
@@ -21,4 +22,6 @@ public class SaveAnswerResult
     public static SaveAnswerResult NotInProgress() => new() { IsNotInProgress = true };
 
     public static SaveAnswerResult Forbidden() => new() { IsForbidden = true };
+
+    public static SaveAnswerResult Expired() => new() { IsExpired = true };
 }
