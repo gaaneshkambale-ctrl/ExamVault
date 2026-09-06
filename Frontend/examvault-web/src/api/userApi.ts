@@ -2,12 +2,14 @@ import apiClient, { getRefreshToken } from './axiosClient';
 import type {
   ChangePasswordRequest,
   CreateUserRequest,
+  ForgotPasswordRequest,
   LoginRequest,
   LoginResponse,
   RefreshTokenResponse,
   RegisterRequest,
   RegisterResponse,
   ResetPasswordRequest,
+  ResetPasswordWithTokenRequest,
   PlatformUserListItem,
   UpdateMyProfileRequest,
   UpdateUserRequest,
@@ -25,6 +27,14 @@ export async function registerUser(request: RegisterRequest): Promise<RegisterRe
 export async function loginUser(request: LoginRequest): Promise<LoginResponse> {
   const { data } = await apiClient.post<LoginResponse>('/api/users/login', request);
   return data;
+}
+
+export async function forgotPassword(request: ForgotPasswordRequest): Promise<void> {
+  await apiClient.post('/api/users/forgot-password', request);
+}
+
+export async function resetPasswordWithToken(request: ResetPasswordWithTokenRequest): Promise<void> {
+  await apiClient.post('/api/users/reset-password-with-token', request);
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<RefreshTokenResponse> {

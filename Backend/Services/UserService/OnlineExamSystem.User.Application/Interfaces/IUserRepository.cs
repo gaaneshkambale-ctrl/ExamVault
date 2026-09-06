@@ -56,6 +56,15 @@ public interface IUserRepository
     Task<bool> RevokeRefreshTokenByIdAsync(Guid userId, Guid tokenId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken = default);
+
+    /// <summary>Looks up a password reset token by its hash - the raw token is never
+    /// stored, same as RefreshToken.TokenHash. Returns it regardless of whether it's
+    /// still valid (unused/unexpired) - callers check <see cref="PasswordResetToken.IsValid"/>
+    /// themselves so an expired/used token gives a real "link expired" message instead
+    /// of collapsing into the same "not found" case as a token that never existed.</summary>
+    Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+
     /// <summary>Returns the given user's single UserPreferences row, creating it
     /// with the entity's own defaults if it doesn't exist yet.</summary>
     Task<UserPreferences> GetOrCreateUserPreferencesAsync(Guid userId, CancellationToken cancellationToken = default);

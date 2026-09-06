@@ -17,6 +17,7 @@ public class UserDbContext : DbContext
 
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
@@ -139,6 +140,17 @@ public class UserDbContext : DbContext
             entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(256);
             entity.Property(t => t.DeviceLabel).HasMaxLength(100);
             entity.Property(t => t.IpAddress).HasMaxLength(64);
+            entity.HasIndex(t => t.TokenHash).IsUnique();
+            entity.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(256);
             entity.HasIndex(t => t.TokenHash).IsUnique();
             entity.HasOne<AppUser>()
                 .WithMany()

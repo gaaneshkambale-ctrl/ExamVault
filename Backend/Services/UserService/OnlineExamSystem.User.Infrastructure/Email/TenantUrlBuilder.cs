@@ -13,19 +13,24 @@ public class TenantUrlBuilder : ITenantUrlBuilder
         _settings = settings.Value;
     }
 
-    public string GetLoginUrl(string? tenantSlug, bool isActive = true)
+    public string GetLoginUrl(string? tenantSlug, bool isActive = true) => BuildTenantUrl(tenantSlug, isActive, "/login");
+
+    public string GetResetPasswordUrl(string? tenantSlug, bool isActive, string token) =>
+        BuildTenantUrl(tenantSlug, isActive, $"/reset-password?token={Uri.EscapeDataString(token)}");
+
+    private string BuildTenantUrl(string? tenantSlug, bool isActive, string path)
     {
         if (string.IsNullOrWhiteSpace(tenantSlug) ||
             !isActive ||
             tenantSlug.Equals(TenantConstants.DefaultTenantSlug, StringComparison.OrdinalIgnoreCase) ||
             tenantSlug.Equals(TenantConstants.PlatformTenantSlug, StringComparison.OrdinalIgnoreCase))
         {
-            return $"{_settings.FrontendBaseUrl.TrimEnd('/')}/login";
+            return $"{_settings.FrontendBaseUrl.TrimEnd('/')}{path}";
         }
 
         var scheme = string.IsNullOrWhiteSpace(_settings.Scheme) ? "http" : _settings.Scheme.TrimEnd(':', '/');
         var baseDomain = _settings.BaseDomain.TrimStart('.');
 
-        return $"{scheme}://{tenantSlug.ToLowerInvariant()}.{baseDomain}/login";
+        return $"{scheme}://{tenantSlug.ToLowerInvariant()}.{baseDomain}{path}";
     }
 }

@@ -8,4 +8,9 @@ public interface ITenantUrlBuilder
     /// this returns the apex login URL instead, exactly like the
     /// Default/Platform reserved-slug case.</summary>
     string GetLoginUrl(string? tenantSlug, bool isActive = true);
+
+    /// <summary>Builds the reset-password link to send in a forgot-password email -
+    /// same tenant-subdomain-vs-apex logic as <see cref="GetLoginUrl"/>, with the raw
+    /// (unhashed) token appended as a query parameter.</summary>
+    string GetResetPasswordUrl(string? tenantSlug, bool isActive, string token);
 }

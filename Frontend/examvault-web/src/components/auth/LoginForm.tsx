@@ -66,9 +66,9 @@ export default function LoginForm() {
         <Form.Group className="mb-3" controlId="loginPassword">
           <div className="d-flex justify-content-between">
             <Form.Label className="fw-medium">Password</Form.Label>
-            <span className="small text-primary" style={{ cursor: 'default' }}>
+            <Link to="/forgot-password" className="small">
               Forgot Password?
-            </span>
+            </Link>
           </div>
           <InputGroup>
             <InputGroup.Text className="bg-white">

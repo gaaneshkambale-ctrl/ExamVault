@@ -65,6 +65,16 @@ export interface LoginRequest {
   tenantSlug?: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+  tenantSlug?: string;
+}
+
+export interface ResetPasswordWithTokenRequest {
+  token: string;
+  newPassword: string;
+}
+
 export interface LoginResponse {
   user: UserProfile;
   accessToken: string;

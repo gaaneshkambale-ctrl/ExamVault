@@ -9,8 +9,10 @@ public class FakeUserRepository : IUserRepository
     private readonly List<AppUser> _users = [];
     private readonly List<RefreshToken> _refreshTokens = [];
     private readonly List<UserPreferences> _userPreferences = [];
+    private readonly List<PasswordResetToken> _passwordResetTokens = [];
 
     public IReadOnlyList<RefreshToken> RefreshTokens => _refreshTokens;
+    public IReadOnlyList<PasswordResetToken> PasswordResetTokens => _passwordResetTokens;
 
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Id == id));
@@ -105,6 +107,15 @@ public class FakeUserRepository : IUserRepository
     public Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<RefreshToken>>(
             _refreshTokens.Where(t => t.UserId == userId).OrderByDescending(t => t.CreatedAtUtc).ToList());
+
+    public Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken = default)
+    {
+        _passwordResetTokens.Add(token);
+        return Task.CompletedTask;
+    }
+
+    public Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_passwordResetTokens.FirstOrDefault(t => t.TokenHash == tokenHash));
 
     public Task<UserPreferences> GetOrCreateUserPreferencesAsync(Guid userId, CancellationToken cancellationToken = default)
     {

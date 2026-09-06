@@ -519,7 +519,13 @@ export default function Home() {
   });
 
   const mode: AuthMode | null =
-    location.pathname === '/login' ? 'login' : location.pathname === '/register' ? 'register' : null;
+    location.pathname === '/login'
+      ? 'login'
+      : location.pathname === '/register'
+        ? 'register'
+        : location.pathname === '/forgot-password'
+          ? 'forgot-password'
+          : null;
 
   return (
     <div>

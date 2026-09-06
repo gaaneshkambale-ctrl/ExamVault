@@ -8,6 +8,7 @@ using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
+using OnlineExamSystem.User.Application.Users.ForgotPassword;
 using OnlineExamSystem.User.Application.Users.GetMyPreferences;
 using OnlineExamSystem.User.Application.Users.GetMySessions;
 using OnlineExamSystem.User.Application.Users.GetProfile;
@@ -17,6 +18,7 @@ using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
+using OnlineExamSystem.User.Application.Users.ResetPasswordWithToken;
 using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
 using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
@@ -42,6 +44,8 @@ public class UsersController : ControllerBase
     private readonly UpdateUserHandler _updateUserHandler;
     private readonly DeleteUserHandler _deleteUserHandler;
     private readonly ResetPasswordHandler _resetPasswordHandler;
+    private readonly ForgotPasswordHandler _forgotPasswordHandler;
+    private readonly ResetPasswordWithTokenHandler _resetPasswordWithTokenHandler;
     private readonly ChangePasswordHandler _changePasswordHandler;
     private readonly LoginUserHandler _loginUserHandler;
     private readonly RefreshTokenHandler _refreshTokenHandler;
@@ -76,6 +80,8 @@ public class UsersController : ControllerBase
         UpdateUserHandler updateUserHandler,
         DeleteUserHandler deleteUserHandler,
         ResetPasswordHandler resetPasswordHandler,
+        ForgotPasswordHandler forgotPasswordHandler,
+        ResetPasswordWithTokenHandler resetPasswordWithTokenHandler,
         ChangePasswordHandler changePasswordHandler,
         LoginUserHandler loginUserHandler,
         RefreshTokenHandler refreshTokenHandler,
@@ -100,6 +106,8 @@ public class UsersController : ControllerBase
         _updateUserHandler = updateUserHandler;
         _deleteUserHandler = deleteUserHandler;
         _resetPasswordHandler = resetPasswordHandler;
+        _forgotPasswordHandler = forgotPasswordHandler;
+        _resetPasswordWithTokenHandler = resetPasswordWithTokenHandler;
         _changePasswordHandler = changePasswordHandler;
         _loginUserHandler = loginUserHandler;
         _refreshTokenHandler = refreshTokenHandler;
@@ -199,6 +207,52 @@ public class UsersController : ControllerBase
         var profile = ToProfileResponse(user);
         var response = new LoginResponse(profile, result.AccessToken!, result.RefreshToken!);
         return Ok(response);
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var command = new ForgotPasswordCommand(request.Email, request.TenantSlug);
+        var result = await _forgotPasswordHandler.HandleAsync(command, cancellationToken);
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        // Always this same generic message - see ForgotPasswordHandler's own
+        // comment for why the response can never differ based on whether the
+        // email/tenant combination actually exists.
+        return Ok(new { message = "If an account exists for this email, we've sent a password reset link." });
+    }
+
+    [HttpPost("reset-password-with-token")]
+    public async Task<IActionResult> ResetPasswordWithToken(
+        ResetPasswordWithTokenRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new ResetPasswordWithTokenCommand(request.Token, request.NewPassword);
+        var result = await _resetPasswordWithTokenHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsInvalidOrExpiredToken)
+        {
+            return BadRequest(new { message = "This reset link is invalid or has expired. Please request a new one." });
+        }
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        return Ok(new { message = "Your password has been reset. You can now log in with your new password." });
     }
 
     [HttpPost("refresh-token")]

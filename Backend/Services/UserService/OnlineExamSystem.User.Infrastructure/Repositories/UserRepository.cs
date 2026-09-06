@@ -135,6 +135,14 @@ public class UserRepository : IUserRepository
             .OrderByDescending(t => t.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken = default) =>
+        _dbContext.PasswordResetTokens.AddAsync(token, cancellationToken).AsTask();
+
+    public Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.PasswordResetTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
     public async Task<UserPreferences> GetOrCreateUserPreferencesAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
