@@ -421,25 +421,37 @@ function cleanSqlLiteral(raw: string): string {
   return trimmed;
 }
 
-// Best-effort parse of an admin-authored Setup SQL script (CREATE TABLE +
-// INSERT INTO ... VALUES ...) into a real data grid, matching the "Use the
-// following table: employees" mockup. Deliberately conservative: bails out
-// to null (caller falls back to the raw SQL text) on anything it can't
-// confidently parse - multiple tables, a column/value count mismatch, an
-// INSERT for a different table - rather than risk rendering a wrong or
-// misleading grid from admin-written SQL it doesn't fully understand.
-function parseSqlSetup(setupSql: string): { tableName: string; columns: string[]; rows: string[][] } | null {
+interface ParsedSqlTable {
+  tableName: string;
+  columns: string[];
+  rows: string[][];
+}
+
+// Best-effort parse of an admin-authored Setup SQL script (one or more
+// CREATE TABLE + INSERT INTO ... VALUES ... pairs, eg. a departments table
+// joined to an employees table) into real data grids, matching the "Use the
+// following table(s)" mockup. Deliberately conservative: bails out to null
+// (caller falls back to the raw SQL text) on anything it can't confidently
+// parse - a column/value count mismatch, an INSERT for a table that was
+// never CREATEd - rather than risk rendering a wrong or misleading grid
+// from admin-written SQL it doesn't fully understand.
+function parseSqlSetup(setupSql: string): ParsedSqlTable[] | null {
   const createMatches = [...setupSql.matchAll(/CREATE\s+TABLE\s+(\w+)\s*\(([^;]*)\)\s*;/gis)];
-  if (createMatches.length !== 1) {
+  if (createMatches.length === 0) {
     return null;
   }
 
-  const [, tableName, columnDefs] = createMatches[0];
-  const columns = splitTopLevel(columnDefs)
-    .map((def) => def.trim().split(/\s+/)[0])
-    .filter(Boolean);
-  if (columns.length === 0) {
-    return null;
+  const tables: ParsedSqlTable[] = [];
+  const tableIndexByName = new Map<string, number>();
+  for (const [, tableName, columnDefs] of createMatches) {
+    const columns = splitTopLevel(columnDefs)
+      .map((def) => def.trim().split(/\s+/)[0])
+      .filter(Boolean);
+    if (columns.length === 0) {
+      return null;
+    }
+    tableIndexByName.set(tableName.toLowerCase(), tables.length);
+    tables.push({ tableName, columns, rows: [] });
   }
 
   const insertMatches = [...setupSql.matchAll(/INSERT\s+INTO\s+(\w+)\s*(?:\([^)]*\))?\s*VALUES\s*([\s\S]*?);/gis)];
@@ -447,21 +459,24 @@ function parseSqlSetup(setupSql: string): { tableName: string; columns: string[]
     return null;
   }
 
-  const rows: string[][] = [];
+  let totalRows = 0;
   for (const [, insertTable, valuesText] of insertMatches) {
-    if (insertTable.toLowerCase() !== tableName.toLowerCase()) {
+    const tableIndex = tableIndexByName.get(insertTable.toLowerCase());
+    if (tableIndex === undefined) {
       return null;
     }
+    const table = tables[tableIndex];
     for (const tuple of matchValueTuples(valuesText)) {
       const values = splitTopLevel(tuple).map(cleanSqlLiteral);
-      if (values.length !== columns.length) {
+      if (values.length !== table.columns.length) {
         return null;
       }
-      rows.push(values);
+      table.rows.push(values);
+      totalRows++;
     }
   }
 
-  return rows.length > 0 ? { tableName, columns, rows } : null;
+  return totalRows > 0 ? tables : null;
 }
 
 // Shared by every place a parsed Sql grid renders - the "Use the following
@@ -470,13 +485,39 @@ function parseSqlSetup(setupSql: string): { tableName: string; columns: string[]
 // identically. Only the public (index 0) test case's setup/result shows
 // in the post-run Test Case panel - hidden test cases stay pass/fail only,
 // see the isPublicCase gate below.
+const NUMERIC_CELL = /^-?\d+(\.\d+)?$/;
+
 function SqlTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
+  // A column is numeric only if every row agrees - one non-numeric value
+  // (eg. a null shown as "NULL") keeps the whole column left-aligned rather
+  // than right-aligning everything but that one row.
+  const isNumericColumn = columns.map((_, colIndex) => rows.every((row) => NUMERIC_CELL.test(row[colIndex] ?? '')));
+
   return (
-    <table className="table table-sm mb-0">
+    // width: auto overrides Bootstrap's .table width:100% - a full-width
+    // stretch made a short-header/short-value grid (eg. department_id: 1,2,3)
+    // balloon out with huge empty column padding, and made the columns of
+    // stacked tables (departments above employees) land at different x
+    // positions since each was independently stretched to the same total
+    // width using its own header lengths. Shrinking to content width keeps
+    // every grid tight and keeps shared columns (department_id in both
+    // tables) visually lined up. Each column's own width still stays
+    // constant down every row (normal browser table layout), which is what
+    // actually keeps a column's header and values sharing one alignment -
+    // table-layout:fixed with guessed percentages would fight that instead.
+    <table className="table table-sm mb-0" style={{ width: 'auto' }}>
       <thead>
         <tr>
-          {columns.map((col) => (
-            <th key={col} className="small text-muted fw-medium">
+          {columns.map((col, j) => (
+            <th
+              key={col}
+              className="small fw-bold text-uppercase bg-body-secondary"
+              style={{
+                textAlign: isNumericColumn[j] ? 'right' : 'left',
+                whiteSpace: 'nowrap',
+                borderBottomWidth: 2,
+              }}
+            >
               {col}
             </th>
           ))}
@@ -486,7 +527,14 @@ function SqlTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
         {rows.map((row, i) => (
           <tr key={i}>
             {row.map((value, j) => (
-              <td key={j} style={{ fontFamily: 'monospace' }}>
+              <td
+                key={j}
+                style={{
+                  fontFamily: 'monospace',
+                  textAlign: isNumericColumn[j] ? 'right' : 'left',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {value}
               </td>
             ))}
@@ -1318,6 +1366,12 @@ export default function TakeExam() {
                 style={{
                   width: 34,
                   height: 34,
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  whiteSpace: 'nowrap',
+                  fontSize: 13,
                   border: isCurrent ? '2px solid #2563eb' : '1px solid #dee2e6',
                   opacity: isDisabled ? 0.5 : 1,
                   ...navStateStyle[navState(question)],
@@ -1601,25 +1655,31 @@ export default function TakeExam() {
 
                             {isSql && currentQuestion.sqlTestCases?.[0]?.setupSql && (() => {
                               const setupSql = currentQuestion.sqlTestCases[0].setupSql;
-                              const parsedTable = parseSqlSetup(setupSql);
+                              const parsedTables = parseSqlSetup(setupSql);
                               return (
                                 <div className="mb-3">
-                                  <div className="fw-medium mb-1">Use the following table:</div>
-                                  {parsedTable ? (
-                                    <>
-                                      <div className="fw-bold mb-1">{parsedTable.tableName}</div>
-                                      <div className="rounded-3 overflow-hidden border">
-                                        <SqlTable columns={parsedTable.columns} rows={parsedTable.rows} />
-                                      </div>
-                                    </>
+                                  <div className="fw-medium mb-1">
+                                    Use the following {parsedTables && parsedTables.length > 1 ? 'tables' : 'table'}:
+                                  </div>
+                                  {parsedTables ? (
+                                    <div className="d-flex flex-column gap-2">
+                                      {parsedTables.map((table) => (
+                                        <div key={table.tableName}>
+                                          <div className="fw-bold mb-1">{table.tableName}</div>
+                                          <div className="rounded-3 border overflow-x-auto">
+                                            <SqlTable columns={table.columns} rows={table.rows} />
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
                                   ) : (
-                                    <div className="rounded-3 overflow-hidden" style={{ background: '#eef2ff' }}>
-                                      <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
+                                    <div className="rounded-3 overflow-hidden border">
+                                      <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
                                         Setup SQL
                                       </div>
-                                      <div className="bg-white px-3 py-2">
+                                      <div className="bg-body px-3 py-2">
                                         <pre
-                                          className="mb-0 small"
+                                          className="mb-0 small text-body"
                                           style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
                                         >
                                           {setupSql}
@@ -1634,14 +1694,17 @@ export default function TakeExam() {
                             {isSql && currentQuestion.sqlTestCases?.[0]?.expectedOutput != null && (() => {
                               const parsed = parseSqlRowSet(currentQuestion.sqlTestCases[0].expectedOutput!);
                               return (
-                                <div className="rounded-3 overflow-hidden mb-3" style={{ background: '#eef2ff' }}>
-                                  <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
+                                <div
+                                  className="rounded-3 overflow-hidden mb-3 border"
+                                  style={{ width: 'fit-content', maxWidth: '100%' }}
+                                >
+                                  <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
                                     Expected Output
                                   </div>
-                                  <div className="bg-white">
+                                  <div className="bg-body overflow-x-auto">
                                     {parsed === null ? (
                                       <pre
-                                        className="mb-0 small px-3 py-2"
+                                        className="mb-0 small px-3 py-2 text-body"
                                         style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
                                       >
                                         {currentQuestion.sqlTestCases[0].expectedOutput}
@@ -1657,11 +1720,11 @@ export default function TakeExam() {
                             })()}
 
                             {!isSql && (currentQuestion.sampleInput || currentQuestion.sampleOutput) && (
-                              <div className="rounded-3 overflow-hidden mb-3" style={{ background: '#eef2ff' }}>
-                                <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
+                              <div className="rounded-3 overflow-hidden mb-3 border">
+                                <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
                                   Sample Input and Output
                                 </div>
-                                <div className="bg-white">
+                                <div className="bg-body">
                                   <table className="table table-sm mb-0">
                                     <thead>
                                       <tr>
@@ -1671,10 +1734,10 @@ export default function TakeExam() {
                                     </thead>
                                     <tbody>
                                       <tr>
-                                        <td style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                                        <td className="text-body" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
                                           {currentQuestion.sampleInput}
                                         </td>
-                                        <td style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                                        <td className="text-body" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
                                           {currentQuestion.sampleOutput}
                                         </td>
                                       </tr>
@@ -1685,11 +1748,11 @@ export default function TakeExam() {
                             )}
 
                             {currentQuestion.constraints && (
-                              <div className="rounded-3 overflow-hidden mb-3" style={{ background: '#eef2ff' }}>
-                                <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
+                              <div className="rounded-3 overflow-hidden mb-3 border">
+                                <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
                                   {isSql ? 'Notes' : 'Constraints'}
                                 </div>
-                                <ul className="bg-white mb-0 px-4 py-2 small">
+                                <ul className="bg-body text-body mb-0 px-4 py-2 small">
                                   {currentQuestion.constraints
                                     .split('\n')
                                     .map((line) => line.trim())
@@ -1961,7 +2024,7 @@ export default function TakeExam() {
                                       parsedActual.rows.length === 0 ? (
                                         <div className="text-muted small">(no rows)</div>
                                       ) : (
-                                        <div className="rounded-2 overflow-hidden border">
+                                        <div className="rounded-2 border overflow-x-auto">
                                           <SqlTable
                                             columns={parsedActual.columns}
                                             rows={toSqlTableRows(parsedActual)}

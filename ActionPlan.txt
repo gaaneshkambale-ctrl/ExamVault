@@ -8527,3 +8527,150 @@ to the user in case they want to spot-check the actual rendering
 themselves.
 
 Not committed or pushed - holding per the user's standing rule.
+
+---
+
+The user then actually logged in as a student and confirmed with two
+screenshots (111.png single-table, 1111.png multi-table/JOIN question)
+that Query Result works, and pinpointed a real bug: parseSqlSetup
+(TakeExam.tsx) only ever matched exactly one CREATE TABLE statement -
+`createMatches.length !== 1` bailed to null for anything else - so a
+question whose Setup SQL defines two tables (eg. departments + employees
+for an INNER JOIN question) fell back to the raw "Setup SQL" text box
+instead of rendering real data grids, even though "Use the following
+table:" is exactly the UI that's supposed to show them.
+
+Fix: parseSqlSetup now returns ParsedSqlTable[] instead of a single
+table - it matches every CREATE TABLE in the script, builds a
+name->columns map, then walks every INSERT INTO and appends rows to
+whichever table it names (bailing to null, same as before, on a
+column/value count mismatch or an INSERT for a table that was never
+CREATEd - still conservative, never guesses). The "Use the following
+table(s):" box (student Question panel) now loops over every parsed
+table and renders each as its own labelled grid; label auto-pluralizes
+to "tables" when there's more than one.
+
+Verification: tsc clean, npm test 84/84 green, npm run build clean.
+Rebuilt and redeployed the frontend Docker image.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+The user logged into a real student account (Bhau Mane) themselves and
+let me inspect the live take-exam page directly (screenshots 4.png/
+5.png), which made this round much more conclusive than code review
+alone - reported 3 bugs: (1) Question Navigator numbers sometimes 9 per
+row, sometimes 10, (2) departments/employees table columns not lining up
+("table alignment left"), (3) the "24" nav button rendering broken.
+
+All three root-caused live via DOM inspection on their actual session
+(read-only queries only - never touched their exam answers or clicked
+Submit), then fixed in source and re-verified with a live CSS injection
+before touching TypeScript, then removed once confirmed:
+
+1. Nav button "24"/"20" splitting across two lines: the button's own
+   default padding (1px 6px, from no explicit padding override) left only
+   ~20px of content width inside the fixed 34px box - just barely too
+   narrow for two bold digits, so wide-glyph 2-digit numbers (20, 24, ...)
+   wrapped to 2 lines while others (11, 19, ...) happened to fit. Fixed by
+   giving the button explicit padding:0, display:flex + centering, and
+   whiteSpace:'nowrap' (TakeExam.tsx Question Navigator button style) -
+   confirmed live via a DOM style patch before editing source.
+
+2. Navigator flipping between 9 and 10 items per row on different
+   questions: confirmed live that the page gets a vertical scrollbar on
+   taller questions (eg. a 2-table SQL setup) that a shorter question
+   doesn't need, and that scrollbar's ~15-17px eats exactly enough of the
+   sidebar's width to cross the 9-vs-10 threshold (10 items need >=412px,
+   9 need >=370px). Added `scrollbar-gutter: stable` to `html` in
+   index.css so the gutter is always reserved, whether or not a scrollbar
+   is actually needed - eliminates the width shift at its source.
+
+3. departments/employees table columns not lining up: Bootstrap's
+   `.table` class forces width:100%, so each table independently
+   stretches to fill the same 529px and distributes the surplus width
+   proportionally to ITS OWN header text lengths - "department_name" is
+   much longer than "name", so the two tables' column boundaries land at
+   different x positions even though both start at the same left edge.
+   Overridden with an inline `width: 'auto'` on SqlTable's `<table>` so
+   every grid shrinks to its actual content width instead of stretching -
+   confirmed live (screenshot-quality zoom) that shared columns like
+   department_id now line up and the sparse empty-column look is gone,
+   across every SqlTable use site (Setup tables, Expected Output, Query
+   Result).
+
+Two small follow-up asks from the user while watching the live fix:
+table headers now render bold (text-muted fw-bold, was fw-medium) and
+uppercase (added text-uppercase) - also verified live before editing
+source.
+
+Verification: tsc clean, npm test 84/84 green, npm run build clean.
+Rebuilt and redeployed the frontend Docker image.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Two more rounds from the same live session (screenshot 6.png: dark mode,
+plus a detailed styling spec message):
+
+1. Dark mode: the "Expected Output", "Sample Input and Output",
+   "Setup SQL" (raw-text fallback), and "Notes"/"Constraints" boxes all
+   used hardcoded light-mode-only colors (background:'#eef2ff',
+   color:'#4338ca', className="bg-white") predating this session's SQL
+   work - exactly the "custom hardcoded-hex-color elements... don't
+   respond [to dark mode]" gap ThemeProvider.tsx's own comment already
+   flags. In dark mode this rendered as a jarring white panel, and the
+   Notes bullet list text was genuinely invisible (dark-theme's default
+   light body-text color on a forced white background). Replaced with
+   theme-aware Bootstrap 5.3 utilities throughout: bg-primary-subtle +
+   text-primary-emphasis for headers, bg-body + text-body for bodies -
+   confirmed live on the user's own dark-mode session (read-only DOM
+   patch mirroring the real fix) before touching source; Notes text went
+   from invisible to fully readable.
+
+2. Table "look not acceptable": the same live inspection showed the
+   Expected Output box's white panel stretching far past its own
+   (already shrink-wrapped per the earlier round) table, leaving a large
+   empty strip. Added `width: 'fit-content', maxWidth: '100%'` to that
+   box's outer container so it hugs the table instead of the full column
+   width.
+
+3. Root-caused live (via a full Retake Exam + DOM inspection on the
+   user's own dark-mode session, with their explicit invitation) that the
+   multi-table width:auto fix from the previous round hadn't actually
+   reached this session yet (only ever verified through a temporary JS
+   patch, never rebuilt/redeployed at that point) - user's "table
+   alignment issue" message was the still-live old behavor. Rebuilt and
+   redeployed to actually ship it.
+
+4. User then sent a detailed SQL-table styling spec (numeric columns
+   right-aligned, stronger header contrast, horizontal scroll on
+   overflow, monospace + nowrap for data, row separators, plus flagging
+   that DEPARTMENT_ID values looked centered under a left-aligned
+   header). Implemented in SqlTable (TakeExam.tsx):
+   - Per-column numeric detection (every row's value in that column
+     matches /^-?\d+(\.\d+)?$/) - right-aligns AND nowraps both the
+     header and every data cell for that column together, so a column
+     never has its header and values disagreeing on alignment (the
+     literal bug the user's screenshot showed).
+   - Header row background (bg-body-secondary) + thicker bottom border
+     for contrast against body rows.
+   - Row separators: already present via Bootstrap's default .table
+     border-bottom - no change needed there.
+   - overflow-x-auto (was overflow-hidden, which clips rather than
+     scrolls) on every SqlTable wrapper, so a wide result set scrolls
+     horizontally on a narrow viewport instead of breaking layout.
+   Deliberately did NOT adopt the user's table-layout:fixed +
+   percentage-width example as-is - that would undo the just-shipped
+   shrink-to-fit fix and reintroduce the "huge empty column" look for a
+   short-value column like department_id; explained this trade-off back
+   to the user rather than silently diverging from their exact snippet.
+
+Verification (each round): tsc clean, live DOM-patch preview on the
+user's real session before editing source, npm test 84/84 green, npm run
+build clean. Rebuilt and redeployed the frontend Docker image after each
+round.
+
+Not committed or pushed - holding per the user's standing rule.
