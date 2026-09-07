@@ -8348,3 +8348,53 @@ afterward via the app's own Delete Question flow - the exam is back to
 its original 6 questions.
 
 Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Bug report: "question assignment edit not workable?" (screenshot of the
+Question Assignment step showing the ssql exam's one SQL question, Edit
+pencil icon highlighted).
+
+Reproduced with the real admin UI (not raw DB access): clicking Edit on
+that question correctly navigates to /admin/questions/{id}/edit with the
+right id every time - the DB (QuestionSqlTestCases.SetupSql/
+ExpectedOutput) was verified correct and stable throughout via direct
+queries. The actual bug was client-side: on a repeat visit to the same
+question's Edit page within one browser session (eg. Question Assignment
+-> Edit -> back -> Edit again, no full page reload), the Setup SQL
+textarea sometimes rendered empty or missing rows despite the URL and DB
+being correct.
+
+Root cause: EditQuestion.tsx's form-population effect was keyed on
+`[question]` (the React Query data object reference) instead of the
+question's id. useQuestion(id) (useQuestions.ts) has default staleTime 0,
+so on a remount that hits an already-cached ['questions', id] entry,
+useQuery returns the cached object immediately with isLoading:false while
+silently refetching in the background - and the render guard only checked
+`isLoading`, so the form rendered from whatever was in cache at that
+instant, with no guarantee it reflected the question's current saved
+state.
+
+Fix (Frontend/examvault-web/src/hooks/useQuestions.ts +
+src/pages/admin/EditQuestion.tsx):
+- useQuestion: added refetchOnWindowFocus: false - an edit form holding
+  live unsaved input shouldn't have a background refetch silently reset
+  it just from an alt-tab.
+- EditQuestion: destructured isFetching and gated both the loading
+  spinner and the form's render (`question && !isFetching`) on it, so the
+  form never paints until the query has fully settled for the current id
+  - no more flash of stale-cache content.
+- Changed the populate-effect's dependency from `[question]` to
+  `[question?.id]` so a background revalidation of the same question
+  (same id, new object reference) can't silently blow away whatever the
+  admin has already typed.
+
+Verification: tsc clean, npm run build clean. Rebuilt and redeployed the
+frontend Docker image, hard-refreshed. Live-verified in the real admin
+UI: navigated Question Assignment (ssql exam, General section) -> Edit on
+the SQL question -> back -> Edit again (repeat visit, the exact scenario
+that reproduced the bug) - Setup SQL textarea showed the full, correct
+3-row script (Alice/Bob/Charlie) immediately and consistently across
+multiple repeats.
+
+Not committed or pushed - holding per the user's standing rule.

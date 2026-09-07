@@ -74,10 +74,15 @@ export function useQuestionsByExamIds(examIds: string[] | undefined) {
   return { questionsByExam, isLoading };
 }
 
+// refetchOnWindowFocus is off by default here - EditQuestion.tsx holds live,
+// unsaved form edits keyed off this query's data, and a silent background
+// refetch (eg. from alt-tabbing) would otherwise blow away in-progress typing
+// the moment the new object reference flows through its populate-form effect.
 export function useQuestion(id: string | undefined) {
   return useQuery({
     queryKey: ['questions', id],
     queryFn: () => getQuestion(id!),
     enabled: !!id,
+    refetchOnWindowFocus: false,
   });
 }

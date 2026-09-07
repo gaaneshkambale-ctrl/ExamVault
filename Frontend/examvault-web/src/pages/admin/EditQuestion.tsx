@@ -100,7 +100,7 @@ export default function EditQuestion() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: question, isLoading, isError } = useQuestion(id);
+  const { data: question, isLoading, isFetching, isError } = useQuestion(id);
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const canEditQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Edit');
@@ -143,7 +143,13 @@ export default function EditQuestion() {
       setSignature(toSignatureFormState(question));
       setSqlTestCases(toSqlTestCaseFormState(question));
     }
-  }, [question]);
+    // Deliberately keyed on question?.id, not the question object itself: a
+    // background refetch of the same question (eg. React Query revalidating
+    // a cached entry from an earlier visit) yields a new object reference
+    // with the same id, and re-running this would silently discard whatever
+    // the admin has typed since the form loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question?.id]);
 
   const changeQuestionType = (type: QuestionType) => {
     setQuestionType(type);
@@ -243,7 +249,7 @@ export default function EditQuestion() {
         <h1 className="h4 fw-bold mb-0 text-primary">Edit Question</h1>
       </div>
 
-      {isLoading && (
+      {(isLoading || isFetching) && (
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
@@ -255,7 +261,7 @@ export default function EditQuestion() {
 
       {status === 'error' && <Alert variant="danger">{serverError}</Alert>}
 
-      {question && (
+      {question && !isFetching && (
         <Card className="border-0 shadow-sm">
           <Card.Body className="p-4">
             <Form noValidate onSubmit={handleSubmit}>
