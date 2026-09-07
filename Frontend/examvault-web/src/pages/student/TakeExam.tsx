@@ -157,6 +157,18 @@ function TestCaseIcon() {
   );
 }
 
+function QueryResultEmptyIcon() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#adb5bd" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="3" y1="15" x2="21" y2="15" />
+      <line x1="9" y1="3" x2="9" y2="21" />
+      <line x1="15" y1="3" x2="15" y2="21" />
+    </svg>
+  );
+}
+
 function TestCaseStatusIcon({ passed }: { passed: boolean | null }) {
   if (passed === null) {
     return (
@@ -453,8 +465,11 @@ function parseSqlSetup(setupSql: string): { tableName: string; columns: string[]
 }
 
 // Shared by every place a parsed Sql grid renders - the "Use the following
-// table" setup grid, the "Expected Output" box, and each Test Case's own
-// setup/expected/got rows - so all four look and format identically.
+// table" setup grid, the pre-run "Expected Output" box, and the public
+// Test Case's own setup/result rows - so they all look and format
+// identically. Only the public (index 0) test case's setup/result shows
+// in the post-run Test Case panel - hidden test cases stay pass/fail only,
+// see the isPublicCase gate below.
 function SqlTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
   return (
     <table className="table table-sm mb-0">
@@ -1720,7 +1735,7 @@ export default function TakeExam() {
                           <div className="border rounded-3 overflow-hidden mb-3">
                             <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
                               <span className="d-flex align-items-center gap-2 fw-semibold small">
-                                <SectionCodeIcon /> Your Code
+                                <SectionCodeIcon /> {isSql ? 'Your SQL Query' : 'Your Code'}
                               </span>
                               <div className="d-flex align-items-center gap-3">
                                 <button
@@ -1791,7 +1806,7 @@ export default function TakeExam() {
                               <div className="bg-body rounded-3 shadow d-flex flex-column flex-grow-1 overflow-hidden">
                                 <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
                                   <span className="d-flex align-items-center gap-2 fw-semibold small">
-                                    <SectionCodeIcon /> Your Code
+                                    <SectionCodeIcon /> {isSql ? 'Your SQL Query' : 'Your Code'}
                                   </span>
                                   <button
                                     type="button"
@@ -1832,11 +1847,17 @@ export default function TakeExam() {
                                     className="btn btn-sm rounded-2 border-0 fw-semibold d-flex align-items-center gap-2"
                                     style={tabButtonStyle(resultTab === 'cases')}
                                   >
-                                    <TestCaseIcon /> Test Cases
-                                    {runResult && (
-                                      <span className="text-muted fw-normal">
-                                        {runResult.outcomes.filter((o) => o.passed).length}/{runResult.outcomes.length}
-                                      </span>
+                                    {isSql ? (
+                                      'Query Result'
+                                    ) : (
+                                      <>
+                                        <TestCaseIcon /> Test Cases
+                                        {runResult && (
+                                          <span className="text-muted fw-normal">
+                                            {runResult.outcomes.filter((o) => o.passed).length}/{runResult.outcomes.length}
+                                          </span>
+                                        )}
+                                      </>
                                     )}
                                   </button>
                                   <button
@@ -1845,7 +1866,7 @@ export default function TakeExam() {
                                     className="btn btn-sm rounded-2 border-0 fw-semibold d-flex align-items-center gap-1"
                                     style={tabButtonStyle(resultTab === 'messages')}
                                   >
-                                    Messages
+                                    {isSql ? 'Execution Messages' : 'Messages'}
                                     {messages.length > 0 && (
                                       <span className="rounded-circle bg-danger" style={{ width: 6, height: 6 }} />
                                     )}
@@ -1867,9 +1888,9 @@ export default function TakeExam() {
                                       Running...
                                     </>
                                   ) : cooldownRemaining > 0 ? (
-                                    `Run Code (${cooldownRemaining}s)`
+                                    `${isSql ? 'Run Query' : 'Run Code'} (${cooldownRemaining}s)`
                                   ) : (
-                                    '▶ Run Code'
+                                    `▶ ${isSql ? 'Run Query' : 'Run Code'}`
                                   )}
                                 </Button>
                               </div>
@@ -1879,7 +1900,9 @@ export default function TakeExam() {
                                     <div className="text-muted small">
                                       {runResult
                                         ? 'No errors - run completed cleanly.'
-                                        : 'Run your code to see compiler/runtime messages here...'}
+                                        : isSql
+                                          ? 'Run your query to see execution messages here...'
+                                          : 'Run your code to see compiler/runtime messages here...'}
                                     </div>
                                   ) : (
                                     messages.map((msg, i) => (
@@ -1893,109 +1916,71 @@ export default function TakeExam() {
                                     ))
                                   )}
                                 </div>
-                              ) : (
-                              <div className="p-3 d-flex flex-column gap-2">
-                                {isSql
-                                  ? currentQuestion.sqlTestCases!.map((testCase, index) => {
-                                      const outcome = runResult?.outcomes[index];
-                                      const parsedSetup = parseSqlSetup(testCase.setupSql);
-                                      const parsedExpected = outcome ? parseSqlRowSet(outcome.expectedOutput) : null;
-                                      const parsedActual =
-                                        outcome && !outcome.error ? parseSqlRowSet(outcome.actualOutput) : null;
-                                      return (
-                                        <div
-                                          key={index}
-                                          className={`rounded-3 border px-3 py-2 d-flex align-items-start gap-2${outcome ? (outcome.passed ? ' bg-success-subtle' : ' bg-danger-subtle') : ''}`}
-                                        >
-                                          <span className="mt-1 flex-shrink-0">
-                                            <TestCaseStatusIcon passed={outcome ? outcome.passed : null} />
-                                          </span>
-                                          <div className="flex-grow-1">
-                                            <div className="d-flex justify-content-between align-items-center">
-                                              <span className="small fw-medium">Test Case {index + 1}</span>
-                                              {outcome && (
-                                                <Badge bg={outcome.passed ? 'success' : 'danger'}>
-                                                  {outcome.passed ? 'Passed' : 'Failed'}
-                                                </Badge>
-                                              )}
-                                            </div>
-                                            {parsedSetup ? (
-                                              <div className="mt-1 mb-0 rounded-2 overflow-hidden border">
-                                                <SqlTable columns={parsedSetup.columns} rows={parsedSetup.rows} />
-                                              </div>
-                                            ) : (
-                                              <pre
-                                                className="text-muted small mt-1 mb-0"
-                                                style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
-                                              >
-                                                {testCase.setupSql}
-                                              </pre>
-                                            )}
-                                            {outcome && (
-                                              <>
-                                                <div className="text-muted small mt-2" style={{ fontFamily: 'monospace' }}>
-                                                  Expected:
-                                                </div>
-                                                {parsedExpected ? (
-                                                  parsedExpected.rows.length === 0 ? (
-                                                    <div className="text-muted small mb-1">(no rows)</div>
-                                                  ) : (
-                                                    <div className="mb-1 rounded-2 overflow-hidden border">
-                                                      <SqlTable
-                                                        columns={parsedExpected.columns}
-                                                        rows={toSqlTableRows(parsedExpected)}
-                                                      />
-                                                    </div>
-                                                  )
-                                                ) : (
-                                                  <pre
-                                                    className="text-muted small mb-1"
-                                                    style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
-                                                  >
-                                                    {outcome.expectedOutput || '(no rows)'}
-                                                  </pre>
-                                                )}
-                                                <div
-                                                  className={outcome.passed ? 'text-success' : 'text-danger'}
-                                                  style={{ fontFamily: 'monospace', fontSize: 13.5 }}
-                                                >
-                                                  Got:
-                                                </div>
-                                                {outcome.error ? (
-                                                  <pre
-                                                    className="text-danger"
-                                                    style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
-                                                  >
-                                                    {outcome.error}
-                                                  </pre>
-                                                ) : parsedActual ? (
-                                                  parsedActual.rows.length === 0 ? (
-                                                    <div className={outcome.passed ? 'text-success' : 'text-danger'} style={{ fontSize: 13.5 }}>
-                                                      (no rows)
-                                                    </div>
-                                                  ) : (
-                                                    <div className="rounded-2 overflow-hidden border">
-                                                      <SqlTable
-                                                        columns={parsedActual.columns}
-                                                        rows={toSqlTableRows(parsedActual)}
-                                                      />
-                                                    </div>
-                                                  )
-                                                ) : (
-                                                  <pre
-                                                    className={outcome.passed ? 'text-success' : 'text-danger'}
-                                                    style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
-                                                  >
-                                                    {outcome.actualOutput || '(no rows)'}
-                                                  </pre>
-                                                )}
-                                              </>
-                                            )}
-                                          </div>
+                              ) : isSql ? (() => {
+                                // Query Result is deliberately flat, not "Test Case" cards -
+                                // it's meant to read like a normal SQL client's results pane.
+                                // Only test case 0 (the public one, whose schema is already
+                                // shown above in "Use the following table") ever has its
+                                // actual output rendered here; any hidden test cases beyond it
+                                // only contribute to the overall Passed/Failed + checks-passed
+                                // count, never their own setup or data.
+                                if (!runResult) {
+                                  return (
+                                    <div className="d-flex flex-column align-items-center justify-content-center text-center py-5">
+                                      <QueryResultEmptyIcon />
+                                      <div className="text-muted small mt-2">
+                                        Run your query to see the results here...
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                const publicOutcome = runResult.outcomes[0];
+                                const allPassed = runResult.outcomes.every((o) => o.passed);
+                                const parsedActual =
+                                  publicOutcome && !publicOutcome.error
+                                    ? parseSqlRowSet(publicOutcome.actualOutput)
+                                    : null;
+                                return (
+                                  <div className="p-3">
+                                    <div className="d-flex align-items-center gap-2 mb-2">
+                                      <Badge bg={allPassed ? 'success' : 'danger'}>
+                                        {allPassed ? 'Passed' : 'Failed'}
+                                      </Badge>
+                                      {runResult.outcomes.length > 1 && (
+                                        <span className="text-muted small">
+                                          {runResult.outcomes.filter((o) => o.passed).length}/
+                                          {runResult.outcomes.length} checks passed
+                                        </span>
+                                      )}
+                                    </div>
+                                    {publicOutcome?.error ? (
+                                      <div className="text-muted small">
+                                        Query failed - see Execution Messages for details.
+                                      </div>
+                                    ) : parsedActual ? (
+                                      parsedActual.rows.length === 0 ? (
+                                        <div className="text-muted small">(no rows)</div>
+                                      ) : (
+                                        <div className="rounded-2 overflow-hidden border">
+                                          <SqlTable
+                                            columns={parsedActual.columns}
+                                            rows={toSqlTableRows(parsedActual)}
+                                          />
                                         </div>
-                                      );
-                                    })
-                                  : currentQuestion.testCases!.map((testCase, index) => {
+                                      )
+                                    ) : (
+                                      <pre
+                                        className="mb-0 small"
+                                        style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                      >
+                                        {publicOutcome?.actualOutput || '(no rows)'}
+                                      </pre>
+                                    )}
+                                  </div>
+                                );
+                              })() : (
+                              <div className="p-3 d-flex flex-column gap-2">
+                                {currentQuestion.testCases!.map((testCase, index) => {
                                       const outcome = runResult?.outcomes[index];
                                       const argsText = currentQuestion.parameters!
                                         .map((p, i) => `${p.name} = ${formatTypedValue(testCase.arguments[i], p.type)}`)

@@ -8398,3 +8398,132 @@ that reproduced the bug) - Setup SQL textarea showed the full, correct
 multiple repeats.
 
 Not committed or pushed - holding per the user's standing rule.
+
+---
+
+User's own "final verdict" review of the SQL exam-taking experience flagged
+one security/integrity gap (Expected Output and hidden test-case details
+were fully visible to the student, before and after running) and one
+labeling gap ("Run Code"/"Your Code" don't fit an SQL question). Three
+fixes, all in Frontend/examvault-web/src/pages/student/TakeExam.tsx:
+
+1. Removed the always-visible "Expected Output" box that rendered above
+   the code editor before the student had even attempted the question -
+   it showed the exact result table the query needed to produce, which
+   is a direct answer leak for most SELECT-style questions. Expected
+   output is no longer shown to students anywhere, at any point.
+
+2. Test Case Results panel (after Run): only test case index 0 (the
+   "public" one whose schema is already shown pre-run in "Use the
+   following table") shows its Setup SQL and the student's own Result
+   table. Every other test case renders as "Test Case N (hidden)" with
+   just a Passed/Failed badge and, if it errored, the error text (so a
+   syntax mistake is still debuggable without revealing the hidden
+   case's schema or data). Previously all test cases - not just the
+   public one - rendered full Setup SQL + Expected + Got for every case,
+   which would leak hidden grading cases the moment a question had more
+   than one.
+
+3. For Sql questions specifically: "Your Code" -> "Your SQL Query" (both
+   the inline and expanded editor headers) and the Run button ->
+   "Run Query" (idle and cooldown states). Non-Sql languages unchanged.
+
+Verification: tsc clean, npm run build clean, npm test 84/84 green.
+Rebuilt and redeployed the frontend Docker image.
+
+Not live-verified as a student this time: the only user assigned to the
+ssql exam (bhaumane@gmail.com) has already used 5 attempts against a
+MaxAttempts of 1, so logging in as them and opening the exam would either
+be blocked or (if not) burn a real attempt on this test account for no
+reason. There's no admin "login as" / impersonation feature, and Add User
+only issues a temporary password by email (no local mail catcher in this
+compose stack), so standing up a disposable test student to click through
+wasn't a quick path either. The change itself is straightforward
+conditional rendering (hide a block, gate an index, swap two label
+strings) and is covered by the full build/test pass above, but actually
+opening the exam as a student to see the boxes/labels render has not been
+done - flagged to the user so they can spot-check or ask for a proper
+live pass if they want one.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Correction from the user right after the above: they only wanted Expected
+Output kept OUT of the Test Case Results panel (post-run) - the pre-run
+"Expected Output" box in the Question panel (shown alongside "Use the
+following table", before the student attempts anything) should stay.
+Restored that box exactly as it was, right after "Use the following
+table" and before the Sample Input/Output section. Final state:
+
+- Question panel (pre-run): "Use the following table" + "Expected Output"
+  - both visible.
+- Test Case Results panel (post-run): only the public test case (index 0)
+  shows Setup SQL + the student's own Result; Expected Output is never
+  shown there; hidden test cases (index > 0) show pass/fail (+ error) only.
+
+Verification: tsc clean, npm run build clean, npm test 84/84 green.
+Rebuilt and redeployed the frontend Docker image.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Follow-up from a screenshot (3.png): inside the Test Case 1 card, the
+public case was showing its Setup SQL table again (id/name/score, same
+Alice/Bob/Charlie rows) directly above the "Result" box - pure repeat of
+the "Use the following table" grid already shown at the top of the
+Question panel. Removed that repeated setup table from the test case
+card; Test Case 1 now shows just the Passed/Failed badge and the "Result"
+box (the student's own query output). Dropped the now-unused parsedSetup
+parse and testCase.setupSql fallback in that branch.
+
+Verification: tsc clean, npm run build clean, npm test 84/84 green.
+Rebuilt and redeployed the frontend Docker image.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Follow-up from a screenshot (case.png): for SQL questions, replace the
+"Test Cases" tab entirely with a "Query Result" tab that reads like a
+normal SQL client's results pane, not a list of Test Case cards -
+TakeExam.tsx. Renamed "Messages" -> "Execution Messages" for SQL too.
+
+Query Result tab (SQL only):
+- Idle (no run yet): centered grid icon (new QueryResultEmptyIcon) +
+  "Run your query to see the results here...", matching the reference
+  screenshot exactly.
+- After running: a single Passed/Failed badge (based on ALL test cases,
+  including hidden ones) + "X/Y checks passed" caption when there's more
+  than one test case, then the public (index 0) test case's actual result
+  as a plain table - no "Test Case 1" card wrapper, no repeated schema.
+  On a query error, a one-line "Query failed - see Execution Messages for
+  details" note instead of the raw error (the error itself already flows
+  into the Execution Messages tab via the existing `messages` array).
+- Non-Sql languages keep the original "Test Cases X/Y" + per-case cards
+  UI unchanged.
+
+Also updated the CSV bulk-import template per the user's request ("update
+in template as well" -> confirmed via AskUserQuestion to mean the CSV
+template, not the student's starter-code boilerplate): both
+csvQuestionImport.ts's parseSqlTestCasesCell doc comment and
+CsvImportPanel.tsx's in-app column help text now explicitly call out that
+only the first Setup SQL block (before any "---" separator) is ever shown
+to students - as the schema and as the Query Result - and any later
+blocks are hidden checks that only ever surface as an extra Passed/Failed
+count, so an admin building a multi-case SQL question via CSV knows which
+block needs to be safe to make public.
+
+Verification: tsc clean, npm run build clean, npm test 84/84 green.
+Rebuilt and redeployed the frontend Docker image.
+
+Not live-verified as a student: doing so would require logging into an
+account (even a disposable throwaway test student) by entering a
+password into the login form, which isn't something I can do regardless
+of whose credentials - so this was verified by code review + the full
+build/test/typecheck pass above, not by opening the exam screen. Flagged
+to the user in case they want to spot-check the actual rendering
+themselves.
+
+Not committed or pushed - holding per the user's standing rule.

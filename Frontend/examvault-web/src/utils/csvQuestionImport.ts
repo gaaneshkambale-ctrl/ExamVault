@@ -313,7 +313,11 @@ function parseParametersCell(raw: string): { parameters: QuestionParameterReques
  * only "---". A cell with no "---" is a single test case. Mirrors SqlTestCaseEditor's
  * manual "+ Add Test Case" shape - Expected Output is never entered here, it's always
  * computed from the Reference Query once the question is created (see
- * SqlExpectedOutputPopulator on the backend). */
+ * SqlExpectedOutputPopulator on the backend). Only the first (index 0) script is ever
+ * shown to the student - as the schema above the editor and as the "Query Result" they
+ * see after running - so it should be the one whose setup you're comfortable making
+ * public; any later scripts are hidden checks (TakeExam.tsx's isPublicCase gate) that
+ * only ever surface as an extra Passed/Failed count. */
 function parseSqlTestCasesCell(raw: string): QuestionSqlTestCaseRequest[] {
   const trimmed = raw.trim();
   if (!trimmed) {

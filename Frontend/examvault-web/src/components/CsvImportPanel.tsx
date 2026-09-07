@@ -204,7 +204,9 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
                 <code>1,2,3</code>). Sql Test Cases: one Setup SQL script per test case (
                 <code>CREATE TABLE ...; INSERT INTO ...;</code>) - Expected Output is computed automatically from
                 the Reference Query, never entered by hand; multiple test cases are separated by a line containing
-                only <code>---</code>.
+                only <code>---</code>. Only the first Setup SQL block is shown to students, as the schema above the
+                editor and as the query result they see after running - any later blocks are hidden checks that
+                only ever show up as an extra Passed/Failed count, never their own schema or data.
               </>
             ) : (
               'Header row required: Question Text, Type, Difficulty, Marks, Option A-D, Correct Answer, Shuffle Options.'
