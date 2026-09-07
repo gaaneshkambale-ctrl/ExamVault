@@ -73,6 +73,9 @@ export default function CreateQuestionModal({
   const [programmingLanguage, setProgrammingLanguage] = useState<ProgrammingLanguage | ''>('');
   const [allowLanguageChange, setAllowLanguageChange] = useState(false);
   const [sampleAnswer, setSampleAnswer] = useState('');
+  const [sampleInput, setSampleInput] = useState('');
+  const [sampleOutput, setSampleOutput] = useState('');
+  const [constraints, setConstraints] = useState('');
   const [signature, setSignature] = useState<FunctionSignatureValue>(EMPTY_SIGNATURE);
   const [sqlTestCases, setSqlTestCases] = useState<SqlTestCaseRow[]>([]);
   const isSql = programmingLanguage === 'Sql';
@@ -107,6 +110,9 @@ export default function CreateQuestionModal({
       programmingLanguage !== '' ||
       allowLanguageChange ||
       sampleAnswer.trim() !== '' ||
+      sampleInput.trim() !== '' ||
+      sampleOutput.trim() !== '' ||
+      constraints.trim() !== '' ||
       signature.functionName.trim() !== '' ||
       signature.returnType !== '' ||
       signature.parameters.length > 0 ||
@@ -124,6 +130,9 @@ export default function CreateQuestionModal({
     setProgrammingLanguage('');
     setAllowLanguageChange(false);
     setSampleAnswer('');
+    setSampleInput('');
+    setSampleOutput('');
+    setConstraints('');
     setSignature(EMPTY_SIGNATURE);
     setSqlTestCases([]);
     setErrors({});
@@ -204,6 +213,9 @@ export default function CreateQuestionModal({
                   expectedOutput: parseTypedValue(tc.expectedOutputText, signature.returnType || 'String'),
                 })),
             sqlTestCases: isSql ? sqlTestCases.map(({ setupSql }) => ({ setupSql })) : [],
+            sampleInput: sampleInput || null,
+            sampleOutput: sampleOutput || null,
+            constraints: constraints || null,
           }
         : {
             examId,
@@ -411,6 +423,53 @@ export default function CreateQuestionModal({
                   {isSql
                     ? 'Used to automatically compute the expected result for each Sql test case below - never shown to students.'
                     : 'Reference solution for the grading admin only - students never see this.'}
+                </Form.Text>
+              </Form.Group>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3" controlId="modalSampleInput">
+                    <Form.Label className="fw-bold">Sample Input (optional)</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={2}
+                      className="font-monospace"
+                      placeholder="e.g. 1, 2, 3, 4, 5, 6, 7, 8"
+                      value={sampleInput}
+                      onChange={(e) => setSampleInput(e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3" controlId="modalSampleOutput">
+                    <Form.Label className="fw-bold">Sample Output (optional)</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={2}
+                      className="font-monospace"
+                      placeholder="e.g. Sum of even numbers is: 20"
+                      value={sampleOutput}
+                      onChange={(e) => setSampleOutput(e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Form.Group className="mb-3" controlId="modalConstraints">
+                <Form.Label className="fw-bold">{isSql ? 'Notes (optional)' : 'Constraints (optional)'}</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={3}
+                  placeholder={
+                    isSql
+                      ? 'Write only the SQL query.\nDo not include any explanation.'
+                      : 'Use plain JavaScript (no external libraries).\nImplement the logic using a loop.'
+                  }
+                  value={constraints}
+                  onChange={(e) => setConstraints(e.target.value)}
+                />
+                <Form.Text className="text-muted">
+                  One per line - shown as bullet points to students.
                 </Form.Text>
               </Form.Group>
 

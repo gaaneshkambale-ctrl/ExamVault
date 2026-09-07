@@ -121,7 +121,7 @@ public class InternalController : ControllerBase
                     t.DisplayOrder))
                 .ToList(),
             SqlTestCases = sqlTestCases?.OrderBy(t => t.DisplayOrder)
-                .Select(t => new QuestionSqlTestCaseResponse(t.SetupSql, t.DisplayOrder))
+                .Select(t => new QuestionSqlTestCaseResponse(t.SetupSql, t.DisplayOrder, t.ExpectedOutput))
                 .ToList(),
         };
 }

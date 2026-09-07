@@ -7804,3 +7804,364 @@ with real aggregated usage (8/∞ students, 3/∞ admins, 2/∞ instructors,
 (unused plan).
 
 NOT committed/pushed - holding per the user's standing rule.
+
+===============================================================================
+Professional split-panel layout for Code/SQL exam questions (2026-09-07)
+===============================================================================
+
+User shared 3 reference mockups (sql interview question.png, javascript.png,
+ChatGPT-generated placement-test mockup) showing a LeetCode-style layout for
+programming/database exam questions: question details in a left panel
+(title, Marks badge, description, Requirements/Example/Constraints), a code
+editor in a right panel with a language selector and Run button, and a
+tabbed Test Cases/Output panel below the editor. Asked to bring TakeExam.tsx
+(student exam-taking page) to the same "professional look" for Code/SQL
+questions specifically, plus review the timer styling.
+
+Grounded against what's actually real in this codebase before planning (per
+the "don't invent metrics/data" rule already established this session):
+  - QuestionResponse has no separate Requirements/Example-table/Constraints
+    fields - only one free-text `questionText`. Currently rendered as a
+    single <p> with NO whitespace preservation, so an admin's own line
+    breaks collapse into one paragraph. Fixing that (white-space: pre-wrap)
+    is a real, cheap win that lets admins format Requirements/Example/
+    Constraints-style content themselves without a new field.
+  - `marks` IS a real field on QuestionResponse, already fetched, but never
+    displayed anywhere in the question-taking view - a real Marks badge
+    (matching the mockups) is a legitimate, no-new-data addition.
+  - RunCodeResponse/TestCaseOutcomeResponse carry passed/actualOutput/
+    expectedOutput/error - no per-test-case execution time in ms. The
+    mockup's "12 ms" style timings are NOT backed by real data - skipped,
+    not faked.
+  - The current exam-level "Time Left" header (clock icon, rounded box,
+    red under 5 min, Connected/Offline badge, Submit button) already
+    closely matches the mockups. Confirmed with the user (AskUserQuestion)
+    that only a styling pass is wanted here, not a new per-question-timer
+    feature (which doesn't exist in the data model at all - exam-level
+    durationMinutes and section-level deadlines only).
+
+Plan (frontend-only, TakeExam.tsx + its CodeProgram render branch):
+  1. Split-panel layout, CodeProgram questions ONLY (MCQ/TrueFalse/
+     MultiSelect/manually-graded text questions keep their current single-
+     column layout - out of scope per the user's own "programming exams,
+     database exam" framing):
+       - Left column (~5/12): "Question N" heading + real Marks badge +
+         question text (now white-space: pre-wrap).
+       - Right column (~7/12): language badge/selector + Run button
+         relocated into the editor panel's header (matching the mockups),
+         Code Editor unchanged, and a restyled Test Cases panel.
+       - Shared header row above both columns: Question N of M, Mark for
+         Review (kept, repositioned) - section instructions alert stays
+         above.
+       - Bottom nav (Save & Previous / Save & Next / Next Section /
+         Review & Submit) unchanged, full width below the split - no
+         change to navigation/forward-only/section-completion logic.
+  2. white-space: pre-wrap on the question text paragraph - applies to
+     ALL question types (universal, safe, real fix).
+  3. Test result tabs: "Test Cases" (existing outcome list, unchanged
+     content/logic) and "Messages" (any run-level error or per-outcome
+     compile/runtime stderr, deduplicated) - replacing the always-visible
+     inline error div, using only data the API already returns.
+  4. Explicitly NOT doing (flagged, not silently skipped): per-test-case
+     timing (no real data), a Custom Input runner (real feature but net-
+     new scope, proposed as a fast-follow if wanted), a structured
+     Requirements/Example-table/Constraints schema (backend change, out
+     of scope), section-tab re-skin (existing icon slider already serves
+     the same purpose - cosmetic churn without functional value).
+
+Verification: tsc/build, existing tests, then live-verify in the browser
+against a real Code question and a real SQL question (the "Programming
+Test - All Languages" exam already has both).
+
+===============================================================================
+Real bug found and fixed: ExecutionService C++ compile failure (2026-09-07)
+===============================================================================
+
+While live-verifying the split-panel redesign above, discovered a genuine,
+previously-undiscovered bug: Piston gcc package compiles via g++ *.cpp,
+meaning Solution.cpp is compiled as its own standalone translation unit,
+not just pulled in via Main.cpp #include "Solution.cpp". The earlier fix
+(adding using-namespace-std to Main.cpp preamble) never reached Solution.cpp
+when the compiler processed it as a standalone input - student C++ code
+using unqualified vector/string failed to compile on its own, independent
+of Main.cpp preamble.
+
+Fix: CppDriverGenerator.cs now prepends #include vector, #include string,
+and using-namespace-std directly onto the Solution.cpp file content itself
+(the actual PistonFile("Solution", ...) payload), not just Main.cpp.
+Verified live end-to-end: rebuilt and redeployed execution-api and
+execution-worker, retested via a real student attempt on "Programming Test
+- All Languages" - C++ question now compiles and passes both real test
+cases.
+
+Also separately confirmed (not a bug, an environmental Piston
+characteristic): the self-hosted Piston csharp.net (.NET 5) runtime takes
+10 to 16 seconds per job every time, consistently, regardless of host load
+(confirmed via piston container own logs going back to earlier in the day)
+- bumping against PistonClient.cs 6 second RunTimeoutMs under real
+conditions. This is why the C# question in this same live attempt scored
+inconsistently. Not fixed in this pass - flagged for the user judgment
+(raising the timeout is a real production tradeoff on a shared Piston
+resource, not something to change silently).
+
+Live exam verification result (QA Student, "Programming Test - All
+Languages", attempt 2 after bumping Max Attempts from 1 to 5 for
+retesting): Python 2/2 pass, Java 2/2 pass, JavaScript 2/2 pass, C++ 2/2
+pass, C# flaky (Piston timeout, not a code bug), SQL correctly held as
+"Pending Grading" (manually graded, no auto-run configured). Final score
+10/100 with the Pending Grading badge shown correctly pending the SQL
+question manual review - exactly the expected real behavior.
+
+Also fixed along the way: the 3 CSV-imported questions in this same exam
+(Java, C#, C++) had been created before the class-wrapping template fix
+and still held the old broken bare-function code - updated via Admin Edit
+Question to the corrected class-wrapped versions and re-saved.
+
+Not committed or pushed - holding per the user standing rule.
+
+===============================================================================
+Sample Input/Output and Constraints/Notes fields for Code/Programming and
+SQL questions (2026-09-07)
+===============================================================================
+
+User shared 2 more reference screenshots (a JS mockup crop showing a
+"Sample Input and Output" table plus a "Constraints" bulleted box; a SQL
+mockup crop showing a sample data table under "Use the following table:
+employees", an "Expected Output" table, and a "Notes" bulleted box) and
+asked to add these as real fields, not just better-formatted free text.
+
+Grounded against the real schema before planning: ExamQuestion
+(QuestionService) has QuestionText (one free-text field) but nothing
+structured for Sample Input/Sample Output/Constraints/Notes. These are
+genuinely new fields, not data that already exists elsewhere - unlike the
+earlier CodeProgram redesign pass, this really does need a schema change.
+
+Plan:
+  1. Backend (QuestionService), 3 new nullable string fields on
+     ExamQuestion, CodeProgram-only (same null-for-every-other-type
+     convention StarterCode already follows):
+       - SampleInput (string, max 2000)
+       - SampleOutput (string, max 2000)
+       - Constraints (string, max 2000) - one line per bullet when
+         rendered; labeled "Constraints" for non-Sql languages, "Notes"
+         for Sql, matching the two mockups exactly (same field, different
+         label - they are the same UI/data shape, just different section
+         titles per the reference designs).
+     Migration: AddQuestionSampleFields. QuestionDbContext entity config:
+     three new Property/HasMaxLength(2000) lines alongside StarterCode own.
+     CreateQuestionCommand/Handler, UpdateQuestionCommand/Handler: append
+     the 3 new optional params at the end of each record (positional-safe)
+     and assign in the handler bodies, following StarterCode exact pattern.
+     QuestionResponse: append the 3 fields at the end, UNMASKED (visible to
+     every caller including students, unlike SampleAnswer) - matches
+     FunctionName visibility, not SampleAnswer admin-only masking, since
+     these are meant to be shown to the student per the mockups.
+     CreateQuestionRequest/UpdateQuestionRequest (Shared.Contracts): add
+     the 3 fields; QuestionsController Create/Update actions pass them
+     through; ToResponse mapping appends them (always visible, no
+     revealAnswers gate).
+     NOT touching the SQL "employees" sample-data grid specifically - that
+     is literally what QuestionSqlTestCase.SetupSql already contains
+     (CREATE TABLE plus INSERT statements); rendering a parsed HTML data
+     grid from arbitrary SQL is its own complex, fragile feature. Instead
+     the SQL question left column will show the (already-real) first
+     SqlTestCase SetupSql verbatim in a labeled monospace box ("Sample
+     Data / Setup SQL") - real data, no new field, no SQL-parsing risk.
+
+  2. Frontend:
+     - types/question.ts: add sampleInput/sampleOutput/constraints to the
+       request/response types (mirroring starterCode own optional-field
+       placement in each interface).
+     - CreateQuestionModal.tsx and EditQuestion.tsx (separately, matching
+       this codebase established duplicated-form convention - confirmed
+       EditQuestion.tsx does NOT reuse CreateQuestionModal): 3 new
+       textareas placed right after the existing Sample Answer field,
+       before the hr that starts the test-case editors. Constraints
+       textarea helper text explains one per line, shown as bullet points
+       to students.
+     - QuestionDetails.tsx (admin read-only preview): render the 3 new
+       fields if present, same treatment as StarterCode/SampleAnswer
+       already get there.
+     - csvQuestionImport.ts: add 3 new optional CSV columns (Sample Input,
+       Sample Output, Constraints) to CODE_CSV_TEMPLATE_HEADER and the
+       parser; update the 6 example rows to include realistic values so
+       the shipped template demonstrates the new fields too.
+     - TakeExam.tsx (the split-panel left column built earlier today):
+       below the question text, conditionally render:
+         - "Sample Input and Output" as a real 2-column table when both
+           sampleInput and sampleOutput are present (matching the JS
+           mockup).
+         - Sql questions: the first sqlTestCase SetupSql (if any) in a
+           "Sample Data" monospace box, matching the SQL mockup table
+           section but using real data instead of a parsed grid.
+         - "Constraints" (non-Sql) / "Notes" (Sql) as a bulleted list, one
+           bullet per non-empty line of the Constraints field, in the same
+           light-blue-header boxed style as the mockups.
+       All three sections are conditional - a question with none of these
+       filled in renders exactly as it does today (no empty boxes).
+
+  Explicitly NOT doing: a real database-schema structured field/admin UI
+  for authoring the SQL sample-data grid (reusing SetupSql instead, as
+  above); changing anything for non-CodeProgram question types (MCQ/
+  TrueFalse/etc. keep their current single-column layout, unaffected by
+  this schema change).
+
+Verification: tsc/build, dotnet build plus existing Application/API tests
+for QuestionService, EF migration applies cleanly, then live-verify by
+creating/editing a real Code and a real Sql question with these fields
+filled in and confirming both the admin form and the student TakeExam
+split-panel render them correctly.
+
+===============================================================================
+Sql "Expected Output" precomputed and shown up front (2026-09-07)
+===============================================================================
+
+Note: the "Sample Input/Output and Constraints/Notes fields" work above was
+implemented and verified by a separate concurrent Claude Code session
+running against this same repo at the same time (discovered mid-session via
+git status showing live edits to files this session hadn't touched, and
+5 running claude.exe processes - confirmed with the user, that session has
+since closed). Picked up cleanly from its finished, tested state; this
+entry covers only what that session explicitly left out.
+
+User shared a SQL mockup showing an always-visible "Expected Output" table
+next to the question (not just after Run). That session's plan deliberately
+skipped this - Sql expected output is only ever computed live, by running
+the reference query (ExamQuestion.SampleAnswer) against SetupSql via Piston
+inside RunSqlHandler, never stored. Showing it up front needed real backend
+work (confirmed with the user before starting - AskUserQuestion, chose "add
+the backend piece" over "show only after Run").
+
+Design problem: Question Service has no Piston access - only Execution
+Service does, via IPistonClient. Execution Service already depends on
+Question Service (calls internal/questions/{id} for the Reference Query
+during a Run) - Question Service depends_on Execution Service in
+docker-compose would be circular. Resolved by NOT adding depends_on at all;
+this is a runtime call (admin saves a Sql question), not a startup
+dependency, so ordering doesn't matter - only the env var does.
+
+Implementation:
+  - ExecutionService: extracted RunSqlHandler's ExecuteQueryAsync +
+    CanonicalRowSet into a shared static SqlReferenceRunner (Sql/
+    SqlReferenceRunner.cs) - both the live grading path and the new
+    precompute path now canonicalize identically by construction, so a
+    precomputed Expected Output can never disagree with what Run Code
+    would show. New ComputeSqlExpectedOutputHandler loops setupSql list
+    through it. New InternalController (internal/execution/sql-expected-
+    output, [Authorize], routed outside /api like Question Service's own
+    InternalController so the Gateway can never proxy it) takes {
+    ReferenceQuery, SetupSqlList } directly rather than a QuestionId -
+    avoids a call back into Question Service, since Question Service
+    already has both values in hand at save time. New Shared.Contracts
+    records: ComputeSqlExpectedOutputRequest/Response,
+    SqlExpectedOutputItemResponse.
+  - QuestionService: QuestionSqlTestCase gained a nullable ExpectedOutput
+    column (migration AddQuestionSqlTestCaseExpectedOutput). New
+    ISqlExpectedOutputClient/SqlExpectedOutputClient (Question.
+    Infrastructure/Clients) forwards the ADMIN'S OWN bearer token to
+    Execution Service's internal endpoint (same forward-the-caller's-token
+    convention Execution Service's own QuestionServiceClient already uses)
+    - threaded through CreateQuestionCommand/UpdateQuestionCommand as a
+    new BearerToken field, populated in QuestionsController from
+    Request.Headers.Authorization. Shared SqlExpectedOutputPopulator
+    (Questions/SqlExpectedOutputPopulator.cs) is called by both
+    CreateQuestionHandler and UpdateQuestionHandler after building the
+    sqlTestCases list, before SaveChangesAsync: only fires for
+    ProgrammingLanguage "Sql" with a non-empty SampleAnswer and at least
+    one SqlTestCase; best-effort (try/catch, logs a warning on failure) so
+    a Piston/Execution Service hiccup NEVER blocks an admin from saving a
+    question - ExpectedOutput just stays null for that save, same as
+    "not computed yet". QuestionSqlTestCaseResponse (Shared.Contracts)
+    gained ExpectedOutput; both places that construct it (QuestionsController
+    ToResponse, InternalController ToFullResponse) pass it through.
+    Config: Services:ExecutionServiceBaseUrl added to Question.API's
+    Program.cs (required, throws if missing - same convention as every
+    other Services:*BaseUrl), appsettings.Development.json, and
+    docker-compose.yml's question-api block (no depends_on, see above).
+  - Frontend: QuestionSqlTestCaseResponse gained expectedOutput. TakeExam.tsx
+    (Sql left column, right after the existing "Sample Data (Setup SQL)"
+    box) renders an "Expected Output" box from sqlTestCases[0].expectedOutput
+    when present - new parseSqlRowSet() helper parses the backend's
+    canonical newline-per-JSON-object row format into a real HTML table
+    (columns from the first row's keys), falling back to raw monospace text
+    if parsing fails, or "No rows returned" for an empty result. Box doesn't
+    render at all when expectedOutput is null (not computed / reference
+    query failed) - no fake/empty box, consistent with the other new
+    sections' own convention.
+  - Tests: CreateQuestionHandlerTests/UpdateQuestionHandlerTests needed a
+    FakeSqlExpectedOutputClient (Fakes/FakeSqlExpectedOutputClient.cs,
+    returns empty list, never actually exercised since no test sets a Sql
+    question + bearer token) to satisfy the handlers' new constructor
+    parameters.
+
+Verification: dotnet build (0 errors) and dotnet test for both
+QuestionService (53/53) and ExecutionService (14/14) Application test
+projects: tsc clean, npm run build, npm test (81/81) for the frontend.
+
+Live-verified end-to-end in Docker (question-api + execution-api +
+frontend rebuilt and redeployed): added a real Sql test case (SetupSql
+seeding students Alice/92.5, Bob/81.0, Charlie/90.0) to the real "Write a
+query returning every student with a score above 85" question on
+"Programming Test - All Languages" (it had none before) via the real admin
+Edit Question UI as Amit Mane (Admin). Confirmed directly in QuestionDb
+that ExpectedOutput was computed and stored:
+{"name":"Alice","score":92.5}\n{"name":"Charlie","score":90.0} - correctly
+excludes Bob (81.0), matches the reference query exactly. Logged in as
+"QA Student" (reset their password via the real admin Reset Password flow
+to get in - no working credentials were on hand) and took the exam:
+Question 4 (the Sql question) renders both "Sample Data (Setup SQL)" and
+the new "Expected Output" box, parsed into a real 2-column table (name/
+score, Alice 92.5, Charlie 90) via parseSqlRowSet - not raw JSON text.
+Also incidentally re-confirmed the split-panel layout and Test Cases/
+Messages tabs from the sibling session's work are rendering correctly for
+Code questions (Q1 C++, Q3 JavaScript, Q5 Java, Q6 C#).
+
+Noted for the record: this session initially found MORE uncommitted
+work on disk than its own starting git-status snapshot showed (the
+Sample Input/Output/Constraints/Notes feature above) - traced to a
+second, unrelated Claude Code session (5 claude.exe processes running,
+one from earlier that morning) independently working the same
+ActionPlan task from the same 2 mockups, discovered mid-turn via files
+changing under this session with no edits from it. Confirmed with the
+user that session had already closed (20+ min of file-write silence)
+before resuming - picked up its finished, tested state rather than
+duplicating or reverting it.
+
+Not committed or pushed - holding per the user's standing rule.
+
+===============================================================================
+Follow-up: parse the Sql "Use the following table" grid for real (2026-09-07)
+===============================================================================
+
+User shared one more mockup crop showing the "employees" sample-data table
+as a real parsed grid (id/name/department/salary columns with real rows),
+not the raw "Sample Data (Setup SQL)" monospace box shipped above - asked
+for the same for students.
+
+Reused the honest-parse-with-fallback pattern from parseSqlRowSet
+(Expected Output) rather than fabricating structure: new parseSqlSetup()
+in TakeExam.tsx does a best-effort regex/string parse of the admin's own
+SetupSql (CREATE TABLE + INSERT INTO ... VALUES ...) into { tableName,
+columns, rows }, handling quoted strings with '' escapes and nested
+parens via small top-level-comma-splitting helpers (splitTopLevel,
+matchValueTuples). Deliberately bails to null - falling back to the
+original raw-SQL monospace box - on anything it can't confidently parse:
+zero or multiple CREATE TABLE statements, an INSERT targeting a different
+table, a column/value count mismatch. Never renders a wrong or partial
+grid from SQL it doesn't fully understand.
+
+Replaced the "Sample Data (Setup SQL)" box with: "Use the following
+table:" + bold table name + the parsed grid when parsing succeeds
+(matching the mockup exactly), same monospace box as before (relabeled
+"Setup SQL") as the fallback.
+
+Verification: tsc clean, npm run build, npm test (81/81) - all before
+touching the live stack. Rebuilt and redeployed the frontend Docker
+image. Live-verified as QA Student on the real "Programming Test - All
+Languages" Sql question (resumed the in-progress attempt from the
+previous entry's verification): the "students" table renders as a real
+3-column grid (id/name/score, Alice 92.5 / Bob 81.0 / Charlie 90.0)
+directly above the already-verified Expected Output table - visually
+matches the reference mockup.
+
+Not committed or pushed - holding per the user's standing rule.

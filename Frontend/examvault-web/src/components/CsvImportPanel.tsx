@@ -126,6 +126,9 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
               returnType: entry.row.returnType,
               parameters: entry.row.parameters,
               testCases: entry.row.testCases,
+              sampleInput: entry.row.sampleInput || null,
+              sampleOutput: entry.row.sampleOutput || null,
+              constraints: entry.row.constraints || null,
             })
           : createQuestion({
               examId,

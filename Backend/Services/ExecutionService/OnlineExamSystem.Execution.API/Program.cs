@@ -51,6 +51,7 @@ public class Program
         builder.Services.AddHttpClient<IQuestionServiceClient, QuestionServiceClient>(client =>
             client.BaseAddress = new Uri(questionServiceBaseUrl.TrimEnd('/') + "/"));
         builder.Services.AddScoped<RunSqlHandler>();
+        builder.Services.AddScoped<ComputeSqlExpectedOutputHandler>();
 
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");

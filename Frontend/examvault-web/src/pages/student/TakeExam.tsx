@@ -295,6 +295,163 @@ function extractError(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
+// sqlTestCases[i].expectedOutput is the backend's canonical row-set format:
+// one raw JSON object per line, e.g. `{"name":"John"}\n{"name":"Bob"}` (see
+// SqlReferenceRunner.CanonicalRowSet). Parses it into rows for a table;
+// returns null if it doesn't parse as that shape, so callers can fall back
+// to raw text instead of rendering a broken/misleading table.
+function parseSqlRowSet(text: string): { columns: string[]; rows: Record<string, unknown>[] } | null {
+  const lines = text.split('\n').filter((line) => line.trim().length > 0);
+  if (lines.length === 0) {
+    return { columns: [], rows: [] };
+  }
+
+  try {
+    const rows = lines.map((line) => {
+      const parsed: unknown = JSON.parse(line);
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error('Not a row object');
+      }
+      return parsed as Record<string, unknown>;
+    });
+    const columns = Object.keys(rows[0]);
+    return { columns, rows };
+  } catch {
+    return null;
+  }
+}
+
+// Splits a comma-separated list at the TOP LEVEL only - commas inside a
+// '...' string or nested (...) don't split. Used for both a CREATE TABLE
+// column list and one VALUES tuple's contents.
+function splitTopLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let inQuote = false;
+  let current = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      current += ch;
+      if (ch === "'" && text[i + 1] === "'") {
+        current += text[++i];
+      } else if (ch === "'") {
+        inQuote = false;
+      }
+      continue;
+    }
+    if (ch === "'") {
+      inQuote = true;
+      current += ch;
+    } else if (ch === '(') {
+      depth++;
+      current += ch;
+    } else if (ch === ')') {
+      depth--;
+      current += ch;
+    } else if (ch === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim().length > 0) {
+    parts.push(current);
+  }
+  return parts;
+}
+
+// Extracts each top-level "(...)" group from a VALUES clause like
+// "(1, 'a'), (2, 'b')".
+function matchValueTuples(text: string): string[] {
+  const tuples: string[] = [];
+  let depth = 0;
+  let inQuote = false;
+  let current = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      current += ch;
+      if (ch === "'" && text[i + 1] === "'") {
+        current += text[++i];
+      } else if (ch === "'") {
+        inQuote = false;
+      }
+      continue;
+    }
+    if (ch === "'") {
+      inQuote = true;
+      if (depth > 0) current += ch;
+    } else if (ch === '(') {
+      depth++;
+      if (depth > 1) current += ch;
+    } else if (ch === ')') {
+      depth--;
+      if (depth === 0) {
+        tuples.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    } else if (depth > 0) {
+      current += ch;
+    }
+  }
+  return tuples;
+}
+
+function cleanSqlLiteral(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replace(/''/g, "'");
+  }
+  return trimmed;
+}
+
+// Best-effort parse of an admin-authored Setup SQL script (CREATE TABLE +
+// INSERT INTO ... VALUES ...) into a real data grid, matching the "Use the
+// following table: employees" mockup. Deliberately conservative: bails out
+// to null (caller falls back to the raw SQL text) on anything it can't
+// confidently parse - multiple tables, a column/value count mismatch, an
+// INSERT for a different table - rather than risk rendering a wrong or
+// misleading grid from admin-written SQL it doesn't fully understand.
+function parseSqlSetup(setupSql: string): { tableName: string; columns: string[]; rows: string[][] } | null {
+  const createMatches = [...setupSql.matchAll(/CREATE\s+TABLE\s+(\w+)\s*\(([^;]*)\)\s*;/gis)];
+  if (createMatches.length !== 1) {
+    return null;
+  }
+
+  const [, tableName, columnDefs] = createMatches[0];
+  const columns = splitTopLevel(columnDefs)
+    .map((def) => def.trim().split(/\s+/)[0])
+    .filter(Boolean);
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const insertMatches = [...setupSql.matchAll(/INSERT\s+INTO\s+(\w+)\s*(?:\([^)]*\))?\s*VALUES\s*([\s\S]*?);/gis)];
+  if (insertMatches.length === 0) {
+    return null;
+  }
+
+  const rows: string[][] = [];
+  for (const [, insertTable, valuesText] of insertMatches) {
+    if (insertTable.toLowerCase() !== tableName.toLowerCase()) {
+      return null;
+    }
+    for (const tuple of matchValueTuples(valuesText)) {
+      const values = splitTopLevel(tuple).map(cleanSqlLiteral);
+      if (values.length !== columns.length) {
+        return null;
+      }
+      rows.push(values);
+    }
+  }
+
+  return rows.length > 0 ? { tableName, columns, rows } : null;
+}
+
 function formatDuration(totalSeconds: number): string {
   const clamped = Math.max(0, totalSeconds);
   const hours = Math.floor(clamped / 3600);
@@ -332,6 +489,7 @@ export default function TakeExam() {
   const [runCooldownUntil, setRunCooldownUntil] = useState<Record<string, number>>({});
   const [nowTick, setNowTick] = useState(Date.now());
   const [isEditorExpanded, setIsEditorExpanded] = useState(false);
+  const [resultTab, setResultTab] = useState<'cases' | 'messages'>('cases');
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [sectionRemainingSeconds, setSectionRemainingSeconds] = useState<number | null>(null);
   const [navFilter, setNavFilter] = useState<NavFilter>('all');
@@ -899,9 +1057,11 @@ export default function TakeExam() {
   const currentQuestion = displayQuestions[currentIndex];
   const currentAnswer = currentQuestion ? (answers[currentQuestion.id] ?? EMPTY_ANSWER) : null;
 
-  // Never carry a maximized editor over to a different question.
+  // Never carry a maximized editor (or the previous question's Messages tab
+  // selection) over to a different question.
   useEffect(() => {
     setIsEditorExpanded(false);
+    setResultTab('cases');
   }, [currentQuestion?.id]);
 
   // Bucketed off navState (not raw answer flags) so the grid colors, the
@@ -1320,12 +1480,17 @@ export default function TakeExam() {
                       {currentGroup?.section && ' · '}
                       Question {currentIndex + 1} of {displayQuestions.length}
                     </span>
-                    <Form.Check
-                      type="checkbox"
-                      label="Mark for Review"
-                      checked={currentAnswer.isMarkedForReview}
-                      onChange={(e) => updateAnswer(currentQuestion.id, { isMarkedForReview: e.target.checked })}
-                    />
+                    <div className="d-flex align-items-center gap-3">
+                      <span className="badge rounded-pill fw-medium border text-dark bg-light">
+                        {currentQuestion.marks} Marks
+                      </span>
+                      <Form.Check
+                        type="checkbox"
+                        label="Mark for Review"
+                        checked={currentAnswer.isMarkedForReview}
+                        onChange={(e) => updateAnswer(currentQuestion.id, { isMarkedForReview: e.target.checked })}
+                      />
+                    </div>
                   </div>
 
                   {currentGroup?.section?.instructions && (
@@ -1334,12 +1499,11 @@ export default function TakeExam() {
                     </Alert>
                   )}
 
-                  {currentQuestion.questionType === 'CodeProgram' && (
-                    <h2 className="h6 fw-bold mb-1">
-                      {currentQuestion.programmingLanguage === 'Sql' ? 'SQL Question' : 'Coding Question'}
-                    </h2>
+                  {currentQuestion.questionType !== 'CodeProgram' && (
+                    <p className="fw-medium mb-4" style={{ whiteSpace: 'pre-wrap' }}>
+                      {currentQuestion.questionText}
+                    </p>
                   )}
-                  <p className="fw-medium mb-4">{currentQuestion.questionText}</p>
 
                   {currentQuestion.questionType === 'CodeProgram' ? (
                     (() => {
@@ -1361,8 +1525,174 @@ export default function TakeExam() {
                       const cooldownRemaining = Math.max(0, Math.ceil((cooldownEndsAt - nowTick) / 1000));
                       const runResult = runResults[currentQuestion.id];
                       const runError = runErrors[currentQuestion.id];
+                      const messages = runError
+                        ? [runError]
+                        : Array.from(
+                            new Set(
+                              (runResult?.outcomes ?? [])
+                                .map((o) => o.error)
+                                .filter((e): e is string => Boolean(e)),
+                            ),
+                          );
+                      const tabButtonStyle = (active: boolean) =>
+                        active
+                          ? { background: 'white', color: '#0f172a', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }
+                          : { background: 'transparent', color: '#6c757d' };
                       return (
-                        <>
+                        <Row className="g-4">
+                          <Col xs={12} lg={5}>
+                            <h2 className="h6 fw-bold mb-1">
+                              {isSql ? 'SQL Question' : 'Coding Question'}
+                            </h2>
+                            <p className="fw-medium" style={{ whiteSpace: 'pre-wrap' }}>
+                              {currentQuestion.questionText}
+                            </p>
+
+                            {isSql && currentQuestion.sqlTestCases?.[0]?.setupSql && (() => {
+                              const setupSql = currentQuestion.sqlTestCases[0].setupSql;
+                              const parsedTable = parseSqlSetup(setupSql);
+                              return (
+                                <div className="mb-3">
+                                  <div className="fw-medium mb-1">Use the following table:</div>
+                                  {parsedTable ? (
+                                    <>
+                                      <div className="fw-bold mb-1">{parsedTable.tableName}</div>
+                                      <div className="rounded-3 overflow-hidden border">
+                                        <table className="table table-sm mb-0">
+                                          <thead>
+                                            <tr>
+                                              {parsedTable.columns.map((col) => (
+                                                <th key={col} className="small text-muted fw-medium bg-body-tertiary">
+                                                  {col}
+                                                </th>
+                                              ))}
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {parsedTable.rows.map((row, i) => (
+                                              <tr key={i}>
+                                                {row.map((value, j) => (
+                                                  <td key={j} style={{ fontFamily: 'monospace' }}>
+                                                    {value}
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="rounded-3 overflow-hidden" style={{ background: '#eef2ff' }}>
+                                      <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
+                                        Setup SQL
+                                      </div>
+                                      <div className="bg-white px-3 py-2">
+                                        <pre
+                                          className="mb-0 small"
+                                          style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                        >
+                                          {setupSql}
+                                        </pre>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
+                            {isSql && currentQuestion.sqlTestCases?.[0]?.expectedOutput != null && (() => {
+                              const parsed = parseSqlRowSet(currentQuestion.sqlTestCases[0].expectedOutput!);
+                              return (
+                                <div className="rounded-3 overflow-hidden mb-3" style={{ background: '#eef2ff' }}>
+                                  <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
+                                    Expected Output
+                                  </div>
+                                  <div className="bg-white">
+                                    {parsed === null ? (
+                                      <pre
+                                        className="mb-0 small px-3 py-2"
+                                        style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                      >
+                                        {currentQuestion.sqlTestCases[0].expectedOutput}
+                                      </pre>
+                                    ) : parsed.rows.length === 0 ? (
+                                      <div className="text-muted small px-3 py-2">No rows returned</div>
+                                    ) : (
+                                      <table className="table table-sm mb-0">
+                                        <thead>
+                                          <tr>
+                                            {parsed.columns.map((col) => (
+                                              <th key={col} className="small text-muted fw-medium">
+                                                {col}
+                                              </th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {parsed.rows.map((row, i) => (
+                                            <tr key={i}>
+                                              {parsed.columns.map((col) => (
+                                                <td key={col} style={{ fontFamily: 'monospace' }}>
+                                                  {String(row[col])}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {(currentQuestion.sampleInput || currentQuestion.sampleOutput) && (
+                              <div className="rounded-3 overflow-hidden mb-3" style={{ background: '#eef2ff' }}>
+                                <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
+                                  Sample Input and Output
+                                </div>
+                                <div className="bg-white">
+                                  <table className="table table-sm mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th className="small text-muted fw-medium">Sample Input</th>
+                                        <th className="small text-muted fw-medium">Sample Output</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <tr>
+                                        <td style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                                          {currentQuestion.sampleInput}
+                                        </td>
+                                        <td style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                                          {currentQuestion.sampleOutput}
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                            {currentQuestion.constraints && (
+                              <div className="rounded-3 overflow-hidden mb-3" style={{ background: '#eef2ff' }}>
+                                <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
+                                  {isSql ? 'Notes' : 'Constraints'}
+                                </div>
+                                <ul className="bg-white mb-0 px-4 py-2 small">
+                                  {currentQuestion.constraints
+                                    .split('\n')
+                                    .map((line) => line.trim())
+                                    .filter(Boolean)
+                                    .map((line, i) => (
+                                      <li key={i}>{line}</li>
+                                    ))}
+                                </ul>
+                              </div>
+                            )}
+                          </Col>
+                          <Col xs={12} lg={7}>
                           <div className="d-flex justify-content-between align-items-center mb-2">
                             {currentQuestion.allowLanguageChange ? (
                               <Form.Select
@@ -1486,14 +1816,32 @@ export default function TakeExam() {
                           {hasTestCases && (
                             <div className="border rounded-3 overflow-hidden mt-3">
                               <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
-                                <span className="d-flex align-items-center gap-2 fw-semibold small">
-                                  <TestCaseIcon /> Test Cases
-                                  {runResult && (
-                                    <span className="text-muted fw-normal">
-                                      {runResult.outcomes.filter((o) => o.passed).length} / {runResult.outcomes.length} passed
-                                    </span>
-                                  )}
-                                </span>
+                                <div className="d-flex align-items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setResultTab('cases')}
+                                    className="btn btn-sm rounded-2 border-0 fw-semibold d-flex align-items-center gap-2"
+                                    style={tabButtonStyle(resultTab === 'cases')}
+                                  >
+                                    <TestCaseIcon /> Test Cases
+                                    {runResult && (
+                                      <span className="text-muted fw-normal">
+                                        {runResult.outcomes.filter((o) => o.passed).length}/{runResult.outcomes.length}
+                                      </span>
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setResultTab('messages')}
+                                    className="btn btn-sm rounded-2 border-0 fw-semibold d-flex align-items-center gap-1"
+                                    style={tabButtonStyle(resultTab === 'messages')}
+                                  >
+                                    Messages
+                                    {messages.length > 0 && (
+                                      <span className="rounded-circle bg-danger" style={{ width: 6, height: 6 }} />
+                                    )}
+                                  </button>
+                                </div>
                                 <Button
                                   size="sm"
                                   variant="primary"
@@ -1516,7 +1864,27 @@ export default function TakeExam() {
                                   )}
                                 </Button>
                               </div>
-                              {runError && <div className="px-3 py-2 text-danger small">{runError}</div>}
+                              {resultTab === 'messages' ? (
+                                <div className="p-3">
+                                  {messages.length === 0 ? (
+                                    <div className="text-muted small">
+                                      {runResult
+                                        ? 'No errors - run completed cleanly.'
+                                        : 'Run your code to see compiler/runtime messages here...'}
+                                    </div>
+                                  ) : (
+                                    messages.map((msg, i) => (
+                                      <pre
+                                        key={i}
+                                        className="text-danger small mb-2"
+                                        style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                      >
+                                        {msg}
+                                      </pre>
+                                    ))
+                                  )}
+                                </div>
+                              ) : (
                               <div className="p-3 d-flex flex-column gap-2">
                                 {isSql
                                   ? currentQuestion.sqlTestCases!.map((testCase, index) => {
@@ -1618,9 +1986,11 @@ export default function TakeExam() {
                                       );
                                     })}
                               </div>
+                              )}
                             </div>
                           )}
-                        </>
+                          </Col>
+                        </Row>
                       );
                     })()
                   ) : (

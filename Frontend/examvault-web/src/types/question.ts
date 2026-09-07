@@ -69,6 +69,10 @@ export interface QuestionSqlTestCaseRequest {
 export interface QuestionSqlTestCaseResponse {
   setupSql: string;
   displayOrder: number;
+  // Precomputed by running the reference query against setupSql when the
+  // admin saved the question - null when not yet computed or the reference
+  // query failed to run (never a stale/hand-typed value).
+  expectedOutput?: string | null;
 }
 
 export interface CreateQuestionOptionRequest {
@@ -92,6 +96,9 @@ export interface QuestionFormFields {
   parameters?: QuestionParameterRequest[];
   testCases?: QuestionTestCaseRequest[];
   sqlTestCases?: QuestionSqlTestCaseRequest[];
+  sampleInput?: string | null;
+  sampleOutput?: string | null;
+  constraints?: string | null;
 }
 
 export interface CreateQuestionRequest extends QuestionFormFields {
@@ -127,6 +134,9 @@ export interface QuestionResponse {
   parameters?: QuestionParameterResponse[] | null;
   testCases?: QuestionTestCaseResponse[] | null;
   sqlTestCases?: QuestionSqlTestCaseResponse[] | null;
+  sampleInput?: string | null;
+  sampleOutput?: string | null;
+  constraints?: string | null;
 }
 
 // Super Admin platform-wide Question Bank browse only - separate shape

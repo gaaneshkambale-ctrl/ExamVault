@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Domain.Entities;
 using OnlineExamSystem.Question.Domain.Enums;
@@ -9,11 +10,19 @@ public class CreateQuestionHandler
 {
     private readonly IQuestionRepository _questionRepository;
     private readonly IValidator<CreateQuestionCommand> _validator;
+    private readonly ISqlExpectedOutputClient _sqlExpectedOutputClient;
+    private readonly ILogger<CreateQuestionHandler> _logger;
 
-    public CreateQuestionHandler(IQuestionRepository questionRepository, IValidator<CreateQuestionCommand> validator)
+    public CreateQuestionHandler(
+        IQuestionRepository questionRepository,
+        IValidator<CreateQuestionCommand> validator,
+        ISqlExpectedOutputClient sqlExpectedOutputClient,
+        ILogger<CreateQuestionHandler> logger)
     {
         _questionRepository = questionRepository;
         _validator = validator;
+        _sqlExpectedOutputClient = sqlExpectedOutputClient;
+        _logger = logger;
     }
 
     public async Task<CreateQuestionResult> HandleAsync(
@@ -44,6 +53,9 @@ public class CreateQuestionHandler
             ReturnType = command.ReturnType is null
                 ? null
                 : Enum.Parse<ParameterType>(command.ReturnType, ignoreCase: true),
+            SampleInput = command.SampleInput,
+            SampleOutput = command.SampleOutput,
+            Constraints = command.Constraints,
         };
 
         var options = command.Options
@@ -84,6 +96,15 @@ public class CreateQuestionHandler
                 DisplayOrder = index,
             })
             .ToList();
+
+        await SqlExpectedOutputPopulator.PopulateAsync(
+            _sqlExpectedOutputClient,
+            _logger,
+            command.ProgrammingLanguage,
+            command.SampleAnswer,
+            command.BearerToken,
+            sqlTestCases,
+            cancellationToken);
 
         await _questionRepository.AddAsync(question, options, parameters, testCases, sqlTestCases, cancellationToken);
         await _questionRepository.SaveChangesAsync(cancellationToken);

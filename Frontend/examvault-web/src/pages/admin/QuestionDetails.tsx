@@ -110,7 +110,37 @@ export default function QuestionDetails() {
                   {question.sampleAnswer && (
                     <>
                       <div className="text-muted small mb-2">Sample Answer (grading reference)</div>
-                      <pre className="bg-body-tertiary border rounded p-3 mb-0">{question.sampleAnswer}</pre>
+                      <pre className="bg-body-tertiary border rounded p-3 mb-3">{question.sampleAnswer}</pre>
+                    </>
+                  )}
+                  {(question.sampleInput || question.sampleOutput) && (
+                    <div className="d-flex gap-3 mb-3">
+                      {question.sampleInput && (
+                        <div className="flex-fill">
+                          <div className="text-muted small mb-2">Sample Input</div>
+                          <pre className="bg-body-tertiary border rounded p-3 mb-0">{question.sampleInput}</pre>
+                        </div>
+                      )}
+                      {question.sampleOutput && (
+                        <div className="flex-fill">
+                          <div className="text-muted small mb-2">Sample Output</div>
+                          <pre className="bg-body-tertiary border rounded p-3 mb-0">{question.sampleOutput}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {question.constraints && (
+                    <>
+                      <div className="text-muted small mb-2">
+                        {question.programmingLanguage === 'Sql' ? 'Notes' : 'Constraints'}
+                      </div>
+                      <ul className="mb-0">
+                        {question.constraints
+                          .split('\n')
+                          .map((line) => line.trim())
+                          .filter(Boolean)
+                          .map((line, i) => <li key={i}>{line}</li>)}
+                      </ul>
                     </>
                   )}
                 </>

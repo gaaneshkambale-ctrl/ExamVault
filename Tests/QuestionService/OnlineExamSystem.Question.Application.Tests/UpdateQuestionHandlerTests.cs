@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using OnlineExamSystem.Question.Application.Questions;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Application.Tests.Fakes;
@@ -10,7 +11,11 @@ namespace OnlineExamSystem.Question.Application.Tests;
 public class UpdateQuestionHandlerTests
 {
     private static UpdateQuestionHandler CreateHandler(FakeQuestionRepository repository) =>
-        new(repository, new UpdateQuestionValidator());
+        new(
+            repository,
+            new UpdateQuestionValidator(),
+            new FakeSqlExpectedOutputClient(),
+            NullLogger<UpdateQuestionHandler>.Instance);
 
     [Fact]
     public async Task Valid_command_replaces_text_and_options()

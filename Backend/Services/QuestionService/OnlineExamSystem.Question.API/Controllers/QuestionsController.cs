@@ -88,7 +88,11 @@ public class QuestionsController : ControllerBase
             request.ReturnType,
             request.Parameters?.Select(p => new QuestionParameterInput(p.Name, p.Type)).ToList(),
             request.TestCases?.Select(ToTestCaseInput).ToList(),
-            request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList());
+            request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList(),
+            request.SampleInput,
+            request.SampleOutput,
+            request.Constraints,
+            GetBearerToken());
 
         var result = await _createQuestionHandler.HandleAsync(command, cancellationToken);
 
@@ -236,7 +240,11 @@ public class QuestionsController : ControllerBase
             request.Parameters?.Select(p => new QuestionParameterInput(p.Name, p.Type)).ToList(),
             request.TestCases?.Select(ToTestCaseInput).ToList(),
             request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList(),
-            GetCallerOwnerUserId());
+            GetCallerOwnerUserId(),
+            request.SampleInput,
+            request.SampleOutput,
+            request.Constraints,
+            GetBearerToken());
 
         var result = await _updateQuestionHandler.HandleAsync(command, cancellationToken);
 
@@ -321,6 +329,11 @@ public class QuestionsController : ControllerBase
     private Guid? GetCallerOwnerUserId() =>
         User.IsInRole("Instructor") ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!) : null;
 
+    // Forwarded to Execution Service (see CreateQuestionCommand.BearerToken)
+    // to precompute Sql test cases' Expected Output as this same caller.
+    private string GetBearerToken() =>
+        Request.Headers.Authorization.ToString().Replace("Bearer ", string.Empty, StringComparison.OrdinalIgnoreCase);
+
     private static QuestionTestCaseInput ToTestCaseInput(QuestionTestCaseRequest request) =>
         new(
             request.Arguments.Select(a => a.GetRawText()).ToList(),
@@ -369,6 +382,9 @@ public class QuestionsController : ControllerBase
                     t.DisplayOrder))
                 .ToList(),
             sqlTestCases?.OrderBy(t => t.DisplayOrder)
-                .Select(t => new QuestionSqlTestCaseResponse(t.SetupSql, t.DisplayOrder))
-                .ToList());
+                .Select(t => new QuestionSqlTestCaseResponse(t.SetupSql, t.DisplayOrder, t.ExpectedOutput))
+                .ToList(),
+            question.SampleInput,
+            question.SampleOutput,
+            question.Constraints);
 }

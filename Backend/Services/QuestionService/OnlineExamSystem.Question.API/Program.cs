@@ -93,6 +93,12 @@ public class Program
             client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
         builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
             client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+
+        var executionServiceBaseUrl = builder.Configuration["Services:ExecutionServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:ExecutionServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<ISqlExpectedOutputClient, SqlExpectedOutputClient>(client =>
+            client.BaseAddress = new Uri(executionServiceBaseUrl.TrimEnd('/') + "/"));
+
         builder.Services.AddMemoryCache();
         builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 

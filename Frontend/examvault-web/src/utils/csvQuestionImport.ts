@@ -48,6 +48,9 @@ export interface CsvCodeImportRow {
   returnType: ParameterType | null;
   parameters: QuestionParameterRequest[];
   testCases: QuestionTestCaseRequest[];
+  sampleInput: string;
+  sampleOutput: string;
+  constraints: string;
   error: string | null;
 }
 
@@ -224,18 +227,21 @@ export function parseQuestionImportCsv(text: string): CsvImportRow[] {
 }
 
 const CODE_CSV_TEMPLATE_HEADER =
-  'Question Text,Difficulty,Marks,Programming Language,Starter Code,Sample Answer / Reference Query,Allow Language Change,Function Name,Return Type,Parameters,Test Cases';
+  'Question Text,Difficulty,Marks,Programming Language,Starter Code,Sample Answer / Reference Query,Allow Language Change,Function Name,Return Type,Parameters,Test Cases,Sample Input,Sample Output,Constraints';
 
 // One example per supported language, each showing the full function-
 // signature encoding except the SQL row (which never uses those four
-// columns - see CsvCodeImportRow's own comment).
+// columns - see CsvCodeImportRow's own comment). Sample Input/Output/
+// Constraints are optional illustrative fields shown to the student
+// alongside the problem statement - separate from Test Cases, which drive
+// grading (see ExamQuestion's own comment).
 const CODE_CSV_TEMPLATE_EXAMPLE_ROWS = [
-  'Write a function that returns the sum of two integers.,Easy,2,Python,"def add(a, b):\n    pass","def add(a, b):\n    return a + b",No,add,Integer,a:Integer;b:Integer,2|3=>5;10|20=>30',
-  'Write a function that returns the larger of two integers.,Easy,2,Java,"public int max(int a, int b) {\n    return 0;\n}","public int max(int a, int b) {\n    return Math.max(a, b);\n}",No,max,Integer,a:Integer;b:Integer,3|7=>7;10|2=>10',
-  'Write a function that reverses a string.,Medium,3,C#,"public string Reverse(string s) {\n    return s;\n}","public string Reverse(string s) {\n    return new string(s.Reverse().ToArray());\n}",No,Reverse,String,s:String,hello=>olleh;abc=>cba',
-  'Write a function that returns the sum of an integer array.,Medium,3,C++,"int sumArray(vector<int> arr) {\n    return 0;\n}","int sumArray(vector<int> arr) {\n    int total = 0;\n    for (int x : arr) total += x;\n    return total;\n}",No,sumArray,Integer,arr:IntArray,"1,2,3=>6;10,20=>30"',
-  'Write a function that checks if a number is even.,Easy,1,JavaScript,"function isEven(n) {\n  return false;\n}","function isEven(n) {\n  return n % 2 === 0;\n}",No,isEven,Boolean,n:Integer,4=>true;7=>false',
-  'Write a query returning every student with a score above 85.,Medium,3,SQL,,"SELECT name, score FROM students WHERE score > 85;",No,,,,',
+  'Write a function that returns the sum of two integers.,Easy,2,Python,"def add(a, b):\n    pass","def add(a, b):\n    return a + b",No,add,Integer,a:Integer;b:Integer,2|3=>5;10|20=>30,"a = 2, b = 3",5,',
+  'Write a function that returns the larger of two integers.,Easy,2,Java,"public class Solution {\n    public int max(int a, int b) {\n        return 0;\n    }\n}","public class Solution {\n    public int max(int a, int b) {\n        return Math.max(a, b);\n    }\n}",No,max,Integer,a:Integer;b:Integer,3|7=>7;10|2=>10,"a = 3, b = 7",7,',
+  'Write a function that reverses a string.,Medium,3,C#,"using System.Linq;\n\npublic class Solution\n{\n    public string Reverse(string s)\n    {\n        return s;\n    }\n}","using System.Linq;\n\npublic class Solution\n{\n    public string Reverse(string s)\n    {\n        return new string(s.Reverse().ToArray());\n    }\n}",No,Reverse,String,s:String,hello=>olleh;abc=>cba,s = hello,olleh,',
+  'Write a function that returns the sum of an integer array.,Medium,3,C++,"class Solution {\npublic:\n    int sumArray(vector<int> arr) {\n        return 0;\n    }\n};","class Solution {\npublic:\n    int sumArray(vector<int> arr) {\n        int total = 0;\n        for (int x : arr) total += x;\n        return total;\n    }\n};",No,sumArray,Integer,arr:IntArray,"1,2,3=>6;10,20=>30","arr = [1, 2, 3]",6,',
+  'Write a function that checks if a number is even.,Easy,1,JavaScript,"function isEven(n) {\n  return false;\n}","function isEven(n) {\n  return n % 2 === 0;\n}",No,isEven,Boolean,n:Integer,4=>true;7=>false,"Enter a number: 4",true,"Use plain JavaScript (no external libraries).\nImplement the logic using a loop.\nHandle invalid input gracefully."',
+  'Write a query returning every student with a score above 85.,Medium,3,SQL,,"SELECT name, score FROM students WHERE score > 85;",No,,,,,"students table: name, score","name\nJohn\nBob","Write only the SQL query.\nDo not include any explanation.\nYour query should return the result as shown in the expected output."',
 ];
 
 export function buildCodeCsvTemplate(): string {
@@ -361,6 +367,9 @@ export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
     returnType: columnIndex('return type'),
     parameters: columnIndex('parameters'),
     testCases: columnIndex('test cases'),
+    sampleInput: columnIndex('sample input'),
+    sampleOutput: columnIndex('sample output'),
+    constraints: columnIndex('constraints'),
   };
 
   return dataRows.map((cells, dataIndex) => {
@@ -379,6 +388,9 @@ export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
     const returnType = returnTypeRaw ? normalizeParameterType(returnTypeRaw) : null;
     const parametersRaw = get(idx.parameters);
     const testCasesRaw = get(idx.testCases);
+    const sampleInput = get(idx.sampleInput);
+    const sampleOutput = get(idx.sampleOutput);
+    const constraints = get(idx.constraints);
 
     const errors: string[] = [];
     if (!questionText) errors.push('question text is required');
@@ -434,6 +446,9 @@ export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
       returnType,
       parameters,
       testCases,
+      sampleInput,
+      sampleOutput,
+      constraints,
       error: errors.length > 0 ? errors.join('; ') : null,
     };
   });
