@@ -452,6 +452,42 @@ function parseSqlSetup(setupSql: string): { tableName: string; columns: string[]
   return rows.length > 0 ? { tableName, columns, rows } : null;
 }
 
+// Shared by every place a parsed Sql grid renders - the "Use the following
+// table" setup grid, the "Expected Output" box, and each Test Case's own
+// setup/expected/got rows - so all four look and format identically.
+function SqlTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
+  return (
+    <table className="table table-sm mb-0">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <th key={col} className="small text-muted fw-medium">
+              {col}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            {row.map((value, j) => (
+              <td key={j} style={{ fontFamily: 'monospace' }}>
+                {value}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Converts parseSqlRowSet's { columns, rows: Record<string,unknown>[] }
+// shape into SqlTable's flat string[][] rows.
+function toSqlTableRows(parsed: { columns: string[]; rows: Record<string, unknown>[] }): string[][] {
+  return parsed.rows.map((row) => parsed.columns.map((col) => String(row[col])));
+}
+
 function formatDuration(totalSeconds: number): string {
   const clamped = Math.max(0, totalSeconds);
   const hours = Math.floor(clamped / 3600);
@@ -1558,28 +1594,7 @@ export default function TakeExam() {
                                     <>
                                       <div className="fw-bold mb-1">{parsedTable.tableName}</div>
                                       <div className="rounded-3 overflow-hidden border">
-                                        <table className="table table-sm mb-0">
-                                          <thead>
-                                            <tr>
-                                              {parsedTable.columns.map((col) => (
-                                                <th key={col} className="small text-muted fw-medium bg-body-tertiary">
-                                                  {col}
-                                                </th>
-                                              ))}
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {parsedTable.rows.map((row, i) => (
-                                              <tr key={i}>
-                                                {row.map((value, j) => (
-                                                  <td key={j} style={{ fontFamily: 'monospace' }}>
-                                                    {value}
-                                                  </td>
-                                                ))}
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
+                                        <SqlTable columns={parsedTable.columns} rows={parsedTable.rows} />
                                       </div>
                                     </>
                                   ) : (
@@ -1619,35 +1634,14 @@ export default function TakeExam() {
                                     ) : parsed.rows.length === 0 ? (
                                       <div className="text-muted small px-3 py-2">No rows returned</div>
                                     ) : (
-                                      <table className="table table-sm mb-0">
-                                        <thead>
-                                          <tr>
-                                            {parsed.columns.map((col) => (
-                                              <th key={col} className="small text-muted fw-medium">
-                                                {col}
-                                              </th>
-                                            ))}
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {parsed.rows.map((row, i) => (
-                                            <tr key={i}>
-                                              {parsed.columns.map((col) => (
-                                                <td key={col} style={{ fontFamily: 'monospace' }}>
-                                                  {String(row[col])}
-                                                </td>
-                                              ))}
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
+                                      <SqlTable columns={parsed.columns} rows={toSqlTableRows(parsed)} />
                                     )}
                                   </div>
                                 </div>
                               );
                             })()}
 
-                            {(currentQuestion.sampleInput || currentQuestion.sampleOutput) && (
+                            {!isSql && (currentQuestion.sampleInput || currentQuestion.sampleOutput) && (
                               <div className="rounded-3 overflow-hidden mb-3" style={{ background: '#eef2ff' }}>
                                 <div className="px-3 py-2 fw-bold small" style={{ color: '#4338ca' }}>
                                   Sample Input and Output
@@ -1739,6 +1733,21 @@ export default function TakeExam() {
                                       )
                                     ) {
                                       updateTextAnswer(currentQuestion.id, currentQuestion.starterCode ?? '');
+                                      // The starter code has never been run - clear out the
+                                      // previous code's stale Passed/Failed result and any
+                                      // run error, or the Test Cases panel keeps showing an
+                                      // outcome that no longer matches what's in the editor.
+                                      setRunResults((prev) => {
+                                        const next = { ...prev };
+                                        delete next[currentQuestion.id];
+                                        return next;
+                                      });
+                                      setRunErrors((prev) => {
+                                        const next = { ...prev };
+                                        delete next[currentQuestion.id];
+                                        return next;
+                                      });
+                                      setResultTab('cases');
                                     }
                                   }}
                                 >
@@ -1889,6 +1898,10 @@ export default function TakeExam() {
                                 {isSql
                                   ? currentQuestion.sqlTestCases!.map((testCase, index) => {
                                       const outcome = runResult?.outcomes[index];
+                                      const parsedSetup = parseSqlSetup(testCase.setupSql);
+                                      const parsedExpected = outcome ? parseSqlRowSet(outcome.expectedOutput) : null;
+                                      const parsedActual =
+                                        outcome && !outcome.error ? parseSqlRowSet(outcome.actualOutput) : null;
                                       return (
                                         <div
                                           key={index}
@@ -1906,35 +1919,76 @@ export default function TakeExam() {
                                                 </Badge>
                                               )}
                                             </div>
-                                            <pre
-                                              className="text-muted small mt-1 mb-0"
-                                              style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
-                                            >
-                                              {testCase.setupSql}
-                                            </pre>
+                                            {parsedSetup ? (
+                                              <div className="mt-1 mb-0 rounded-2 overflow-hidden border">
+                                                <SqlTable columns={parsedSetup.columns} rows={parsedSetup.rows} />
+                                              </div>
+                                            ) : (
+                                              <pre
+                                                className="text-muted small mt-1 mb-0"
+                                                style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                              >
+                                                {testCase.setupSql}
+                                              </pre>
+                                            )}
                                             {outcome && (
                                               <>
-                                                <div className="text-muted small mt-1" style={{ fontFamily: 'monospace' }}>
+                                                <div className="text-muted small mt-2" style={{ fontFamily: 'monospace' }}>
                                                   Expected:
                                                 </div>
-                                                <pre
-                                                  className="text-muted small mb-1"
-                                                  style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
-                                                >
-                                                  {outcome.expectedOutput || '(no rows)'}
-                                                </pre>
+                                                {parsedExpected ? (
+                                                  parsedExpected.rows.length === 0 ? (
+                                                    <div className="text-muted small mb-1">(no rows)</div>
+                                                  ) : (
+                                                    <div className="mb-1 rounded-2 overflow-hidden border">
+                                                      <SqlTable
+                                                        columns={parsedExpected.columns}
+                                                        rows={toSqlTableRows(parsedExpected)}
+                                                      />
+                                                    </div>
+                                                  )
+                                                ) : (
+                                                  <pre
+                                                    className="text-muted small mb-1"
+                                                    style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                                  >
+                                                    {outcome.expectedOutput || '(no rows)'}
+                                                  </pre>
+                                                )}
                                                 <div
                                                   className={outcome.passed ? 'text-success' : 'text-danger'}
                                                   style={{ fontFamily: 'monospace', fontSize: 13.5 }}
                                                 >
                                                   Got:
                                                 </div>
-                                                <pre
-                                                  className={outcome.passed ? 'text-success' : 'text-danger'}
-                                                  style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
-                                                >
-                                                  {outcome.error ?? (outcome.actualOutput || '(no rows)')}
-                                                </pre>
+                                                {outcome.error ? (
+                                                  <pre
+                                                    className="text-danger"
+                                                    style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
+                                                  >
+                                                    {outcome.error}
+                                                  </pre>
+                                                ) : parsedActual ? (
+                                                  parsedActual.rows.length === 0 ? (
+                                                    <div className={outcome.passed ? 'text-success' : 'text-danger'} style={{ fontSize: 13.5 }}>
+                                                      (no rows)
+                                                    </div>
+                                                  ) : (
+                                                    <div className="rounded-2 overflow-hidden border">
+                                                      <SqlTable
+                                                        columns={parsedActual.columns}
+                                                        rows={toSqlTableRows(parsedActual)}
+                                                      />
+                                                    </div>
+                                                  )
+                                                ) : (
+                                                  <pre
+                                                    className={outcome.passed ? 'text-success' : 'text-danger'}
+                                                    style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
+                                                  >
+                                                    {outcome.actualOutput || '(no rows)'}
+                                                  </pre>
+                                                )}
                                               </>
                                             )}
                                           </div>

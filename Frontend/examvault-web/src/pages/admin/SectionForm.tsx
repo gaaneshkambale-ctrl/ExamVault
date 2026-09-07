@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Form, InputGroup, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, InputGroup, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
@@ -8,7 +8,7 @@ import CreateQuestionModal from '../../components/CreateQuestionModal';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import { EditIcon } from '../../components/icons/ActionIcons';
 import { createSection, updateSection } from '../../api/sectionApi';
-import { bulkAssignSection } from '../../api/questionApi';
+import { bulkAssignSection, deleteQuestion } from '../../api/questionApi';
 import { useExam } from '../../hooks/useExams';
 import { useSection, useSections } from '../../hooks/useSections';
 import { useQuestionsBySection, useUnassignedQuestions } from '../../hooks/useQuestions';
@@ -318,6 +318,9 @@ export default function SectionForm() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showCreateQuestion, setShowCreateQuestion] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState('');
 
   useEffect(() => {
     if (isEdit && existingSection) {
@@ -430,6 +433,39 @@ export default function SectionForm() {
       }
       return next;
     });
+  };
+
+  // Deletes every checked question from the question bank entirely (same
+  // hard-delete DeleteQuestionButton's own per-row icon does, just for many
+  // at once) - not just unchecking them from this section. Best-effort: one
+  // question failing to delete (e.g. still referenced elsewhere) doesn't
+  // block the rest, and survivors stay selected so the admin can see what
+  // didn't go through.
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds).filter((id) => filteredQuestions.some((q) => q.id === id));
+    setBulkDeleting(true);
+    setBulkDeleteError('');
+
+    const results = await Promise.allSettled(ids.map((id) => deleteQuestion(id)));
+    const failedIds = ids.filter((_, index) => results[index].status === 'rejected');
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id, index) => {
+        if (results[index].status === 'fulfilled') next.delete(id);
+      });
+      return next;
+    });
+    queryClient.invalidateQueries({ queryKey: ['questions', 'byExam', examId] });
+
+    if (failedIds.length > 0) {
+      setBulkDeleteError(
+        `${failedIds.length} of ${ids.length} question(s) could not be deleted (still in use elsewhere).`,
+      );
+    } else {
+      setShowBulkDeleteConfirm(false);
+    }
+    setBulkDeleting(false);
   };
 
   const updateField = <K extends keyof SectionRequest>(field: K, value: SectionRequest[K]) => {
@@ -989,6 +1025,18 @@ export default function SectionForm() {
                           {allFilteredSelected ? 'Clear All' : 'Select All'}
                         </Button>
                       )}
+                      {filteredQuestions.some((q) => selectedIds.has(q.id)) && (
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() => {
+                            setBulkDeleteError('');
+                            setShowBulkDeleteConfirm(true);
+                          }}
+                        >
+                          Delete Selected ({filteredQuestions.filter((q) => selectedIds.has(q.id)).length})
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -1147,6 +1195,30 @@ export default function SectionForm() {
           onCreated={handleQuestionCreated}
         />
       )}
+
+      <Modal show={showBulkDeleteConfirm} onHide={() => setShowBulkDeleteConfirm(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Selected Questions</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Are you sure you want to delete{' '}
+          {filteredQuestions.filter((q) => selectedIds.has(q.id)).length} question(s) from the question
+          bank? This cannot be undone.
+          {bulkDeleteError && (
+            <Alert variant="danger" className="mt-3 mb-0">
+              {bulkDeleteError}
+            </Alert>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowBulkDeleteConfirm(false)}>
+            Cancel
+          </Button>
+          <Button variant="danger" disabled={bulkDeleting} onClick={() => void handleBulkDelete()}>
+            {bulkDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </RoleAwareLayout>
   );
 }

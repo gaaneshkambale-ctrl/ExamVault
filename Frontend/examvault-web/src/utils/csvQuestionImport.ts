@@ -5,6 +5,7 @@ import type {
   ProgrammingLanguage,
   QuestionDifficulty,
   QuestionParameterRequest,
+  QuestionSqlTestCaseRequest,
   QuestionTestCaseRequest,
   QuestionType,
 } from '../types/question';
@@ -31,10 +32,13 @@ export interface CsvImportRow {
 // form), Parameters is "name:type" pairs separated by ";", and Test Cases is
 // one argument per parameter separated by "|" then "=>" then the expected
 // output, multiple cases separated by ";" (array arguments are themselves
-// comma-separated, e.g. "1,2,3=>6"). Sql questions don't use these four
-// columns at all - the setup-script test cases (QuestionSqlTestCase) stay a
-// manual Edit Question step, since a multi-statement SQL script doesn't fit
-// this encoding without its own escaping problems.
+// comma-separated, e.g. "1,2,3=>6"). Sql questions use Sql Test Cases
+// instead of those four columns - one Setup SQL script per test case (real,
+// multi-statement SQL text, since a quoted CSV cell can hold embedded
+// newlines - see parseCsvText), multiple test cases separated by a line
+// containing only "---". Expected Output is never a column here - same as
+// the manual SqlTestCaseEditor, it's always computed automatically from the
+// Reference Query (Sample Answer / Reference Query column) once imported.
 export interface CsvCodeImportRow {
   rowNumber: number;
   questionText: string;
@@ -48,6 +52,7 @@ export interface CsvCodeImportRow {
   returnType: ParameterType | null;
   parameters: QuestionParameterRequest[];
   testCases: QuestionTestCaseRequest[];
+  sqlTestCases: QuestionSqlTestCaseRequest[];
   sampleInput: string;
   sampleOutput: string;
   constraints: string;
@@ -227,21 +232,21 @@ export function parseQuestionImportCsv(text: string): CsvImportRow[] {
 }
 
 const CODE_CSV_TEMPLATE_HEADER =
-  'Question Text,Difficulty,Marks,Programming Language,Starter Code,Sample Answer / Reference Query,Allow Language Change,Function Name,Return Type,Parameters,Test Cases,Sample Input,Sample Output,Constraints';
+  'Question Text,Difficulty,Marks,Programming Language,Starter Code,Sample Answer / Reference Query,Allow Language Change,Function Name,Return Type,Parameters,Test Cases,Sql Test Cases,Sample Input,Sample Output,Constraints';
 
 // One example per supported language, each showing the full function-
-// signature encoding except the SQL row (which never uses those four
-// columns - see CsvCodeImportRow's own comment). Sample Input/Output/
-// Constraints are optional illustrative fields shown to the student
+// signature encoding except the SQL row, which uses Sql Test Cases instead
+// (see CsvCodeImportRow's own comment for both encodings). Sample Input/
+// Output/Constraints are optional illustrative fields shown to the student
 // alongside the problem statement - separate from Test Cases, which drive
 // grading (see ExamQuestion's own comment).
 const CODE_CSV_TEMPLATE_EXAMPLE_ROWS = [
-  'Write a function that returns the sum of two integers.,Easy,2,Python,"def add(a, b):\n    pass","def add(a, b):\n    return a + b",No,add,Integer,a:Integer;b:Integer,2|3=>5;10|20=>30,"a = 2, b = 3",5,',
-  'Write a function that returns the larger of two integers.,Easy,2,Java,"public class Solution {\n    public int max(int a, int b) {\n        return 0;\n    }\n}","public class Solution {\n    public int max(int a, int b) {\n        return Math.max(a, b);\n    }\n}",No,max,Integer,a:Integer;b:Integer,3|7=>7;10|2=>10,"a = 3, b = 7",7,',
-  'Write a function that reverses a string.,Medium,3,C#,"using System.Linq;\n\npublic class Solution\n{\n    public string Reverse(string s)\n    {\n        return s;\n    }\n}","using System.Linq;\n\npublic class Solution\n{\n    public string Reverse(string s)\n    {\n        return new string(s.Reverse().ToArray());\n    }\n}",No,Reverse,String,s:String,hello=>olleh;abc=>cba,s = hello,olleh,',
-  'Write a function that returns the sum of an integer array.,Medium,3,C++,"class Solution {\npublic:\n    int sumArray(vector<int> arr) {\n        return 0;\n    }\n};","class Solution {\npublic:\n    int sumArray(vector<int> arr) {\n        int total = 0;\n        for (int x : arr) total += x;\n        return total;\n    }\n};",No,sumArray,Integer,arr:IntArray,"1,2,3=>6;10,20=>30","arr = [1, 2, 3]",6,',
-  'Write a function that checks if a number is even.,Easy,1,JavaScript,"function isEven(n) {\n  return false;\n}","function isEven(n) {\n  return n % 2 === 0;\n}",No,isEven,Boolean,n:Integer,4=>true;7=>false,"Enter a number: 4",true,"Use plain JavaScript (no external libraries).\nImplement the logic using a loop.\nHandle invalid input gracefully."',
-  'Write a query returning every student with a score above 85.,Medium,3,SQL,,"SELECT name, score FROM students WHERE score > 85;",No,,,,,"students table: name, score","name\nJohn\nBob","Write only the SQL query.\nDo not include any explanation.\nYour query should return the result as shown in the expected output."',
+  'Write a function that returns the sum of two integers.,Easy,2,Python,"def add(a, b):\n    pass","def add(a, b):\n    return a + b",No,add,Integer,a:Integer;b:Integer,2|3=>5;10|20=>30,,"a = 2, b = 3",5,',
+  'Write a function that returns the larger of two integers.,Easy,2,Java,"public class Solution {\n    public int max(int a, int b) {\n        return 0;\n    }\n}","public class Solution {\n    public int max(int a, int b) {\n        return Math.max(a, b);\n    }\n}",No,max,Integer,a:Integer;b:Integer,3|7=>7;10|2=>10,,"a = 3, b = 7",7,',
+  'Write a function that reverses a string.,Medium,3,C#,"using System.Linq;\n\npublic class Solution\n{\n    public string Reverse(string s)\n    {\n        return s;\n    }\n}","using System.Linq;\n\npublic class Solution\n{\n    public string Reverse(string s)\n    {\n        return new string(s.Reverse().ToArray());\n    }\n}",No,Reverse,String,s:String,hello=>olleh;abc=>cba,,s = hello,olleh,',
+  'Write a function that returns the sum of an integer array.,Medium,3,C++,"class Solution {\npublic:\n    int sumArray(vector<int> arr) {\n        return 0;\n    }\n};","class Solution {\npublic:\n    int sumArray(vector<int> arr) {\n        int total = 0;\n        for (int x : arr) total += x;\n        return total;\n    }\n};",No,sumArray,Integer,arr:IntArray,"1,2,3=>6;10,20=>30",,"arr = [1, 2, 3]",6,',
+  'Write a function that checks if a number is even.,Easy,1,JavaScript,"function isEven(n) {\n  return false;\n}","function isEven(n) {\n  return n % 2 === 0;\n}",No,isEven,Boolean,n:Integer,4=>true;7=>false,,"Enter a number: 4",true,"Use plain JavaScript (no external libraries).\nImplement the logic using a loop.\nHandle invalid input gracefully."',
+  'Write a query returning every student with a score above 85.,Medium,3,SQL,,"SELECT name, score FROM students WHERE score > 85;",No,,,,,"CREATE TABLE students(id INTEGER, name TEXT, score REAL);\nINSERT INTO students VALUES (1, \'Alice\', 92.5), (2, \'Bob\', 81.0), (3, \'Charlie\', 90.0);","students: id, name, score","Alice 92.5, Charlie 90.0","Write only the SQL query.\nDo not include any explanation.\nExpected Output is computed automatically from the Reference Query - you never type it by hand."',
 ];
 
 export function buildCodeCsvTemplate(): string {
@@ -302,6 +307,25 @@ function parseParametersCell(raw: string): { parameters: QuestionParameterReques
   return { parameters, error: null };
 }
 
+/** Parses one or more Setup SQL scripts into QuestionSqlTestCaseRequest[] - each script
+ * is real, multi-statement SQL text (CREATE TABLE + INSERT INTO ... VALUES ...), and
+ * multiple test cases (each its own fresh database) are separated by a line containing
+ * only "---". A cell with no "---" is a single test case. Mirrors SqlTestCaseEditor's
+ * manual "+ Add Test Case" shape - Expected Output is never entered here, it's always
+ * computed from the Reference Query once the question is created (see
+ * SqlExpectedOutputPopulator on the backend). */
+function parseSqlTestCasesCell(raw: string): QuestionSqlTestCaseRequest[] {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return [];
+  }
+  return trimmed
+    .split(/\n[ \t]*---[ \t]*\n/)
+    .map((setupSql) => setupSql.trim())
+    .filter((setupSql) => setupSql !== '')
+    .map((setupSql) => ({ setupSql }));
+}
+
 /** Parses "arg1|arg2=>output;arg1|arg2=>output2" into QuestionTestCaseRequest[] - one
  * argument per parameter (in the same order as `parameters`) separated by "|", then
  * "=>" then the expected output, multiple test cases separated by ";". Array arguments
@@ -343,8 +367,8 @@ function parseTestCasesCell(
 
 /** Parses a Code/Programming question-import CSV (header row required), including the
  * optional Function Name/Return Type/Parameters/Test Cases columns for Run Code +
- * auto-grading (see CsvCodeImportRow's own comment for the encoding). Sql's own
- * setup-script test cases still aren't covered - those stay a manual Edit Question step. */
+ * auto-grading, and the Sql Test Cases column for Sql questions (see CsvCodeImportRow's
+ * own comment for both encodings). */
 export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
   const table = parseCsvText(text);
   if (table.length === 0) {
@@ -367,6 +391,7 @@ export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
     returnType: columnIndex('return type'),
     parameters: columnIndex('parameters'),
     testCases: columnIndex('test cases'),
+    sqlTestCases: columnIndex('sql test cases'),
     sampleInput: columnIndex('sample input'),
     sampleOutput: columnIndex('sample output'),
     constraints: columnIndex('constraints'),
@@ -388,6 +413,7 @@ export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
     const returnType = returnTypeRaw ? normalizeParameterType(returnTypeRaw) : null;
     const parametersRaw = get(idx.parameters);
     const testCasesRaw = get(idx.testCases);
+    const sqlTestCasesRaw = get(idx.sqlTestCases);
     const sampleInput = get(idx.sampleInput);
     const sampleOutput = get(idx.sampleOutput);
     const constraints = get(idx.constraints);
@@ -433,6 +459,19 @@ export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
       errors.push('function name is required to use return type, parameters, or test cases');
     }
 
+    // Sql Test Cases only applies to Sql questions - same "wrong column for
+    // this language" guard as the function-signature columns above, just in
+    // the other direction (Sql questions don't use those, non-Sql questions
+    // don't use this).
+    let sqlTestCases: QuestionSqlTestCaseRequest[] = [];
+    if (sqlTestCasesRaw) {
+      if (programmingLanguage !== 'Sql') {
+        errors.push('sql test cases only apply to a SQL question');
+      } else {
+        sqlTestCases = parseSqlTestCasesCell(sqlTestCasesRaw);
+      }
+    }
+
     return {
       rowNumber: dataIndex + 1,
       questionText,
@@ -446,6 +485,7 @@ export function parseCodeQuestionImportCsv(text: string): CsvCodeImportRow[] {
       returnType,
       parameters,
       testCases,
+      sqlTestCases,
       sampleInput,
       sampleOutput,
       constraints,

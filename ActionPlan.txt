@@ -8130,6 +8130,136 @@ duplicating or reverting it.
 Not committed or pushed - holding per the user's standing rule.
 
 ===============================================================================
+Hide the redundant "Sample Input and Output" box for Sql questions
+(2026-09-07)
+===============================================================================
+
+User showed a screenshot of a Sql question's TakeExam view with FOUR boxes
+stacked: "Use the following table" (real, from SetupSql), "Expected
+Output" (real, auto-computed), "Sample Input and Output" (real, the
+admin's own SampleInput/SampleOutput text), and "Notes" - asked whether
+this was correct. It was - every box was genuinely real data - but the
+Sample Input/Output box was restating the exact same table+result the two
+Sql-specific boxes already showed more precisely, because this particular
+test question had both the old free-text fields AND the new Setup-SQL
+test case filled in for the same underlying fact. Confirmed with the user
+(AskUserQuestion) they wanted it hidden for Sql specifically rather than
+left duplicated.
+
+Fix: TakeExam.tsx's Sample Input and Output block now also checks
+`!isSql` before rendering - one added condition, no other change. Non-Sql
+languages are unaffected (that box is often their ONLY illustrative
+example, so it still needs to show there).
+
+Verification: tsc clean, npm test (84/84), npm run build. Rebuilt and
+redeployed the frontend Docker image, then hard-refreshed
+(Ctrl+Shift+R) before checking - per the earlier stale-bundle lesson.
+Live-verified as Bhau Mane on the real "ssql" exam's Sql question: the
+Sample Input and Output box no longer renders; "Use the following table",
+"Expected Output", and "Notes" still do, unchanged.
+
+Not committed or pushed - holding per the user's standing rule.
+
+===============================================================================
+Parse the Sql Test Cases panel's own tables too (2026-09-07)
+===============================================================================
+
+User pointed out the Test Cases tab (below Run Code, after the redundant
+Sample Input/Output box was hidden) was "also wrong" - it still showed
+raw Setup SQL text and raw newline-per-JSON-object Expected/Got text
+instead of the same parsed grids the top boxes already got. Same class of
+issue as the earlier "Use the following table" and "Expected Output"
+fixes, just a spot the refactor hadn't reached yet.
+
+Extracted the inline table markup those two boxes already used into a
+shared SqlTable({ columns, rows }) component plus a
+toSqlTableRows(parsed) adapter (parseSqlRowSet returns Record<string,
+unknown>[] rows; SqlTable takes flat string[][] - avoids repeating the
+column/row conversion at each call site) - both top boxes now use it too,
+removing duplicated markup. Each Test Case row now parses its own
+setupSql (via parseSqlSetup, real grid, same fallback-to-raw-text
+behavior for anything unparseable) and, once a Run Code result exists,
+its own Expected/Got rows (via parseSqlRowSet) into the same grid style -
+color-coded green/red exactly as the pass/fail state already was. A run
+error still shows as raw text under "Got:", unchanged - that's a message,
+not row data.
+
+Verification: tsc clean, npm test (84/84), npm run build. Rebuilt and
+redeployed the frontend Docker image, hard-refreshed first. Live-verified
+as Bhau Mane on the real "ssql" exam: Test Case 1 shows the real
+students table before running; after Run Code with the correct query,
+both "Expected:" and "Got:" render as real matching tables and the case
+shows Passed - no raw SQL or JSON text anywhere in the panel.
+
+Not committed or pushed - holding per the user's standing rule.
+
+===============================================================================
+Reset didn't clear the stale Test Case result (2026-09-07)
+===============================================================================
+
+User pointed out that clicking the code editor's own "Reset" button (back
+to starter code) left the Test Cases panel showing the PREVIOUS run's
+Passed/Failed result, Expected/Got, and the Messages tab's error dot -
+all now describing code that was no longer in the editor. Real bug:
+Reset's onClick only called updateTextAnswer(...) to restore starter
+code; runResults/runErrors (keyed by question id, driving that whole
+panel) were untouched.
+
+Fix: Reset's handler now also clears that question's entries from
+runResults and runErrors (functional Set-style updates, matching the
+question-switch effect's own cleanup pattern already in the file) and
+resets resultTab back to 'cases' - three lines alongside the existing
+updateTextAnswer call, no other change.
+
+Verification: tsc clean, npm test (84/84), npm run build. Rebuilt and
+redeployed the frontend Docker image, hard-refreshed first. Live-verified
+as QA Student on "Programming Test - All Languages": ran the correct SQL
+query (real Passed result, Expected/Got tables shown), clicked Reset,
+confirmed the editor went back to empty AND the Test Cases panel went
+back to its pre-run state with no stale badge/tables and no Messages red
+dot. Note: Reset uses a native window.confirm() - clicking it hung Claude
+in Chrome's automation (a real limitation, not a bug) until the page was
+navigated away from and the resumed attempt retried with
+window.confirm overridden via injected JS for the verification click.
+
+Not committed or pushed - holding per the user's standing rule.
+
+===============================================================================
+Question Assignment: Delete Selected, alongside the existing Select All
+(2026-09-07)
+===============================================================================
+
+User asked for "select all and delete all" on the admin Question
+Assignment step (SectionForm.tsx, step 3 of Create/Edit Section). Select
+All/Clear All already existed (toggles the section-assignment checkboxes
+for the currently filtered questions) - the missing piece was bulk
+deletion of the checked questions from the question bank entirely (only a
+per-row delete icon existed before, via DeleteQuestionButton).
+
+Added a "Delete Selected (N)" button next to Select All/Clear All -
+appears only when at least one of the currently-filtered questions is
+checked, shows the live count. Deliberately scoped to the FILTERED set
+only (same as Select All/Clear All already do) so switching a filter
+never risks deleting something outside the visible list. Clicking it
+opens a count-aware confirm modal (matching DeleteQuestionButton's own
+"cannot be undone" wording), then fires one deleteQuestion() call per
+selected id via Promise.allSettled - best-effort, so one question failing
+(e.g. still referenced elsewhere) doesn't block deleting the rest;
+survivors stay checked afterward with an inline error naming how many
+failed.
+
+Verification: tsc clean, npm run build, npm test (84/84 - unaffected).
+Rebuilt and redeployed the frontend Docker image, this time with an
+explicit hard-refresh (Ctrl+Shift+R) before testing - see the prior
+entry's stale-bundle finding. Live-verified: created a real throwaway
+question ("TEMP TEST DELETE ME"), confirmed "Delete Selected (1)"
+appeared with the correct count, confirmed the modal's wording, and
+confirmed the question was actually gone from the bank afterward (list
+count 7 -> 6, button correctly disappeared with nothing selected).
+
+Not committed or pushed - holding per the user's standing rule.
+
+===============================================================================
 Follow-up: parse the Sql "Use the following table" grid for real (2026-09-07)
 ===============================================================================
 
@@ -8163,5 +8293,58 @@ previous entry's verification): the "students" table renders as a real
 3-column grid (id/name/score, Alice 92.5 / Bob 81.0 / Charlie 90.0)
 directly above the already-verified Expected Output table - visually
 matches the reference mockup.
+
+Not committed or pushed - holding per the user's standing rule.
+
+===============================================================================
+CSV import: add Sql Test Cases column (2026-09-07)
+===============================================================================
+
+User asked how to bulk-add Code/Programming questions covering C#, SQL,
+JavaScript, and other languages, then asked for the CSV import template
+itself to support all of them "like this format" (the SQL/JS mockups).
+Walked through the manual per-language workflow first (function-signature
+model for C#/Java/Python/C++/JavaScript vs the separate Setup SQL +
+Reference Query model for Sql - flagged that "Allow student to select
+language" lists Sql as a switchable option even though a function-
+signature question has no Sql grading path behind it, a real latent bug,
+recommended against relying on it rather than fixing it unprompted).
+
+Then found the actual gap for the CSV path: parseCodeQuestionImportCsv
+already had full C#/Java/Python/C++/JavaScript support (Function Name/
+Return Type/Parameters/Test Cases) and could set a Sql question's
+Reference Query, but had NO column for Sql's own Setup SQL test cases -
+explicitly called out in the code's own comment as "stays a manual Edit
+Question step." That meant a CSV-imported Sql question always landed
+with zero test cases (Run Code broken: "no test cases configured") until
+an admin went and added them by hand - not a real end-to-end import for
+that language.
+
+Added a new "Sql Test Cases" column (csvQuestionImport.ts): one Setup SQL
+script per test case, real multi-statement SQL text (CREATE TABLE +
+INSERT INTO ... VALUES ...) since a quoted CSV cell already supports
+embedded newlines; multiple test cases separated by a line containing
+only "---" (new parseSqlTestCasesCell). Guarded both directions, same
+pattern as the existing Function Name gate: this column errors if used on
+a non-Sql row, and vice versa. Never a column for Expected Output itself
+- exactly like the manual SqlTestCaseEditor, it's always computed
+automatically (by the SQL Expected Output feature built earlier today)
+once the question is created, never typed by hand. Wired sqlTestCases
+through CsvImportPanel.tsx's create-question call (it was building the
+payload but silently dropping this field), and updated the in-app column
+help text and the SQL template example row to demonstrate it (reused the
+same students/salary-band shape as this session's other examples).
+
+Verification: tsc clean, npm run build, npm test (84/84, +3 new: single
+script, multi-test-case "---" split, wrong-language guard). Rebuilt and
+redeployed the frontend Docker image. Live-verified via the real admin
+CSV Import UI (Create Question > Import CSV > Code/Programming): uploaded
+a real CSV with one Sql row (employees table, "salary > 55000"), parsed
+as "1 valid," imported successfully, and confirmed directly in
+QuestionDb that both SetupSql (the real multi-statement script) and the
+auto-computed ExpectedOutput ({"name":"Bob"}/{"name":"John"}, correctly
+excluding Alice) landed exactly right. Deleted the test question
+afterward via the app's own Delete Question flow - the exam is back to
+its original 6 questions.
 
 Not committed or pushed - holding per the user's standing rule.

@@ -126,6 +126,7 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
               returnType: entry.row.returnType,
               parameters: entry.row.parameters,
               testCases: entry.row.testCases,
+              sqlTestCases: entry.row.sqlTestCases,
               sampleInput: entry.row.sampleInput || null,
               sampleOutput: entry.row.sampleOutput || null,
               constraints: entry.row.constraints || null,
@@ -192,13 +193,18 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
             {importKind === 'code' ? (
               <>
                 Header row required: Question Text, Difficulty, Marks, Programming Language, Starter Code, Sample
-                Answer / Reference Query, Allow Language Change, Function Name, Return Type, Parameters, Test Cases.
-                The last four are optional (leave all blank for a manually graded question; SQL never uses them).
+                Answer / Reference Query, Allow Language Change, Function Name, Return Type, Parameters, Test Cases,
+                Sql Test Cases. Function Name/Return Type/Parameters/Test Cases are for auto-grading C#, Java,
+                Python, C++, or JavaScript (leave all blank for a manually graded question); Sql Test Cases is for
+                SQL questions instead - the other four don't apply there, and vice versa.
                 Parameters: <code>name:type</code> pairs separated by <code>;</code> (e.g.{' '}
                 <code>arr:IntArray;target:Int</code>). Test Cases: one argument per parameter separated by{' '}
                 <code>|</code>, then <code>=&gt;</code> and the expected output, multiple cases separated by{' '}
                 <code>;</code> (e.g. <code>2|3=&gt;5;10|20=&gt;30</code>); array arguments are comma-separated (e.g.{' '}
-                <code>1,2,3</code>).
+                <code>1,2,3</code>). Sql Test Cases: one Setup SQL script per test case (
+                <code>CREATE TABLE ...; INSERT INTO ...;</code>) - Expected Output is computed automatically from
+                the Reference Query, never entered by hand; multiple test cases are separated by a line containing
+                only <code>---</code>.
               </>
             ) : (
               'Header row required: Question Text, Type, Difficulty, Marks, Option A-D, Correct Answer, Shuffle Options.'

@@ -234,6 +234,46 @@ describe('parseCodeQuestionImportCsv', () => {
 
     expect(rows[0].error).toContain('has 1 argument(s), expected 2');
   });
+
+  const CODE_HEADER_WITH_SQL = `${CODE_HEADER},Sql Test Cases`;
+
+  it('parses a single Sql Test Cases script', () => {
+    const csv =
+      `${CODE_HEADER_WITH_SQL}\n` +
+      'Students over 85.,Medium,3,SQL,,"SELECT name FROM students WHERE score > 85;",No,,,,,' +
+      '"CREATE TABLE students(id INTEGER, name TEXT, score REAL);\nINSERT INTO students VALUES (1, \'Alice\', 92.5);"';
+
+    const rows = parseCodeQuestionImportCsv(csv);
+
+    expect(rows[0].error).toBeNull();
+    expect(rows[0].sqlTestCases).toHaveLength(1);
+    expect(rows[0].sqlTestCases[0].setupSql).toContain('CREATE TABLE students');
+    expect(rows[0].sqlTestCases[0].setupSql).toContain("INSERT INTO students VALUES (1, 'Alice', 92.5);");
+  });
+
+  it('splits multiple Sql Test Cases scripts on a "---" line', () => {
+    const csv =
+      `${CODE_HEADER_WITH_SQL}\n` +
+      'Students over 85.,Medium,3,SQL,,"SELECT name FROM students WHERE score > 85;",No,,,,,' +
+      '"CREATE TABLE students(id INTEGER, score REAL);\nINSERT INTO students VALUES (1, 90.0);\n---\nCREATE TABLE students(id INTEGER, score REAL);\nINSERT INTO students VALUES (1, 40.0);"';
+
+    const rows = parseCodeQuestionImportCsv(csv);
+
+    expect(rows[0].error).toBeNull();
+    expect(rows[0].sqlTestCases).toHaveLength(2);
+    expect(rows[0].sqlTestCases[0].setupSql).toContain('90.0');
+    expect(rows[0].sqlTestCases[1].setupSql).toContain('40.0');
+  });
+
+  it('flags Sql Test Cases used on a non-SQL row', () => {
+    const csv =
+      `${CODE_HEADER_WITH_SQL}\n` +
+      'Bad row.,Easy,1,Python,,,No,,,,,"CREATE TABLE t(x INTEGER);"';
+
+    const rows = parseCodeQuestionImportCsv(csv);
+
+    expect(rows[0].error).toContain('sql test cases only apply to a SQL question');
+  });
 });
 
 describe('buildCodeCsvTemplate', () => {
