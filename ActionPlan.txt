@@ -8718,3 +8718,37 @@ transient/flaky environment hiccup, not a real regression), npm run
 build clean. Rebuilt and redeployed the frontend Docker image.
 
 Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Another dark-mode gap, this time in the multi-section exam's "Sections"
+tab bar (TakeExam.tsx sectionNavigator, ~line 1228) - a different
+component than the Question/Test Case panels fixed earlier. Each section
+card hardcoded background:'white' (and #eef2ff for the current one),
+border:'#e5e7eb', icon circle '#e0e7ff'/'#4338ca', and text color
+'#0f172a' - so on a dark-themed exam every non-current section card
+rendered as a stark white box, exactly the same class of bug as the
+Expected Output/Notes boxes from earlier, just in a part of the UI that
+hadn't been touched yet (multi-section exams are a different code path
+than the single-section "sql bigdata" exam used for prior verification).
+
+Fixed by swapping the hardcoded hex values for Bootstrap 5.3's
+theme-aware CSS custom properties instead of Bootstrap utility classes
+(inline styles can reference them directly): var(--bs-tertiary-bg) for
+the card/progress-track background, var(--bs-border-color) for the
+border, var(--bs-primary-bg-subtle)/var(--bs-primary-text-emphasis) for
+the current-section highlight and icon circle, var(--bs-body-bg) for the
+completed-checkmark's white ring, and text-body instead of a hardcoded
+dark navy for the section name. Left the brand-purple accents (#4f46e5
+border/progress-fill/countdown-text) and the Question Navigator's status
+dots/active-filter/active-tab colors alone - those are small, high-
+contrast fixed accents that already read fine in both themes per the
+screenshot, not the "big white box" failure mode this fix targets, and
+touching them would be unscoped beyond what was reported. The Review
+screen's own separate "Sections" summary list (~line 2265) was already
+plain Bootstrap classes with no hardcoded colors - nothing to fix there.
+
+Verification: tsc clean, npm test 84/84 green, npm run build clean.
+Rebuilt and redeployed the frontend Docker image.
+
+Not committed or pushed - holding per the user's standing rule.

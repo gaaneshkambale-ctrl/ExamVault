@@ -1263,22 +1263,34 @@ export default function TakeExam() {
                 <div
                   className="d-flex align-items-center gap-2 px-3 py-3 rounded-4"
                   style={{
-                    border: isCurrent ? '1.5px solid #4f46e5' : '1px solid #e5e7eb',
-                    background: isCurrent ? '#eef2ff' : 'white',
+                    border: isCurrent ? '1.5px solid #4f46e5' : '1px solid var(--bs-border-color)',
+                    background: isCurrent ? 'var(--bs-primary-bg-subtle)' : 'var(--bs-tertiary-bg)',
                     boxShadow: isCurrent ? '0 4px 10px rgba(79, 70, 229, 0.14)' : 'none',
                   }}
                 >
                   <div className="position-relative flex-shrink-0">
                     <div
                       className="rounded-circle d-flex align-items-center justify-content-center"
-                      style={{ width: 36, height: 36, background: '#e0e7ff', color: '#4338ca' }}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        background: 'var(--bs-primary-bg-subtle)',
+                        color: 'var(--bs-primary-text-emphasis)',
+                      }}
                     >
                       {isLocked ? '\u{1F512}' : <SectionIcon />}
                     </div>
                     {isCompleted && (
                       <span
                         className="position-absolute rounded-circle bg-success text-white d-flex align-items-center justify-content-center"
-                        style={{ width: 14, height: 14, fontSize: 9, bottom: -2, right: -2, border: '1.5px solid white' }}
+                        style={{
+                          width: 14,
+                          height: 14,
+                          fontSize: 9,
+                          bottom: -2,
+                          right: -2,
+                          border: '1.5px solid var(--bs-body-bg)',
+                        }}
                       >
                         &#10003;
                       </span>
@@ -1286,8 +1298,8 @@ export default function TakeExam() {
                   </div>
                   <div className="flex-grow-1 overflow-hidden">
                     <div
-                      className="fw-semibold text-truncate"
-                      style={{ fontSize: 13.5, color: '#0f172a' }}
+                      className="fw-semibold text-truncate text-body"
+                      style={{ fontSize: 13.5 }}
                       title={section.name}
                     >
                       {section.name}
@@ -1302,7 +1314,10 @@ export default function TakeExam() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-1 rounded-pill" style={{ height: 3, background: '#e5e7eb', overflow: 'hidden' }}>
+                <div
+                  className="mt-1 rounded-pill"
+                  style={{ height: 3, background: 'var(--bs-tertiary-bg)', overflow: 'hidden' }}
+                >
                   <div
                     className="h-100 rounded-pill"
                     style={{ width: `${progressPct}%`, background: isCurrent ? '#4f46e5' : progressColor }}
