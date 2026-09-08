@@ -194,6 +194,24 @@ function TestCaseStatusIcon({ passed }: { passed: boolean | null }) {
   );
 }
 
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ transform: expanded ? 'rotate(180deg)' : undefined, transition: 'transform 0.15s ease' }}
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
 function ClockIcon({ color }: { color: string }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -589,6 +607,10 @@ export default function TakeExam() {
   const [nowTick, setNowTick] = useState(Date.now());
   const [isEditorExpanded, setIsEditorExpanded] = useState(false);
   const [resultTab, setResultTab] = useState<'cases' | 'messages'>('cases');
+  // Collapsed by default so a student checks test cases one at a time
+  // instead of seeing every Input/Expected/Got at once - keyed by
+  // "questionId:index" so expand state doesn't bleed between questions.
+  const [expandedTestCases, setExpandedTestCases] = useState<Record<string, boolean>>({});
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [sectionRemainingSeconds, setSectionRemainingSeconds] = useState<number | null>(null);
   const [navFilter, setNavFilter] = useState<NavFilter>('all');
@@ -2052,38 +2074,49 @@ export default function TakeExam() {
                                         testCase.expectedOutput,
                                         currentQuestion.returnType!,
                                       );
+                                      const key = `${currentQuestion.id}:${index}`;
+                                      const isExpanded = Boolean(expandedTestCases[key]);
                                       return (
                                         <div
                                           key={index}
-                                          className={`rounded-3 border px-3 py-2 d-flex align-items-start gap-2${outcome ? (outcome.passed ? ' bg-success-subtle' : ' bg-danger-subtle') : ''}`}
+                                          className={`rounded-3 border overflow-hidden${outcome ? (outcome.passed ? ' bg-success-subtle' : ' bg-danger-subtle') : ''}`}
                                         >
-                                          <span className="mt-1 flex-shrink-0">
-                                            <TestCaseStatusIcon passed={outcome ? outcome.passed : null} />
-                                          </span>
-                                          <div className="flex-grow-1">
-                                            <div className="d-flex justify-content-between align-items-center">
-                                              <span className="small fw-medium">Test Case {index + 1}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setExpandedTestCases((prev) => ({ ...prev, [key]: !isExpanded }))
+                                            }
+                                            className="w-100 border-0 bg-transparent px-3 py-2 d-flex align-items-center gap-2 text-start"
+                                          >
+                                            <span className="flex-shrink-0">
+                                              <TestCaseStatusIcon passed={outcome ? outcome.passed : null} />
+                                            </span>
+                                            <span className="small fw-medium flex-grow-1">Test Case {index + 1}</span>
+                                            <Badge bg={outcome ? (outcome.passed ? 'success' : 'danger') : 'secondary'}>
+                                              {outcome ? (outcome.passed ? 'Passed' : 'Failed') : 'Not Run'}
+                                            </Badge>
+                                            <span className="flex-shrink-0 text-muted">
+                                              <ChevronIcon expanded={isExpanded} />
+                                            </span>
+                                          </button>
+                                          {isExpanded && (
+                                            <div className="px-3 pb-3">
+                                              <div className="text-muted small" style={{ fontFamily: 'monospace' }}>
+                                                Input: {argsText}
+                                              </div>
+                                              <div className="text-muted small" style={{ fontFamily: 'monospace' }}>
+                                                Expected: {expectedText}
+                                              </div>
                                               {outcome && (
-                                                <Badge bg={outcome.passed ? 'success' : 'danger'}>
-                                                  {outcome.passed ? 'Passed' : 'Failed'}
-                                                </Badge>
+                                                <div
+                                                  className={outcome.passed ? 'text-success' : 'text-danger'}
+                                                  style={{ fontFamily: 'monospace', fontSize: 13.5, marginTop: 2 }}
+                                                >
+                                                  Got: {outcome.error ?? outcome.actualOutput}
+                                                </div>
                                               )}
                                             </div>
-                                            <div className="text-muted small mt-1" style={{ fontFamily: 'monospace' }}>
-                                              Input: {argsText}
-                                            </div>
-                                            <div className="text-muted small" style={{ fontFamily: 'monospace' }}>
-                                              Expected: {expectedText}
-                                            </div>
-                                            {outcome && (
-                                              <div
-                                                className={outcome.passed ? 'text-success' : 'text-danger'}
-                                                style={{ fontFamily: 'monospace', fontSize: 13.5, marginTop: 2 }}
-                                              >
-                                                Got: {outcome.error ?? outcome.actualOutput}
-                                              </div>
-                                            )}
-                                          </div>
+                                          )}
                                         </div>
                                       );
                                     })}

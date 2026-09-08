@@ -8674,3 +8674,47 @@ build clean. Rebuilt and redeployed the frontend Docker image after each
 round.
 
 Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Separately, created a downloadable CSV (not a source change - a file for
+the user, in their Downloads folder) with one well-crafted question per
+supported language, matching two ExamVault mockup images they shared
+(C# "Reverse a String", Python "Find the Largest Number", both with
+proper constraints/notes/test cases): added Java ("isPrime"), C++
+("factorial"), JavaScript ("countVowels"), and a SQL question using two
+joined tables (departments + employees, total salary per department) to
+also exercise the multi-table Setup SQL rendering fixed earlier. Hand-
+validated all 6 rows against the app's own parseCsvText logic (correct
+15-column parse for every row) before handing it over. File:
+code-question-import-template-all-languages.csv (a second file, since
+their first one was open in Excel and locked).
+
+---
+
+New mockup screenshot: the student's Test Cases panel (regular, non-SQL
+code questions - Fibonacci Number example) should show each test case
+collapsed by default (icon + "Test Case N" + Passed/Failed/Not Run badge
++ chevron), expanding on click to reveal Input/Expected/Got - "check one
+by one" rather than every test case's full detail shown at once.
+
+Implemented in TakeExam.tsx: added expandedTestCases state (keyed by
+"questionId:index" so expand state doesn't leak between questions,
+defaults to all collapsed), turned each non-SQL test case's header into
+a clickable button with a new ChevronIcon (rotates 180deg when expanded),
+and moved Input/Expected/Got into a conditionally-rendered body below it.
+Added a gray "Not Run" badge for a test case with no outcome yet (the
+mockup shows one) - previously that state showed no badge at all.
+Deliberately left out the mockup's "Execution Time: 12 ms" - the backend
+response (TestCaseOutcomeResponse) has no timing field, so it would have
+to be fabricated; flagged to the user instead of inventing data. This is
+the non-SQL panel only - the SQL "Query Result" tab (redesigned earlier
+this session per the user's own request to drop test-case cards
+entirely) is unaffected by this change.
+
+Verification: tsc clean, npm test 84/84 green (one earlier run reported
+only 2/9 files with 7 errors - re-ran clean at 9/9 84/84, treated as a
+transient/flaky environment hiccup, not a real regression), npm run
+build clean. Rebuilt and redeployed the frontend Docker image.
+
+Not committed or pushed - holding per the user's standing rule.
