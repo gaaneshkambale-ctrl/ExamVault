@@ -41,6 +41,7 @@ import SecurityViolations from '../pages/admin/liveMonitoring/SecurityViolations
 import Proctoring from '../pages/admin/liveMonitoring/Proctoring';
 import ExamResults from '../pages/admin/ExamResults';
 import StudentResults from '../pages/admin/StudentResults';
+import StudentResultDetails from '../pages/admin/StudentResultDetails';
 import ResultAnalytics from '../pages/admin/ResultAnalytics';
 import PublishResults from '../pages/admin/PublishResults';
 import AdminReports from '../pages/admin/AdminReports';
@@ -405,6 +406,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <StudentResults />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/results/students/:examId/:attemptId"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <StudentResultDetails />
           </ProtectedRoute>
         }
       />
