@@ -4,6 +4,7 @@ import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useMyResult } from '../../hooks/useResults';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth } from '../../hooks/useAuth';
 import { getGrade } from '../../types/result';
 import type { CreationMethod } from '../../types/exam';
 import { generateResultPdf } from '../../utils/generateResultPdf';
@@ -39,6 +40,7 @@ export default function ResultDetails() {
   const { hasPermission } = usePermissions();
   const { data: result, isLoading, isError } = useMyResult(examId);
   const { data: exam } = useExam(examId);
+  const { user } = useAuth();
 
   const percentage =
     result && result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
@@ -174,7 +176,18 @@ export default function ResultDetails() {
           )}
 
           <div className="d-flex justify-content-end mt-3">
-            <Button variant="primary" onClick={() => generateResultPdf(result)}>
+            <Button
+              variant="primary"
+              onClick={() =>
+                generateResultPdf(result, {
+                  studentName: user?.fullName,
+                  studentEmail: user?.email,
+                  examCode: exam?.examCode ?? null,
+                  examType: exam?.examTypeName ?? exam?.category ?? null,
+                  durationMinutes: exam?.durationMinutes,
+                })
+              }
+            >
               Download Result
             </Button>
           </div>
