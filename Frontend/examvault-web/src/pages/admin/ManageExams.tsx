@@ -475,7 +475,7 @@ export default function ManageExams() {
                 <thead className="text-muted small text-uppercase bg-body-tertiary">
                   <tr>
                     <th className="ps-4" style={{ width: 40 }}></th>
-                    <th>Title</th>
+                    <th>Exam Title</th>
                     <th>Category</th>
                     <th>Exam Type</th>
                     <th>Creation Method</th>
