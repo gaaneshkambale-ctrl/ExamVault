@@ -1,26 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Badge, Card, Col, Form, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../../layouts/AdminLayout';
 import UserAvatar from '../../../components/UserAvatar';
-import { useExams } from '../../../hooks/useExams';
 import { useUsers } from '../../../hooks/useUsers';
-import { useAssignments } from '../../../hooks/useAssignments';
-import { useAttemptsByExam } from '../../../hooks/useSubmissions';
+import { useActiveExamCards, type ActiveExamStatus } from '../../../hooks/useActiveExamCards';
 import { attemptViolationCount } from '../../../utils/proctoring';
 import { EXAM_CATEGORIES } from '../../../types/exam';
-import type { ExamResponse } from '../../../types/exam';
-import type { ExamAttemptResponse } from '../../../types/submission';
 
-// "Live monitoring" - refetch periodically so admins see progress without
-// manually reloading, same TanStack Query mechanism every other query on
-// this page already uses, just with an interval attached.
-const POLL_INTERVAL_MS = 15000;
-const ENDING_SOON_WINDOW_MS = 30 * 60 * 1000;
-
-type CardStatus = 'InProgress' | 'EndingSoon' | 'NeedsReview';
-
-const statusMeta: Record<CardStatus, { label: string; badgeBg: string; borderColor: string }> = {
+const statusMeta: Record<ActiveExamStatus, { label: string; badgeBg: string; borderColor: string }> = {
   InProgress: { label: 'IN PROGRESS', badgeBg: 'success', borderColor: '#198754' },
   EndingSoon: { label: 'ENDING SOON', badgeBg: 'danger', borderColor: '#dc3545' },
   NeedsReview: { label: 'NEEDS REVIEW', badgeBg: 'warning', borderColor: '#ffc107' },
@@ -33,92 +21,17 @@ function formatTime(value: string | null): string {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-interface ActiveExamCard {
-  exam: ExamResponse;
-  status: CardStatus;
-  inProgress: ExamAttemptResponse[];
-  completedCount: number;
-  totalAssigned: number;
-  startAtUtc: string | null;
-  endAtUtc: string | null;
-}
-
 export default function ActiveExams() {
-  const { data: exams, isLoading: isLoadingExams, isError: isExamsError } = useExams();
+  const { cards: allCards, isLoading: loading, isError: isExamsError } = useActiveExamCards();
   const { data: users } = useUsers();
-  const { data: assignments } = useAssignments();
   const [examNameFilter, setExamNameFilter] = useState<'All' | string>('All');
   const [categoryFilter, setCategoryFilter] = useState<'All' | string>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const publishedExamIds = useMemo(
-    () => (exams ?? []).filter((exam) => exam.status === 'Published').map((exam) => exam.id),
-    [exams],
-  );
-  const { attemptsByExam, isLoading: isLoadingAttempts } = useAttemptsByExam(publishedExamIds, POLL_INTERVAL_MS);
-
-  const userById = useMemo(() => {
-    const map = new Map<string, { fullName: string; hasPhoto: boolean }>();
-    for (const user of users ?? []) {
-      map.set(user.id, { fullName: user.fullName, hasPhoto: user.hasPhoto });
-    }
-    return map;
-  }, [users]);
-
-  // Assignments are the source of truth for "how many students are expected
-  // to take this exam" - an exam can have more than one assignment (separate
-  // batches/windows), so this sums targetCount across all of them.
-  const assignedCountByExam = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const assignment of assignments ?? []) {
-      map.set(assignment.examId, (map.get(assignment.examId) ?? 0) + assignment.targetCount);
-    }
-    return map;
-  }, [assignments]);
-
-  // Time Started/Expected End: an exam's own startAtUtc/endAtUtc are often
-  // never set (StartAttemptHandler only falls back to them when a student
-  // has no assignment at all) - the real window students are testing under
-  // lives on their assignment(s). When an exam has more than one assignment
-  // (separate batches with different windows), use the one with the
-  // soonest deadline - the next thing an admin needs to know about, not the
-  // furthest-out one (which would hide an imminent "Ending Soon" behind a
-  // cohort that still has days left).
-  const windowByExam = useMemo(() => {
-    const map = new Map<string, { start: string; end: string }>();
-    for (const assignment of assignments ?? []) {
-      const existing = map.get(assignment.examId);
-      if (!existing || new Date(assignment.endAtUtc) < new Date(existing.end)) {
-        map.set(assignment.examId, { start: assignment.startAtUtc, end: assignment.endAtUtc });
-      }
-    }
-    return map;
-  }, [assignments]);
-
-  const now = Date.now();
-  const allCards: ActiveExamCard[] = (exams ?? [])
-    .filter((exam) => exam.status === 'Published')
-    .map((exam) => {
-      const attempts = attemptsByExam[exam.id] ?? [];
-      const inProgress = attempts.filter((a) => a.status === 'InProgress');
-      const completedCount = attempts.filter(
-        (a) => a.status === 'Submitted' || a.status === 'AutoSubmitted',
-      ).length;
-      const totalAssigned = assignedCountByExam.get(exam.id) ?? attempts.length;
-      const window = windowByExam.get(exam.id);
-      const startAtUtc = window?.start ?? exam.startAtUtc;
-      const endAtUtc = window?.end ?? exam.endAtUtc;
-
-      const endAtMs = endAtUtc ? new Date(endAtUtc).getTime() : null;
-      const isEndingSoon = endAtMs !== null && endAtMs - now > 0 && endAtMs - now <= ENDING_SOON_WINDOW_MS;
-      const needsReview = inProgress.some((a) => attemptViolationCount(a) > 0);
-      const status: CardStatus = isEndingSoon ? 'EndingSoon' : needsReview ? 'NeedsReview' : 'InProgress';
-
-      return { exam, status, inProgress, completedCount, totalAssigned, startAtUtc, endAtUtc };
-    })
-    // "Active" = actually has a live attempt right now, matching the page's
-    // own subtitle ("exams currently in progress"), not just Published status.
-    .filter((card) => card.inProgress.length > 0);
+  const userById = new Map<string, { fullName: string; hasPhoto: boolean }>();
+  for (const user of users ?? []) {
+    userById.set(user.id, { fullName: user.fullName, hasPhoto: user.hasPhoto });
+  }
 
   // Dropdown options are derived from the currently-active exams only,
   // matching this page's live-monitoring scope - no point offering a name
@@ -145,8 +58,6 @@ export default function ActiveExams() {
       0,
     ),
   };
-
-  const loading = isLoadingExams || isLoadingAttempts;
 
   return (
     <AdminLayout active="Active Exams">
