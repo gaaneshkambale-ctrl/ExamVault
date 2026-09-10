@@ -188,7 +188,7 @@ export default function EditExam() {
   const { hasPermission } = usePermissions();
   const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
   const { data: exam, isLoading, isError } = useExam(id);
-  const { data: examTypes } = useExamTypes();
+  const { data: allExamTypes } = useExamTypes();
 
   const [form, setForm] = useState<UpdateExamRequest | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof UpdateExamRequest, string>>>(
@@ -393,7 +393,9 @@ export default function EditExam() {
                         onChange={(e) => updateField('examTypeId', e.target.value || null)}
                       >
                         <option value="">Not set</option>
-                        {examTypes?.map((type) => (
+                        {allExamTypes
+                          ?.filter((type) => type.isActive || type.id === form.examTypeId)
+                          .map((type) => (
                           <option key={type.id} value={type.id}>
                             {type.name}
                           </option>

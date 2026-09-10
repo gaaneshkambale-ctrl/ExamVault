@@ -107,7 +107,11 @@ export default function CreateExam() {
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const canCreateExams = user?.role !== 'Instructor' || hasPermission('Exams - Create');
-  const { data: examTypes } = useExamTypes();
+  const { data: allExamTypes } = useExamTypes();
+  // New exams only offer active types - an Inactive one stays fully usable
+  // on exams that already reference it (see EditExam's own filter), it just
+  // stops being offered for new ones.
+  const examTypes = allExamTypes?.filter((type) => type.isActive);
   const { data: examDefaults } = useExamDefaults();
   const [form, setForm] = useState<CreateExamRequest>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateExamRequest, string>>>(

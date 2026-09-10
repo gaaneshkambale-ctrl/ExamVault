@@ -69,6 +69,11 @@ export async function deleteExamType(id: string): Promise<void> {
   await apiClient.delete(`/api/exam-types/${id}`);
 }
 
+export async function setExamTypeStatus(id: string, isActive: boolean): Promise<ExamTypeOption> {
+  const { data } = await apiClient.patch<ExamTypeOption>(`/api/exam-types/${id}/status`, { isActive });
+  return data;
+}
+
 export async function getReminderSettings(): Promise<ReminderSettingsResponse> {
   const { data } = await apiClient.get<ReminderSettingsResponse>('/api/exams/reminder-settings');
   return data;

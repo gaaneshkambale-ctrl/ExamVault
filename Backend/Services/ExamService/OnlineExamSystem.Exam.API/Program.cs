@@ -26,6 +26,7 @@ using OnlineExamSystem.Exam.Application.Exams.Update;
 using OnlineExamSystem.Exam.Application.ExamTypes.Create;
 using OnlineExamSystem.Exam.Application.ExamTypes.Delete;
 using OnlineExamSystem.Exam.Application.ExamTypes.List;
+using OnlineExamSystem.Exam.Application.ExamTypes.SetStatus;
 using OnlineExamSystem.Exam.Application.ExamTypes.Update;
 using OnlineExamSystem.Exam.API.Jobs;
 using OnlineExamSystem.Exam.Application.Interfaces;
@@ -138,6 +139,7 @@ public class Program
         builder.Services.AddScoped<DeleteExamTypeHandler>();
         builder.Services.AddScoped<IValidator<UpdateExamTypeCommand>, UpdateExamTypeValidator>();
         builder.Services.AddScoped<UpdateExamTypeHandler>();
+        builder.Services.AddScoped<SetExamTypeStatusHandler>();
 
         builder.Services.AddScoped<IValidator<CreateSectionCommand>, CreateSectionValidator>();
         builder.Services.AddScoped<CreateSectionHandler>();

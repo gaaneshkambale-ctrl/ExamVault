@@ -7,7 +7,7 @@ import DeleteExamTypeButton from '../../components/DeleteExamTypeButton';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import { EditIcon } from '../../components/icons/ActionIcons';
 import { useExamTypes } from '../../hooks/useExams';
-import { createExamType, updateExamType } from '../../api/examApi';
+import { createExamType, setExamTypeStatus, updateExamType } from '../../api/examApi';
 import { ClipboardIcon, TagIcon, iconForExamType } from '../../utils/examTypeIcons';
 import { getPaginationRange } from '../../utils/paginationRange';
 import type { ExamTypeOption } from '../../types/exam';
@@ -101,6 +101,11 @@ export default function ManageExamTypes() {
   });
 
   const activeMutation = editingId ? updateMutation : createMutation;
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setExamTypeStatus(id, isActive),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['exam-types'] }),
+  });
 
   const openCreate = () => {
     createMutation.reset();
@@ -411,8 +416,12 @@ export default function ManageExamTypes() {
             <Table responsive hover className="mb-0 align-middle">
               <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
-                  <th className="ps-4">Name</th>
-                  <th>Purpose</th>
+                  <th className="ps-4">Exam Type Name</th>
+                  <th>Code</th>
+                  <th>Description</th>
+                  <th>Default Duration</th>
+                  <th>Passing Threshold</th>
+                  <th>Status</th>
                   <th
                     role="button"
                     onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
@@ -437,7 +446,26 @@ export default function ManageExamTypes() {
                         <span className="fw-medium">{examType.name}</span>
                       </div>
                     </td>
+                    <td className="text-muted font-monospace small">{examType.code}</td>
                     <td className="text-muted">{examType.purpose || '-'}</td>
+                    <td className="text-muted">
+                      {examType.defaultDurationMinutes ? `${examType.defaultDurationMinutes} mins` : '-'}
+                    </td>
+                    <td className="text-muted">
+                      {examType.passingScorePercent != null ? `${examType.passingScorePercent}%` : '-'}
+                    </td>
+                    <td>
+                      <Button
+                        variant={examType.isActive ? 'outline-success' : 'outline-secondary'}
+                        size="sm"
+                        className="rounded-pill"
+                        disabled={statusMutation.isPending}
+                        onClick={() => statusMutation.mutate({ id: examType.id, isActive: !examType.isActive })}
+                        title={examType.isActive ? 'Click to deactivate' : 'Click to activate'}
+                      >
+                        {examType.isActive ? 'Active' : 'Inactive'}
+                      </Button>
+                    </td>
                     <td>{new Date(examType.createdAtUtc).toLocaleDateString()}</td>
                     <td className="pe-4">
                       <div className="d-flex gap-2">

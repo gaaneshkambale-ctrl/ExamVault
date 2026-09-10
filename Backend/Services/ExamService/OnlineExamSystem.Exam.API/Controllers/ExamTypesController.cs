@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Exam.Application.ExamTypes.Create;
 using OnlineExamSystem.Exam.Application.ExamTypes.Delete;
 using OnlineExamSystem.Exam.Application.ExamTypes.List;
+using OnlineExamSystem.Exam.Application.ExamTypes.SetStatus;
 using OnlineExamSystem.Exam.Application.ExamTypes.Update;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
@@ -19,6 +20,7 @@ public class ExamTypesController : ControllerBase
     private readonly ListExamTypesHandler _listExamTypesHandler;
     private readonly DeleteExamTypeHandler _deleteExamTypeHandler;
     private readonly UpdateExamTypeHandler _updateExamTypeHandler;
+    private readonly SetExamTypeStatusHandler _setExamTypeStatusHandler;
     private readonly ILogger<ExamTypesController> _logger;
 
     public ExamTypesController(
@@ -26,12 +28,14 @@ public class ExamTypesController : ControllerBase
         ListExamTypesHandler listExamTypesHandler,
         DeleteExamTypeHandler deleteExamTypeHandler,
         UpdateExamTypeHandler updateExamTypeHandler,
+        SetExamTypeStatusHandler setExamTypeStatusHandler,
         ILogger<ExamTypesController> logger)
     {
         _createExamTypeHandler = createExamTypeHandler;
         _listExamTypesHandler = listExamTypesHandler;
         _deleteExamTypeHandler = deleteExamTypeHandler;
         _updateExamTypeHandler = updateExamTypeHandler;
+        _setExamTypeStatusHandler = setExamTypeStatusHandler;
         _logger = logger;
     }
 
@@ -106,6 +110,23 @@ public class ExamTypesController : ControllerBase
         return Ok(ToResponse(result.ExamType!));
     }
 
+    [HttpPatch("{id:guid}/status")]
+    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = ExamTypes)]
+    public async Task<IActionResult> SetStatus(Guid id, SetExamTypeStatusRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _setExamTypeStatusHandler.HandleAsync(
+            new SetExamTypeStatusCommand(id, request.IsActive), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Exam type not found." });
+        }
+
+        _logger.LogInformation("Exam type {ExamTypeId} status set to {IsActive}.", id, request.IsActive);
+        return Ok(ToResponse(result.ExamType!));
+    }
+
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
     [Authorize(Policy = ExamTypes)]
@@ -126,6 +147,8 @@ public class ExamTypesController : ControllerBase
         new(
             examType.Id,
             examType.Name,
+            examType.Code,
+            examType.IsActive,
             examType.Purpose,
             examType.CreatedAtUtc,
             examType.DefaultDurationMinutes,

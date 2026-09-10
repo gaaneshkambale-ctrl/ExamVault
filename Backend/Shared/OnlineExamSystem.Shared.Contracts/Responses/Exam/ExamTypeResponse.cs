@@ -3,6 +3,8 @@ namespace OnlineExamSystem.Shared.Contracts.Responses.Exam;
 public record ExamTypeResponse(
     Guid Id,
     string Name,
+    string Code,
+    bool IsActive,
     string? Purpose,
     DateTime CreatedAtUtc,
     int? DefaultDurationMinutes = null,

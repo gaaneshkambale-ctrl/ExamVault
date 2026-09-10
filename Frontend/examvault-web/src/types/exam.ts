@@ -67,6 +67,8 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
 export interface ExamTypeOption {
   id: string;
   name: string;
+  code: string;
+  isActive: boolean;
   purpose: string | null;
   createdAtUtc: string;
   defaultDurationMinutes?: number | null;
