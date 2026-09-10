@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import UserAvatar from '../../components/UserAvatar';
 import DeleteUserButton from '../../components/DeleteUserButton';
-import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
+import { DownloadIcon, EditIcon, PlusIcon, ShieldIcon, UsersIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useUsers } from '../../hooks/useUsers';
 import { activateUser, deactivateUser, deleteUser } from '../../api/userApi';
 import { extractServerError } from '../../utils/apiError';
@@ -297,18 +297,33 @@ export default function ManageUsers() {
   });
 
   return (
-    <AdminLayout active="All Users">
+    <AdminLayout active="Users">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="h4 fw-bold mb-0 text-primary">All Users</h1>
           <p className="text-muted mb-0">Manage all users, view details and control access.</p>
         </div>
         <div className="d-flex gap-2">
-          <Button variant="outline-primary" disabled={!users || users.length === 0} onClick={() => exportUsersToCsv(filteredUsers)}>
+          <Link to="/admin/users/roles" className="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
+            <ShieldIcon />
+            Roles &amp; Permissions
+          </Link>
+          <Link to="/admin/users/groups" className="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
+            <UsersIcon />
+            User Groups
+          </Link>
+          <Button
+            variant="outline-primary"
+            className="d-inline-flex align-items-center gap-2"
+            disabled={!users || users.length === 0}
+            onClick={() => exportUsersToCsv(filteredUsers)}
+          >
+            <DownloadIcon />
             Export
           </Button>
-          <Link to="/admin/users/create" className="btn btn-primary">
-            + Add User
+          <Link to="/admin/users/create" className="btn btn-primary d-inline-flex align-items-center gap-2">
+            <PlusIcon />
+            Add User
           </Link>
         </div>
       </div>

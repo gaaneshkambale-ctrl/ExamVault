@@ -243,7 +243,7 @@ export default function RolesPermissions() {
   };
 
   return (
-    <AdminLayout active="Roles & Permissions">
+    <AdminLayout active="Users">
       <div className="d-flex justify-content-between align-items-center mb-1">
         <div>
           <p className="text-muted small mb-1">Users / Roles &amp; Permissions</p>

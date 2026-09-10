@@ -263,7 +263,7 @@ export default function CreateUser() {
   };
 
   return (
-    <AdminLayout active="Add User">
+    <AdminLayout active="Users">
       <div className="d-flex justify-content-between align-items-center mb-1">
         <div className="d-flex align-items-center gap-3">
           <IconBadge icon={<PersonPlusIcon />} bg="#eef2ff" color="#4f46e5" />

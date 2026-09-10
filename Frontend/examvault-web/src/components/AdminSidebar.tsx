@@ -63,16 +63,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/admin/dashboard' },
-  {
-    label: 'Users',
-    path: '/admin/users',
-    children: [
-      { label: 'All Users', path: '/admin/users' },
-      { label: 'Add User', path: '/admin/users/create' },
-      { label: 'Roles & Permissions', path: '/admin/users/roles' },
-      { label: 'User Groups', path: '/admin/users/groups' },
-    ],
-  },
+  { label: 'Users', path: '/admin/users' },
   {
     label: 'Exams',
     path: '/admin/exams',
@@ -158,6 +149,120 @@ const iconPaths: Partial<Record<AdminNavItem, ReactNode>> = {
       <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
     </>
   ),
+  'Exam Scheduled': (
+    <>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </>
+  ),
+  'Active Exams': (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="10 8 16 12 10 16 10 8" />
+    </>
+  ),
+  'Student Attempts': (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="8.5" cy="7" r="4" />
+      <polyline points="17 11 19 13 23 9" />
+    </>
+  ),
+  'Security Violations': (
+    <>
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </>
+  ),
+  Proctoring: (
+    <>
+      <path d="M23 7l-7 5 7 5V7z" />
+      <rect x="1" y="5" width="15" height="14" rx="2" />
+    </>
+  ),
+  'Exam Results': (
+    <>
+      <circle cx="12" cy="8" r="7" />
+      <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+    </>
+  ),
+  'Student Results': (
+    <>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </>
+  ),
+  'Result Analytics': (
+    <>
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+      <path d="M22 12A10 10 0 0 0 12 2v10z" />
+    </>
+  ),
+  'Publish Results': (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </>
+  ),
+  'Exam Type Wise Report': (
+    <>
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </>
+  ),
+  'Exam Reports': (
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </>
+  ),
+  'Student Reports': (
+    <>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </>
+  ),
+  'Performance Reports': (
+    <>
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
+    </>
+  ),
+  'Audit Reports': (
+    <>
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" ry="1" />
+    </>
+  ),
+  'Create Notification': (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="16" />
+      <line x1="8" y1="12" x2="16" y2="12" />
+    </>
+  ),
+  History: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </>
+  ),
+  'Notification Templates': (
+    <>
+      <path d="M4 3h16a1 1 0 0 1 1 1v3H3V4a1 1 0 0 1 1-1z" />
+      <rect x="3" y="7" width="18" height="14" rx="1" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+    </>
+  ),
   'Live Monitoring': (
     <>
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -191,13 +296,13 @@ const iconPaths: Partial<Record<AdminNavItem, ReactNode>> = {
   ),
 };
 
-function NavIcon({ label }: { label: AdminNavItem }) {
+function NavIcon({ label, size = 16 }: { label: AdminNavItem; size?: number }) {
   const path = iconPaths[label];
   if (!path) return null;
   return (
     <svg
-      width="16"
-      height="16"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -331,7 +436,7 @@ export default function AdminSidebar({ active, show = false, onClose = () => {} 
                       key={child.label}
                       to={child.path}
                       onClick={onClose}
-                      className="py-1 rounded-2 text-decoration-none small d-block"
+                      className="py-1 rounded-2 text-decoration-none small d-flex align-items-center gap-2"
                       style={{
                         paddingLeft: '2.25rem',
                         paddingRight: '0.75rem',
@@ -340,6 +445,7 @@ export default function AdminSidebar({ active, show = false, onClose = () => {} 
                           : { color: '#94a3b8' }),
                       }}
                     >
+                      <NavIcon label={child.label} size={14} />
                       {child.label}
                     </Link>
                   ))}

@@ -82,7 +82,7 @@ export default function ManageGroups() {
   const emptyGroups = groups?.filter((g) => g.memberCount === 0).length ?? 0;
 
   return (
-    <AdminLayout active="User Groups">
+    <AdminLayout active="Users">
       <div className="d-flex justify-content-between align-items-center mb-1">
         <div className="d-flex align-items-center gap-3">
           <div
