@@ -8752,3 +8752,442 @@ Verification: tsc clean, npm test 84/84 green, npm run build clean.
 Rebuilt and redeployed the frontend Docker image.
 
 Not committed or pushed - holding per the user's standing rule.
+
+---
+
+New mockup: a polished 2-page branded "Student Result Report" PDF
+(ExamVaults header, Student Information / Examination Details / Result
+Status cards, 4 performance ring gauges, a Performance Analysis bar
+chart, Section-wise Performance table, Remarks/Next Steps boxes, page 2
+Question-wise Results table, General Feedback, QR "Verify Result",
+signature block, footer with institution name/address). Rewriting
+generateResultPdf.ts (utils/generateResultPdf.ts) to match this, called
+from StudentResults.tsx and StudentResultDetails.tsx Download buttons.
+
+Feasibility check against real data (no fabrication, per standing
+practice this session):
+- Student Name/Email/Roll No.: real (User fields). Registration No.,
+  Batch, Academic Year: DROPPED - not in the data model (Batch was
+  already dropped from StudentResultDetails.tsx earlier this session for
+  the same reason - bulk GroupResponse has no membership list).
+- Institution name/address (footer): DROPPED - Tenant.name/address
+  fields exist in the data model, but GET /api/tenants is
+  [Authorize(Roles = "SuperAdmin")] only (TenantsController.cs) - a
+  tenant Admin generating this report has no accessible endpoint to
+  read their own tenant's name/address. Using static "ExamVaults" app
+  branding in the header/footer instead (no data lookup needed, not
+  fabricated).
+- QR "Verify Result": DROPPED - no result-verification endpoint/URL
+  exists on the backend; a QR code here would either be fake or link to
+  a page that doesn't exist.
+- Exam Controller signature ("Amit Kumar"): DROPPED - no such role/person
+  field exists; would be a fabricated named individual. Replaced with a
+  neutral "computer-generated report, no signature required" line.
+- Everything else (Exam Title/Code/Type/Date/Start/End/Duration/Total
+  Marks/Passing Marks, Score/Percentage/Grade/Integrity Score, per-
+  question Your Answer/Correct Answer/Status/Marks, Correct/Incorrect/
+  Skipped counts, Remarks/Next Steps as templated pass/fail copy) is
+  real data already available at both call sites, or derivable from
+  result.questions the same way StudentResultDetails.tsx's sectionStats
+  already does it.
+
+Section-wise Performance table + Performance Analysis chart need each
+question's section, which only StudentResultDetails.tsx has loaded
+(useSections+useQuestions); StudentResults.tsx is a multi-exam list page
+and doesn't load per-exam sections for every row. Making section data an
+*optional* parameter: passed from StudentResultDetails.tsx (full
+section breakdown), omitted from StudentResults.tsx (falls back to a
+single "Overall" bar/row - never a fake per-section split).
+
+No new dependency - hand-rolling the ring gauges/bar chart/tables with
+jsPDF primitives (rect/line/circle), matching how the rest of this file
+and the app's other hand-rolled report components already work.
+Implemented generateResultPdf.ts as a 2-page jsPDF report: page 1 =
+branded header, Student Information/Examination Details/Result Status
+cards, 4 hand-drawn ring gauges (Score/Accuracy/Incorrect/Skipped,
+traced via small line segments since jsPDF has no percentage-arc
+primitive), a grouped bar chart (Correct/Incorrect/Skipped) and a
+Section-wise Performance table; page 2 = Question-wise Results table
+(Your Answer/Correct Answer/Status/Marks, handling both MCQ options and
+free-text answers), General Feedback, and a "computer-generated, no
+signature required" line instead of a fabricated signer. Footer is
+static "ExamVaults" branding + real generated-at timestamp + page
+number (no institution name/address - not accessible to the Admin
+role). New optional ResultPdfContext parameter (studentName/email/roll
+number, examCode/examType/duration, attemptStartedAtUtc,
+integrityScorePercent, sectionStats) lets each caller pass what it has
+without fabricating the rest - Integrity Score renders "-" rather than
+a fake 100% when omitted.
+
+Wired all three existing callers: StudentResultDetails.tsx (has
+everything, including the real per-section breakdown via its existing
+sectionStats), StudentResults.tsx (list page - added an examMetaById
+map alongside the existing examCodeById one, no sectionStats since this
+page doesn't load per-exam sections/questions for every row - falls
+back to a single "Overall" bar/row, never a fake split), and the
+student-facing pages/student/ResultDetails.tsx "Download Result" button
+(added useAuth for the student's own name/email; no integrity score or
+attempt-start time here since ResultSummaryResponse/this page don't
+carry that data - both degrade gracefully rather than fabricate).
+
+Verification: npm run build (tsc -b && vite build) clean across all 4
+touched files, npm run lint clean (only pre-existing unrelated
+warnings). Rebuilt and redeployed the frontend Docker image, confirmed
+HTTP 200 and grepped the served bundle for new-code markers
+("Overall Performance", "Section-wise Performance", "computer-generated
+report") to confirm the deploy actually picked up the change. Did not
+attempt a live click-through download via browser automation this
+session (recurring 0x0 viewport failures on this machine noted
+throughout this session) - visual verification of the generated PDF
+layout is still pending from the user.
+
+Not committed or pushed - holding per the user's standing rule.
+---
+
+Correction from a screenshot the user shared (incorrect.png) of the
+actual generated PDF: the header used a hand-drawn triangle "mark" with
+invented brand text ("ExamVaults" / "Assess . Learn . Grow") that
+doesn't match the real product - the actual logo (public/examvault-
+logo.png, already used everywhere else via components/BrandMark.tsx)
+says "ExamVault" (no trailing s) with the real tagline "Create . Conduct
+. Conquer".
+
+Fixed generateResultPdf.ts to fetch that same PNG at generation time,
+convert it to a data URL, and embed it via jsPDF's addImage in both the
+header and footer (falls back to plain "ExamVault" text if the fetch
+ever fails, never to the old fake mark). Also dropped the mockup's
+fabricated "Empowering Learning. Building Brighter Futures." subtitle
+line, since the real logo image already carries the product's actual
+tagline as pixels. Since embedding the logo needs an async fetch,
+generateResultPdf is now async - all three call sites already just
+fire it from onClick without awaiting the result, so no caller changes
+were needed there.
+
+While reviewing the screenshot also noticed the Accuracy ring showed
+"0 of 0 correct" when every question was skipped (0 attempted) - fixed
+to show "No answers submitted" instead of the confusing 0/0.
+
+Verification: npm run build clean, npm run lint clean (same pre-
+existing unrelated warnings only). Rebuilt and redeployed the frontend
+Docker image; curled the served bundle to confirm "ExamVaults" is gone,
+examvault-logo.png is referenced, and the new accuracy caption text is
+present. Did not visually re-render the PDF via browser automation this
+session (same known 0x0 viewport issue) - still pending the user's own
+visual check.
+
+Not committed or pushed - holding per the user's standing rule.
+---
+
+"pdf field not aggenge proper" / "arrengement not proper" - the user
+sent two more screenshots of actual downloaded PDFs and asked to find
+and fix the layout problems. Did the math on every panel's fixed height
+vs. its actual content height instead of guessing from the screenshots,
+and found two real overflow bugs plus one data-correctness bug that
+directly explains the self-contradictory numbers visible in their
+screenshot (PASSED/100% score sitting right next to a "100% Incorrect"
+ring):
+
+1. Examination Details card (cardH=42) has 7 field rows - the last one
+   ("Total / Passing") baselines at y+43, 1mm past the card's own
+   bottom border. Bumped cardH to 48.
+2. Each ring gauge's 2-line caption reaches r+10 below center
+   (drawRingGauge) but ringPanelH was only 32 - the second caption line
+   drew 2mm below the box. Bumped to 38 and nudged ring center down for
+   better balance.
+3. Section-wise Performance table height was capped to whatever space
+   remained on page 1 (Math.min(sectionTableH, remaining-space)) but the
+   row-drawing loop ignored that cap and drew every row regardless -
+   fine for the 1-row "Overall" fallback in the screenshots, but any
+   exam with more sections/rows than fit would have spilled rows past
+   the box and potentially past the footer. Replaced the clamp with a
+   real page-break: if the table doesn't fit, finish page 1 and draw it
+   at the top of a fresh page instead.
+4. The real bug behind the screenshot's contradiction: AttemptScorer.cs
+   hardcodes IsCorrect=false for every CodeProgram (code/SQL) question -
+   "no auto-scoring engine exists, an admin assigns MarksAwarded by
+   hand" - so a fully-credited code answer still reads as "incorrect"
+   everywhere that trusts the isCorrect flag at face value. Added
+   isQuestionCorrect() (exported from generateResultPdf.ts) that treats
+   a CodeProgram question as correct when marksAwarded >= marks instead,
+   and leaves isCorrect authoritative for MCQ/MultiSelect (where the
+   backend computes it properly). Used it for the PDF's rings/chart/
+   Section-wise table/Page-2 Status column, AND fixed the same
+   `q.isCorrect` bug at its other two call sites in
+   StudentResultDetails.tsx (sectionStats computation + the Question-
+   wise and Section-wise tab Badges) since that page's data directly
+   feeds the PDF's sectionStats - leaving it unfixed there would have
+   reintroduced the same contradiction for any exam with real sections.
+   Did NOT touch pages/student/ResultDetails.tsx or
+   AnswerReviewPanel.tsx - those already have a deliberate, different
+   special-case for code questions (correct/incorrect coloring is
+   suppressed entirely in the per-question review, not misclassified)
+   that predates this session and wasn't part of what the user reported.
+5. Found and fixed a second, unrelated bug while verifying page-break
+   behavior: three places mid-function called drawFooter() with
+   doc.getNumberOfPages() as a placeholder before the true total was
+   known (e.g. "Page 1 of 1" drawn on page 1 before page 2 existed).
+   The final pass at the end already redraws every page's footer with
+   the correct numbers once the true count is known, so those early
+   draws were always getting overdrawn - but PDF text objects don't
+   erase each other, so the placeholder and the correction both persist
+   in the file (confirmed in the raw extracted text layer of a real
+   downloaded PDF: "Page 1 of 1 Page 1 of 2" both present). Removed all
+   three mid-function drawFooter() calls; the footer is now written
+   exactly once per page, in the final pass only.
+6. Also noticed (while reading a real 126-question multi-page PDF used
+   to verify #3) that every skipped/unanswered question showed Status
+   "Incorrect" on the Question-wise Results table, directly contradicting
+   the Skipped counts shown in the rings/table above it. Added a
+   "Skipped" status (checked before Pending/Correct/Incorrect) to the
+   PDF's page-2 table and to the same two Badge spots in
+   StudentResultDetails.tsx.
+
+Verification this time was via real generated PDFs, not just build/
+lint: used Claude-in-Chrome to click "Download Result" on the actual
+admin Student Result Details page (browser automation worked this time,
+no 0x0 viewport issue), then read the downloaded PDFs directly with the
+Read tool (it rasterizes + OCRs PDF pages). Confirmed on a real 126-
+question/5-page report (all fields now sit inside their boxes, no
+footer ghosting, all 126 rows correctly say "Skipped") and a clean 2-
+question 100%-passed report (rings/table/question list all agree:
+100% score, 100% accuracy, both questions "Correct"). npm run build and
+npm run lint both clean. Rebuilt and redeployed the frontend Docker
+image before each verification pass.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+"section not working as expected in pdf" - traced this to the design
+tradeoff documented in the previous entry: StudentResults.tsx (the
+list page) deliberately never passed sectionStats to generateResultPdf,
+so its downloads always fell back to a single fake "Overall" row -
+even for exams that have real named sections. Confirmed against the
+actual test data (queried ExamDb directly): "All Language Test" has
+ContainsSections=1 with 6 real sections (Java/javasceript/SQL/C#/
+Python/c++), so downloading its result from the list page was silently
+throwing away real section data the app already has, which is exactly
+what "not working as expected" describes.
+
+Fixed by fetching that one exam's sections+questions on demand, only
+when its Download button is actually clicked (listSections/listQuestions
+from sectionApi/questionApi - the same calls useSections/useQuestions
+wrap, called directly instead of via hooks since this is an imperative
+click handler, not a render). Extracted the section-grouping logic
+that was inline in StudentResultDetails.tsx into a shared
+utils/sectionStats.ts (computeSectionStats), used by both that page's
+on-screen sectionStats and this new on-click fetch, so the on-screen
+Section-wise tab and the downloaded PDF can never disagree again.
+Deliberately did NOT prefetch section/question data for every row on
+this list page up front (N+1 fetch cost across every exam just to
+render a table) - it's fetched once, only for the exam being
+downloaded, right when the click happens.
+
+Verified against the real "All Language Test" exam via Claude-in-Chrome
++ Read (same technique as the previous entry): downloaded from the
+list page specifically (not the per-attempt details page, to isolate
+this exact code path), and the resulting PDF now shows the real 6
+sections with correct per-section totals in both the Performance
+Analysis chart and the Section-wise Performance table, instead of the
+"Overall" fallback fabricating a single row.
+
+npm run build and npm run lint clean. Rebuilt and redeployed the
+frontend Docker image before verifying.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+New mockup ("exam result.png"): redesigned Admin "Exam Results" page -
+breadcrumb + "Create Exam" button, 4 new stat cards (Total Exams/
+Completed Exams/Average Pass Rate/Total Students), a filter bar (search
++ Exam Type + Status + date range + Reset), one big paginated "all
+exams" table (Exam Title/Code/Type/Date/Duration/Total Students/Passed/
+Failed/Pass Rate/Status/Actions with bar-chart+eye+download+kebab
+icons), and a bottom row of 3 panels: Pass/Fail Distribution donut,
+Top Performing Exams (ranked, progress bars), Recent Results Published.
+
+Asked the user two scoping questions before starting (AskUserQuestion):
+kept the existing "Attempts & Participation Over Time" trend chart
+(mockup doesn't show it, but no explicit "remove" instruction - user
+confirmed keep, placed below the new main table) and confirmed the
+bottom-left ranked list should sort by Pass Rate (matching the mockup's
+visible order: 90/79/72/72/70%) rather than today's attempt-volume sort.
+
+Feasibility research (Explore agent) before touching code:
+- "Recent Results Published" needs a real publish timestamp -
+  ExamResponse.showResult is a boolean, no PublishedAt field exists
+  anywhere in the app (checked types, PublishResults.tsx, all hooks/
+  api files). Not fabricating a fake timestamp - relabeling this panel
+  "Recently Completed Exams" using each exam's real latest-submission
+  time (max submittedAtUtc among its results), restricted to exams
+  where showResult is actually true, "View All" links to the existing
+  /admin/results/publish page (the real place that manages this).
+- Exam Type filter: no fixed Technical/Aptitude/Mixed enum exists -
+  built from real tenant exam types via useExamTypes() (ExamTypeOption.
+  name), matching exam.examTypeName, not an invented fixed list.
+- Per-row download icon: reuses the existing exportRowsToCsv utility
+  (same one ReportFilters/AdminReports.tsx already use) to export that
+  one exam's real per-student result rows (name/email/score/grade/
+  status/submitted-at) - added useUsers() for name/email lookup, same
+  pattern StudentResults.tsx already uses.
+- Kebab menu: ManageExams.tsx's kebab only has "Archive", which doesn't
+  fit a results page. Used "Edit Exam" (/admin/exams/:id/edit) and
+  "Publish Results" (/admin/results/publish) instead - both real,
+  already-existing destinations, mirroring the same Dropdown/KebabIcon
+  pattern ManageExams.tsx and ManageUsers.tsx already use for
+  consistency, not a new interaction pattern.
+- Date-range filter: no real calendar widget exists anywhere in the
+  app - reusing the same plain two <input type="date"> pattern
+  ReportFilters.tsx already uses (not introducing a new picker
+  component/dependency for this).
+
+Total Exams/Completed Exams/Average Pass Rate/Total Students stat cards
+all computed from real data already available on this page (exam count,
+completed-at-least-once count, average pass % with a real month-over-
+month delta, and distinct candidate count across all submitted results).
+
+
+Verification against the real running app (Claude-in-Chrome get_page_text +
+direct javascript_tool inspection of the trend chart's SVG path, since
+screenshots failed with the same 0x0-viewport issue noted all session)
+surfaced two more real bugs, both fixed in the same pass:
+
+1. "Exam Date" column showed "-" for every single exam - most exams in
+   this environment have no scheduled startAtUtc (they're not calendar-
+   booked). Falls back to the exam's real createdOn date instead of a
+   permanent dash; the date-range filter uses the same fallback so it
+   filters what's actually displayed.
+2. Two different "Total Students" numbers disagreed on the same page:
+   the KPI card correctly counted unique candidates (33), but the Pass/
+   Fail Distribution donut was labeled "Total Students" while actually
+   summing individual result records (175, i.e. total submissions -
+   the mockup's own version of this chart has the same per-record
+   semantics, just re-used the "Total Students" label from the mockup
+   without noticing it doesn't match this page's own KPI card
+   definition). Relabeled the donut's center to "Total Submissions" -
+   both numbers are real, they just needed distinct honest labels.
+
+User follow-up: "Attempts & Participation Over Time not showing
+correctly" -> "looks empty/blank". Verified directly against
+SubmissionDb.ExamAttempts: every single submission in this environment
+(175 total) was submitted within one 4-day window (Sep 5-8). The trend
+chart's default 30-day window was rendering 26 flat/zero days and
+squeezing that entire real signal into ~4/30 of the chart's width -
+technically correct (confirmed via reading the actual rendered SVG path
+coordinates, which matched the real per-day counts exactly) but
+reads as an empty chart at a glance. Not a rendering bug and not
+touching the shared 30-day default other Reports pages rely on -
+scoped a 7-day initial window to just this page's trend section
+(getDefaultRange(7) instead of getDefaultRange()), which now shows the
+real spike filling most of the chart instead of a sliver at the edge.
+
+npm run build and npm run lint clean after each round of fixes. Rebuilt
+and redeployed the frontend Docker image before every verification.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+New mockup ("ChatGPT Image Sep 11, 2026, 02_24_05 AM.png"): a refined
+"Exam Result Report" single-page layout - unified Student+Exam info
+band with an avatar, 4 stat cards (Score Obtained/Passing Marks/Result
+Status/Grade), a single Score Distribution donut + Section-wise
+Accuracy bar list (replacing the old 4-ring "Overall Performance" +
+grouped 3-color bar chart), a Performance Analysis mini-stats row
+(Time Taken/Accuracy/Your Rank), an amber Remarks box, and a closing
+motivational quote + website line. Rewrote generateResultPdf.ts's page 1
+around this design.
+
+Asked one scoping question first (AskUserQuestion): the mockup is a
+single page with no per-question answer breakdown, but the existing PDF
+has a page 2 with a full Question-wise Results table. User chose to
+keep page 2 - redesigned page 1 to match the mockup, left the existing
+page 2 (and its per-question Skipped/Correct/Incorrect logic from the
+last redesign) untouched other than the "Exam Result Report" title
+rename and dropping the now-redundant "General Feedback" box (the new
+page 1 Remarks box already covers that).
+
+Feasibility/no-fabrication notes:
+- "Registration No." and "Institute" from the mockup: dropped again,
+  same reasons as the last redesign (not in the data model / Tenant
+  info is SuperAdmin-only) - already documented, not re-investigated.
+- The mockup's footer showed "www.examvaults.com" - the real domain per
+  project memory is examvaults.in, not .com. Used the real domain
+  instead of copying the mockup's placeholder verbatim.
+- "Your Rank" and the Accuracy "Above/Below average" caption need every
+  student's result for the same exam to compute honestly. Both
+  StudentResultDetails.tsx and StudentResults.tsx already load all
+  attempts for the relevant exam(s) (for Previous/Next nav and the list
+  itself), so real rank/percentile and real average accuracy are
+  computed there and passed in as new optional ResultPdfContext fields
+  (rank, totalParticipants, averageAccuracyPercent). Not wired into the
+  student-facing "My Result" page (pages/student/ResultDetails.tsx) -
+  a student's own result view has no access to other students' results,
+  so rank/average would have to be guessed; left those fields undefined
+  there rather than fabricate a comparison.
+- Integrity Score (added earlier this session) isn't in this mockup at
+  all - rather than drop it, folded it into the Performance Analysis
+  mini-stats row alongside Time Taken/Accuracy/Rank so existing
+  capability isn't silently lost.
+
+Found and fixed one bug before shipping: the Performance Analysis
+mini-stat captions ("8% of time", "Average", "Top 100%") were all
+hardcoded green regardless of what they meant or whether the student
+passed or failed - looked like false-positive framing on a failed
+report. Now neutral gray by default, only the Accuracy caption colors
+green/red when there's a real above/below-average comparison to show.
+
+Verification: npm run build/lint clean. Rebuilt and redeployed the
+frontend Docker image, then downloaded two real PDFs via Claude-in-
+Chrome (clicking the button directly via JS after the simulated mouse
+click silently produced no download - likely the same window/viewport
+issue noted all session; a direct .click() call worked) and read them
+back: a 126-question/6-section exam (confirmed the page correctly
+overflows to a second page when the Score Distribution + Section-wise
+Accuracy panels don't fit, rather than clipping) and a clean 2-question
+100%-pass exam (confirmed the whole redesigned summary fits on one
+page exactly like the mockup, with real rank/accuracy/integrity values
+and correctly-neutral caption colors).
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+"here exacel download not pdf?" - pointed out that the Exam Results
+page's per-exam download icon still produced a CSV, not the new PDF
+report just built. Asked which they wanted (AskUserQuestion): a PDF
+booklet with one full report page-set per student, a single class-level
+summary page, or keep the CSV. User chose the booklet.
+
+Refactored generateResultPdf.ts so the entire single-student drawing
+routine (both pages) is its own internal function (drawStudentReport)
+that draws onto a jsPDF document passed in rather than creating/saving
+its own - it takes an "is this the first report in the document" flag
+so it knows whether to call addPage() first. generateResultPdf()
+(unchanged public behavior) now just calls it once and saves; added
+generateExamResultsBooklet(examTitle, entries[]) which loads the logo
+once, loops every student's {result, context} through the same
+drawStudentReport call, and saves one combined multi-student PDF. Same
+drawing code both ways, so the booklet and the single-student download
+can never visually drift apart.
+
+Wired this into ExamResults.tsx's per-exam download button: fetches
+that exam's sections/questions once (not per student - they're exam-
+level, not per-student), computes rank/total-participants/average-
+accuracy once across every student who attempted it, then builds one
+ResultPdfContext per student reusing that shared data plus their own
+score/timing/integrity. Replaced the CSV export entirely - removed
+exportRowsToCsv/getGrade usage from that file since nothing else there
+needed them.
+
+Verified against a real exam with exactly 2 students (queried
+SubmissionDb directly to find one, "QA Competitive Exam"): downloaded
+the booklet and confirmed a real 4-page PDF (2 pages per student) with
+each student's own name/score/rank correctly personalized (Rank 1/2 for
+the 100% scorer, Rank 2/2 for the 50% scorer) and continuous page
+numbering across the whole document ("Page 1 of 4" through "Page 4 of
+4"). npm run build/lint clean. Rebuilt and redeployed the frontend
+Docker image before verifying.
+
+Not committed or pushed - holding per the user's standing rule.
