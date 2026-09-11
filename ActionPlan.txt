@@ -9692,3 +9692,81 @@ count match anyway, so this is a pure quality improvement, not a
 regression.
 Full solution build clean; ai-api rebuilt and redeployed.
 
+
+---
+
+"bug - when question count 10 but getting 2 question when select
+multiple choice same hapenning with true/false as well check what is
+exact issue" + "if i wll choose single then only single choice question
+i want" - traced to the actual root cause behind the count shortfall
+(not just AI unreliability): FormatQuestionTypeLabel in
+N8nQuestionGenerator.cs mapped BOTH "MultipleChoice" (admin UI's "Single
+Choice" button, one correct answer) and "MultiSelect" (admin UI's
+"Multiple Choice" button, 2+ correct answers) to the SAME string
+("Multiple Choice") in the payload sent to n8n. So selecting only
+"Multiple Choice" (MultiSelect) produced a request payload
+indistinguishable from selecting only "Single Choice" (MultipleChoice) -
+the model had no signal it should specifically generate multi-correct-
+answer questions, defaulted to ordinary single-answer questions most of
+the time, and the (correct, previously-shipped) "drop items that don't
+match what was requested" logic then dropped most of them - surfacing as
+a severe count shortfall (2 of 10) rather than a silent wrong-type leak.
+
+Fix: FormatQuestionTypeLabel now sends "Single Choice" for MultipleChoice
+and keeps "Multiple Choice" for MultiSelect - matching the same
+QUESTION_TYPE_LABELS the admin UI itself already uses, removing the
+ambiguity at the source instead of only reacting to it after the fact.
+Single-Choice-only requests were already effectively guaranteed correct
+by the earlier per-type gate+drop fix (a MultiSelect-shaped item just
+downgrades to its first correct letter and stays MultipleChoice, never
+dropped) - confirmed this explicitly to the user rather than assuming.
+
+Also handed the user a further-updated n8n prompt (external system, not
+in this repo - user pastes it in manually) that explains what "Single
+Choice" vs "Multiple Choice" now specifically mean now that they're
+distinct labels: Single Choice = exactly one correct answer; Multiple
+Choice = a genuine multi-select question with 2+ correct answers,
+explicitly forbidding a single-correct-answer question when "Multiple
+Choice" is requested.
+
+Full solution build clean; ai-api rebuilt and redeployed.
+Not yet confirmed live: whether AI generation now reliably hits the
+requested count of 10/10 once the user pastes the new prompt into n8n -
+flagged as something to verify together next.
+
+
+---
+
+"n8n got 10 record but our side some issue i thing check" + pasted raw
+n8n output data + "here 4 record only" (screenshot) - diagnosed via
+ai-api container logs (Generated N draft questions - logged right after
+n8n responds, before the preview screen even renders) that our backend
+was NOT silently losing records after receiving them - the shortfall was
+already baked into what n8n sent back. The pasted raw data showed
+several genuinely single-correct-answer questions (eg. "Which SQL
+keyword is used to sort the result-set?" - only one right answer,
+ORDER BY) tagged QuestionType:"Multiple" with just 1 letter in
+CorrectOption, despite the updated n8n prompt explicitly forbidding
+that. TryBuildDraft correctly drops these (a multi-select question
+needs 2+ real correct answers - the backend's own CreateQuestionValidator
+requires it; coercing a 1-correct-answer item into MultiSelect would
+mean fabricating a second "correct" answer that isn't actually correct,
+which is off the table). So this is an AI/prompt-compliance limit on the
+external n8n side, not a code bug - confirmed to the user rather than
+guessing, using the logs as evidence.
+
+Asked the user how to handle the residual shortfall (AskUserQuestion) -
+picked "over-request and pad". Implemented in N8nQuestionGenerator.cs:
+the count sent to n8n is now min(request.QuestionCount * 2, 30) instead
+of the admin's exact requested count, and the final draft list is
+.Take(request.QuestionCount) after filtering - so "Number of Questions"
+in the UI stays a meaningful, predictable ceiling (never more than
+asked), while padding roughly doubles the odds enough valid items
+survive TryBuildDraft's filtering to actually reach that count. Doesn't
+guarantee the exact count (n8n could still under-comply even against a
+doubled ask) but meaningfully improves the common case. Trade-off:
+n8n calls already take 14-18s: asking for more will likely take longer
+(not yet measured live).
+
+Full solution build clean; ai-api rebuilt and redeployed.
+
