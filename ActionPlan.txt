@@ -10123,3 +10123,57 @@ DashboardSidebar's navItems array, rendered inline before each label.
 tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
 and redeployed.
 
+
+---
+
+"add budge for my exams menu" - asked which count to show (AskUserQuestion)
+since there were two reasonable options with very different costs; user
+picked "exams available to take right now" (Live) over a cheap total
+count. New hooks/useLiveExamCount.ts replicates MyExams.tsx's own
+rowStatus==='Live' definition exactly (an exam not yet started/completed
+whose assignment window is open, or has no scheduled window at all) via
+the same per-exam getMyAttempt/getMyAssignmentForExam queries that page
+already runs for its own tab counts - kept as one shared definition
+instead of a second one that could drift. Wired into DashboardSidebar.tsx
+as a red pill Badge (react-bootstrap, same "9+" cap convention
+NotificationBell.tsx already uses) next to "My Exams", shown only when
+count > 0.
+
+Flagged to the user before building: since the sidebar is global, this
+hook's per-exam queries now run on every student page load, not just
+My Exams - accepted as the same cost that page already pays, not a new
+problem, but worth knowing.
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
+
+---
+
+"add budge for 'my results','my certificates','Notifications' menu" -
+extended the same sidebar badge pattern from "My Exams" to the other
+three:
+- Notifications: the exact same unread count the top-bar
+  NotificationBell already shows (useUnreadCount) - no new definition.
+- My Results: total count of results available (no "unseen/new result"
+  concept exists anywhere in this app's data model - no read-tracking -
+  so a total count was the only real, non-fabricated option; didn't
+  bother asking since there wasn't a genuine second choice this time,
+  unlike My Exams' Live-vs-total tradeoff).
+- My Certificates: count of exams the student scored 80%+ on (the exact
+  same isCertificateEligible threshold MyCertificates.tsx itself uses -
+  there's no separate certificate issuance/record in this app, a
+  certificate is just "did you clear the bar").
+
+New hooks/useResultsAndCertificatesCounts.ts computes both counts from
+one shared per-exam getMyResult query set (both pages would build their
+own copy of the same ['results','mine',examId] query anyway -
+react-query dedupes identical keys, so this isn't extra network cost
+beyond what My Results/My Certificates already individually pay).
+DashboardSidebar.tsx refactored from one hardcoded "My Exams" badge
+check to a badgeCountByLabel map so all four badges render through the
+same code path.
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
