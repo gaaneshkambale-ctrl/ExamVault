@@ -97,6 +97,24 @@ describe('parseQuestionImportCsv', () => {
     expect(rows[0].error).toContain('marks must be a number greater than 0');
   });
 
+  it('parses more than four options when extra Option columns are present', () => {
+    const csv =
+      'Question Text,Type,Difficulty,Marks,Option A,Option B,Option C,Option D,Option E,Option F,Correct Answer,Shuffle Options\n' +
+      'Pick the prime.,Multiple Choice,Easy,1,4,6,8,9,10,7,F,No';
+
+    const rows = parseQuestionImportCsv(csv);
+
+    expect(rows[0].error).toBeNull();
+    expect(rows[0].options).toEqual([
+      { optionText: '4', isCorrect: false },
+      { optionText: '6', isCorrect: false },
+      { optionText: '8', isCorrect: false },
+      { optionText: '9', isCorrect: false },
+      { optionText: '10', isCorrect: false },
+      { optionText: '7', isCorrect: true },
+    ]);
+  });
+
   it('returns an empty array for an empty file', () => {
     expect(parseQuestionImportCsv('')).toEqual([]);
   });

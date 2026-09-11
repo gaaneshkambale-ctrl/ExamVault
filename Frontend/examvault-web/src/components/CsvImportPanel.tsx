@@ -214,7 +214,8 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
                 only ever show up as an extra Passed/Failed count, never their own schema or data.
               </>
             ) : (
-              'Header row required: Question Text, Type, Difficulty, Marks, Option A-D, Correct Answer, Shuffle Options.'
+              'Header row required: Question Text, Type, Difficulty, Marks, Option A, Option B, ... (add as many ' +
+              'Option <letter> columns as you need - not limited to four), Correct Answer, Shuffle Options.'
             )}
           </div>
         </div>

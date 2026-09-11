@@ -60,11 +60,11 @@ export interface CsvCodeImportRow {
 }
 
 const CSV_TEMPLATE_HEADER =
-  'Question Text,Type,Difficulty,Marks,Option A,Option B,Option C,Option D,Correct Answer,Shuffle Options';
+  'Question Text,Type,Difficulty,Marks,Option A,Option B,Option C,Option D,Option E,Option F,Correct Answer,Shuffle Options';
 
 const CSV_TEMPLATE_EXAMPLE_ROWS = [
-  'What is the capital of France?,Single Choice,Easy,1,Paris,London,Berlin,Madrid,A,No',
-  'The sun rises in the east.,True/False,Easy,1,True,False,,,A,No',
+  'What is the capital of France?,Single Choice,Easy,1,Paris,London,Berlin,Madrid,,,A,No',
+  'The sun rises in the east.,True/False,Easy,1,True,False,,,,,A,No',
 ];
 
 export function buildCsvTemplate(): string {
@@ -139,7 +139,20 @@ function normalizeYesNo(raw: string): boolean {
   return v === 'yes' || v === 'true' || v === '1';
 }
 
-const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
+// Finds every "Option <letter>" column present in the header (not just A-D),
+// sorted by letter - lets a CSV author add "Option E", "Option F", and so on
+// with no code changes needed, instead of being stuck at a hardcoded 4 like
+// the manual Create Question form never was (it has no option-count cap).
+function findOptionColumns(header: string[]): { index: number; letter: string }[] {
+  const columns: { index: number; letter: string }[] = [];
+  header.forEach((h, i) => {
+    const match = /^option ([a-z])$/.exec(h);
+    if (match) {
+      columns.push({ index: i, letter: match[1].toUpperCase() });
+    }
+  });
+  return columns.sort((a, b) => a.letter.localeCompare(b.letter));
+}
 
 /** Parses a question-import CSV (header row required) into per-row results, each either
  * fully valid and ready to create, or carrying an `error` describing what's wrong. */
@@ -153,17 +166,13 @@ export function parseQuestionImportCsv(text: string): CsvImportRow[] {
   const dataRows = table.slice(1).filter((r) => r.some((cell) => cell.trim() !== ''));
 
   const columnIndex = (name: string) => header.indexOf(name);
+  const optionColumns = findOptionColumns(header);
+  const lastOptionLetter = optionColumns.at(-1)?.letter ?? 'D';
   const idx = {
     text: columnIndex('question text'),
     type: columnIndex('type'),
     difficulty: columnIndex('difficulty'),
     marks: columnIndex('marks'),
-    options: [
-      columnIndex('option a'),
-      columnIndex('option b'),
-      columnIndex('option c'),
-      columnIndex('option d'),
-    ],
     correct: columnIndex('correct answer'),
     shuffle: columnIndex('shuffle options'),
   };
@@ -176,7 +185,7 @@ export function parseQuestionImportCsv(text: string): CsvImportRow[] {
     const difficulty = normalizeDifficulty(get(idx.difficulty));
     const marksRaw = get(idx.marks);
     const marks = Number(marksRaw);
-    const optionTexts = idx.options.map((i) => get(i));
+    const optionTexts = optionColumns.map((c) => get(c.index));
     const correctLetter = get(idx.correct).toUpperCase();
     const shuffleOptions = normalizeYesNo(get(idx.shuffle));
 
@@ -201,14 +210,14 @@ export function parseQuestionImportCsv(text: string): CsvImportRow[] {
       }
     } else if (questionType === 'MultipleChoice') {
       const filledOptions = optionTexts
-        .map((optionText, i) => ({ optionText, letter: OPTION_LETTERS[i] }))
+        .map((optionText, i) => ({ optionText, letter: optionColumns[i].letter }))
         .filter((o) => o.optionText !== '');
       if (filledOptions.length < 2) {
         errors.push('at least two options (Option A, Option B) are required');
       }
-      const correctIndex = OPTION_LETTERS.indexOf(correctLetter);
+      const correctIndex = optionColumns.findIndex((c) => c.letter === correctLetter);
       if (correctIndex === -1 || !optionTexts[correctIndex]) {
-        errors.push('correct answer must match a filled-in option letter (A-D)');
+        errors.push(`correct answer must match a filled-in option letter (A-${lastOptionLetter})`);
       }
       options = filledOptions.map((o) => ({
         optionText: o.optionText,
