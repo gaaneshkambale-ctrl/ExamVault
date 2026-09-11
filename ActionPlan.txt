@@ -9460,3 +9460,141 @@ Rebuilt and redeployed the frontend Docker image before each
 verification.
 
 Not committed or pushed - holding per the user's standing rule.
+
+---
+
+"sequential nevigation and locked navigation can check there logic work
+expected or not" - ran a full audit (Explore agent) across frontend and
+backend before touching anything. Real findings, worst first:
+
+1. Sequential and Locked collapse into one identical client-side rule
+   (isForwardOnly = navigationType !== 'Free') in TakeExam.tsx - despite
+   the admin UI's own descriptions being genuinely different ("must
+   answer in order" vs "once answered, cannot be revisited"). Choosing
+   "Locked" today gives a student the exact same experience as
+   "Sequential".
+2. No server-side enforcement of in-section question order/locking at
+   all - SaveAnswerHandler.cs never checks NavigationType. A student
+   using devtools/a REST client can bypass either restriction entirely
+   by calling the save-answer endpoint directly. (Cross-SECTION gating
+   - can't skip to a later section, can't re-enter a completed one - IS
+   enforced server-side already, in EnterSectionHandler.cs - only the
+   in-section, per-question layer was missing.)
+3. Refreshing the browser mid-section resets the client's "current
+   question" pointer to 0, and the forward-only check is purely
+   relative to that pointer - so a refresh lets a student re-walk
+   through (and in a "Locked" section, re-answer) every question again,
+   even though the real per-question answered state is already
+   correctly rehydrated from the server on load (it's just never
+   consulted by the navigation-gating code).
+4. AllowReview (both Section.AllowReview and the exam-level
+   ExamSettings.allowReview) is persisted, editable in two admin
+   screens, and even fetched cross-service into Submission - but
+   TakeExam.tsx never reads it. Turning it off has zero effect on
+   students today.
+5. (Confirmed, not fixing) The tenant-wide "Question Navigation"
+   default in Settings and a non-sectioned exam's total lack of a
+   Sequential/Locked option are real gaps too, but out of scope for
+   this pass - flagged to the user, not asked to be fixed.
+
+Asked the user which to fix (AskUserQuestion, multi-select) - they
+picked all four: make Locked actually differ from Sequential, add
+server-side enforcement, fix the refresh bypass, and wire up (not
+remove) Allow Review.
+
+Design, once real behavior was clear:
+- Sequential: unchanged in spirit (still strictly one question at a
+  time, forward only) - kept via a canNavigateToIndex() helper.
+- Locked: redefined for real per the admin UI's own description - a
+  student can jump to ANY question that hasn't been answered yet
+  (order doesn't matter), but once a question has a real saved answer
+  (checked the same way TakeExam.tsx's own navState already determines
+  "answered" - selectedOptionId/answerText/selectedOptionIds, not just
+  "visited"), it becomes permanently unreachable for the rest of the
+  section. This single change also closes the refresh bypass for
+  Locked sections for free - the "is this question answered" check is
+  already correctly rehydrated from the server on load, so it survives
+  a refresh; the OLD isForwardOnly check never consulted it, only the
+  refresh-resettable currentIndex.
+- Server-side: SaveAnswerHandler needs to independently know which
+  section a question belongs to and that section's NavigationType -
+  the client can't be trusted to self-report this (a forged "Free"
+  claim would defeat the whole point). Found that ResultService already
+  solves an equivalent problem via an internal, gateway-unreachable
+  Question Service endpoint (internal/questions/answer-key?examId=) -
+  deliberately service-to-service only, already proven safe to call
+  with a forwarded caller bearer token (a comment on that controller
+  already says "a student's browser never calls Question API
+  directly"). Added an equivalent lightweight client to Submission
+  Service instead of reinventing a new endpoint or a new auth story:
+  IQuestionLookupClient/QuestionServiceClient, mirroring
+  IExamLookupClient/ExamServiceClient's exact existing pattern (same
+  Services:QuestionServiceBaseUrl config key ResultService/ExamService/
+  ExecutionService already use - added it to Submission's own
+  appsettings.Development.json and docker-compose.yml, the two configs
+  it was missing from - and Program.cs registration).
+  SaveAnswerHandler now cross-checks the target question's real section
+  (via the new client) against that section's real NavigationType (via
+  the already-used IExamLookupClient) and the attempt's existing
+  answers (via the already-existing repository methods
+  GetAnswersByAttemptIdAsync/GetAnswerAsync - no new repository work
+  needed): rejects the save outright if the section is Locked and this
+  question already has a real answer, or if the section is Sequential
+  and any earlier question (by CreatedAtUtc, the same implicit order
+  the frontend displays when not shuffled) isn't answered yet.
+  Deliberately NOT attempting to reconstruct a per-student SHUFFLED
+  order server-side for the Sequential check - the frontend's
+  shuffle() is unseeded and never sent to the server, so there's no way
+  to know a specific student's randomized order after the fact; using
+  canonical (unshuffled) CreatedAtUtc order is exactly correct for the
+  common case (a Sequential section with shuffling off, which is the
+  only combination that actually makes sense - shuffled "answer in
+  order" is self-contradictory) and still a meaningful, if imprecise,
+  backstop if an admin combines the two anyway. Flagging this trade-off
+  explicitly rather than quietly leaving a gap unexplained.
+- Allow Review: wired into TakeExam.tsx rather than removed - the exam-
+  level flag (defaults true, fail-open like every other optional
+  setting in this file) hides "Mark for Review" and skips the whole
+  Review Summary screen (top "Submit Exam" button and the last
+  question's advance button submit directly instead); the section-
+  level flag was already largely redundant with NavigationType's
+  existing completed-section lockout, so it's layered on top of the
+  existing canReenterCompleted/canReturn checks (a Free section can
+  still normally be revisited, unless its own AllowReview is off).
+
+
+Implementation done (2026-09-11):
+- Backend: new IQuestionLookupClient/QuestionServiceClient (Submission),
+  SaveAnswerCommand.BearerToken, SaveAnswerResult.IsQuestionLocked/
+  IsOutOfSequence, SaveAnswerHandler.CheckSectionNavigationAsync, controller
+  bearer-token extraction + Conflict mapping, docker-compose.yml +
+  appsettings.Development.json + Program.cs config/DI. Added
+  FakeQuestionLookupClient and 3 new SaveAnswerHandlerTests (Locked reject,
+  Sequential reject, Sequential allow-in-order) alongside fixing the 8
+  existing tests broken by the new constructor/command shape - full
+  ExamVault.sln build green, all 96 SubmissionService application tests
+  pass.
+- Frontend: TakeExam.tsx - replaced isForwardOnly with isQuestionAnswered +
+  canNavigateToIndex (Locked = any not-yet-answered question navigable,
+  Sequential = strict forward one-at-a-time, unchanged), used at all 3
+  former isForwardOnly call sites (goToIndex, navigator grid, Previous
+  button) plus the new Locked semantics closes the refresh bypass for free.
+  Added reviewAllowed = exam.allowReview !== false, gating the Mark for
+  Review checkbox, the top Submit Exam button, the last-question advance
+  button (label + direct-submit), and finishCurrentSectionAndAdvance's
+  review-skip branch. Section-level AllowReview layered onto the existing
+  canReenterCompleted/canReturn Free-section checks. `npm run build` and
+  `npm run lint` clean (only pre-existing unrelated warnings).
+- Docker: rebuilt and redeployed submission-api + frontend; submission-api
+  came up clean (EF migrations up to date, no DI/config errors) confirming
+  the new QuestionServiceBaseUrl wiring resolves correctly at startup.
+- Not yet done: a live click-through walkthrough (enter a Locked section,
+  jump to an unanswered question, answer one and confirm it locks and
+  survives refresh; enter a Sequential section and confirm strict forward-
+  only still holds; attempt a direct PUT .../answers bypass for a locked/
+  out-of-order question and confirm the server now rejects with 409;
+  confirm Mark for Review/Review screen disappear when AllowReview is off).
+  Flagged to the user as unverified in the browser per the browser-
+  verification standing lesson - the browser automation 0x0 viewport bug on
+  this machine makes a real click-through unreliable without user help.
+
