@@ -88,6 +88,11 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
     setSelectedRows(new Set(parsed.filter((r) => r.row.error === null).map((r) => r.row.rowNumber)));
   };
 
+  const selectAllValid = () =>
+    setSelectedRows(new Set(rows.filter((r) => r.row.error === null).map((r) => r.row.rowNumber)));
+
+  const clearAllSelected = () => setSelectedRows(new Set());
+
   const toggleRow = (rowNumber: number) => {
     setSelectedRows((prev) => {
       const next = new Set(prev);
@@ -237,6 +242,24 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
             <div className="fw-bold">{fileName}</div>
             <Badge bg="success">{validCount} valid</Badge>
             {invalidCount > 0 && <Badge bg="danger">{invalidCount} invalid</Badge>}
+            <div className="ms-auto d-flex gap-2">
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                disabled={selectedRows.size === validCount}
+                onClick={selectAllValid}
+              >
+                Select All
+              </Button>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                disabled={selectedRows.size === 0}
+                onClick={clearAllSelected}
+              >
+                Clear All
+              </Button>
+            </div>
           </div>
 
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
