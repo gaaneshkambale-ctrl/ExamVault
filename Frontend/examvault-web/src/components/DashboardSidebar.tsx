@@ -17,12 +17,16 @@ interface NavItem {
   path: string | null;
 }
 
+// No "Profile" entry here - it's already one click away via the top bar's
+// UserProfileMenu ("My Profile"), so a second link to the same /profile
+// route in the sidebar was pure duplication. 'Profile' stays in
+// DashboardNavItem (Profile.tsx still passes active="Profile" to whichever
+// layout renders it) - only the clickable nav entry itself is gone.
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'My Exams', path: '/exams' },
   { label: 'My Results', path: '/results' },
   { label: 'My Certificates', path: '/certificates' },
-  { label: 'Profile', path: '/profile' },
   { label: 'Notifications', path: '/notifications' },
   { label: 'Settings', path: '/settings' },
 ];
