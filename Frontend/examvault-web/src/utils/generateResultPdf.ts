@@ -1,28 +1,35 @@
 import { jsPDF } from 'jspdf';
 import { getGrade } from '../types/result';
 import type { AdminAttemptResultResponse, ResultSummaryResponse } from '../types/result';
-
-const PAGE_WIDTH = 210;
-const PAGE_HEIGHT = 297;
-const MARGIN = 14;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-const FOOTER_Y = PAGE_HEIGHT - 12;
-
-const BRAND = { r: 37, g: 99, b: 235 };
-const GREEN = { r: 22, g: 163, b: 74 };
-const RED = { r: 220, g: 38, b: 38 };
-const GRAY = { r: 148, g: 163, b: 184 };
-const AMBER = { r: 217, g: 119, b: 6 };
-const TEXT_DARK = { r: 15, g: 23, b: 42 };
-const TEXT_MUTED = { r: 100, g: 116, b: 139 };
-const BORDER = { r: 226, g: 232, b: 240 };
-const PANEL_BG = { r: 248, g: 250, b: 252 };
-const AMBER_BG = { r: 254, g: 243, b: 199 };
-
-// The real product domain (see project memory: multi-tenant SaaS plan) - the
-// mockup this report is based on showed a placeholder ".com" domain that isn't
-// the actual one, so this uses the real address instead of copying it verbatim.
-const WEBSITE = 'www.examvaults.in';
+import {
+  AMBER,
+  AMBER_BG,
+  BORDER,
+  BRAND,
+  CONTENT_WIDTH,
+  GRAY,
+  GREEN,
+  MARGIN,
+  PAGE_WIDTH,
+  RED,
+  TEXT_DARK,
+  TEXT_MUTED,
+  WEBSITE,
+  drawDonutChart,
+  drawHeaderBrand,
+  drawStatCard,
+  drawTableHeader,
+  ensurePageSpace,
+  fieldRow,
+  getInitials,
+  loadLogo,
+  panel,
+  panelTitle,
+  sanitizeFilename,
+  setColor,
+  stampFooters,
+} from './pdfReportKit';
+import type { LogoImage } from './pdfReportKit';
 
 export interface ResultPdfSectionStat {
   name: string;
@@ -55,21 +62,6 @@ export interface ResultPdfContext {
 const QUOTE_TEXT = 'Success is the sum of small efforts, repeated day in and day out.';
 const QUOTE_AUTHOR = 'Robert Collier';
 
-function sanitizeFilename(title: string): string {
-  return title.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'exam';
-}
-
-function setColor(doc: jsPDF, method: 'setTextColor' | 'setFillColor' | 'setDrawColor', c: { r: number; g: number; b: number }) {
-  doc[method](c.r, c.g, c.b);
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 export function isSkipped(q: { selectedOptionId: string | null; selectedOptionIds: string[] | null; answerText: string | null }): boolean {
   return q.selectedOptionId === null && (!q.selectedOptionIds || q.selectedOptionIds.length === 0) && !q.answerText;
 }
@@ -83,190 +75,6 @@ export function isQuestionCorrect(q: { questionType: string; marks: number; mark
     return !q.isPendingGrading && q.marks > 0 && q.marksAwarded >= q.marks;
   }
   return q.isCorrect;
-}
-
-interface LogoImage {
-  dataUrl: string;
-  ratio: number;
-}
-
-const LOGO_URL = '/examvault-logo.png';
-// Intrinsic size of public/examvault-logo.png (verified via `file`) - used to keep the
-// embedded image's aspect ratio correct without re-measuring it at render time.
-const LOGO_INTRINSIC_RATIO = 512 / 178;
-
-/** Fetches the app's real logo (same file the app header/login screen use via BrandMark.tsx) and inlines it as a data URL for jsPDF's addImage. Falls back to null (plain text) rather than fail the whole report if it can't be loaded. */
-async function loadLogo(): Promise<LogoImage | null> {
-  try {
-    const response = await fetch(LOGO_URL);
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Failed to read logo image'));
-      reader.readAsDataURL(blob);
-    });
-    return { dataUrl, ratio: LOGO_INTRINSIC_RATIO };
-  } catch {
-    return null;
-  }
-}
-
-/** Draws the real ExamVault logo (image, wordmark and tagline all baked into the PNG); falls back to plain "ExamVault" text if the image couldn't be loaded. */
-function drawHeaderBrand(doc: jsPDF, x: number, y: number, heightMm: number, logo: LogoImage | null) {
-  if (logo) {
-    doc.addImage(logo.dataUrl, 'PNG', x, y, heightMm * logo.ratio, heightMm);
-  } else {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    setColor(doc, 'setTextColor', TEXT_DARK);
-    doc.text('ExamVault', x, y + heightMm * 0.7);
-  }
-}
-
-function drawFooter(doc: jsPDF, page: number, totalPages: number, generatedAt: Date, logo: LogoImage | null) {
-  setColor(doc, 'setDrawColor', BORDER);
-  doc.setLineWidth(0.3);
-  doc.line(MARGIN, FOOTER_Y - 4, PAGE_WIDTH - MARGIN, FOOTER_Y - 4);
-  if (logo) {
-    const h = 4.5;
-    doc.addImage(logo.dataUrl, 'PNG', MARGIN, FOOTER_Y - h + 0.5, h * logo.ratio, h);
-  } else {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    setColor(doc, 'setTextColor', TEXT_DARK);
-    doc.text('ExamVault', MARGIN, FOOTER_Y);
-  }
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text(`Generated on: ${generatedAt.toLocaleString()}`, PAGE_WIDTH - MARGIN, FOOTER_Y - 3, { align: 'right' });
-  doc.text(`Page ${page} of ${totalPages}`, PAGE_WIDTH - MARGIN, FOOTER_Y + 2, { align: 'right' });
-}
-
-function panel(doc: jsPDF, x: number, y: number, w: number, h: number) {
-  setColor(doc, 'setFillColor', PANEL_BG);
-  setColor(doc, 'setDrawColor', BORDER);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(x, y, w, h, 2, 2, 'FD');
-}
-
-function panelTitle(doc: jsPDF, text: string, x: number, y: number) {
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  setColor(doc, 'setTextColor', TEXT_DARK);
-  doc.text(text, x, y);
-}
-
-function fieldRow(doc: jsPDF, label: string, value: string, x: number, y: number, labelW: number) {
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text(label, x, y);
-  doc.setFont('helvetica', 'bold');
-  setColor(doc, 'setTextColor', TEXT_DARK);
-  doc.text(String(value || '—'), x + labelW, y);
-}
-
-/** Ensures the given content height fits above the footer on the current page; otherwise starts a fresh page first. Call before drawing a block whose height is known ahead of time. */
-function ensurePageSpace(doc: jsPDF, y: number, needed: number): number {
-  if (y + needed > FOOTER_Y - 6) {
-    doc.addPage();
-    return MARGIN;
-  }
-  return y;
-}
-
-/** Traces a donut chart by stepping around the circle in small line segments per slice - jsPDF has no native "percentage arc" primitive. */
-function drawDonutChart(
-  doc: jsPDF,
-  cx: number,
-  cy: number,
-  r: number,
-  slices: { value: number; color: { r: number; g: number; b: number } }[],
-  centerValue: string,
-  centerLabel: string,
-) {
-  const total = slices.reduce((sum, s) => sum + s.value, 0);
-  doc.setLineWidth(7);
-  if (total <= 0) {
-    setColor(doc, 'setDrawColor', BORDER);
-    doc.circle(cx, cy, r, 'S');
-  } else {
-    let startDeg = -90;
-    const step = 2.5;
-    slices.forEach((slice) => {
-      if (slice.value <= 0) return;
-      const endDeg = startDeg + (slice.value / total) * 360;
-      setColor(doc, 'setDrawColor', slice.color);
-      let prevX = cx + r * Math.cos((startDeg * Math.PI) / 180);
-      let prevY = cy + r * Math.sin((startDeg * Math.PI) / 180);
-      for (let deg = startDeg + step; deg <= endDeg; deg += step) {
-        const px = cx + r * Math.cos((deg * Math.PI) / 180);
-        const py = cy + r * Math.sin((deg * Math.PI) / 180);
-        doc.line(prevX, prevY, px, py);
-        prevX = px;
-        prevY = py;
-      }
-      const fx = cx + r * Math.cos((endDeg * Math.PI) / 180);
-      const fy = cy + r * Math.sin((endDeg * Math.PI) / 180);
-      doc.line(prevX, prevY, fx, fy);
-      startDeg = endDeg;
-    });
-  }
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  setColor(doc, 'setTextColor', TEXT_DARK);
-  doc.text(centerValue, cx, cy + 1, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text(centerLabel, cx, cy + 6, { align: 'center' });
-}
-
-function drawTableHeader(doc: jsPDF, x: number, y: number, colWidths: number[], headers: string[], rowH: number) {
-  setColor(doc, 'setFillColor', { r: 241, g: 245, b: 249 });
-  doc.rect(x, y, colWidths.reduce((a, b) => a + b, 0), rowH, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.8);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  let cx = x + 2;
-  headers.forEach((h, i) => {
-    doc.text(h.toUpperCase(), cx, y + rowH - 2.3);
-    cx += colWidths[i];
-  });
-}
-
-function drawStatCard(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  dotColor: { r: number; g: number; b: number },
-  label: string,
-  value: string,
-  valueColor: { r: number; g: number; b: number },
-  caption?: string,
-) {
-  panel(doc, x, y, w, h);
-  setColor(doc, 'setFillColor', dotColor);
-  doc.circle(x + 6, y + 7, 2, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text(label, x + 10, y + 8);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  setColor(doc, 'setTextColor', valueColor);
-  doc.text(value, x + 6, y + 18);
-  if (caption) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    setColor(doc, 'setTextColor', TEXT_MUTED);
-    doc.text(caption, x + 6, y + 23.5);
-  }
 }
 
 /** Draws one student's full report (both pages) into an already-created jsPDF document, starting on a fresh page unless this is the very first report in the document (which already has jsPDF's initial blank page 1 to use). Shared by the single-student download and the whole-exam booklet, so the two can never visually drift apart. */
@@ -736,14 +544,6 @@ function drawStudentReport(
   doc.setFontSize(7.5);
   setColor(doc, 'setTextColor', TEXT_MUTED);
   doc.text('This is a computer-generated report and does not require a physical signature.', MARGIN, y + 4);
-}
-
-function stampFooters(doc: jsPDF, generatedAt: Date, logo: LogoImage | null): void {
-  const totalPages = doc.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-    drawFooter(doc, p, totalPages, generatedAt, logo);
-  }
 }
 
 export async function generateResultPdf(
