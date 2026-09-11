@@ -326,7 +326,7 @@ export default function MyExams() {
               <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Exam Details</th>
-                  <th>Type</th>
+                  <th>Exam Type</th>
                   <th>Duration</th>
                   <th>Start Date</th>
                   <th>Due Date</th>
@@ -353,7 +353,7 @@ export default function MyExams() {
                           </div>
                         </div>
                       </td>
-                      <td>Online Exam</td>
+                      <td>{exam.examTypeName ?? '—'}</td>
                       <td>{exam.durationMinutes} min</td>
                       <td>
                         <div>{start.date}</div>
