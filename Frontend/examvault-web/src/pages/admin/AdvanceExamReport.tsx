@@ -11,9 +11,15 @@ import { BookIcon, TargetIcon, CheckCircleIcon, UserCheckIcon } from '../../comp
 import { DownloadIcon } from '../../components/icons/ActionIcons';
 import { useExam } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
+import { useMyTenant } from '../../hooks/useTenants';
+import { useQuestionsByExamIds } from '../../hooks/useQuestions';
+import { useSectionsByExamIds } from '../../hooks/useSections';
+import { useAssignmentsForExam } from '../../hooks/useAssignments';
+import { useAuth } from '../../hooks/useAuth';
 import { getExamResultsForAdmin } from '../../api/resultApi';
 import { getExamResultScheme } from '../../utils/examResultScheme';
 import { buildAdvanceExamReport } from '../../utils/advanceExamReport';
+import { buildQuestionDifficulty, buildSectionWiseStats } from '../../utils/advanceExamReportAnalysis';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
 import { exportAdvanceExamReportExcel } from '../../utils/exportAdvanceExamReportExcel';
 import { exportAdvanceExamReportPdf } from '../../utils/exportAdvanceExamReportPdf';
@@ -39,14 +45,45 @@ export default function AdvanceExamReport() {
     enabled: !!examId,
   });
   const { data: users, isLoading: isLoadingUsers } = useUsers();
+  const { data: myTenant } = useMyTenant();
+  const { user: currentUser } = useAuth();
+  const examIds = useMemo(() => (examId ? [examId] : []), [examId]);
+  const { questionsByExam } = useQuestionsByExamIds(examIds);
+  const { sectionsByExam } = useSectionsByExamIds(examIds);
+  const { data: assignments } = useAssignmentsForExam(examId);
 
   const loading = isLoadingExam || isLoadingResults || isLoadingUsers;
   const scheme = getExamResultScheme(exam?.examTypeName ?? undefined);
+
+  // Exam.startAtUtc/endAtUtc are frequently null - scheduling in this app is
+  // actually enforced per-assignment, not per-exam (see StartAttemptHandler.cs's
+  // own assignment-first fallback). Falls back to the earliest real assignment
+  // window so "Exam Date" isn't a bare "-" whenever the exam itself was never
+  // directly scheduled, without fabricating a date that was never really set.
+  const effectiveExam = useMemo(() => {
+    if (!exam || exam.startAtUtc) return exam;
+    const earliest = assignments && assignments.length > 0
+      ? [...assignments].sort((a, b) => a.startAtUtc.localeCompare(b.startAtUtc))[0]
+      : null;
+    return earliest ? { ...exam, startAtUtc: earliest.startAtUtc, endAtUtc: earliest.endAtUtc } : exam;
+  }, [exam, assignments]);
 
   const report = useMemo(
     () => buildAdvanceExamReport(attempts ?? [], users ?? [], scheme),
     [attempts, users, scheme],
   );
+
+  const sectionStats = useMemo(
+    () =>
+      buildSectionWiseStats(
+        attempts ?? [],
+        (examId && questionsByExam[examId]) || [],
+        (examId && sectionsByExam[examId]) || [],
+        exam?.title ?? '',
+      ),
+    [attempts, questionsByExam, sectionsByExam, examId, exam?.title],
+  );
+  const questionDifficulty = useMemo(() => buildQuestionDifficulty(attempts ?? []), [attempts]);
 
   type CombinedRow =
     | { kind: 'present'; row: (typeof report.studentRows)[number] }
@@ -87,20 +124,30 @@ export default function AdvanceExamReport() {
   }
 
   async function handleExportExcel() {
-    if (!exam) return;
+    if (!effectiveExam) return;
     setExporting(true);
     try {
-      await exportAdvanceExamReportExcel(exam, scheme, report);
+      await exportAdvanceExamReportExcel(effectiveExam, scheme, report, {
+        sectionStats,
+        questionDifficulty,
+        organization: myTenant,
+        generatedByName: currentUser?.fullName,
+      });
     } finally {
       setExporting(false);
     }
   }
 
   async function handleExportPdf() {
-    if (!exam) return;
+    if (!effectiveExam) return;
     setExportingPdf(true);
     try {
-      await exportAdvanceExamReportPdf(exam, scheme, report);
+      await exportAdvanceExamReportPdf(effectiveExam, scheme, report, {
+        sectionStats,
+        questionDifficulty,
+        organization: myTenant,
+        generatedByName: currentUser?.fullName,
+      });
     } finally {
       setExportingPdf(false);
     }
@@ -179,7 +226,7 @@ export default function AdvanceExamReport() {
                   <Row className="g-2">
                     <Col xs={5} className="text-muted small">Exam Date</Col>
                     <Col xs={7} className="fw-medium">
-                      {exam.startAtUtc ? new Date(exam.startAtUtc).toLocaleString() : '—'}
+                      {effectiveExam?.startAtUtc ? new Date(effectiveExam.startAtUtc).toLocaleString() : '—'}
                     </Col>
                     <Col xs={5} className="text-muted small">Duration</Col>
                     <Col xs={7} className="fw-medium">{exam.durationMinutes} Minutes</Col>
