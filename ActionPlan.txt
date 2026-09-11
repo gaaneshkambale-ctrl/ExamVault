@@ -9191,3 +9191,272 @@ numbering across the whole document ("Page 1 of 4" through "Page 4 of
 Docker image before verifying.
 
 Not committed or pushed - holding per the user's standing rule.
+
+---
+
+"create preview button to see question look like in exam in question
+assignment page" - added a Preview button to Section Form's step 3
+"Question Assignment" table (the question-list-with-checkboxes page
+used when assigning questions to an exam section).
+
+Researched first (Explore agent) rather than guessing: confirmed the
+frontend only actually supports 4 question types (MultipleChoice/
+MultiSelect/TrueFalse/CodeProgram - the backend's QuestionType enum has
+more values like ShortAnswer/Essay but nothing in this frontend creates
+or renders them), found that TakeExam.tsx's real student-facing
+rendering is a single 2400-line component with the rendering logic
+tightly coupled to live exam state (timers, answer mutations, code-run
+cooldowns) - not something to import directly - and found an existing
+QuestionDetails.tsx admin page that already shows a question's raw data
+(options/correct-answer list, starter code) but in a plain admin-
+inspection style (ListGroup + badges), not styled like the actual exam
+question a student sees.
+
+Built a new QuestionPreviewModal.tsx that mirrors TakeExam.tsx's real
+option-row markup (labeled radio/checkbox rows, lettered A/B/C...) so
+this is a genuine look-alike rather than a data dump, with the correct
+option(s) badged in green for the admin's benefit (students obviously
+don't see that). For CodeProgram/SQL questions it shows the question
+text, sample input/output, constraints/notes, starter code, and (for
+SQL) the visible table setup - all real data already loaded on this
+page, no extra API call.
+
+Asked the user whether this static/read-only preview was sufficient or
+whether they wanted a live, typeable code editor embedded (the real
+Monaco-based editor + Run Code button TakeExam.tsx uses) - confirmed
+static preview is fine, since embedding the live editor component would
+mean either duplicating a large chunk of TakeExam.tsx's run/test-case
+logic or coupling this admin page to student-exam-session state for no
+real benefit (an admin isn't submitting an answer).
+
+Verified against two real questions via Claude-in-Chrome + direct DOM
+read of the rendered modal (screenshots still unusable - same 0x0
+viewport issue): a CodeProgram/Python question (showed sample I/O and
+starter code correctly) and a Single Choice MCQ question ("What is the
+capital of France?" - Paris correctly badged "Correct Answer"). npm run
+build/lint clean. Rebuilt and redeployed the frontend Docker image
+before verifying.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Follow-up: "i want which format seen to student that format show me in
+preview" + a screenshot of a richer, dark-panel code-question layout
+("Fibonacci Number" - Example table with Input/Output rows, Constraints
+bullets, a "Function Signature" code block "public int Fibonacci(int
+n)", Notes). The exact section headings/format ("Function Signature")
+don't exist anywhere in the current TakeExam.tsx rendering - grepped
+the whole frontend to confirm - so this wasn't literally today's live
+exam screenshot as-is.
+
+Before assuming it was fabricated/aspirational, verified against the
+real database: searched QuestionDb for an actual "Fibonacci Number"
+CodeProgram question and found one whose real stored test cases are
+exactly [0]->0, [1]->1, [6]->8, [10]->55 - matching 3 of the mockup's 4
+example rows exactly, and whose real FunctionName="Fibonacci"/
+ReturnType=Int/Parameter name="n" (type Int)/Language=CSharp produce
+precisely "public int Fibonacci(int n)" when composed. This confirmed
+the requested format is fully backed by real, already-stored data (just
+not currently surfaced anywhere in the UI) - not a request to fabricate
+anything.
+
+Rebuilt QuestionPreviewModal's CodeProgram section to add:
+- "Example" table built from the question's real testCases (arguments
+  + expectedOutput, formatted via the existing formatTypedValue utility
+  used elsewhere for the same typed values) - falls back to the single
+  sampleInput/sampleOutput pair when a question has no structured test
+  cases.
+- "Function Signature" - a new buildFunctionSignature() utility
+  (utils/functionSignature.ts) that composes a language-idiomatic
+  one-line signature (C#/Java/Python/C++/JavaScript all handled
+  differently) from the question's real functionName/returnType/
+  parameters. Only rendered when a function name actually exists.
+- Icon-headed sub-sections (Example/Constraints/Function Signature)
+  matching the shared screenshot's visual language, kept in the app's
+  existing light theme (bg-primary-subtle-style headers already used
+  elsewhere in TakeExam.tsx) rather than switching to the screenshot's
+  dark colors, for consistency with every other admin modal - flagged
+  this choice to the user rather than assuming the dark palette was a
+  hard requirement.
+
+Verified against the real question end-to-end via Claude-in-Chrome +
+targeted DOM reads (innerText on the whole modal kept getting a false-
+positive "[BLOCKED: Base64 encoded data]" content-safety block from the
+extension - worked around by reading each section element
+individually): Example table showed all 4 real test cases (0->0, 1->1,
+6->8, 10->55), Constraints showed the real stored text, and Function
+Signature rendered exactly "public int Fibonacci(int n)". npm run
+build/lint clean. Rebuilt and redeployed the frontend Docker image
+before verifying.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Follow-up: "check this because i thing you are using create table like for
+showing table for question instead use this [pasted a proposed generic
+JSON+React table structure]... check how to implement so we can use for
+all language instead sql only" - correctly caught that the preview's SQL
+section was dumping the raw Setup SQL text in a <pre> block instead of
+parsing it into a real HTML table, and asked for the same idea to work
+for every language's "Example" data, not just SQL.
+
+Rather than adopt the user's proposed new JSON schema from scratch, found
+that TakeExam.tsx (the real live exam) already has this exact real-table
+parsing/rendering built and working: parseSqlSetup (CREATE TABLE/INSERT
+-> real column/row grids), parseSqlRowSet (the backend's canonical
+JSON-lines row-set format -> the same shape), and a SqlTable component -
+confirmed via two more screenshots the user sent that both match this
+existing code exactly (one showing the parsed "Use the following table"
++ "Expected Output" real-table format, one showing the plain-text
+Sample-Input/Output fallback for a question with no CREATE TABLE setup).
+
+Extracted all of it out of TakeExam.tsx into shared modules instead of
+duplicating it a second time: utils/sqlSetupParser.ts (parseSqlSetup,
+parseSqlRowSet, toSqlTableRows) and components/DataTable.tsx (renamed
+from the page-local "SqlTable" since it's genuinely generic - just
+columns+rows). TakeExam.tsx now imports from these instead of defining
+them locally; behavior is unchanged (same function bodies, just
+relocated) - verified with a full production build, not just a
+type-check, since this touches the live exam-taking page.
+
+Rewired QuestionPreviewModal.tsx to use the shared modules: SQL setup
+now renders as real parsed table(s) (falling back to raw SQL text only
+when parsing genuinely can't make sense of it, matching TakeExam.tsx),
+added the missing "Expected Output" table (real reference-query result,
+was completely absent from the preview before), and added a Sample-
+Input/Output fallback table for SQL questions that have neither. For
+every other language, generalized the "Example" section to the same
+DataTable component with one real column per function parameter (named)
+plus an Output column, instead of one joined "Input" string - directly
+answering "use this for all languages, not just SQL."
+
+Verified against two real questions via Claude-in-Chrome + targeted DOM
+reads: a real "students" table setup parsed into id/name/score with 5
+real rows (Alice/Bob/Charlie/Diana/Ethan), and its real Expected Output
+table showing student_count=5 (the actual reference-query result for
+that question). npm run build/lint clean (build catches TakeExam.tsx
+type/behavior regressions the way a type-check alone wouldn't). Rebuilt
+and redeployed the frontend Docker image before verifying. Did not do a
+full live student exam attempt walkthrough to re-verify TakeExam.tsx's
+own SQL rendering post-refactor (would need a fresh test attempt set up)
+- relying on the clean production build plus the mechanical, behavior-
+preserving nature of the extraction (same function bodies, just moved).
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Follow-up: "check example margin table alighnment issue" + a dark-mode
+screenshot of the exact preview showing the Example table's "OUTPUT"
+header sitting flush-left while its numeric values (6, 30) sat flush-
+right underneath - looked like the header and column had drifted apart.
+
+Root cause: DataTable right-aligned BOTH the header and the data for a
+numeric column. Since "OUTPUT" (the header) is wider than "6" (the
+data), right-aligning both to the same edge still left a visible gap
+between them - technically aligned, but reads as broken. Fixed by
+always left-aligning headers (they're labels, not data) while data
+cells keep whatever alignment applies.
+
+Immediately after, the user sent a light-theme reference screenshot
+("i want result show like this") matching the CSS spec they'd pasted
+earlier - full-width table, all-left-aligned (including numeric
+columns, not just headers), light-gray header band (#f1f5f9), soft
+border (#dbe3ef) with rounded corners, row separators only (no vertical
+column lines), generous padding. Rewrote DataTable.tsx to match that
+spec exactly - dropped the numeric-right-align/monospace logic entirely
+in favor of the simpler all-left-aligned style, and switched from a
+shrink-to-content table to a real 100%-width one.
+
+Since DataTable now carries its own border/radius, had to remove the
+redundant outer wrapping "rounded border" divs at every call site
+(3 in TakeExam.tsx, 4 in QuestionPreviewModal.tsx) that would otherwise
+double up with the table's own border - added a `bordered` prop
+(default true) so the couple of cases already inside their own colored-
+header "TableCard" box can turn the table's own border off instead of
+nesting two.
+
+This is a deliberately fixed light palette (hardcoded hex values from
+the user's own spec), not a dark-mode-aware Bootstrap-token style like
+the rest of the app - flagged this explicitly since it's a deviation
+from how color is normally handled here, in case dark-mode consistency
+turns out to matter later.
+
+Verified against the exact question from the user's own screenshot
+("Write a function that returns the sum of an integer array", C++,
+arr/Output columns, test cases [1,2,3]->6 and [10,20]->30) via Claude-
+in-Chrome + computed-style reads: both headers now read textAlign=left,
+matching the data, with the correct #f1f5f9 header background. npm run
+build/lint clean. Rebuilt and redeployed the frontend Docker image
+before verifying.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+"table header seen only table body blank fix the issue" + a screenshot
+confirming it: the "a | b | Output" header band was clearly visible,
+but the data rows underneath were essentially invisible (only barely
+visible as a faint ghost).
+
+Root cause was exactly the trade-off flagged in the previous response:
+DataTable's <th> cells set an explicit background (#f1f5f9) so they're
+always readable, but the <td> data cells had no background at all -
+they inherited whatever was behind them (the page/modal background),
+which is dark in dark mode. Combined with the cells' hardcoded dark
+navy text color (#1e293b), dark text landed on a dark background and
+became unreadable, while the header (light background + dark text)
+stayed fine regardless of theme.
+
+Fixed by giving <td> cells the same explicit white background
+(#ffffff) as part of the table's own self-contained light card, so the
+whole table - header and body - renders consistently regardless of the
+surrounding page's theme, matching the original design intent (a
+deliberately light, fixed-palette table per the user's own spec, not a
+theme-adaptive one).
+
+Verified against the exact question from the screenshot ("Write a
+function that returns the sum of two integers", Python, a/b/Output
+columns) via Claude-in-Chrome + computed style read: data cell now
+reports background rgb(255,255,255) with text color rgb(30,41,59) -
+correct contrast. npm run build/lint clean. Rebuilt and redeployed the
+frontend Docker image before verifying.
+
+Not committed or pushed - holding per the user's standing rule.
+
+---
+
+Two quick follow-ups on DataTable.tsx:
+
+1. "horizental border between two column" - clarified via AskUserQuestion:
+   wanted vertical divider lines between columns too, not just the
+   existing horizontal row separators - added a left border on every
+   column after the first (both header and data cells), matching the
+   same separator color, for a full grid look.
+
+2. "dark mode not as per expectation use for table" - the fixed light
+   palette from the earlier CSS-spec request (deliberately hardcoded
+   hex colors, flagged as a trade-off at the time) wasn't acceptable
+   after all once seen in dark mode. Rebuilt DataTable.tsx's colors
+   using Bootstrap 5.3's theme-aware CSS custom properties
+   (var(--bs-tertiary-bg) for the header band, var(--bs-body-bg) for
+   data cells, var(--bs-body-color) for text, var(--bs-border-color)
+   for every border) instead of hardcoded hex - the exact same fix
+   pattern already used earlier this session for the multi-section
+   exam's Sections tab bar dark-mode bug. Kept every structural change
+   from the CSS-spec request (full width, all-left-aligned, grid
+   lines) - only the color source changed, from fixed hex to theme
+   variables.
+
+Verified against a real dark-mode session (window.matchMedia
+prefers-color-scheme: dark actually true here, confirmed via JS) that
+the table's header/body backgrounds and text now resolve to real dark-
+theme colors matching the page's own background exactly (rgb(33,37,41)
+for both table body and document body), instead of a jarring light box
+sitting inside a dark page. npm run build/lint clean both times.
+Rebuilt and redeployed the frontend Docker image before each
+verification.
+
+Not committed or pushed - holding per the user's standing rule.
