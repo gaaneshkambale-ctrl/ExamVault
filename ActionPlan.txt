@@ -10061,3 +10061,31 @@ data there; same principle, different constraint.
 tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
 and redeployed.
 
+
+---
+
+"student side - my profile - download my data and deactivate account
+both disable" - clarified via AskUserQuestion (neither was actually
+broken/disabled in the code - "Download My Data" only disables itself
+mid-download, "Deactivate Account" had no disabled state at all) - user
+confirmed this is a feature request to turn both off for students, not
+a bug report.
+
+Fix: Profile.tsx now only renders <QuickActionsCard /> for non-Student
+roles (`user.role !== 'Student'`) - "Deactivate Account" was already
+gated Student-only inside that component, so hiding the whole card for
+students removes both at once; non-Student roles (Admin/Instructor/
+Platform) keep "Download My Data" exactly as before, since the request
+was specifically scoped to "student side" and those roles were never
+part of it. Since QuickActionsCard's only consumer is Profile.tsx and
+Deactivate was Student-only, that branch became 100% unreachable -
+removed it (button, confirm modal, deactivateMutation, the now-unused
+Modal/useAuth imports) rather than leave dead code behind. Left
+deactivateMyAccount() in api/userApi.ts and its backend endpoint
+untouched - this was a UI-level "hide the entry point" request, not a
+"delete the capability everywhere" one; flagged this scope boundary to
+the user rather than assuming.
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
