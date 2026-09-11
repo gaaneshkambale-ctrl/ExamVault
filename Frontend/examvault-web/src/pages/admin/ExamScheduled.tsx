@@ -318,10 +318,10 @@ export default function ExamScheduled() {
   }
 
   return (
-    <AdminLayout active="Exam Scheduled">
+    <AdminLayout active="Scheduled Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="h4 fw-bold mb-0 text-primary">Exam Scheduled</h1>
+          <h1 className="h4 fw-bold mb-0 text-primary">Scheduled Exams</h1>
           <p className="text-muted mb-0">View and manage all scheduled exam sittings</p>
         </div>
         <Link to="/admin/assignments/new" className="btn btn-primary">

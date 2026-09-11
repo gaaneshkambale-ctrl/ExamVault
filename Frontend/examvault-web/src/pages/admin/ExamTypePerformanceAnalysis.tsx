@@ -168,10 +168,10 @@ export default function ExamTypePerformanceAnalysis() {
   }, [examsOfType, resultsOfType]);
 
   return (
-    <AdminLayout active="Exam Type Wise Report">
+    <AdminLayout active="Exam Type Performance">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
-          <p className="text-muted small mb-1">Results / By Exam Type / Performance Analysis</p>
+          <p className="text-muted small mb-1">Reports / By Exam Type / Performance Analysis</p>
           <h1 className="h4 fw-bold mb-1 text-primary">
             Performance Analysis{examType ? ` – ${examType.name}` : ''}
           </h1>

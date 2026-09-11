@@ -96,10 +96,10 @@ export default function ExamTypeStudentPerformance() {
   const rangeEnd = Math.min(currentPage * pageSize, rows.length);
 
   return (
-    <AdminLayout active="Exam Type Wise Report">
+    <AdminLayout active="Exam Type Performance">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
-          <p className="text-muted small mb-1">Results / By Exam Type / Student Performance</p>
+          <p className="text-muted small mb-1">Reports / By Exam Type / Student Performance</p>
           <h1 className="h4 fw-bold mb-1 text-primary">
             Student Performance{examType ? ` – ${examType.name}` : ''}
           </h1>

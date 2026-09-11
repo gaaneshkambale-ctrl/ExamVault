@@ -13,7 +13,7 @@ export type AdminNavItem =
   | 'User Groups'
   | 'Exams'
   | 'Exam Types'
-  | 'Exam Scheduled'
+  | 'Scheduled Exams'
   | 'Live Monitoring'
   | 'Active Exams'
   | 'Student Attempts'
@@ -29,7 +29,7 @@ export type AdminNavItem =
   | 'Student Reports'
   | 'Performance Reports'
   | 'Audit Reports'
-  | 'Exam Type Wise Report'
+  | 'Exam Type Performance'
   | 'Notifications'
   | 'Create Notification'
   | 'History'
@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
     path: '/admin/exams',
     children: [
       { label: 'Exam Types', path: '/admin/exam-types' },
-      { label: 'Exam Scheduled', path: '/admin/exams/scheduled' },
+      { label: 'Scheduled Exams', path: '/admin/exams/scheduled' },
     ],
   },
   {
@@ -90,10 +90,6 @@ const navItems: NavItem[] = [
       { label: 'Student Results', path: '/admin/results/students' },
       { label: 'Result Analytics', path: '/admin/results/analytics' },
       { label: 'Publish Results', path: '/admin/results/publish' },
-      // Route stays under /admin/reports/... - only the menu placement moved,
-      // to avoid a URL migration across the 6 exam-type-wise pages' own
-      // cross-links for what's otherwise a purely cosmetic reorg.
-      { label: 'Exam Type Wise Report', path: '/admin/reports/exam-type-wise' },
     ],
   },
   {
@@ -104,6 +100,7 @@ const navItems: NavItem[] = [
       { label: 'Student Reports', path: '/admin/reports/students' },
       { label: 'Performance Reports', path: '/admin/reports/performance' },
       { label: 'Audit Reports', path: '/admin/reports/audit' },
+      { label: 'Exam Type Performance', path: '/admin/reports/exam-type-wise' },
     ],
   },
   {
@@ -149,7 +146,7 @@ const iconPaths: Partial<Record<AdminNavItem, ReactNode>> = {
       <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
     </>
   ),
-  'Exam Scheduled': (
+  'Scheduled Exams': (
     <>
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <line x1="16" y1="2" x2="16" y2="6" />
@@ -208,7 +205,7 @@ const iconPaths: Partial<Record<AdminNavItem, ReactNode>> = {
       <line x1="12" y1="3" x2="12" y2="15" />
     </>
   ),
-  'Exam Type Wise Report': (
+  'Exam Type Performance': (
     <>
       <polygon points="12 2 2 7 12 12 22 7 12 2" />
       <polyline points="2 17 12 22 22 17" />
