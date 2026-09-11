@@ -9770,3 +9770,294 @@ n8n calls already take 14-18s: asking for more will likely take longer
 
 Full solution build clean; ai-api rebuilt and redeployed.
 
+
+---
+
+"Results / By Exam Type / Advanced Report - export pdf file make as per
+student pdf result" - the Advanced Report's PDF export
+(exportAdvanceExamReportPdf.ts) is currently a plain manual-table PDF
+(bare jsPDF tables, a solid green header band, no logo, no branding) -
+visually nothing like the real per-student result PDF
+(generateResultPdf.ts), which has the real ExamVault logo, a blue brand
+line, rounded "panel" info/stat cards, a donut chart, a light muted-gray
+table header style, and a branded footer with logo + generated date +
+page numbers.
+
+Plan: extract the reusable branding primitives already built for
+generateResultPdf.ts (colors, PAGE_WIDTH/MARGIN/CONTENT_WIDTH, loadLogo,
+drawHeaderBrand, drawFooter/stampFooters, panel, panelTitle, fieldRow,
+drawStatCard, drawDonutChart, drawTableHeader, ensurePageSpace,
+sanitizeFilename) into a new shared module
+(utils/pdfReportKit.ts) instead of duplicating them - generateResultPdf.ts
+switches to import from it (no behavior change, verified unaffected),
+then exportAdvanceExamReportPdf.ts is rewritten on top of the same kit:
+branded header (logo + "Advanced Exam Report" + brand line), an Exam
+Info panel (title/type/date/duration/marks - same layout convention as
+the student report's combined info panel), stat cards for
+Total/Present/Absent/Pass Rate or Average Score, a Present/Absent or
+Pass/Fail donut, the student table restyled with the same light
+muted-header convention (not the current solid green band), the Exam
+Insights section as a styled panel instead of plain text lines, and the
+same branded footer (logo + generated date + page N of N) via
+stampFooters. Kept the "Regenerate"/"Export Excel" siblings and the
+report's own data (AdvanceReportData/ExamResultScheme) completely
+unchanged - this is a rendering-only redesign.
+
+
+Implementation done (2026-09-11): Extracted pdfReportKit.ts with every
+reusable branding primitive from generateResultPdf.ts (colors, page
+constants, loadLogo, drawHeaderBrand/drawPageHeader, drawFooter/
+stampFooters, panel/panelTitle/fieldRow, drawStatCard, drawDonutChart,
+drawTableHeader, ensurePageSpace, sanitizeFilename). generateResultPdf.ts
+now imports from it (pure refactor, verified behavior-unchanged via
+tsc --noEmit + npm run build). exportAdvanceExamReportPdf.ts rewritten on
+top of the same kit: branded header w/ logo + tagline, an Exam Info
+panel, 4 stat cards (Total/Present/Absent/Pass Rate or Average),
+a Result-Split donut + Score-Distribution-by-range bars two-column row,
+the student table restyled with the same light muted-header convention
+(replacing the old solid green band) plus alternating row banding, an
+Exam Insights panel, and the same branded footer via stampFooters.
+tsc --noEmit, npm run build, and npm run lint all clean; frontend
+rebuilt and redeployed.
+
+Attempted live browser verification (navigate to
+/admin/reports/946202c1-72ff-451b-bf3e-84c9f753826a/advance, a real exam
+with 4 submitted attempts) but hit an apparently pre-existing, unrelated
+session issue in the reused browser tab: exam/report data never loaded
+(h1 stuck on the "Advanced Report" fallback, Export buttons stayed
+disabled, zero /api/ network requests fired even after 9+ seconds,
+no console errors) - looks like a stale/expired session in that specific
+tab rather than anything caused by this change (nothing here touches
+auth or data-fetching). Did not attempt to work around it by minting a
+token from the stored refresh token (standing rule: never do that -
+it rotates and logs the user out). Flagged to the user as NOT yet
+visually verified live - asked them to refresh/re-log that tab (or open
+a fresh one) so the PDF can actually be downloaded and inspected.
+
+
+---
+
+"check and improve" [detailed ChatGPT-style redesign spec + reference
+mockup image] for the Advanced Exam Report PDF - a full institutional-
+report redesign: new header copy ("EXAM PERFORMANCE REPORT"), an
+organization info block, a 3-column Exam Information panel, 6 KPI cards
+(Total/Attempted/Passed/Failed/Absent/Pass Rate) for pass-fail exam
+types (4 cards for non-pass-fail types), a Result Split horizontal
+stacked bar (replacing a donut that got unreadable at 97% absent), a
+Score Distribution bar chart, a Key Highlights panel, a restyled Student
+Performance Details table (Present rows first then Absent, status/result
+pill badges, Roll No. "-" fallback, absent rows capped at 15 with a
+"...and N more" note - present/attempted rows are NEVER capped), and an
+entirely new page 2 (Performance Summary with Score/Percentage kept
+separate per the user's own feedback point #7, Top Performers, Attendance
+Overview donut, Section-wise Performance, Most Difficult Questions, Exam
+Insights, Recommendations, and a confidentiality/generated-by closing
+line).
+
+Before implementing, asked the user 3 clarifying questions (AskUserQuestion)
+about pieces the mockup showed that this app doesn't actually have real
+data/assets for - never fabricate data is a standing rule:
+1. Branding: mockup used a fabricated "ExamVaults"/tagline/cursive
+   quote that don't exist in the real app - user chose to keep the real
+   ExamVault logo and drop the invented taglines.
+2. Organization name/address: real data exists (Tenant.Name/Address* in
+   UserService) but no endpoint let an Admin fetch their OWN org's info -
+   user chose to build it. Added GET /api/tenants/mine
+   (MyTenantController.cs, separate from the SuperAdmin-only
+   TenantsController, reads tenant_id off the JWT claim rather than a
+   route parameter) + MyTenantResponse.cs (a narrower shape than the
+   SuperAdmin TenantResponse - name/address only) + frontend
+   getMyTenant()/useMyTenant().
+3. QR verification + a fabricated "Amit Kumar, Exam Controller"
+   signature - user chose to skip QR entirely (would need a real public
+   verification page/endpoint - a genuinely new feature, not a styling
+   change) and replaced the signature block with a real
+   "Generated by: {the exporting admin's own name}" line (via useAuth())
+   instead of any invented identity.
+
+Mid-task, user separately flagged "website colors use in pdf file" -
+found the app's real --bs-primary is #4f46e5 (indigo, index.css), not
+the generic blue {37,99,235} pdfReportKit.ts had been using since the
+original student-PDF work. Fixed BRAND to the real indigo and GREEN/RED
+to the site's actual Bootstrap success/danger hex (#198754/#dc3545) -
+this is a shared-kit fix so it also corrects generateResultPdf.ts (the
+student PDF), not just this report. Left AMBER as-is (Bootstrap's actual
+warning #ffc107 is too pale/yellow to read as bold report text, and the
+site doesn't override it either).
+
+For Section-wise Performance and Most Difficult Questions (page 2), reused
+the exact existing client-side join pattern ExamTypeSectionPerformance.tsx
+and ExamTypeQuestionAnalysis.tsx already use elsewhere in the app
+(QuestionResultResponse has no sectionId of its own, but Question
+Service's QuestionResponse does - join client-side via
+useQuestionsByExamIds/useSectionsByExamIds) rather than inventing a new
+backend aggregation - new file advanceExamReportAnalysis.ts
+(buildSectionWiseStats/buildQuestionDifficulty), kept separate from the
+shared advanceExamReport.ts (which Excel export + the on-screen page also
+depend on) since this analysis is PDF-only for now.
+
+Added 3 new shared primitives to pdfReportKit.ts: drawBadge (status/result
+pills), drawStackedBar (Result Split), and made drawStatCard wrap long
+labels to 2 lines (needed for the narrower 6-up KPI row) - backward
+compatible with the existing 4-up cards.
+
+Full tsc --noEmit, npm run build, and npm run lint all clean; full
+backend solution build clean. user-api and frontend rebuilt and
+redeployed; user-api came up cleanly (confirmed via logs, real DB query
+against the Tenants table succeeded).
+
+NOT verified live: attempted browser verification 3 times (reusing the
+existing tab, a fresh navigate, and a brand-new tab) - hit a real,
+reproducible environment problem each time (stale/unauthenticated
+session with zero API calls firing, then a frozen/unresponsive renderer
+on retry) unrelated to this change (nothing here touches auth). Did not
+attempt to work around it with the stored refresh token (standing rule:
+never mint an out-of-band token from it). Flagged to the user as
+genuinely unverified - they need to open the report fresh themselves and
+actually export the PDF to confirm the real layout/spacing looks right,
+since jsPDF's manual-coordinate layout in a file this size (two full
+pages, ~15 new panels/tables) is exactly the kind of thing that can look
+right on paper (measurements checked by hand) and still be off by a few
+mm in the actual render.
+
+
+---
+
+"i want to add field in pdf - exam code, exam Date, start time, end
+time, Academic year 2026, organization name" - Exam Information panel
+in the Advanced Exam Report PDF restructured from 3 to 4 columns to fit
+the additions: Exam Title/Exam Code/Exam Type | Exam Date/Start Time/
+End Time | Duration/Total Marks/Passing | Status/Mode/Academic Year.
+Exam Code from exam.examCode (real field, already existed on
+ExamResponse, just wasn't surfaced here yet); Start/End Time split out
+from exam.startAtUtc/endAtUtc (same real fields Exam Date already used,
+"-" fallback when null - confirmed via the exam-scheduling-window bug
+earlier this session that these are often null at the exam level since
+assignment-level scheduling is what's actually enforced, so this field
+will legitimately show "-" for many exams, same honest fallback as
+everything else here); Academic Year derived from Exam Date's own year
+(not a separate stored concept - deliberately not fabricated as some
+other year). Organization Name was already wired (confirmed via a
+direct DB check that the test tenant's Name/Address are populated and
+GET /api/tenants/mine returns them) - left as the existing bold header
+block above the panel rather than also duplicating it as a field row.
+
+"add icon in bedge" - added optional check/cross/dot vector icons (jsPDF
+has no icon font, so these are drawn as plain line/circle primitives) to
+drawBadge in pdfReportKit.ts, wired into the Student Performance table's
+Status/Result pills: check for Present and for a passed Result, cross
+for a failed Result, dot for every Absent pill.
+
+tsc --noEmit, npm run build, and npm run lint all clean; frontend
+rebuilt and redeployed.
+
+
+---
+
+"Results / By Exam Type / Advanced Report - exam date not seen" -
+diagnosed via direct DB check: every exam currently in ExamDb has
+StartAtUtc/EndAtUtc = NULL (confirmed - test data has clearly been reset
+since earlier this session, only 4 exams now exist, all with null exam-
+level dates). Not a bug - this is the SAME thing flagged proactively
+after the "add field" request: exam-level scheduling is frequently
+unset because this app actually enforces scheduling per-ASSIGNMENT
+(ExamAssignments.StartAtUtc/EndAtUtc are non-nullable, always real -
+same precedent as StartAttemptHandler.cs's own assignment-first
+fallback), not per-exam. The screen, PDF, and Excel export were all
+reading only the exam's own (frequently-null) date, showing "-"
+everywhere with no real fallback.
+
+Fix (AdvanceExamReport.tsx): added useAssignmentsForExam(examId) and a
+new effectiveExam memo - when exam.startAtUtc is null, falls back to the
+earliest real assignment's startAtUtc/endAtUtc pair (sorted, not mixing
+one assignment's start with a different assignment's end) rather than
+show "-" when real data exists. effectiveExam now feeds the on-screen
+"Exam Date" field, the PDF export (Exam Date/Start Time/End Time/
+Academic Year all derive from it), and the Excel export - same fix
+applied everywhere the exam's date is shown, not just the PDF, since all
+three had the identical gap. No new data invented - every value shown is
+a real, already-stored assignment date; if an exam genuinely has zero
+assignments yet, it still correctly shows "-".
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
+
+---
+
+"check alignment and margin not correct please fix this issue" [screenshot
+of the 4-column Exam Information panel] - confirmed the exact bug from
+the screenshot: "Exam Code" value ("PRO-2026-AD35E3") and "Exam Type"
+value ("Assessment Exam") visibly overlapped into column 2's "Start
+Time"/"End Time" labels, and "Academic Year" 's own label collided with
+its own value ("Academic Year2026", no gap at all). Root cause:
+fieldRow (pdfReportKit.ts, shared by both PDFs) drew the value at a
+fixed x+labelW offset with no awareness of the label's actual rendered
+width or the column's right boundary - fine for the wider 2-3 column
+panels this was originally built for, but the new 4-column layout
+(colW~45mm) made both failure modes hit at once: a label wider than its
+own fixed labelW offset (Academic Year), and a value long enough to
+cross into the next column (Exam Code/Exam Type).
+
+Fix: fieldRow now measures the label's real width and uses
+max(labelW, actualWidth + 2) as the value's start position (never draws
+a value on top of its own label again), and takes an optional maxWidth
+(total width budget from x) to ellipsis-truncate the value via a new
+shared fitText export instead of letting it bleed into whatever's
+drawn next - moved fitText out of exportAdvanceExamReportPdf.ts's local
+copy into pdfReportKit.ts so it's one shared implementation. Wired
+maxWidth = colW - 6 through every fieldRow call in the Exam Information
+panel. Backward compatible - every other fieldRow caller (student PDF,
+Performance Summary panel) that doesn't pass maxWidth keeps its exact
+previous behavior, and the label-collision fix can only ever grow the
+value's start position, never shrink it below what already worked.
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
+
+---
+
+"exam code and exam type not seen you do one thing create 4 rows to it
+will adjested" [screenshot showing "PRO-2026..." and "Assessm..."
+truncated] - the ellipsis-truncation fix from the previous round was
+working correctly, but 4 narrow columns (~45mm) genuinely didn't have
+room for a real exam code or a longer exam type name even before
+truncating. Restructured the Exam Information panel from 4 columns x 3
+rows to 3 columns x 4 rows (same 12 fields, redistributed: Exam Title/
+Code/Type/Status | Exam Date/Start/End Time/Mode | Duration/Total Marks/
+Passing/Academic Year) - each column is now ~60.7mm instead of ~45.5mm,
+comfortably fitting "PRO-2026-AD35E3" and "Assessment Exam" without
+truncating. infoPanelH grown from 28 to 34 to fit the 4th row.
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
+
+---
+
+"Results / By Exam Type / Advanced Report - export excel modify as per
+pdf file" - brought exportAdvanceExamReportExcel.ts up to parity with
+everything built into the PDF this session. Extracted the PDF's
+AdvanceReportPdfExtras into a shared AdvanceReportExtras
+(advanceExamReportAnalysis.ts) so both exports take the exact same
+sectionStats/questionDifficulty/organization/generatedByName - no
+separate data path to drift out of sync.
+
+Summary sheet: added Organization + Address (when resolved), Exam Code,
+Status, Start Time, End Time, Academic Year (all the same fields added
+to the PDF's Exam Info panel), Attempted/Pass Rate rows, and split Score
+Highlights into separate Score (Marks) and Percentage columns per the
+earlier "these are percentages, not scores" feedback. Added two new
+sheets - Section-wise Performance and Question Analysis - mirroring the
+PDF's page 2 panels, only created when there's real data for them
+(a non-sectioned exam or one exam type doesn't get an empty tab).
+
+Deliberately did NOT cap absent students in the Student Details sheet
+the way the PDF does (MAX_ABSENT_ROWS) - a spreadsheet has no page
+budget to protect, so there's no reason to summarize away real roster
+data there; same principle, different constraint.
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
