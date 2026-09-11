@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Offcanvas } from 'react-bootstrap';
+import { Badge, Offcanvas } from 'react-bootstrap';
 import BrandMark from './BrandMark';
 import { usePermissions } from '../hooks/usePermissions';
+import { useLiveExamCount } from '../hooks/useLiveExamCount';
+import { useResultsAndCertificatesCounts } from '../hooks/useResultsAndCertificatesCounts';
+import { useUnreadCount } from '../hooks/useNotifications';
 import {
   CertificatesIcon,
   DashboardIcon,
@@ -55,6 +58,21 @@ export default function DashboardSidebar({ active, show = false, onClose = () =>
   // restriction at all), so hide the nav item rather than leave a link
   // that 403s.
   const visibleNavItems = navItems.filter((item) => item.label !== 'My Results' || hasPermission('Results - View'));
+  // Each of these mirrors a real count the destination page itself computes
+  // (or, for Notifications, the same unread count the top-bar bell already
+  // shows) - not a new definition invented just for the sidebar. Runs on
+  // every page since this sidebar is global; the per-exam queries behind
+  // Live/Results/Certificates are the same ones those pages already pay for
+  // their own counts, not new cost.
+  const liveExamCount = useLiveExamCount();
+  const { resultsCount, certificatesCount } = useResultsAndCertificatesCounts();
+  const { data: unread } = useUnreadCount();
+  const badgeCountByLabel: Partial<Record<DashboardNavItem, number>> = {
+    'My Exams': liveExamCount,
+    'My Results': resultsCount,
+    'My Certificates': certificatesCount,
+    Notifications: unread?.count ?? 0,
+  };
 
   return (
     <Offcanvas
@@ -92,6 +110,11 @@ export default function DashboardSidebar({ active, show = false, onClose = () =>
                 >
                   {item.icon}
                   {item.label}
+                  {!!badgeCountByLabel[item.label] && (
+                    <Badge bg="danger" pill className="ms-auto" style={{ fontSize: 10 }}>
+                      {badgeCountByLabel[item.label]! > 9 ? '9+' : badgeCountByLabel[item.label]}
+                    </Badge>
+                  )}
                 </Link>
               ) : (
                 <span key={item.label} className="px-3 py-2 rounded-2 d-flex align-items-center gap-2" style={{ color: '#475569' }}>
