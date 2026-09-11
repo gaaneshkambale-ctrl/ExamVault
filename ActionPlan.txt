@@ -9598,3 +9598,63 @@ Implementation done (2026-09-11):
   verification standing lesson - the browser automation 0x0 viewport bug on
   this machine makes a real click-through unreliable without user help.
 
+
+---
+
+"why single choice and multple choice questions have only 4 options?" /
+"yes extend more than 4" - traced the cap to two separate places (manual
+Create Question entry already supports unlimited options via "+ Add
+Option", confirmed no cap there or in the backend's CreateQuestionValidator/
+UpdateQuestionValidator, which only enforce a MINIMUM of 2):
+1. CSV import (csvQuestionImport.ts) - parseQuestionImportCsv hardcoded to
+   exactly 4 fixed columns (Option A-D) via a 4-entry OPTION_LETTERS array
+   and fixed columnIndex() calls.
+2. AI generation (N8nQuestionGenerator.cs) - N8nGeneratedItem/OptionSelectors
+   hardcoded to exactly 4 fields (OptionA-D) read from the n8n webhook
+   response.
+
+Fix:
+1. CSV import: made option-column discovery fully dynamic - scans the
+   header row for any "Option <letter>" column (not just A-D), sorted by
+   letter, so a CSV author can add "Option E", "Option F", etc. with no
+   further code changes ever needed. Error messages ("correct answer must
+   match a filled-in option letter") now reference the actual last letter
+   found instead of a hardcoded "A-D". Updated the CsvImportPanel help text
+   to mention more columns can be added.
+2. AI generation: extended N8nGeneratedItem/OptionSelectors from
+   OptionA-D (4) to OptionA-J (10) - the n8n webhook response is now read
+   for up to 10 options instead of 4. Flagged to the user: the actual n8n
+   workflow that generates the questions is an external system (only its
+   webhook URL - N8N_AI_WEBHOOK_URL - lives in this repo, no workflow
+   config file), so this change alone doesn't make the AI generate more
+   than 4 options; it only makes the .NET side ready to use more than 4 IF
+   the external n8n workflow is separately updated to return them.
+
+
+---
+
+User pasted the actual n8n "AI Question Generation" prompt text (external
+workflow, not in this repo) after the "extend more than 4 options" ask.
+Since I have no access to n8n itself, drafted a replacement prompt for the
+user to paste in there by hand - not applied by me, just handed back as
+text. Changes from the original:
+1. Added OptionE/OptionF to the required JSON fields (raises the ceiling
+   from 4 to 6, matching N8nQuestionGenerator.cs's now-dynamic OptionA-Z
+   parsing - still a fixed prompt-side ceiling, not truly unlimited, since
+   an LLM prompt needs a concrete field list to reliably fill in).
+2. Multiple Choice rule now: use AT LEAST 4 distinct options, and up to 6
+   when more genuine, distinct options naturally exist for the question -
+   never pad with filler/duplicate options just to reach 6. Unused
+   trailing fields (OptionE/OptionF) must be left as "" - same convention
+   the original prompt already used for True/False leaving OptionC/D "".
+3. Added an explicit "only generate a type that was actually requested"
+   rule - this is the prompt-level root cause of the earlier True/False-
+   leak bug (fixed defensively in code via allowTrueFalse in
+   N8nQuestionGenerator.cs already, but the prompt itself never told the
+   model not to do it in the first place).
+Not done: no UI control for the admin to choose a target option count
+(e.g. "always exactly 5") - left the exact count per question up to the
+model within the 4-6 range, matching how it already varies question
+wording/difficulty on its own; flagged as an easy follow-up if the user
+wants that level of control instead.
+
