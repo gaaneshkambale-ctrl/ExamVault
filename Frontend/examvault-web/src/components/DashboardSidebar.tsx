@@ -1,7 +1,16 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Offcanvas } from 'react-bootstrap';
 import BrandMark from './BrandMark';
 import { usePermissions } from '../hooks/usePermissions';
+import {
+  CertificatesIcon,
+  DashboardIcon,
+  ExamsIcon,
+  NotificationsIcon,
+  ResultsIcon,
+  SettingsIcon,
+} from './icons/StudentNavIcons';
 
 export type DashboardNavItem =
   | 'Dashboard'
@@ -15,6 +24,7 @@ export type DashboardNavItem =
 interface NavItem {
   label: DashboardNavItem;
   path: string | null;
+  icon: ReactNode;
 }
 
 // No "Profile" entry here - it's already one click away via the top bar's
@@ -23,12 +33,12 @@ interface NavItem {
 // DashboardNavItem (Profile.tsx still passes active="Profile" to whichever
 // layout renders it) - only the clickable nav entry itself is gone.
 const navItems: NavItem[] = [
-  { label: 'Dashboard', path: '/dashboard' },
-  { label: 'My Exams', path: '/exams' },
-  { label: 'My Results', path: '/results' },
-  { label: 'My Certificates', path: '/certificates' },
-  { label: 'Notifications', path: '/notifications' },
-  { label: 'Settings', path: '/settings' },
+  { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
+  { label: 'My Exams', path: '/exams', icon: <ExamsIcon /> },
+  { label: 'My Results', path: '/results', icon: <ResultsIcon /> },
+  { label: 'My Certificates', path: '/certificates', icon: <CertificatesIcon /> },
+  { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
+  { label: 'Settings', path: '/settings', icon: <SettingsIcon /> },
 ];
 
 interface DashboardSidebarProps {
@@ -73,17 +83,19 @@ export default function DashboardSidebar({ active, show = false, onClose = () =>
                   key={item.label}
                   to={item.path}
                   onClick={onClose}
-                  className="px-3 py-2 rounded-2 text-decoration-none"
+                  className="px-3 py-2 rounded-2 text-decoration-none d-flex align-items-center gap-2"
                   style={
                     item.label === active
                       ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
                       : { color: '#94a3b8' }
                   }
                 >
+                  {item.icon}
                   {item.label}
                 </Link>
               ) : (
-                <span key={item.label} className="px-3 py-2 rounded-2" style={{ color: '#475569' }}>
+                <span key={item.label} className="px-3 py-2 rounded-2 d-flex align-items-center gap-2" style={{ color: '#475569' }}>
+                  {item.icon}
                   {item.label}
                 </span>
               ),

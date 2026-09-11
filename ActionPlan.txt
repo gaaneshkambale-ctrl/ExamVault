@@ -10107,3 +10107,19 @@ go, not the type contract.
 tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
 and redeployed.
 
+
+---
+
+"create menu icon in student side" - the student sidebar
+(DashboardSidebar.tsx) had plain text-only nav items (Dashboard/My
+Exams/My Results/My Certificates/Notifications/Settings), no icons,
+unlike other icon sets already established in the app
+(icons/ActionIcons.tsx, reports/ReportIcons.tsx). Added a new
+icons/StudentNavIcons.tsx (Home/BookOpen/BarChart/Award/Bell/Settings
+outline icons, same 24x24 currentColor-stroke convention as the
+existing icon sets) and wired one icon per nav item into
+DashboardSidebar's navItems array, rendered inline before each label.
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
