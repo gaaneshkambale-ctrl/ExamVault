@@ -201,6 +201,8 @@ public class SubmissionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
 
         var command = new SaveAnswerCommand(
             attemptId,
@@ -208,6 +210,7 @@ public class SubmissionsController : ControllerBase
             request.SelectedOptionId,
             request.IsMarkedForReview,
             userId,
+            bearerToken,
             request.AnswerText,
             request.SelectedOptionIds);
         var result = await _saveAnswerHandler.HandleAsync(command, cancellationToken);
@@ -239,6 +242,16 @@ public class SubmissionsController : ControllerBase
         if (result.IsExpired)
         {
             return Conflict(new { message = "Time is up for this exam. Submit your attempt now." });
+        }
+
+        if (result.IsQuestionLocked)
+        {
+            return Conflict(new { message = "This question has already been answered and is locked." });
+        }
+
+        if (result.IsOutOfSequence)
+        {
+            return Conflict(new { message = "Answer the questions in this section in order." });
         }
 
         return Ok(ToResponse(result.Answer!));

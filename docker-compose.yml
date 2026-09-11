@@ -149,6 +149,7 @@ services:
       Services__ExamServiceBaseUrl: http://exam-api:8080
       Services__NotificationServiceBaseUrl: http://notification-api:8080
       Services__UserServiceBaseUrl: http://user-api:8080
+      Services__QuestionServiceBaseUrl: http://question-api:8080
       Metered__ApiKey: ${METERED_API_KEY}
       Metered__AppDomain: ${METERED_APP_DOMAIN}
     depends_on:
@@ -159,6 +160,8 @@ services:
       exam-api:
         condition: service_started
       user-api:
+        condition: service_started
+      question-api:
         condition: service_started
     ports:
       - "5050:8080"

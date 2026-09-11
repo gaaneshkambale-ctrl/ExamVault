@@ -83,6 +83,11 @@ public class Program
         builder.Services.AddHttpClient<IAssignmentLookupClient, AssignmentServiceClient>(client =>
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
+        var questionServiceBaseUrl = builder.Configuration["Services:QuestionServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:QuestionServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IQuestionLookupClient, QuestionServiceClient>(client =>
+            client.BaseAddress = new Uri(questionServiceBaseUrl.TrimEnd('/') + "/"));
+
         var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
