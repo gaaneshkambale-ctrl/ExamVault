@@ -591,7 +591,38 @@ export default function TakeExam() {
   const currentGroup = sectionIndex >= 0 ? sectionGroups[sectionIndex] : undefined;
   const displayQuestions = useMemo(() => currentGroup?.questions ?? [], [currentGroup]);
   const navigationType = currentGroup?.section?.navigationType ?? 'Free';
-  const isForwardOnly = navigationType !== 'Free';
+
+  // A question is "answered" the same way navState treats it (a real
+  // selection/text), independent of the "marked for review" flag - used to
+  // gate Locked-section navigation on real answered state rather than on
+  // `visited`, which resets to nothing useful on refresh.
+  const isQuestionAnswered = (question: QuestionResponse): boolean =>
+    Boolean(answers[question.id]?.selectedOptionId || answers[question.id]?.textAnswer || answers[question.id]?.selectedOptionIds?.length);
+
+  // Sequential and Locked used to collapse into one identical "forward-only"
+  // rule. They're actually different: Sequential is strict one-at-a-time
+  // forward progress (matches the admin UI's "must answer in order"
+  // description); Locked lets a student jump to ANY not-yet-answered
+  // question in the section, but a question with a real saved answer
+  // becomes permanently unreachable ("once answered, cannot be revisited") -
+  // this also closes the old refresh bypass for Locked sections for free,
+  // since it keys off `answers` (server-rehydrated on load), not the
+  // unpersisted `currentIndex`.
+  const canNavigateToIndex = (index: number): boolean => {
+    if (index === currentIndex || navigationType === 'Free') {
+      return true;
+    }
+    if (navigationType === 'Locked') {
+      const target = displayQuestions[index];
+      return target ? !isQuestionAnswered(target) : false;
+    }
+    return index === currentIndex + 1;
+  };
+
+  // Exam-level: hides Mark for Review and skips the Review Summary screen
+  // entirely when off. Section-level AllowReview is handled separately,
+  // alongside the existing Free-section re-entry checks below.
+  const reviewAllowed = exam?.allowReview !== false;
 
   const persistAnswer = (questionId: string, answer: AnswerState) => {
     if (!attemptId) {
@@ -667,7 +698,11 @@ export default function TakeExam() {
       if (current) {
         persistAnswer(current.id, answers[current.id] ?? EMPTY_ANSWER);
       }
-      setMode('review');
+      if (reviewAllowed) {
+        setMode('review');
+      } else {
+        runSubmit(false);
+      }
     }
   };
 
@@ -902,9 +937,7 @@ export default function TakeExam() {
   };
 
   const goToIndex = (index: number) => {
-    // Forward-only sections still need to allow the one-step advance that
-    // "Save & Next" drives - only block backward jumps and skips ahead.
-    if (isForwardOnly && index !== currentIndex && index !== currentIndex + 1) {
+    if (!canNavigateToIndex(index)) {
       return;
     }
     const current = displayQuestions[currentIndex];
@@ -998,7 +1031,7 @@ export default function TakeExam() {
             // (Sequential/Locked sections lock once finished), surfacing
             // as a raw error. Same rule the Review screen's own section
             // list already applies via `canReturn`.
-            const canReenterCompleted = section.navigationType === 'Free' || isCurrent;
+            const canReenterCompleted = (section.navigationType === 'Free' && section.allowReview) || isCurrent;
             const isClickable = isCurrent || (isCompleted ? canReenterCompleted : isOpenable);
             const isLocked = !isClickable;
             const sectionQuestions = sectionGroups[index]?.questions ?? [];
@@ -1150,7 +1183,7 @@ export default function TakeExam() {
               return null;
             }
             const isCurrent = mode === 'take' && index === currentIndex;
-            const isDisabled = isForwardOnly && index !== currentIndex;
+            const isDisabled = !canNavigateToIndex(index);
             return (
               <button
                 key={question.id}
@@ -1336,7 +1369,7 @@ export default function TakeExam() {
               <Button
                 variant="primary"
                 disabled={mode === 'loading' || submitMutation.isPending}
-                onClick={() => (mode === 'review' ? requestSubmit() : setMode('review'))}
+                onClick={() => (mode === 'review' || !reviewAllowed ? requestSubmit() : setMode('review'))}
               >
                 Submit Exam
               </Button>
@@ -1384,12 +1417,14 @@ export default function TakeExam() {
                       <span className="badge rounded-pill fw-medium border text-dark bg-light">
                         {currentQuestion.marks} Marks
                       </span>
-                      <Form.Check
-                        type="checkbox"
-                        label="Mark for Review"
-                        checked={currentAnswer.isMarkedForReview}
-                        onChange={(e) => updateAnswer(currentQuestion.id, { isMarkedForReview: e.target.checked })}
-                      />
+                      {reviewAllowed && (
+                        <Form.Check
+                          type="checkbox"
+                          label="Mark for Review"
+                          checked={currentAnswer.isMarkedForReview}
+                          onChange={(e) => updateAnswer(currentQuestion.id, { isMarkedForReview: e.target.checked })}
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -1961,7 +1996,7 @@ export default function TakeExam() {
                   <div className="d-flex justify-content-between mt-3">
                     <Button
                       variant="outline-secondary"
-                      disabled={isForwardOnly || currentIndex === 0}
+                      disabled={currentIndex === 0 || !canNavigateToIndex(currentIndex - 1)}
                       onClick={() => goToIndex(Math.max(0, currentIndex - 1))}
                     >
                       &larr; Save &amp; Previous
@@ -1980,7 +2015,9 @@ export default function TakeExam() {
                       {isLastQuestionInSection
                         ? sectionIndex < sectionGroups.length - 1
                           ? 'Next Section →'
-                          : 'Review & Submit'
+                          : reviewAllowed
+                            ? 'Review & Submit'
+                            : 'Submit Exam'
                         : 'Save & Next →'}
                     </Button>
                   </div>
@@ -2028,7 +2065,7 @@ export default function TakeExam() {
                         const sectionQuestions = sectionGroups[index]?.questions ?? [];
                         const sectionAnswered = sectionQuestions.filter((q) => navState(q) === 'answered').length;
                         const isCompleted = Boolean(sectionStates[section.id]?.isCompleted);
-                        const canReturn = section.navigationType === 'Free' || index === sectionIndex;
+                        const canReturn = (section.navigationType === 'Free' && section.allowReview) || index === sectionIndex;
                         return (
                           <div
                             key={section.id}
