@@ -22,13 +22,28 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
             ?? throw new InvalidOperationException("Missing \"N8n:WebhookUrl\" configuration.");
     }
 
+    // Cap on how many questions we'll ever ask the n8n workflow to generate in one call,
+    // regardless of how much padding a request needs - keeps prompt/response size and
+    // latency (n8n calls already take 14-18s) from growing unbounded.
+    private const int MaxRequestedCount = 30;
+
     public async Task<IReadOnlyList<DraftQuestion>> GenerateAsync(
         GenerateQuestionsRequest request,
         CancellationToken cancellationToken = default)
     {
+        // The n8n workflow doesn't reliably stick to the requested question type - eg. a
+        // "Multiple Choice" (multi-select) only request can still come back with some
+        // ordinary single-correct-answer items mixed in, which TryBuildDraft correctly
+        // drops below (a multi-select question needs 2+ real correct answers - it can't
+        // be coerced from a single-answer one without fabricating a wrong answer as
+        // "correct"). Asking for more than the admin actually requested compensates for
+        // that drop rate; the result is still trimmed back down to what was requested so
+        // "Number of Questions" stays a meaningful, predictable count.
+        var paddedCount = Math.Min(request.QuestionCount * 2, MaxRequestedCount);
+
         var payload = new
         {
-            questionCount = request.QuestionCount,
+            questionCount = paddedCount,
             complexity = string.Join(", ", request.DifficultyLevels),
             subject = request.Topic,
             questionTypes = string.Join(", ", request.QuestionTypes.Select(FormatQuestionTypeLabel).Distinct()),
@@ -57,6 +72,7 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
             .Select(item => TryBuildDraft(item, allowMultipleChoice, allowMultiSelect, allowTrueFalse, fallbackDifficulty))
             .Where(draft => draft is not null)
             .Select(draft => draft!)
+            .Take(request.QuestionCount)
             .ToList();
     }
 
@@ -134,9 +150,20 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
         };
     }
 
+    // Sent verbatim to the n8n workflow as the "Question format(s) requested" line - must
+    // give the model a distinct label per requested type. This used to collapse
+    // MultipleChoice (single correct answer - labelled "Single Choice" everywhere else in
+    // the admin UI) and MultiSelect (2+ correct answers - labelled "Multiple Choice"
+    // everywhere else) into the SAME string ("Multiple Choice"), so a request for only
+    // MultiSelect looked identical to the model as a request for only MultipleChoice. The
+    // model then mostly generated ordinary single-correct questions either way, and (since
+    // TryBuildDraft correctly drops anything that doesn't match what was actually
+    // requested) a "Multiple Choice" request would come back with only the handful of
+    // items that happened to have several correct answers - eg. 2 of 10. Matching the
+    // admin UI's own QUESTION_TYPE_LABELS here removes the ambiguity at the source.
     private static string FormatQuestionTypeLabel(string type) => type switch
     {
-        "MultipleChoice" => "Multiple Choice",
+        "MultipleChoice" => "Single Choice",
         "MultiSelect" => "Multiple Choice",
         "TrueFalse" => "True/False",
         _ => type,
