@@ -9658,3 +9658,37 @@ model within the 4-6 range, matching how it already varies question
 wording/difficulty on its own; flagged as an easy follow-up if the user
 wants that level of control instead.
 
+
+---
+
+"bug in Create Exam / AI Generate Questions - when question type select
+only 'multiple choice' then only multiple choice question i want if
+select 'True/false' then only true/false fix the issue" - the earlier
+allowTrueFalse gate only fixed ONE direction (Single Choice requested ->
+no True/False leak). The reverse was still broken: MultipleChoice had no
+gate at all - it was the unconditional fallback whenever a generated item
+wasn't True/False-shaped or multi-correct-shaped, so requesting ONLY
+True/False still let a normal (4-option, single-correct) item from the
+model show up as a MultipleChoice question.
+
+Fix (N8nQuestionGenerator.cs): rewrote the per-item classification as
+TryBuildDraft, added the missing allowMultipleChoice gate alongside the
+existing allowMultiSelect/allowTrueFalse ones, and - the real fix - an
+item that doesn't match ANY requested type is now dropped entirely
+instead of silently defaulting to MultipleChoice. Downgrades are still
+allowed the same as before (True/False-shaped -> 2-option MultipleChoice
+when only MultipleChoice was requested; several-correct-letters ->
+first-letter-only MultipleChoice when MultiSelect wasn't requested) since
+those are still valid content of a requested type, just reshaped - the
+difference is a plain single-correct item is no longer forced into
+MultipleChoice when MultipleChoice itself wasn't requested. Also added a
+rawOptions.Count < 2 guard (drop rather than emit a broken 0/1-option
+question) while touching this method.
+Consequence: if only True/False is requested and the model still returns
+some non-True/False-shaped items despite the updated n8n prompt, the
+preview will now show FEWER than the requested count rather than the
+wrong type mixed in - GenerateQuestionsHandler never enforced an exact
+count match anyway, so this is a pure quality improvement, not a
+regression.
+Full solution build clean; ai-api rebuilt and redeployed.
+
