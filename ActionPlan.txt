@@ -10177,3 +10177,49 @@ same code path.
 tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
 and redeployed.
 
+
+---
+
+"modify the submenu name 'exam scheduled' change as 'scheduled exams'
+and 'Exam Type Wise Report' change as 'Exam Type Performance' in admin
+side" - clarified direction after my previous turn had it backwards
+(the sidebar already said "Exam Scheduled"/"Exam Type Wise Report" -
+correctly told the user so rather than making a pointless edit - this
+turn is the actual rename in the direction they wanted).
+
+Renamed both AdminNavItem labels in AdminSidebar.tsx (type union,
+navItems entry, icon-map key) to 'Scheduled Exams' and 'Exam Type
+Performance', then updated every consumer: ExamScheduled.tsx's own
+active prop + <h1>, and the 8 exam-type-wise report family pages'
+active="Exam Type Wise Report" props (AdvanceExamReport,
+ExamTypeComparison, ExamTypeDetails, ExamTypePerformanceAnalysis,
+ExamTypeQuestionAnalysis, ExamTypeSectionPerformance,
+ExamTypeStudentPerformance, ExamTypeWiseReport - the last one's own
+<h1> too). Routes/paths untouched - only the label text moved, per the
+existing "menu placement moved, not URL" precedent already noted in
+this file's own comment for Exam Type Wise Report.
+
+tsc --noEmit caught every consumer automatically (AdminNavItem is a
+literal string union, so a stale active="Exam Type Wise Report" would
+have failed to compile) - confirms nothing was missed. npm run build,
+npm run lint both clean; frontend rebuilt and redeployed.
+
+
+---
+
+"'exam type performance' submenu move under reports menu" - moved the
+{ label: 'Exam Type Performance', path: '/admin/reports/exam-type-wise' }
+entry from the Results group's children to the Reports group's children
+in AdminSidebar.tsx (URL unchanged - only which parent menu it's nested
+under). Also updated the "Results / By Exam Type / ..." breadcrumb
+prefix to "Reports / By Exam Type / ..." on all 8 exam-type-wise pages
+(AdvanceExamReport, ExamTypeComparison, ExamTypeDetails,
+ExamTypePerformanceAnalysis, ExamTypeQuestionAnalysis,
+ExamTypeSectionPerformance, ExamTypeStudentPerformance,
+ExamTypeWiseReport) so the breadcrumb stays truthful about which menu
+you actually navigated from - would have been stale/wrong left as
+"Results" after the sidebar move.
+
+tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
+and redeployed.
+
