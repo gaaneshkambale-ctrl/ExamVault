@@ -30,6 +30,19 @@ export interface Tenant {
   createdByName: string | null;
 }
 
+// Narrower than Tenant - what GET /api/tenants/mine returns for the
+// currently authenticated user's own organization (name/address only, no
+// plan/billing/audit fields - see MyTenantResponse.cs's own comment).
+export interface MyTenant {
+  name: string;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+}
+
 export interface CreateTenantRequest {
   name: string;
   slug: string;

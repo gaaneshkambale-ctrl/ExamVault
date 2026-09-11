@@ -1,9 +1,14 @@
 import apiClient from './axiosClient';
-import type { CreateTenantAdminRequest, CreateTenantRequest, Tenant, UpdateTenantRequest } from '../types/tenant';
+import type { CreateTenantAdminRequest, CreateTenantRequest, MyTenant, Tenant, UpdateTenantRequest } from '../types/tenant';
 import type { RolePermissionsEntry } from '../types/user';
 
 export async function listTenants(): Promise<Tenant[]> {
   const { data } = await apiClient.get<Tenant[]>('/api/tenants');
+  return data;
+}
+
+export async function getMyTenant(): Promise<MyTenant> {
+  const { data } = await apiClient.get<MyTenant>('/api/tenants/mine');
   return data;
 }
 
