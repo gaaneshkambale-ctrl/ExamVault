@@ -1549,33 +1549,40 @@ export default function TakeExam() {
                               );
                             })()}
 
-                            {!isSql && (currentQuestion.sampleInput || currentQuestion.sampleOutput) && (
-                              <div className="rounded-3 overflow-hidden mb-3 border">
-                                <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
-                                  Sample Input and Output
+                            {!isSql && (() => {
+                              // Same real per-question test cases (and the same DataTable
+                              // rendering) the admin's Question Preview shows - one row per
+                              // parameter combination, falling back to the single sample
+                              // pair only when there are no structured test cases yet. Used
+                              // to be a single-row plain <table>, which both showed only one
+                              // example when several existed and rendered without the
+                              // DataTable's grid borders.
+                              const parameters = currentQuestion.parameters ?? [];
+                              const exampleColumns =
+                                parameters.length > 0 ? [...parameters.map((p) => p.name), 'Output'] : ['Input', 'Output'];
+                              const exampleRows: string[][] =
+                                currentQuestion.testCases && currentQuestion.testCases.length > 0
+                                  ? currentQuestion.testCases.map((tc) => [
+                                      ...tc.arguments.map((arg, i) => formatTypedValue(arg, parameters[i]?.type ?? 'String')),
+                                      currentQuestion.returnType
+                                        ? formatTypedValue(tc.expectedOutput, currentQuestion.returnType)
+                                        : String(tc.expectedOutput),
+                                    ])
+                                  : currentQuestion.sampleInput || currentQuestion.sampleOutput
+                                    ? [[currentQuestion.sampleInput ?? '', currentQuestion.sampleOutput ?? '']]
+                                    : [];
+
+                              return exampleRows.length > 0 ? (
+                                <div className="rounded-3 overflow-hidden mb-3 border">
+                                  <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
+                                    Example
+                                  </div>
+                                  <div className="bg-body overflow-x-auto">
+                                    <DataTable columns={exampleColumns} rows={exampleRows} bordered={false} />
+                                  </div>
                                 </div>
-                                <div className="bg-body">
-                                  <table className="table table-sm mb-0">
-                                    <thead>
-                                      <tr>
-                                        <th className="small text-muted fw-medium">Sample Input</th>
-                                        <th className="small text-muted fw-medium">Sample Output</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      <tr>
-                                        <td className="text-body" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                                          {currentQuestion.sampleInput}
-                                        </td>
-                                        <td className="text-body" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                                          {currentQuestion.sampleOutput}
-                                        </td>
-                                      </tr>
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            )}
+                              ) : null;
+                            })()}
 
                             {currentQuestion.constraints && (
                               <div className="rounded-3 overflow-hidden mb-3 border">
