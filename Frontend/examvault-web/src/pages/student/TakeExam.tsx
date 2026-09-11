@@ -24,6 +24,8 @@ import { PROGRAMMING_LANGUAGES } from '../../types/question';
 import { runCode, runSql } from '../../api/executionApi';
 import type { RunCodeResponse } from '../../types/execution';
 import { formatTypedValue } from '../../utils/typedValue';
+import { parseSqlSetup, parseSqlRowSet, toSqlTableRows } from '../../utils/sqlSetupParser';
+import DataTable from '../../components/DataTable';
 
 // Lazy-loaded - Monaco is several MB and must not bloat the app's main
 // bundle for every page that isn't a code question.
@@ -323,250 +325,6 @@ function extractError(error: unknown): string {
     return error.response.data.message;
   }
   return 'Something went wrong. Please try again.';
-}
-
-// sqlTestCases[i].expectedOutput is the backend's canonical row-set format:
-// one raw JSON object per line, e.g. `{"name":"John"}\n{"name":"Bob"}` (see
-// SqlReferenceRunner.CanonicalRowSet). Parses it into rows for a table;
-// returns null if it doesn't parse as that shape, so callers can fall back
-// to raw text instead of rendering a broken/misleading table.
-function parseSqlRowSet(text: string): { columns: string[]; rows: Record<string, unknown>[] } | null {
-  const lines = text.split('\n').filter((line) => line.trim().length > 0);
-  if (lines.length === 0) {
-    return { columns: [], rows: [] };
-  }
-
-  try {
-    const rows = lines.map((line) => {
-      const parsed: unknown = JSON.parse(line);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error('Not a row object');
-      }
-      return parsed as Record<string, unknown>;
-    });
-    const columns = Object.keys(rows[0]);
-    return { columns, rows };
-  } catch {
-    return null;
-  }
-}
-
-// Splits a comma-separated list at the TOP LEVEL only - commas inside a
-// '...' string or nested (...) don't split. Used for both a CREATE TABLE
-// column list and one VALUES tuple's contents.
-function splitTopLevel(text: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let inQuote = false;
-  let current = '';
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuote) {
-      current += ch;
-      if (ch === "'" && text[i + 1] === "'") {
-        current += text[++i];
-      } else if (ch === "'") {
-        inQuote = false;
-      }
-      continue;
-    }
-    if (ch === "'") {
-      inQuote = true;
-      current += ch;
-    } else if (ch === '(') {
-      depth++;
-      current += ch;
-    } else if (ch === ')') {
-      depth--;
-      current += ch;
-    } else if (ch === ',' && depth === 0) {
-      parts.push(current);
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  if (current.trim().length > 0) {
-    parts.push(current);
-  }
-  return parts;
-}
-
-// Extracts each top-level "(...)" group from a VALUES clause like
-// "(1, 'a'), (2, 'b')".
-function matchValueTuples(text: string): string[] {
-  const tuples: string[] = [];
-  let depth = 0;
-  let inQuote = false;
-  let current = '';
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuote) {
-      current += ch;
-      if (ch === "'" && text[i + 1] === "'") {
-        current += text[++i];
-      } else if (ch === "'") {
-        inQuote = false;
-      }
-      continue;
-    }
-    if (ch === "'") {
-      inQuote = true;
-      if (depth > 0) current += ch;
-    } else if (ch === '(') {
-      depth++;
-      if (depth > 1) current += ch;
-    } else if (ch === ')') {
-      depth--;
-      if (depth === 0) {
-        tuples.push(current);
-        current = '';
-      } else {
-        current += ch;
-      }
-    } else if (depth > 0) {
-      current += ch;
-    }
-  }
-  return tuples;
-}
-
-function cleanSqlLiteral(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
-    return trimmed.slice(1, -1).replace(/''/g, "'");
-  }
-  return trimmed;
-}
-
-interface ParsedSqlTable {
-  tableName: string;
-  columns: string[];
-  rows: string[][];
-}
-
-// Best-effort parse of an admin-authored Setup SQL script (one or more
-// CREATE TABLE + INSERT INTO ... VALUES ... pairs, eg. a departments table
-// joined to an employees table) into real data grids, matching the "Use the
-// following table(s)" mockup. Deliberately conservative: bails out to null
-// (caller falls back to the raw SQL text) on anything it can't confidently
-// parse - a column/value count mismatch, an INSERT for a table that was
-// never CREATEd - rather than risk rendering a wrong or misleading grid
-// from admin-written SQL it doesn't fully understand.
-function parseSqlSetup(setupSql: string): ParsedSqlTable[] | null {
-  const createMatches = [...setupSql.matchAll(/CREATE\s+TABLE\s+(\w+)\s*\(([^;]*)\)\s*;/gis)];
-  if (createMatches.length === 0) {
-    return null;
-  }
-
-  const tables: ParsedSqlTable[] = [];
-  const tableIndexByName = new Map<string, number>();
-  for (const [, tableName, columnDefs] of createMatches) {
-    const columns = splitTopLevel(columnDefs)
-      .map((def) => def.trim().split(/\s+/)[0])
-      .filter(Boolean);
-    if (columns.length === 0) {
-      return null;
-    }
-    tableIndexByName.set(tableName.toLowerCase(), tables.length);
-    tables.push({ tableName, columns, rows: [] });
-  }
-
-  const insertMatches = [...setupSql.matchAll(/INSERT\s+INTO\s+(\w+)\s*(?:\([^)]*\))?\s*VALUES\s*([\s\S]*?);/gis)];
-  if (insertMatches.length === 0) {
-    return null;
-  }
-
-  let totalRows = 0;
-  for (const [, insertTable, valuesText] of insertMatches) {
-    const tableIndex = tableIndexByName.get(insertTable.toLowerCase());
-    if (tableIndex === undefined) {
-      return null;
-    }
-    const table = tables[tableIndex];
-    for (const tuple of matchValueTuples(valuesText)) {
-      const values = splitTopLevel(tuple).map(cleanSqlLiteral);
-      if (values.length !== table.columns.length) {
-        return null;
-      }
-      table.rows.push(values);
-      totalRows++;
-    }
-  }
-
-  return totalRows > 0 ? tables : null;
-}
-
-// Shared by every place a parsed Sql grid renders - the "Use the following
-// table" setup grid, the pre-run "Expected Output" box, and the public
-// Test Case's own setup/result rows - so they all look and format
-// identically. Only the public (index 0) test case's setup/result shows
-// in the post-run Test Case panel - hidden test cases stay pass/fail only,
-// see the isPublicCase gate below.
-const NUMERIC_CELL = /^-?\d+(\.\d+)?$/;
-
-function SqlTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
-  // A column is numeric only if every row agrees - one non-numeric value
-  // (eg. a null shown as "NULL") keeps the whole column left-aligned rather
-  // than right-aligning everything but that one row.
-  const isNumericColumn = columns.map((_, colIndex) => rows.every((row) => NUMERIC_CELL.test(row[colIndex] ?? '')));
-
-  return (
-    // width: auto overrides Bootstrap's .table width:100% - a full-width
-    // stretch made a short-header/short-value grid (eg. department_id: 1,2,3)
-    // balloon out with huge empty column padding, and made the columns of
-    // stacked tables (departments above employees) land at different x
-    // positions since each was independently stretched to the same total
-    // width using its own header lengths. Shrinking to content width keeps
-    // every grid tight and keeps shared columns (department_id in both
-    // tables) visually lined up. Each column's own width still stays
-    // constant down every row (normal browser table layout), which is what
-    // actually keeps a column's header and values sharing one alignment -
-    // table-layout:fixed with guessed percentages would fight that instead.
-    <table className="table table-sm mb-0" style={{ width: 'auto' }}>
-      <thead>
-        <tr>
-          {columns.map((col, j) => (
-            <th
-              key={col}
-              className="small fw-bold text-uppercase bg-body-secondary"
-              style={{
-                textAlign: isNumericColumn[j] ? 'right' : 'left',
-                whiteSpace: 'nowrap',
-                borderBottomWidth: 2,
-              }}
-            >
-              {col}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, i) => (
-          <tr key={i}>
-            {row.map((value, j) => (
-              <td
-                key={j}
-                style={{
-                  fontFamily: 'monospace',
-                  textAlign: isNumericColumn[j] ? 'right' : 'left',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {value}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-// Converts parseSqlRowSet's { columns, rows: Record<string,unknown>[] }
-// shape into SqlTable's flat string[][] rows.
-function toSqlTableRows(parsed: { columns: string[]; rows: Record<string, unknown>[] }): string[][] {
-  return parsed.rows.map((row) => parsed.columns.map((col) => String(row[col])));
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -1703,8 +1461,8 @@ export default function TakeExam() {
                                       {parsedTables.map((table) => (
                                         <div key={table.tableName}>
                                           <div className="fw-bold mb-1">{table.tableName}</div>
-                                          <div className="rounded-3 border overflow-x-auto">
-                                            <SqlTable columns={table.columns} rows={table.rows} />
+                                          <div className="overflow-x-auto">
+                                            <DataTable columns={table.columns} rows={table.rows} />
                                           </div>
                                         </div>
                                       ))}
@@ -1749,7 +1507,7 @@ export default function TakeExam() {
                                     ) : parsed.rows.length === 0 ? (
                                       <div className="text-muted small px-3 py-2">No rows returned</div>
                                     ) : (
-                                      <SqlTable columns={parsed.columns} rows={toSqlTableRows(parsed)} />
+                                      <DataTable columns={parsed.columns} rows={toSqlTableRows(parsed)} bordered={false} />
                                     )}
                                   </div>
                                 </div>
@@ -2061,8 +1819,8 @@ export default function TakeExam() {
                                       parsedActual.rows.length === 0 ? (
                                         <div className="text-muted small">(no rows)</div>
                                       ) : (
-                                        <div className="rounded-2 border overflow-x-auto">
-                                          <SqlTable
+                                        <div className="overflow-x-auto">
+                                          <DataTable
                                             columns={parsedActual.columns}
                                             rows={toSqlTableRows(parsedActual)}
                                           />
