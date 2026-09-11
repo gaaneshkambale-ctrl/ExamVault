@@ -193,7 +193,7 @@ export default function Profile() {
             </Card.Body>
           </Card>
 
-          <QuickActionsCard />
+          {user.role !== 'Student' && <QuickActionsCard />}
         </Col>
 
         <Col xs={12} lg={8} xl={9}>
