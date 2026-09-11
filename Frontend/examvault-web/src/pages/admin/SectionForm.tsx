@@ -6,7 +6,8 @@ import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import TablePagination from '../../components/reports/TablePagination';
 import CreateQuestionModal from '../../components/CreateQuestionModal';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
-import { EditIcon } from '../../components/icons/ActionIcons';
+import QuestionPreviewModal from '../../components/QuestionPreviewModal';
+import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { createSection, updateSection } from '../../api/sectionApi';
 import { bulkAssignSection, deleteQuestion } from '../../api/questionApi';
 import { useExam } from '../../hooks/useExams';
@@ -321,6 +322,7 @@ export default function SectionForm() {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState('');
+  const [previewQuestion, setPreviewQuestion] = useState<QuestionResponse | null>(null);
 
   useEffect(() => {
     if (isEdit && existingSection) {
@@ -1091,6 +1093,16 @@ export default function SectionForm() {
                               <td>{q.marks}</td>
                               <td onClick={(e) => e.stopPropagation()}>
                                 <div className="d-flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center"
+                                    style={{ width: 32, height: 32 }}
+                                    title="Preview"
+                                    aria-label="Preview question as students will see it"
+                                    onClick={() => setPreviewQuestion(q)}
+                                  >
+                                    <ViewIcon />
+                                  </button>
                                   {canEditQuestions && (
                                     <Link
                                       to={`/admin/questions/${q.id}/edit`}
@@ -1219,6 +1231,8 @@ export default function SectionForm() {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      <QuestionPreviewModal question={previewQuestion} onHide={() => setPreviewQuestion(null)} />
     </RoleAwareLayout>
   );
 }
