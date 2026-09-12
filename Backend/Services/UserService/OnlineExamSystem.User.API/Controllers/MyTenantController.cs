@@ -71,6 +71,31 @@ public class MyTenantController : ControllerBase
             tenant.Country));
     }
 
+    // Unlike GetSettings below (Admin/SuperAdmin-only, for the settings-editing
+    // UI), this is what PDF generation reads - a student downloading their own
+    // result needs the tenant's logo/motto/brand-color/toggles too, not just an
+    // Admin editing them. Open to any authenticated role, same as the plain
+    // Get() above; returns the same shape as GetSettings purely to avoid a
+    // second DTO for what is otherwise identical data.
+    [HttpGet("branding")]
+    public async Task<IActionResult> GetBranding(CancellationToken cancellationToken)
+    {
+        var tenantId = GetOwnTenantId();
+        if (tenantId is null)
+        {
+            return NotFound(new { message = "No organization associated with this account." });
+        }
+
+        var tenant = await _getOrganizationSettingsHandler.HandleAsync(
+            new GetOrganizationSettingsQuery(tenantId.Value), cancellationToken);
+        if (tenant is null)
+        {
+            return NotFound(new { message = "Organization not found." });
+        }
+
+        return Ok(ToSettingsResponse(tenant));
+    }
+
     [Authorize(Roles = "Admin,SuperAdmin")]
     [Authorize(Policy = SettingsView)]
     [HttpGet("settings")]

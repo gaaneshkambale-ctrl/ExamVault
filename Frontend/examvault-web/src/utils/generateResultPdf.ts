@@ -22,14 +22,14 @@ import {
   ensurePageSpace,
   fieldRow,
   getInitials,
-  loadLogo,
+  loadTenantBranding,
   panel,
   panelTitle,
   sanitizeFilename,
   setColor,
   stampFooters,
 } from './pdfReportKit';
-import type { LogoImage } from './pdfReportKit';
+import type { TenantBranding } from './pdfReportKit';
 
 export interface ResultPdfSectionStat {
   name: string;
@@ -82,7 +82,7 @@ function drawStudentReport(
   doc: jsPDF,
   result: AdminAttemptResultResponse | ResultSummaryResponse,
   context: ResultPdfContext,
-  logo: LogoImage | null,
+  branding: TenantBranding,
   generatedAt: Date,
   isFirstInDocument: boolean,
 ): void {
@@ -125,7 +125,24 @@ function drawStudentReport(
   // ---------- Page 1 ----------
   let y = MARGIN;
   const logoH = 13;
-  drawHeaderBrand(doc, MARGIN, y, logoH, logo);
+  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo);
+  // The ExamVault logo has its own wordmark baked into the image, so no
+  // extra text is needed alongside it - a tenant's own uploaded logo is
+  // typically just a mark/icon, so its institution name (and motto, if
+  // enabled) is printed as text next to it instead.
+  if (branding.hasOwnLogo) {
+    const logoW = branding.logo ? logoH * branding.logo.ratio : 20;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    setColor(doc, 'setTextColor', branding.headerColor);
+    doc.text(branding.name, MARGIN + logoW + 4, y + 6);
+    if (branding.showMotto && branding.motto) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      setColor(doc, 'setTextColor', TEXT_MUTED);
+      doc.text(branding.motto, MARGIN + logoW + 4, y + 11);
+    }
+  }
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   setColor(doc, 'setTextColor', TEXT_MUTED);
@@ -138,7 +155,7 @@ function drawStudentReport(
   doc.setFontSize(8.5);
   setColor(doc, 'setTextColor', TEXT_MUTED);
   doc.text('Your Learning Journey, Our Commitment', PAGE_WIDTH - MARGIN, y + 15, { align: 'right' });
-  setColor(doc, 'setDrawColor', BRAND);
+  setColor(doc, 'setDrawColor', branding.headerColor);
   doc.setLineWidth(0.6);
   doc.line(MARGIN, y + 19, PAGE_WIDTH - MARGIN, y + 19);
   y += 25;
@@ -447,12 +464,12 @@ function drawStudentReport(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text(WEBSITE, PAGE_WIDTH - MARGIN, y + 4, { align: 'right' });
+  doc.text(branding.website || WEBSITE, PAGE_WIDTH - MARGIN, y + 4, { align: 'right' });
 
   // ---------- Page 2 ----------
   doc.addPage();
   y = MARGIN;
-  drawHeaderBrand(doc, MARGIN, y, 9, logo);
+  drawHeaderBrand(doc, MARGIN, y, 9, branding.logo);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   setColor(doc, 'setTextColor', TEXT_DARK);
@@ -461,7 +478,7 @@ function drawStudentReport(
   doc.setFontSize(8);
   setColor(doc, 'setTextColor', TEXT_MUTED);
   doc.text('Question-wise Details', PAGE_WIDTH - MARGIN, y + 9, { align: 'right' });
-  setColor(doc, 'setDrawColor', BRAND);
+  setColor(doc, 'setDrawColor', branding.headerColor);
   doc.setLineWidth(0.6);
   doc.line(MARGIN, y + 13, PAGE_WIDTH - MARGIN, y + 13);
   y += 19;
@@ -550,11 +567,11 @@ export async function generateResultPdf(
   result: AdminAttemptResultResponse | ResultSummaryResponse,
   context: ResultPdfContext = {},
 ): Promise<void> {
-  const logo = await loadLogo();
+  const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
-  drawStudentReport(doc, result, context, logo, generatedAt, true);
-  stampFooters(doc, generatedAt, logo);
+  drawStudentReport(doc, result, context, branding, generatedAt, true);
+  stampFooters(doc, generatedAt, branding.logo);
   doc.save(`${sanitizeFilename(result.examTitle)}-result.pdf`);
 }
 
@@ -566,12 +583,12 @@ export interface ExamResultBookletEntry {
 /** One combined PDF for a whole exam - every student's full report (page 1 summary + page 2 question-wise detail), one after another, reusing the exact same per-student drawing as the single-student download so the two never disagree. Can run to many pages for a large class (2+ pages per student). */
 export async function generateExamResultsBooklet(examTitle: string, entries: ExamResultBookletEntry[]): Promise<void> {
   if (entries.length === 0) return;
-  const logo = await loadLogo();
+  const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
   entries.forEach(({ result, context }, i) => {
-    drawStudentReport(doc, result, context, logo, generatedAt, i === 0);
+    drawStudentReport(doc, result, context, branding, generatedAt, i === 0);
   });
-  stampFooters(doc, generatedAt, logo);
+  stampFooters(doc, generatedAt, branding.logo);
   doc.save(`${sanitizeFilename(examTitle)}-all-results.pdf`);
 }

@@ -6,6 +6,15 @@ export async function getOrganizationSettings(): Promise<OrganizationSettings> {
   return data;
 }
 
+// Same shape as getOrganizationSettings, but from the "branding" endpoint,
+// which any authenticated tenant member can call (not just Admin/SuperAdmin)
+// - used by PDF generation, since a student downloading their own result
+// needs the tenant's logo/motto/colors too, not just an Admin editing them.
+export async function getOrganizationBranding(): Promise<OrganizationSettings> {
+  const { data } = await apiClient.get<OrganizationSettings>('/api/tenants/mine/branding');
+  return data;
+}
+
 export async function updateOrganizationSettings(
   request: UpdateOrganizationSettingsRequest,
 ): Promise<OrganizationSettings> {

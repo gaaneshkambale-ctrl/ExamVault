@@ -200,7 +200,7 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     ? draft.primaryColor ?? DEFAULT_BRANDING_COLORS.primaryColor
     : '#1F2937';
 
-  const handleDownloadSample = async () => {
+  const buildSamplePdf = async () => {
     const doc = new jsPDF();
     const brand = draft.useBrandColorsInReportHeader ? hexToRgb(draft.primaryColor) : TEXT_DARK;
     const passed = percentage >= 40;
@@ -209,27 +209,37 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     const [logoImg, signatureImg] = await Promise.all([loadImageElement(logoUrl), loadImageElement(signatureUrl)]);
 
     // Header: logo + name/motto on the left, contact block on the right.
+    // The logo box is now taller (24mm, up from a cramped 16mm) and, for a
+    // real uploaded logo, sized to its own aspect ratio rather than forced
+    // into a square - a wide wordmark-style logo was getting squashed
+    // before. Text after it shifts right by however wide the logo actually
+    // rendered, capped so a very wide logo can't run into the header rule.
+    const logoBoxH = 24;
+    let logoAreaW = 20;
     if (logoImg) {
-      doc.addImage(logoImg, MARGIN, MARGIN, 16, 16);
+      const ratio = logoImg.naturalWidth / logoImg.naturalHeight || 1;
+      logoAreaW = Math.min(logoBoxH * ratio, 60);
+      doc.addImage(logoImg, MARGIN, MARGIN, logoAreaW, logoBoxH);
     } else {
       setColor(doc, 'setFillColor', brand);
-      doc.roundedRect(MARGIN, MARGIN, 16, 16, 2, 2, 'F');
+      doc.roundedRect(MARGIN, MARGIN, logoAreaW, logoBoxH, 2, 2, 'F');
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
+      doc.setFontSize(13);
       doc.setTextColor(255, 255, 255);
-      doc.text((draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase(), MARGIN + 8, MARGIN + 10, {
+      doc.text((draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase(), MARGIN + logoAreaW / 2, MARGIN + logoBoxH / 2 + 2, {
         align: 'center',
       });
     }
+    const nameX = MARGIN + logoAreaW + 6;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     setColor(doc, 'setTextColor', brand);
-    doc.text(draft.name || 'Institution Name', MARGIN + 20, MARGIN + 6);
+    doc.text(draft.name || 'Institution Name', nameX, MARGIN + 9);
     if (draft.showMottoTagline && draft.mottoTagline) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       setColor(doc, 'setTextColor', TEXT_MUTED);
-      doc.text(draft.mottoTagline, MARGIN + 20, MARGIN + 12);
+      doc.text(draft.mottoTagline, nameX, MARGIN + 15);
     }
     if (draft.showContactDetails) {
       doc.setFont('helvetica', 'normal');
@@ -244,9 +254,9 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     }
     setColor(doc, 'setDrawColor', brand);
     doc.setLineWidth(0.6);
-    doc.line(MARGIN, MARGIN + 22, PAGE_WIDTH - MARGIN, MARGIN + 22);
+    doc.line(MARGIN, MARGIN + logoBoxH + 4, PAGE_WIDTH - MARGIN, MARGIN + logoBoxH + 4);
 
-    let y = MARGIN + 32;
+    let y = MARGIN + logoBoxH + 14;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     setColor(doc, 'setTextColor', TEXT_DARK);
@@ -304,7 +314,7 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     y += 10;
 
     const cardW = (CONTENT_WIDTH - 12) / 3;
-    drawStatCard(doc, MARGIN, y, cardW, 26, brand, 'Percentage', `${percentage}%`, brand);
+    drawStatCard(doc, MARGIN, y, cardW, 26, TEXT_DARK, 'Percentage', `${percentage}%`, TEXT_DARK);
     drawStatCard(
       doc,
       MARGIN + cardW + 6,
@@ -316,7 +326,7 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
       passed ? 'PASS' : 'FAIL',
       passed ? GREEN : { r: 220, g: 53, b: 69 },
     );
-    drawStatCard(doc, MARGIN + (cardW + 6) * 2, y, cardW, 26, brand, 'Grade', grade, brand);
+    drawStatCard(doc, MARGIN + (cardW + 6) * 2, y, cardW, 26, TEXT_DARK, 'Grade', grade, TEXT_DARK);
     y += 26 + 10;
 
     if (draft.showQrCodeForVerification) {
@@ -354,7 +364,21 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     doc.text('This is a computer generated report and does not require a physical signature.', MARGIN, y);
     doc.text('(Sample)', PAGE_WIDTH - MARGIN, y, { align: 'right' });
 
+    return doc;
+  };
+
+  const handleDownloadSample = async () => {
+    const doc = await buildSamplePdf();
     doc.save('sample-report.pdf');
+  };
+
+  // Opens the same generated PDF inline in a new tab (jsPDF's blob-URL
+  // output) instead of forcing a download - lets the admin quickly check
+  // how a setting change looks without cluttering their Downloads folder
+  // every time.
+  const handlePreviewSample = async () => {
+    const doc = await buildSamplePdf();
+    window.open(doc.output('bloburl'), '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -373,9 +397,14 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                 title="Live PDF Preview"
                 subtitle="See how your settings will appear in the generated report."
                 action={
-                  <Button variant="outline-primary" size="sm" onClick={handleDownloadSample}>
-                    Download Sample
-                  </Button>
+                  <div className="d-flex gap-2">
+                    <Button variant="outline-secondary" size="sm" onClick={handlePreviewSample}>
+                      Preview PDF
+                    </Button>
+                    <Button variant="outline-primary" size="sm" onClick={handleDownloadSample}>
+                      Download Sample
+                    </Button>
+                  </div>
                 }
               />
               <Card className="border">
@@ -384,10 +413,10 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                     <div className="d-flex align-items-center gap-2">
                       <div
                         className="d-flex align-items-center justify-content-center rounded-2 overflow-hidden flex-shrink-0"
-                        style={{ width: 44, height: 44, background: headerColor, color: 'white', fontWeight: 700 }}
+                        style={{ width: 56, height: 56, background: headerColor, color: 'white', fontWeight: 700 }}
                       >
                         {logoUrl ? (
-                          <img src={logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                         ) : (
                           (draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase()
                         )}
@@ -865,7 +894,7 @@ export default function OrganizationSettingsPage() {
                   <div className="d-flex align-items-center gap-3 mb-3">
                     <div
                       className="d-flex align-items-center justify-content-center rounded-3 bg-body-tertiary flex-shrink-0 overflow-hidden"
-                      style={{ width: 64, height: 64 }}
+                      style={{ width: 96, height: 96 }}
                     >
                       {logoUrl ? (
                         <img src={logoUrl} alt="Institution logo" style={{ maxWidth: '100%', maxHeight: '100%' }} />
@@ -1092,8 +1121,8 @@ export default function OrganizationSettingsPage() {
                           <div
                             className="d-flex align-items-center justify-content-center rounded-2 overflow-hidden flex-shrink-0"
                             style={{
-                              width: 40,
-                              height: 40,
+                              width: 52,
+                              height: 52,
                               background: draft.primaryColor ?? DEFAULT_BRANDING_COLORS.primaryColor,
                               color: 'white',
                               fontWeight: 700,
@@ -1101,7 +1130,11 @@ export default function OrganizationSettingsPage() {
                             }}
                           >
                             {logoUrl ? (
-                              <img src={logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <img
+                                src={logoUrl}
+                                alt=""
+                                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                              />
                             ) : (
                               (draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase()
                             )}

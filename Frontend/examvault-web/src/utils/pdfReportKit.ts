@@ -3,6 +3,8 @@
 // export (eg. exportAdvanceExamReportPdf.ts) can look like the same product
 // instead of each report reinventing its own header/footer/panel/table style.
 import { jsPDF } from 'jspdf';
+import apiClient from '../api/axiosClient';
+import { getOrganizationBranding } from '../api/organizationSettingsApi';
 
 export const PAGE_WIDTH = 210;
 export const PAGE_HEIGHT = 297;
@@ -86,6 +88,89 @@ export async function loadLogo(): Promise<LogoImage | null> {
   }
 }
 
+function loadImage(dataUrl: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+/** Fetches a tenant's own uploaded logo (raw bytes, via the branding-scoped endpoint any authenticated tenant member can call) and inlines it as a data URL with its real aspect ratio - unlike the fixed ExamVault logo, a tenant's own upload has no known intrinsic size. Returns null on any failure (no logo uploaded, fetch error, undecodable image). */
+async function loadTenantLogo(): Promise<LogoImage | null> {
+  try {
+    const { data } = await apiClient.get<Blob>('/api/tenants/mine/logo', { responseType: 'blob' });
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read logo image'));
+      reader.readAsDataURL(data);
+    });
+    const img = await loadImage(dataUrl);
+    if (!img || !img.naturalWidth || !img.naturalHeight) return null;
+    return { dataUrl, ratio: img.naturalWidth / img.naturalHeight };
+  } catch {
+    return null;
+  }
+}
+
+export interface TenantBranding {
+  /** The tenant's own logo if uploaded and enabled for reports, else the app's own ExamVault logo (loadLogo's existing fallback) - so every report always has a logo to draw, whichever one it turns out to be. */
+  logo: LogoImage | null;
+  /** True only when `logo` is the tenant's own upload, not the ExamVault fallback - callers use this to decide whether to also print the institution's name/motto as text (the ExamVault logo already has its own wordmark baked into the image; a tenant's own icon-only upload does not). */
+  hasOwnLogo: boolean;
+  name: string;
+  motto: string | null;
+  showMotto: boolean;
+  /** Scoped deliberately narrowly - only for header accents (a divider rule, a logo-placeholder badge), never for the semantic pass/fail/grade colors elsewhere in a report, so an unlucky tenant color choice can't make critical results illegible (see ActionPlan.txt). */
+  headerColor: RgbColor;
+  website: string | null;
+  addressLine: string | null;
+  contactLine: string | null;
+  showContactDetails: boolean;
+  includeAddressInFooter: boolean;
+}
+
+/** Resolves everything a report needs to brand itself for the current tenant, with the same "never fail the report" fallback discipline as loadLogo(): any error (not authenticated in this context, network failure, tenant hasn't configured anything) falls back to ExamVault's own fixed branding rather than throwing. */
+export async function loadTenantBranding(): Promise<TenantBranding> {
+  try {
+    const settings = await getOrganizationBranding();
+    const ownLogo = settings.hasLogo ? await loadTenantLogo() : null;
+    const logo = ownLogo ?? (await loadLogo());
+    const addressLine = [settings.addressLine1, settings.city, settings.state, settings.postalCode, settings.country]
+      .filter(Boolean)
+      .join(', ');
+    return {
+      logo,
+      hasOwnLogo: ownLogo !== null,
+      name: settings.name || 'ExamVault',
+      motto: settings.mottoTagline,
+      showMotto: settings.showMottoTagline,
+      headerColor: settings.useBrandColorsInReportHeader ? hexToRgb(settings.primaryColor) : BRAND,
+      website: settings.website,
+      addressLine: addressLine || null,
+      contactLine: [settings.contactPhone, settings.contactEmail].filter(Boolean).join(' · ') || null,
+      showContactDetails: settings.showContactDetails,
+      includeAddressInFooter: settings.includeAddressInPdfFooter,
+    };
+  } catch {
+    return {
+      logo: await loadLogo(),
+      hasOwnLogo: false,
+      name: 'ExamVault',
+      motto: null,
+      showMotto: false,
+      headerColor: BRAND,
+      website: null,
+      addressLine: null,
+      contactLine: null,
+      showContactDetails: false,
+      includeAddressInFooter: false,
+    };
+  }
+}
+
 /** Draws the real ExamVault logo (image, wordmark and tagline all baked into the PNG); falls back to plain "ExamVault" text if the image couldn't be loaded. */
 export function drawHeaderBrand(doc: jsPDF, x: number, y: number, heightMm: number, logo: LogoImage | null) {
   if (logo) {
@@ -102,7 +187,13 @@ export function drawHeaderBrand(doc: jsPDF, x: number, y: number, heightMm: numb
 export function drawPageHeader(
   doc: jsPDF,
   title: string,
-  opts: { logo: LogoImage | null; generatedAt?: Date; tagline?: string; logoHeightMm?: number } = { logo: null },
+  opts: {
+    logo: LogoImage | null;
+    generatedAt?: Date;
+    tagline?: string;
+    logoHeightMm?: number;
+    headerColor?: RgbColor;
+  } = { logo: null },
 ): number {
   let y = MARGIN;
   const logoH = opts.logoHeightMm ?? 13;
@@ -123,7 +214,7 @@ export function drawPageHeader(
     setColor(doc, 'setTextColor', TEXT_MUTED);
     doc.text(opts.tagline, PAGE_WIDTH - MARGIN, y + 15, { align: 'right' });
   }
-  setColor(doc, 'setDrawColor', BRAND);
+  setColor(doc, 'setDrawColor', opts.headerColor ?? BRAND);
   doc.setLineWidth(0.6);
   doc.line(MARGIN, y + 19, PAGE_WIDTH - MARGIN, y + 19);
   y += 25;

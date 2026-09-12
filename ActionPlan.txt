@@ -11557,3 +11557,119 @@ hardcoded logo. Wiring per-tenant branding into the actual generated
 documents remains separate, not-yet-started work.
 
 Not committed/pushed - holding per standing rule.
+
+---
+
+Fixed two real defects the user spotted in their own downloaded sample
+PDF, plus added a requested "Preview PDF" button, all in the PDF Report
+Settings tab of Organization Settings.
+
+1. Logo not "proper fit": handleDownloadSample was forcing any uploaded
+   logo into a fixed 16x16mm SQUARE regardless of its real aspect ratio -
+   a wide wordmark-style logo (like the ExamVault logo itself, used in
+   the user's own test) came out squashed and tiny. Fixed by sizing the
+   logo to its own naturalWidth/naturalHeight ratio at a taller 24mm
+   height (capped at 60mm wide so it can't run into the header's contact
+   block), with the institution name/motto text position now computed
+   from the logo's actual rendered width instead of a fixed offset. Also
+   fixed the same "cover" (crop-to-fill-square) CSS on the two on-screen
+   HTML preview logo badges (General tab's Report Header Preview, PDF tab's
+   Live PDF Preview) to "contain" instead, and enlarged all three logo
+   preview boxes (44->56, 40->52, 64->96) for better visibility - matching
+   the user's explicit "more size for logo" ask beyond just the one PDF
+   fix.
+
+2. Percentage/Grade stat-card values nearly invisible: both the dot and
+   the large value text were tinted with the tenant's own arbitrary
+   primaryColor (draft.useBrandColorsInReportHeader's "brand" variable) -
+   for this real tenant's chosen (light) color, the text became illegible
+   against the card's light background. Since the toggle is literally
+   named "Use brand colors in report header", it was never meant to
+   extend to these stat cards anyway - decoupled them entirely, now always
+   TEXT_DARK for both cards regardless of the toggle (Result/PASS-FAIL
+   stays its own semantic green/red, unaffected either way).
+
+3. Added a "Preview PDF" button next to "Download Sample" (per explicit
+   request) - refactored the PDF-building logic out of
+   handleDownloadSample into a shared buildSamplePdf() that returns the
+   jsPDF doc without saving; handleDownloadSample calls doc.save(), the
+   new handlePreviewSample instead opens doc.output('bloburl') in a new
+   tab via window.open, so an admin can check a setting change without
+   cluttering their Downloads folder every time.
+
+Live-verified: re-downloaded the sample and confirmed via direct read
+that the logo is now proportioned and Percentage/Grade values are dark
+and legible; clicked Preview PDF and confirmed it opened a new tab at a
+blob: URL (Chrome's inline PDF viewer) with zero new files added to
+Downloads. Frontend build clean, zero 4xx/5xx in gateway logs.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+Wired the tenant's real Organization Settings branding into the actual
+generated student-facing PDFs (not just the sample/preview from the
+settings page) - answers "as per organization pdf report student result
+how to show?" with an explicit "yes, build it now" from the user.
+
+1. New backend endpoint: GET /api/tenants/mine/branding on
+   MyTenantController.cs. Same response shape/handler as the existing
+   Admin-only GET /api/tenants/mine/settings, but with NO extra role
+   restriction beyond the controller's class-level [Authorize] - any
+   authenticated member of the tenant can call it. Needed because the
+   settings endpoint is Admin/SuperAdmin-gated, but a STUDENT downloading
+   their own result is neither.
+
+2. pdfReportKit.ts: added loadImage()/loadTenantLogo() (fetches the
+   tenant's uploaded logo bytes via the existing authenticated
+   fetchOrganizationAssetObjectUrl-style blob call and turns it into an
+   HTMLImageElement, same aspect-ratio-safe pattern from the logo-fit fix)
+   and loadTenantBranding() (calls the new /branding endpoint + the logo
+   loader together, returns a TenantBranding object with hasOwnLogo,
+   logo, institution name/motto, headerColor, website - falls back
+   completely to ExamVault's own fixed branding on ANY error, since a
+   branding fetch failure must never block a student from getting their
+   result). drawPageHeader() extended with an optional headerColor
+   override (defaults to the existing fixed BRAND).
+
+3. generateResultPdf.ts: drawStudentReport() now takes the whole
+   branding object instead of just a logo. Header draws the tenant's
+   institution name/motto next to their logo when they have one; the
+   divider line color and the footer's website line now use the tenant's
+   own headerColor/website instead of the hardcoded ExamVault ones. Both
+   generateResultPdf() and generateExamResultsBooklet() now call
+   loadTenantBranding() instead of the old fixed loadLogo().
+   exportAdvanceExamReportPdf.ts: same loadLogo -> loadTenantBranding
+   swap, both drawPageHeader() calls and stampFooters() now pass the
+   tenant's logo/headerColor. The pre-existing extras.organization
+   name/address block (already tenant-specific, unrelated to this change)
+   was left untouched.
+
+   Deliberately NOT touched, matching the earlier legibility lesson from
+   the sample-PDF fix: Pass/Fail/Grade/Result semantic colors (GREEN/RED/
+   AMBER) stay fixed everywhere in both files, regardless of the tenant's
+   chosen brand color - only the header/branding elements change.
+   generateCertificatePdf.ts was NOT touched - it has its own separate
+   hardcoded logo outside pdfReportKit and was out of scope for this ask.
+
+Live-verified as the real Admin on tenant test.localhost: uploaded a
+wide synthetic test logo, confirmed via gateway/user-api logs that
+GET /api/tenants/mine/branding and the logo endpoint both fire and
+return 200 during real PDF generation (not just from the settings page).
+Downloaded a real student's (Bhau Mane, "c# exam") result PDF and read
+it directly - tenant's wide logo renders correctly (not squished) in
+header and footer on both pages, footer shows the tenant's own website
+instead of the hardcoded one, institution name text present, all
+Pass/Fail/Grade/donut colors correctly untouched. Also exported an
+Advance Exam Report PDF and read all 4 pages - tenant logo appears
+correctly in the header (pages with drawPageHeader) and in every page's
+footer via stampFooters, the existing organization name/address block
+still renders unchanged, header divider reflects the tenant's branding.
+Checked gateway and user-api logs across the full test window: zero
+exceptions, zero 4xx/5xx, zero unhandled errors.
+
+No new automated tests added for this phase (GetBranding controller
+action, loadTenantBranding/loadTenantLogo) - verified live/manually
+only; UserService test count unchanged at 118/118.
+
+Not committed/pushed - holding per standing rule.

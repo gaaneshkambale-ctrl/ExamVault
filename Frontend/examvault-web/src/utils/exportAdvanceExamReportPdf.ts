@@ -31,7 +31,7 @@ import {
   ensurePageSpace,
   fieldRow,
   fitText,
-  loadLogo,
+  loadTenantBranding,
   panel,
   panelTitle,
   sanitizeFilename,
@@ -103,13 +103,18 @@ export async function exportAdvanceExamReportPdf(
   report: AdvanceReportData,
   extras: AdvanceReportExtras,
 ): Promise<void> {
-  const logo = await loadLogo();
+  const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
   const TITLE = 'EXAM PERFORMANCE REPORT';
   const SUBTITLE = 'Detailed Examination Performance & Outcome Analysis';
 
-  let y = drawPageHeader(doc, TITLE, { logo, generatedAt, tagline: SUBTITLE });
+  let y = drawPageHeader(doc, TITLE, {
+    logo: branding.logo,
+    headerColor: branding.headerColor,
+    generatedAt,
+    tagline: SUBTITLE,
+  });
 
   // Organization info - only when the caller's tenant lookup actually
   // resolved (see MyTenantController.cs); skipped rather than showing a
@@ -438,7 +443,12 @@ export async function exportAdvanceExamReportPdf(
 
   // ---------- Page 2 ----------
   doc.addPage();
-  y = drawPageHeader(doc, TITLE, { logo, generatedAt, tagline: SUBTITLE });
+  y = drawPageHeader(doc, TITLE, {
+    logo: branding.logo,
+    headerColor: branding.headerColor,
+    generatedAt,
+    tagline: SUBTITLE,
+  });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
@@ -672,6 +682,6 @@ export async function exportAdvanceExamReportPdf(
     align: 'right',
   });
 
-  stampFooters(doc, generatedAt, logo);
+  stampFooters(doc, generatedAt, branding.logo);
   doc.save(`${sanitizeFilename(exam.title)}-advanced-report.pdf`);
 }
