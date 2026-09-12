@@ -11504,3 +11504,56 @@ report header" off, saved, reloaded the page fresh - confirmed the
 setting persisted. Zero 4xx/5xx in gateway logs across the entire test.
 
 Not committed/pushed - holding per standing rule.
+
+---
+
+Restyled the "Download Sample" PDF in PDF Report Settings to match a
+target screenshot the user provided (a properly-branded, table/stat-card
+report), replacing the earlier plain-text jsPDF output. Rather than
+hand-rolling new drawing code, reused the already-existing shared PDF kit
+(Frontend/.../utils/pdfReportKit.ts) built for the real result-PDF
+generator - drawTableHeader, drawStatCard, fieldRow, fitText, and the
+color constants - since it already has exactly the primitives this kind
+of report needs (branded header, bordered table, colored KPI cards).
+
+Added one new small helper to the shared kit itself: hexToRgb(hex) -
+parses a tenant's own "#RRGGBB" branding-color string into the RgbColor
+shape the kit's drawing functions expect (falls back to the kit's fixed
+BRAND color for anything unparseable) - this is the first place a
+tenant's own color, rather than the fixed app-wide BRAND constant, feeds
+into this kit.
+
+Rebuilt handleDownloadSample entirely: branded header (logo image if
+uploaded, else initials on a colored badge, respecting "Use brand colors
+in report header"), right-aligned contact block (respecting "Show contact
+details"), real bordered table with an alternating-row body and a shaded
+Total Marks row, three drawStatCard KPI boxes (Percentage/Result/Grade,
+Result colored green/red by pass-fail), a hand-drawn QR-pattern
+placeholder (respecting "Show QR code for verification" - explicitly not
+a real scannable code, same honesty as the on-screen preview), the
+signature image if uploaded, and the same "computer generated report"
+disclaimer line as the target. Added loadImageElement() (resolves a blob:
+object URL to an HTMLImageElement for jsPDF's addImage) and
+drawQrPlaceholder() as local helpers in OrganizationSettings.tsx.
+
+Live-verified: downloaded the sample multiple times through real
+(coordinate, not scripted-DOM) clicks - a scripted .click() silently
+produced no file at all after the first couple of downloads in the same
+session (Chrome's automatic multi-download throttling), while a genuine
+click always worked; read the resulting PDFs directly and confirmed they
+match the target closely - colored logo badge, branded divider line,
+bordered/shaded table, colored stat cards, QR placeholder, signature
+area, and footer disclaimer, correctly reflecting the current toggle
+state (re-verified with "Use brand colors in report header" both off and
+on, producing black-and-white vs. indigo-branded output respectively).
+Frontend build clean. Zero 4xx/5xx in gateway logs throughout.
+
+Still true from the earlier "how does this affect exam results" question,
+unchanged by this: this whole feature (settings + preview + sample
+download) has NO effect on the real student result PDFs or certificates -
+those still use pdfReportKit's fixed BRAND color and static
+/examvault-logo.png, and generateCertificatePdf.ts has its own separate
+hardcoded logo. Wiring per-tenant branding into the actual generated
+documents remains separate, not-yet-started work.
+
+Not committed/pushed - holding per standing rule.

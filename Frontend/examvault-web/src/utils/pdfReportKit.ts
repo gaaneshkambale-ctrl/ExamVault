@@ -39,6 +39,18 @@ export function setColor(doc: jsPDF, method: 'setTextColor' | 'setFillColor' | '
   doc[method](c.r, c.g, c.b);
 }
 
+/** Parses a "#RRGGBB" string (eg. a tenant's own branding color) into an RgbColor - falls back to the fixed BRAND color for anything that doesn't match. */
+export function hexToRgb(hex: string | null | undefined): RgbColor {
+  const match = hex?.match(/^#?([0-9A-Fa-f]{6})$/);
+  if (!match) return BRAND;
+  const value = match[1];
+  return {
+    r: parseInt(value.slice(0, 2), 16),
+    g: parseInt(value.slice(2, 4), 16),
+    b: parseInt(value.slice(4, 6), 16),
+  };
+}
+
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';

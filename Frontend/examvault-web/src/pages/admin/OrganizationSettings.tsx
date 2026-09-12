@@ -13,6 +13,21 @@ import { fetchOrganizationAssetObjectUrl } from '../../api/organizationSettingsA
 import { extractServerError } from '../../utils/apiError';
 import { ORGANIZATION_TYPES } from '../../types/tenant';
 import {
+  MARGIN,
+  CONTENT_WIDTH,
+  PAGE_WIDTH,
+  GREEN,
+  TEXT_DARK,
+  TEXT_MUTED,
+  BORDER,
+  setColor,
+  fieldRow,
+  fitText,
+  drawTableHeader,
+  drawStatCard,
+  hexToRgb,
+} from '../../utils/pdfReportKit';
+import {
   DEFAULT_BRANDING_COLORS,
   TIME_ZONES,
   LANGUAGES,
@@ -132,6 +147,44 @@ function QrPlaceholder() {
   );
 }
 
+// Loads a (possibly blob:) object URL into an HTMLImageElement so it can be
+// passed straight to jsPDF's addImage - resolves to null on any failure
+// (no logo/signature uploaded, or the image failed to decode) rather than
+// blocking the whole PDF export.
+function loadImageElement(url: string | null): Promise<HTMLImageElement | null> {
+  if (!url) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+// A visually QR-like grid of filled squares - not a real scannable code,
+// just enough to show where/how one would render in the actual layout
+// (this whole document is an explicitly-labeled sample).
+function drawQrPlaceholder(doc: jsPDF, x: number, y: number, size: number) {
+  const cells = 6;
+  const cellSize = size / cells;
+  const pattern = [
+    [1, 1, 1, 0, 1, 1],
+    [1, 0, 1, 0, 0, 1],
+    [1, 1, 0, 1, 1, 0],
+    [0, 1, 1, 0, 1, 1],
+    [1, 0, 0, 1, 0, 1],
+    [1, 1, 1, 0, 1, 1],
+  ];
+  setColor(doc, 'setFillColor', TEXT_DARK);
+  pattern.forEach((row, r) => {
+    row.forEach((cell, c) => {
+      if (cell) {
+        doc.rect(x + c * cellSize, y + r * cellSize, cellSize, cellSize, 'F');
+      }
+    });
+  });
+}
+
 interface PdfReportSettingsTabProps {
   draft: UpdateOrganizationSettingsRequest;
   set: <K extends keyof UpdateOrganizationSettingsRequest>(key: K, value: UpdateOrganizationSettingsRequest[K]) => void;
@@ -147,49 +200,160 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     ? draft.primaryColor ?? DEFAULT_BRANDING_COLORS.primaryColor
     : '#1F2937';
 
-  const handleDownloadSample = () => {
+  const handleDownloadSample = async () => {
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(draft.name || 'Institution Name', 14, 20);
-    if (draft.showMottoTagline && draft.mottoTagline) {
-      doc.setFontSize(10);
-      doc.text(draft.mottoTagline, 14, 27);
+    const brand = draft.useBrandColorsInReportHeader ? hexToRgb(draft.primaryColor) : TEXT_DARK;
+    const passed = percentage >= 40;
+    const grade = percentage >= 80 ? 'A' : percentage >= 60 ? 'B' : 'C';
+
+    const [logoImg, signatureImg] = await Promise.all([loadImageElement(logoUrl), loadImageElement(signatureUrl)]);
+
+    // Header: logo + name/motto on the left, contact block on the right.
+    if (logoImg) {
+      doc.addImage(logoImg, MARGIN, MARGIN, 16, 16);
+    } else {
+      setColor(doc, 'setFillColor', brand);
+      doc.roundedRect(MARGIN, MARGIN, 16, 16, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(255, 255, 255);
+      doc.text((draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase(), MARGIN + 8, MARGIN + 10, {
+        align: 'center',
+      });
     }
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
-    doc.text('OFFICIAL EXAMINATION REPORT (Sample)', 14, 40);
-    doc.setFontSize(10);
-    let y = 52;
-    const lines = [
-      `Student Name: ${SAMPLE_REPORT.studentName}`,
-      `Registration No.: ${SAMPLE_REPORT.registrationNo}`,
-      `Program: ${SAMPLE_REPORT.program}`,
-      `Exam Name: ${SAMPLE_REPORT.examName}`,
-      `Exam Date: ${SAMPLE_REPORT.examDate}`,
-      `Duration: ${SAMPLE_REPORT.duration}`,
+    setColor(doc, 'setTextColor', brand);
+    doc.text(draft.name || 'Institution Name', MARGIN + 20, MARGIN + 6);
+    if (draft.showMottoTagline && draft.mottoTagline) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      setColor(doc, 'setTextColor', TEXT_MUTED);
+      doc.text(draft.mottoTagline, MARGIN + 20, MARGIN + 12);
+    }
+    if (draft.showContactDetails) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      setColor(doc, 'setTextColor', TEXT_MUTED);
+      const address = [draft.addressLine1, draft.city, draft.state, draft.postalCode, draft.country]
+        .filter(Boolean)
+        .join(', ');
+      const contact = [draft.contactPhone, draft.website].filter(Boolean).join(' · ');
+      doc.text(fitText(doc, address, 90), PAGE_WIDTH - MARGIN, MARGIN + 4, { align: 'right' });
+      doc.text(fitText(doc, contact, 90), PAGE_WIDTH - MARGIN, MARGIN + 9, { align: 'right' });
+    }
+    setColor(doc, 'setDrawColor', brand);
+    doc.setLineWidth(0.6);
+    doc.line(MARGIN, MARGIN + 22, PAGE_WIDTH - MARGIN, MARGIN + 22);
+
+    let y = MARGIN + 32;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    setColor(doc, 'setTextColor', TEXT_DARK);
+    doc.text('OFFICIAL EXAMINATION REPORT', PAGE_WIDTH / 2, y, { align: 'center' });
+    y += 10;
+
+    const fields: [string, string][] = [
+      ['Student Name', SAMPLE_REPORT.studentName],
+      ['Registration No.', SAMPLE_REPORT.registrationNo],
+      ['Program', SAMPLE_REPORT.program],
+      ['Exam Name', SAMPLE_REPORT.examName],
+      ['Exam Date', SAMPLE_REPORT.examDate],
+      ['Duration', SAMPLE_REPORT.duration],
     ];
-    lines.forEach((line) => {
-      doc.text(line, 14, y);
-      y += 7;
-    });
-    y += 3;
-    doc.text('Q.No   Subject / Section              Marks   Obtained', 14, y);
-    y += 6;
-    SAMPLE_REPORT.rows.forEach((r) => {
-      doc.text(`${r.no}      ${r.subject.padEnd(28, ' ')}   ${r.marks}       ${r.obtained}`, 14, y);
-      y += 6;
+    fields.forEach(([label, value]) => {
+      fieldRow(doc, label, value, MARGIN, y, 38, CONTENT_WIDTH);
+      y += 6.5;
     });
     y += 4;
-    doc.setFontSize(11);
-    doc.text(`Total: ${totalObtained} / ${totalMarks} (${percentage}%) - ${percentage >= 40 ? 'PASS' : 'FAIL'}`, 14, y);
-    if (draft.includeAddressInPdfFooter) {
-      y += 15;
+
+    const colWidths = [16, 94, 36, 36];
+    const rowH = 7.5;
+    const tableTop = y;
+    drawTableHeader(doc, MARGIN, y, colWidths, ['Q.No', 'Subject / Section', 'Marks', 'Obtained'], rowH);
+    y += rowH;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    SAMPLE_REPORT.rows.forEach((r, i) => {
+      if (i % 2 === 1) {
+        setColor(doc, 'setFillColor', { r: 248, g: 250, b: 252 });
+        doc.rect(MARGIN, y, CONTENT_WIDTH, rowH, 'F');
+      }
+      setColor(doc, 'setTextColor', TEXT_DARK);
+      let cx = MARGIN + 2;
+      doc.text(String(r.no), cx, y + rowH - 2.5);
+      cx += colWidths[0];
+      doc.text(r.subject, cx, y + rowH - 2.5);
+      cx += colWidths[1];
+      doc.text(String(r.marks), cx, y + rowH - 2.5);
+      cx += colWidths[2];
+      doc.text(String(r.obtained), cx, y + rowH - 2.5);
+      y += rowH;
+    });
+    setColor(doc, 'setFillColor', { r: 238, g: 242, b: 255 });
+    doc.rect(MARGIN, y, CONTENT_WIDTH, rowH, 'F');
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, 'setTextColor', TEXT_DARK);
+    doc.text('Total Marks', MARGIN + 2, y + rowH - 2.5);
+    doc.text(String(totalMarks), MARGIN + colWidths[0] + colWidths[1] + 2, y + rowH - 2.5);
+    doc.text(String(totalObtained), MARGIN + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + rowH - 2.5);
+    y += rowH;
+    setColor(doc, 'setDrawColor', BORDER);
+    doc.setLineWidth(0.3);
+    doc.rect(MARGIN, tableTop, CONTENT_WIDTH, y - tableTop);
+    y += 10;
+
+    const cardW = (CONTENT_WIDTH - 12) / 3;
+    drawStatCard(doc, MARGIN, y, cardW, 26, brand, 'Percentage', `${percentage}%`, brand);
+    drawStatCard(
+      doc,
+      MARGIN + cardW + 6,
+      y,
+      cardW,
+      26,
+      passed ? GREEN : { r: 220, g: 53, b: 69 },
+      'Result',
+      passed ? 'PASS' : 'FAIL',
+      passed ? GREEN : { r: 220, g: 53, b: 69 },
+    );
+    drawStatCard(doc, MARGIN + (cardW + 6) * 2, y, cardW, 26, brand, 'Grade', grade, brand);
+    y += 26 + 10;
+
+    if (draft.showQrCodeForVerification) {
+      drawQrPlaceholder(doc, MARGIN, y, 22);
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(
-        [draft.addressLine1, draft.city, draft.state, draft.postalCode, draft.country].filter(Boolean).join(', '),
-        14,
-        y,
-      );
+      setColor(doc, 'setTextColor', TEXT_MUTED);
+      doc.text('Scan to verify this report', MARGIN + 26, y + 8);
+      doc.text(`Verification Code: ${SAMPLE_REPORT.verificationCode}`, MARGIN + 26, y + 13);
     }
+
+    const sigX = PAGE_WIDTH - MARGIN - 50;
+    if (signatureImg) {
+      doc.addImage(signatureImg, sigX, y, 40, 14);
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    setColor(doc, 'setTextColor', TEXT_DARK);
+    doc.text(draft.signatoryName || 'Authorized Signatory', sigX + 20, y + 19, { align: 'center' });
+    if (draft.signatoryDesignation) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      setColor(doc, 'setTextColor', TEXT_MUTED);
+      doc.text(draft.signatoryDesignation, sigX + 20, y + 23, { align: 'center' });
+    }
+
+    y += 30;
+    setColor(doc, 'setDrawColor', BORDER);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
+    y += 5;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text('This is a computer generated report and does not require a physical signature.', MARGIN, y);
+    doc.text('(Sample)', PAGE_WIDTH - MARGIN, y, { align: 'right' });
+
     doc.save('sample-report.pdf');
   };
 
