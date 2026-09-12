@@ -16,4 +16,15 @@ public record UpdateQuestionCommand(
     string? ReturnType = null,
     IReadOnlyList<QuestionParameterInput>? Parameters = null,
     IReadOnlyList<QuestionTestCaseInput>? TestCases = null,
-    IReadOnlyList<QuestionSqlTestCaseInput>? SqlTestCases = null);
+    IReadOnlyList<QuestionSqlTestCaseInput>? SqlTestCases = null,
+    // Non-null only for an Instructor caller - Admin/SuperAdmin pass null
+    // for unrestricted access. When set, the handler requires
+    // question.CreatedByUserId to match.
+    Guid? OwnerUserId = null,
+    string? SampleInput = null,
+    string? SampleOutput = null,
+    string? Constraints = null,
+    // Forwarded to Execution Service to precompute Sql test cases' Expected
+    // Output - only needed when SqlTestCases is non-empty, same
+    // caller-forwards-own-token pattern RunSqlCommand already uses.
+    string? BearerToken = null);

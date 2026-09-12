@@ -31,6 +31,10 @@ namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
                     b.Property<bool>("AllowLanguageChange")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Constraints")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -68,6 +72,14 @@ namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
                     b.Property<string>("SampleAnswer")
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("SampleInput")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("SampleOutput")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<Guid?>("SectionId")
                         .HasColumnType("uniqueidentifier");
@@ -163,6 +175,9 @@ namespace OnlineExamSystem.Question.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("DisplayOrder")
                         .HasColumnType("int");
+
+                    b.Property<string>("ExpectedOutput")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("QuestionId")
                         .HasColumnType("uniqueidentifier");

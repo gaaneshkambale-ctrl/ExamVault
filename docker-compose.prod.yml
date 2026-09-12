@@ -1,0 +1,69 @@
+# Production override for the Hostinger VPS - merges on top of
+# docker-compose.yml (which stays as-is for local dev, unchanged).
+# Usage on the VPS: docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+#
+# What this does: removes every internal service's host port publishing
+# (sqlserver, rabbitmq, piston, and every *-api service) so they're only
+# reachable container-to-container on the Docker network, not from the
+# public IP - and removes gateway/frontend's direct host port publishing
+# too, since Traefik fronts them instead (see docker-compose.traefik.yml).
+#
+# IMPORTANT: `ports:` is a sequence field, and Compose's default merge
+# behavior for sequences is to CONCATENATE across -f files, not replace -
+# a plain `ports: []` here contributes nothing and silently leaves the
+# base file's ports intact (confirmed live: first deploy still published
+# every port). The `!reset` tag is Compose's documented way to force an
+# override file to actually clear/replace a sequence field instead of
+# appending to it - required here, not optional.
+
+services:
+  sqlserver:
+    ports: !reset []
+
+  rabbitmq:
+    ports: !reset []
+
+  piston:
+    ports: !reset []
+
+  user-api:
+    ports: !reset []
+    environment:
+      # TenantUrlBuilder (Backend/Services/UserService/.../Email/
+      # TenantUrlBuilder.cs) builds every invite/reset email's login URL
+      # from these three - left at the base file's local-dev values
+      # (localhost:5173/http), every such email was linking to
+      # http://<slug>.localhost:5173/login instead of the real domain.
+      App__FrontendBaseUrl: https://examvaults.in
+      App__BaseDomain: examvaults.in
+      App__Scheme: https
+
+  exam-api:
+    ports: !reset []
+
+  question-api:
+    ports: !reset []
+
+  ai-api:
+    ports: !reset []
+
+  submission-api:
+    ports: !reset []
+
+  result-api:
+    ports: !reset []
+
+  execution-api:
+    ports: !reset []
+
+  notification-api:
+    ports: !reset []
+
+  gateway:
+    ports: !reset []
+
+  frontend:
+    ports: !reset []
+    build:
+      args:
+        VITE_API_BASE_URL: https://api.examvaults.in

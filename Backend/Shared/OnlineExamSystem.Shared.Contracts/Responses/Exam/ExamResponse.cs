@@ -32,4 +32,7 @@ public record ExamResponse(
     bool ConfirmBeforeSubmit,
     Guid? ExamTypeId = null,
     string? ExamTypeName = null,
-    Guid TenantId = default);
+    Guid TenantId = default,
+    string Tags = "",
+    Guid CreatedByUserId = default,
+    string? CreatedByName = null);

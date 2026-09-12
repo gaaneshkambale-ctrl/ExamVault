@@ -27,8 +27,6 @@ using OnlineExamSystem.Notification.Application.Notifications.Mine.GetUnreadCoun
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAllAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.Preferences;
-using OnlineExamSystem.Notification.Application.Settings.GetSystemSettings;
-using OnlineExamSystem.Notification.Application.Settings.UpdateSystemSettings;
 using OnlineExamSystem.Notification.Application.SystemLogs.ListSystemErrorLogs;
 using OnlineExamSystem.Notification.Application.SystemLogs.RecordSystemErrorLog;
 using OnlineExamSystem.Notification.Application.SystemLogs.ResolveSystemErrorLog;
@@ -64,21 +62,20 @@ public class Program
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
         builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
-        builder.Services.AddScoped<ISystemSettingsRepository, SystemSettingsRepository>();
         builder.Services.AddScoped<ISystemErrorLogRepository, SystemErrorLogRepository>();
+        builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
+        builder.Services.AddScoped<INewsletterSubscriberRepository, NewsletterSubscriberRepository>();
         builder.Services.AddScoped<RecordAuditLogHandler>();
         builder.Services.AddScoped<ListAuditLogsHandler>();
-        builder.Services.AddScoped<GetSystemSettingsHandler>();
-        builder.Services.AddScoped<IValidator<UpdateSystemSettingsCommand>, UpdateSystemSettingsValidator>();
-        builder.Services.AddScoped<UpdateSystemSettingsHandler>();
         builder.Services.AddScoped<RecordSystemErrorLogHandler>();
         builder.Services.AddScoped<ListSystemErrorLogsHandler>();
         builder.Services.AddScoped<ResolveSystemErrorLogHandler>();
-        builder.Services.AddHostedService<AuditLogRetentionCleanupService>();
         builder.Services.AddHostedService<SystemErrorLogRetentionCleanupService>();
 
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
+        builder.Services.AddSingleton<INotificationDispatchQueue, NotificationDispatchQueue>();
+        builder.Services.AddHostedService<NotificationDispatchBackgroundService>();
         builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
 
         // Trailing slash is required: HttpClient/Uri combine a relative request path against
@@ -88,10 +85,18 @@ public class Program
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IUserDirectoryClient, UserDirectoryClient>(client =>
             client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<INotificationDefaultsClient, NotificationDefaultsClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IExamAssignmentLookupClient, ExamAssignmentLookupClient>(client =>
+            client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IExamLookupClient, ExamServiceClient>(client =>
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
         builder.Services.AddScoped<GetMyNotificationsHandler>();
@@ -140,7 +145,11 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
 

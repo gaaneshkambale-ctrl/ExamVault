@@ -1,0 +1,66 @@
+# Traefik routing labels for the Hostinger VPS - use alongside
+# docker-compose.yml + docker-compose.prod.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+#
+# CONFIRMED against the VPS's actual Traefik setup (Hostinger's "Docker
+# and Traefik" template, deployed via its Docker Manager as an app named
+# "traefik" - container traefik-traefik-1):
+#   - network_mode: host - Traefik is NOT on a custom Docker network, so
+#     no `traefik.docker.network` label or external network join is
+#     needed here at all. It discovers labeled containers via the Docker
+#     socket (--providers.docker=true, exposedbydefault=false) regardless
+#     of which network they're on - a host-mode Traefik can always reach
+#     a container's bridge-network IP directly.
+#   - certresolver name: "letsencrypt" (confirmed, matches this file)
+#   - entrypoint for HTTPS: "websecure" (confirmed, matches this file)
+#   - challenge type: DNS-01 via HOSTINGER_API_TOKEN (switched from HTTP-01
+#     - HTTP-01 only requests certs for domains Traefik can extract
+#     literally from a Host() rule; it cannot enumerate a HostRegexp()
+#     pattern into concrete domains, so a brand-new tenant subdomain never
+#     got a cert at all under HTTP-01, confirmed live via Traefik's own
+#     debug log: "Trying to challenge certificate for domain
+#     [examvaults.in] found in HostSNI rule" - only the two literal Host()
+#     domains were ever attempted, never anything matching just the regex
+#     part). DNS-01 can issue a genuine wildcard instead - the
+#     tls.domains override below asks for one cert covering both
+#     examvaults.in and *.examvaults.in, so every current and future
+#     tenant subdomain is already covered by the same cert, no per-tenant
+#     action ever needed.
+#   - HostRegexp syntax note (still relevant for routing, separate from
+#     certs): Traefik v3 (this VPS runs v3.7) changed HostRegexp to plain
+#     Go regex - v2's mux-style placeholder syntax
+#     ({subdomain:[a-z0-9-]+}.examvaults.in) silently matches nothing in
+#     v3. The rule below already uses v3's syntax.
+#   - ROUTER PRIORITY (added after a real live bug): frontend's
+#     HostRegexp(`^[a-z0-9-]+.examvaults.in$`) also matches
+#     "api.examvaults.in" - "api" is just another string satisfying
+#     [a-z0-9-]+, and Go's RE2 (which v3 uses) has no negative-lookahead
+#     to exclude it. Without an explicit priority, Traefik was routing
+#     api.examvaults.in to the FRONTEND (nginx) instead of the gateway -
+#     confirmed live: a CORS preflight to api.examvaults.in/api/users/login
+#     came back 405 from nginx, not the Gateway's own CORS-aware pipeline,
+#     which silently broke every browser API call (a plain curl to the
+#     bare root wrongly looked healthy, since nginx's SPA fallback serves
+#     200 for any path too). Explicit priority forces the exact-match
+#     api router to win whenever both match.
+
+services:
+  gateway:
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.examvault-api.rule: "Host(`api.examvaults.in`)"
+      traefik.http.routers.examvault-api.priority: "100"
+      traefik.http.routers.examvault-api.entrypoints: "websecure"
+      traefik.http.routers.examvault-api.tls.certresolver: "letsencrypt"
+      traefik.http.services.examvault-api.loadbalancer.server.port: "8080"
+
+  frontend:
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.examvault-frontend.rule: "Host(`examvaults.in`) || HostRegexp(`^[a-z0-9-]+.examvaults.in$`)"
+      traefik.http.routers.examvault-frontend.priority: "1"
+      traefik.http.routers.examvault-frontend.entrypoints: "websecure"
+      traefik.http.routers.examvault-frontend.tls.certresolver: "letsencrypt"
+      traefik.http.routers.examvault-frontend.tls.domains[0].main: "examvaults.in"
+      traefik.http.routers.examvault-frontend.tls.domains[0].sans: "*.examvaults.in"
+      traefik.http.services.examvault-frontend.loadbalancer.server.port: "80"

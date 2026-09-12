@@ -81,4 +81,36 @@ public class UpdateExamHandlerTests
         Assert.NotEmpty(result.ValidationErrors);
         Assert.Equal("C# Fundamentals", exam.Title);
     }
+
+    [Fact]
+    public async Task Owner_can_update_their_own_exam()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals", CreatedByUserId = ownerId };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository);
+        var command = CommandFor(exam.Id) with { OwnerUserId = ownerId };
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.Equal("C# Fundamentals (Updated)", result.Exam!.Title);
+    }
+
+    [Fact]
+    public async Task Non_owner_cannot_update_another_instructors_exam()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals", CreatedByUserId = Guid.NewGuid() };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository);
+        var command = CommandFor(exam.Id) with { OwnerUserId = Guid.NewGuid() };
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsForbidden);
+        Assert.Equal("C# Fundamentals", exam.Title);
+    }
 }

@@ -25,4 +25,9 @@ public record UpdateExamCommand(
     bool AutoSubmitOnTimeEnd,
     bool ConfirmBeforeSubmit,
     string? ExamCode = null,
-    Guid? ExamTypeId = null);
+    Guid? ExamTypeId = null,
+    // Non-null only for an Instructor caller - Admin/SuperAdmin pass null
+    // for unrestricted tenant-wide access. When set, the handler requires
+    // exam.CreatedByUserId to match, matching the ownership scope List/
+    // GetById already enforce for Instructor.
+    Guid? OwnerUserId = null);

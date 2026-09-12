@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OnlineExamSystem.Exam.Application.Interfaces;
 
 namespace OnlineExamSystem.Exam.Application.Exams.Delete;
@@ -5,10 +6,17 @@ namespace OnlineExamSystem.Exam.Application.Exams.Delete;
 public class DeleteExamHandler
 {
     private readonly IExamRepository _examRepository;
+    private readonly IQuestionServiceClient _questionServiceClient;
+    private readonly ILogger<DeleteExamHandler> _logger;
 
-    public DeleteExamHandler(IExamRepository examRepository)
+    public DeleteExamHandler(
+        IExamRepository examRepository,
+        IQuestionServiceClient questionServiceClient,
+        ILogger<DeleteExamHandler> logger)
     {
         _examRepository = examRepository;
+        _questionServiceClient = questionServiceClient;
+        _logger = logger;
     }
 
     public async Task<DeleteExamResult> HandleAsync(
@@ -21,9 +29,32 @@ public class DeleteExamHandler
             return DeleteExamResult.NotFound();
         }
 
+        // Instructor is restricted to exams they created themselves, same
+        // ownership rule Update/ChangeStatus already enforce; Admin/
+        // SuperAdmin remain unrestricted (null = no ownership check).
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return DeleteExamResult.Forbidden();
+        }
+
         await _examRepository.RemoveAsync(exam, cancellationToken);
         await _examRepository.SaveChangesAsync(cancellationToken);
 
-        return DeleteExamResult.Ok();
+        try
+        {
+            // Best-effort, same principle as DeleteSectionHandler's own call - the exam is
+            // already durably deleted, a Question Service hiccup here must not fail the
+            // whole operation nor mislead the Admin into retrying.
+            await _questionServiceClient.DeleteQuestionsForExamAsync(
+                command.ExamId,
+                command.BearerToken,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to delete questions for deleted exam {ExamId}.", command.ExamId);
+        }
+
+        return DeleteExamResult.Ok(exam.TenantId, exam.Title);
     }
 }

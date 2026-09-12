@@ -5,6 +5,7 @@ import About from '../pages/About';
 import Contact from '../pages/Contact';
 import Profile from '../pages/Profile';
 import ChangePassword from '../pages/ChangePassword';
+import ResetPasswordWithToken from '../pages/ResetPassword';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import ManageUsers from '../pages/admin/ManageUsers';
 import CreateUser from '../pages/admin/CreateUser';
@@ -15,6 +16,7 @@ import ResetPassword from '../pages/admin/ResetPassword';
 import RolesPermissions from '../pages/admin/RolesPermissions';
 import ManageExams from '../pages/admin/ManageExams';
 import ManageExamTypes from '../pages/admin/ManageExamTypes';
+import ExamScheduled from '../pages/admin/ExamScheduled';
 import CreateExam from '../pages/admin/CreateExam';
 import ExamDetails from '../pages/admin/ExamDetails';
 import EditExam from '../pages/admin/EditExam';
@@ -39,20 +41,29 @@ import SecurityViolations from '../pages/admin/liveMonitoring/SecurityViolations
 import Proctoring from '../pages/admin/liveMonitoring/Proctoring';
 import ExamResults from '../pages/admin/ExamResults';
 import StudentResults from '../pages/admin/StudentResults';
+import StudentResultDetails from '../pages/admin/StudentResultDetails';
 import ResultAnalytics from '../pages/admin/ResultAnalytics';
 import PublishResults from '../pages/admin/PublishResults';
 import AdminReports from '../pages/admin/AdminReports';
 import StudentReports from '../pages/admin/StudentReports';
 import PerformanceReports from '../pages/admin/PerformanceReports';
 import AuditReports from '../pages/admin/AuditReports';
+import ExamTypeWiseReport from '../pages/admin/ExamTypeWiseReport';
+import ExamTypeDetails from '../pages/admin/ExamTypeDetails';
+import ExamTypePerformanceAnalysis from '../pages/admin/ExamTypePerformanceAnalysis';
+import ExamTypeStudentPerformance from '../pages/admin/ExamTypeStudentPerformance';
+import ExamTypeComparison from '../pages/admin/ExamTypeComparison';
+import ExamTypeQuestionAnalysis from '../pages/admin/ExamTypeQuestionAnalysis';
+import ExamTypeSectionPerformance from '../pages/admin/ExamTypeSectionPerformance';
 import AdminSettings from '../pages/admin/AdminSettings';
-import GeneralSettingsPage from '../pages/admin/settings/GeneralSettingsPage';
+import OrganizationSettings from '../pages/admin/OrganizationSettings';
 import ExamSettingsPage from '../pages/admin/settings/ExamSettingsPage';
 import SecuritySettingsPage from '../pages/admin/settings/SecuritySettingsPage';
 import ProctoringSettingsPage from '../pages/admin/settings/ProctoringSettingsPage';
 import NotificationSettingsPage from '../pages/admin/settings/NotificationSettingsPage';
-import SystemSettingsPage from '../pages/admin/settings/SystemSettingsPage';
 import ExamReportDetails from '../pages/admin/ExamReportDetails';
+import AdvanceExamReport from '../pages/admin/AdvanceExamReport';
+import InstructorDashboard from '../pages/instructor/InstructorDashboard';
 import StudentDashboard from '../pages/student/StudentDashboard';
 import MyExams from '../pages/student/MyExams';
 import StudentExamDetails from '../pages/student/ExamDetails';
@@ -81,6 +92,9 @@ import OrganizationsAndPlans from '../pages/platform/OrganizationsAndPlans';
 import PlatformUsage from '../pages/platform/PlatformUsage';
 import SecurityAuditLogs from '../pages/platform/SecurityAuditLogs';
 import LoginActivity from '../pages/platform/LoginActivity';
+import SecurityEvents from '../pages/platform/SecurityEvents';
+import SubscriptionHistory from '../pages/platform/SubscriptionHistory';
+import FailedLoginAttempts from '../pages/platform/FailedLoginAttempts';
 import OrganizationReport from '../pages/platform/OrganizationReport';
 import UserReport from '../pages/platform/UserReport';
 import ExamUsageReport from '../pages/platform/ExamUsageReport';
@@ -99,8 +113,16 @@ import MonitoringOverview from '../pages/platform/monitoring/MonitoringOverview'
 import MonitoringActiveOrganizations from '../pages/platform/monitoring/ActiveOrganizations';
 import MonitoringActiveExams from '../pages/platform/monitoring/ActiveExams';
 import MonitoringSystemHealth from '../pages/platform/monitoring/SystemHealth';
+import MonitoringApiHealth from '../pages/platform/monitoring/ApiHealth';
 import MonitoringServiceStatus from '../pages/platform/monitoring/ServiceStatus';
 import SystemLogs from '../pages/platform/SystemLogs';
+import PlatformAllExams from '../pages/platform/PlatformAllExams';
+import PlatformExamCategories from '../pages/platform/PlatformExamCategories';
+import PlatformSections from '../pages/platform/PlatformSections';
+import PlatformQuestionBank from '../pages/platform/PlatformQuestionBank';
+import PlatformExamTags from '../pages/platform/PlatformExamTags';
+import PlatformQuestions from '../pages/platform/PlatformQuestions';
+import PlatformSubmissions from '../pages/platform/PlatformSubmissions';
 import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
 import { platformComingSoonRoutes } from './platformComingSoonRoutes';
 
@@ -110,6 +132,8 @@ export default function AppRoutes() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Home />} />
       <Route path="/register" element={<Home />} />
+      <Route path="/forgot-password" element={<Home />} />
+      <Route path="/reset-password" element={<ResetPasswordWithToken />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/about" element={<About />} />
       <Route path="/contact" element={<Contact />} />
@@ -212,7 +236,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/assignments/new"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AssignExam />
           </ProtectedRoute>
         }
@@ -220,7 +244,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/assignments/:id/edit"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AssignExam />
           </ProtectedRoute>
         }
@@ -228,7 +252,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ManageExams />
           </ProtectedRoute>
         }
@@ -242,9 +266,17 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/admin/exams/scheduled"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <ExamScheduled />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/exams/create"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <CreateExam />
           </ProtectedRoute>
         }
@@ -252,7 +284,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:id/edit"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <EditExam />
           </ProtectedRoute>
         }
@@ -260,7 +292,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:id"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamDetails />
           </ProtectedRoute>
         }
@@ -268,7 +300,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ManageSections />
           </ProtectedRoute>
         }
@@ -276,7 +308,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/wizard/sections"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamWizardSections />
           </ProtectedRoute>
         }
@@ -284,7 +316,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/wizard/configuration"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamWizardConfiguration />
           </ProtectedRoute>
         }
@@ -292,7 +324,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/wizard/review"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamWizardReview />
           </ProtectedRoute>
         }
@@ -300,7 +332,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections/reorder"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ReorderSections />
           </ProtectedRoute>
         }
@@ -308,7 +340,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections/create"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <SectionForm />
           </ProtectedRoute>
         }
@@ -316,7 +348,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections/:sectionId/edit"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <SectionForm />
           </ProtectedRoute>
         }
@@ -324,7 +356,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/:examId/sections/:sectionId"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <SectionDetails />
           </ProtectedRoute>
         }
@@ -332,7 +364,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/active-exams"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']} feature="LiveMonitoring">
             <ActiveExams />
           </ProtectedRoute>
         }
@@ -340,7 +372,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/student-attempts"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']} feature="LiveMonitoring">
             <StudentAttempts />
           </ProtectedRoute>
         }
@@ -348,7 +380,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/security-violations"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']} feature="ExamSecurity">
             <SecurityViolations />
           </ProtectedRoute>
         }
@@ -356,7 +388,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/proctoring"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin']} feature="Proctoring">
             <Proctoring />
           </ProtectedRoute>
         }
@@ -365,7 +397,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/results/exams"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamResults />
           </ProtectedRoute>
         }
@@ -373,15 +405,23 @@ export default function AppRoutes() {
       <Route
         path="/admin/results/students"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <StudentResults />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/results/students/:examId/:attemptId"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <StudentResultDetails />
           </ProtectedRoute>
         }
       />
       <Route
         path="/admin/results/analytics"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ResultAnalytics />
           </ProtectedRoute>
         }
@@ -389,7 +429,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/results/publish"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <PublishResults />
           </ProtectedRoute>
         }
@@ -398,7 +438,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exams"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AdminReports />
           </ProtectedRoute>
         }
@@ -406,7 +446,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/students"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <StudentReports />
           </ProtectedRoute>
         }
@@ -414,7 +454,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/performance"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <PerformanceReports />
           </ProtectedRoute>
         }
@@ -428,17 +468,81 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/admin/reports/exam-type-wise"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <ExamTypeWiseReport />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type-wise/comparison"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <ExamTypeComparison />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <ExamTypeDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId/performance"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <ExamTypePerformanceAnalysis />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId/students"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <ExamTypeStudentPerformance />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId/questions"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <ExamTypeQuestionAnalysis />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/exam-type/:typeId/sections"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <ExamTypeSectionPerformance />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/reports/:examId"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamReportDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reports/:examId/advance"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <AdvanceExamReport />
           </ProtectedRoute>
         }
       />
       <Route
         path="/admin/exams/:examId/questions/ai-generate"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AiGenerateQuestion />
           </ProtectedRoute>
         }
@@ -446,7 +550,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/questions/ai-generate"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AiGenerateQuestion />
           </ProtectedRoute>
         }
@@ -454,7 +558,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/questions/ai-generate/preview"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AiGeneratedQuestionsPreview />
           </ProtectedRoute>
         }
@@ -470,7 +574,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/questions/:id"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <QuestionDetails />
           </ProtectedRoute>
         }
@@ -478,8 +582,16 @@ export default function AppRoutes() {
       <Route
         path="/admin/questions/:id/edit"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <EditQuestion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/instructor/dashboard"
+        element={
+          <ProtectedRoute roles={['Instructor']}>
+            <InstructorDashboard />
           </ProtectedRoute>
         }
       />
@@ -582,7 +694,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications/create"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <CreateNotification />
           </ProtectedRoute>
         }
@@ -590,7 +702,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications/history/:batchId"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <NotificationBatchDetails />
           </ProtectedRoute>
         }
@@ -598,7 +710,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications/history"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <NotificationHistory />
           </ProtectedRoute>
         }
@@ -614,7 +726,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications/:id"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AdminNotificationDetails />
           </ProtectedRoute>
         }
@@ -622,7 +734,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AdminNotifications />
           </ProtectedRoute>
         }
@@ -636,10 +748,10 @@ export default function AppRoutes() {
         }
       />
       <Route
-        path="/admin/settings/general"
+        path="/admin/settings/organization"
         element={
           <ProtectedRoute roles={['Admin']}>
-            <GeneralSettingsPage />
+            <OrganizationSettings />
           </ProtectedRoute>
         }
       />
@@ -654,7 +766,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/settings/security"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin']} feature="ExamSecurity">
             <SecuritySettingsPage />
           </ProtectedRoute>
         }
@@ -662,7 +774,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/settings/proctoring"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin']} feature="Proctoring">
             <ProctoringSettingsPage />
           </ProtectedRoute>
         }
@@ -672,14 +784,6 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <NotificationSettingsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/settings/system"
-        element={
-          <ProtectedRoute roles={['Admin']}>
-            <SystemSettingsPage />
           </ProtectedRoute>
         }
       />
@@ -732,10 +836,18 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/platform/organizations/trial"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <ManageTenants statusFilter="trial" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/platform/users"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <AllUsers />
+            <AllUsers key="all" />
           </ProtectedRoute>
         }
       />
@@ -743,7 +855,7 @@ export default function AppRoutes() {
         path="/platform/users/organization-admins"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <AllUsers roleFilter="Admin" />
+            <AllUsers key="Admin" roleFilter="Admin" />
           </ProtectedRoute>
         }
       />
@@ -751,7 +863,7 @@ export default function AppRoutes() {
         path="/platform/users/students"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <AllUsers roleFilter="Student" />
+            <AllUsers key="Student" roleFilter="Student" />
           </ProtectedRoute>
         }
       />
@@ -759,7 +871,63 @@ export default function AppRoutes() {
         path="/platform/users/platform-admins"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
-            <AllUsers roleFilter="SuperAdmin" />
+            <AllUsers key="SuperAdmin" roleFilter="SuperAdmin" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformAllExams />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams/categories"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformExamCategories />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams/sections"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformSections />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams/question-bank"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformQuestionBank />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/exams/tags"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformExamTags />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/questions"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformQuestions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/submissions"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <PlatformSubmissions />
           </ProtectedRoute>
         }
       />
@@ -796,6 +964,14 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/platform/subscriptions/history"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SubscriptionHistory />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/platform/security/audit-logs"
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
@@ -808,6 +984,30 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <LoginActivity />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/security"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SecurityEvents />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/security/events"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <SecurityEvents />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/security/failed-logins"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <FailedLoginAttempts />
           </ProtectedRoute>
         }
       />
@@ -956,6 +1156,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <MonitoringSystemHealth />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/monitoring/api-health"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <MonitoringApiHealth />
           </ProtectedRoute>
         }
       />

@@ -1,0 +1,371 @@
+HOSTINGER VPS DEPLOYMENT - STEP BY STEP
+==========================================
+Decided so far: Hostinger KVM 2 (2 vCPU/8GB/100GB/8TB), server location
+India - Mumbai 2, VPS image "Docker and Traefik" (Ubuntu + Docker Engine +
+Compose + Traefik reverse proxy, pre-installed). Domain: examvaults.in
+(GoDaddy). This file is the full walkthrough - follow it top to bottom.
+
+STATUS as of 2026-08-30: Steps 1-11 DONE. Full stack (15 containers) is
+live - https://examvaults.in (frontend) and https://api.examvaults.in
+(gateway) both load over HTTPS with valid Let's Encrypt certs, no browser
+warnings. Two real bugs hit and fixed along the way, both worth knowing
+about if something looks broken later:
+  1. `examvault-admin` user silently failed to get created the first time
+     (adduser/usermod commands appeared to run but the user didn't exist)
+     - always verify with `id examvault-admin` or `su - examvault-admin`
+     rather than trusting that earlier commands "worked".
+  2. docker-compose.prod.yml's `ports: []` did NOT clear the base file's
+     published ports - Compose merges sequence fields across -f files by
+     concatenation, not replacement. Fixed using the `!reset` tag
+     (`ports: !reset []`), confirmed via `docker compose config`. If you
+     ever add a new service or new port mapping later, remember this -
+     plain `ports: []` in an override file is silently a no-op.
+Login also confirmed working end to end (bootstrap Super Admin account,
+real DB/migrations came up clean). Step 12 (firewall) DONE - ufw active,
+only OpenSSH/80/443 allowed, confirmed via `ufw status`.
+Remaining: Step 13 (backups), and broader functional testing beyond login
+(create an exam end to end, Run Code, exam submission - the same features
+that had bugs on the old Azure environment, worth re-checking here since
+this is a fresh, independent deployment).
+
+CI/CD (2026-08-30): DONE and confirmed working end to end. Push to dev ->
+CI (ci.yml, pre-existing) runs backend/frontend build+test -> on success,
+CD (.github/workflows/cd-hostinger.yml, new) SSHes into the VPS and runs
+git pull + docker compose up -d --build automatically. Replaced the old
+cd-dev.yml (auto-deployed to Azure Container Apps on every dev push -
+deleted, since it was still silently redeploying to Azure throughout this
+whole migration without anyone noticing).
+
+Getting the SSH auth working took 8 attempts - real issues hit, in order,
+worth knowing if this ever needs touching again:
+  1. Secrets (VPS_HOST/VPS_USER/VPS_SSH_PRIVATE_KEY) were never actually
+     created the first few times despite being reported as done - always
+     verify the actual secrets list on GitHub, don't trust "added" alone.
+  2. Pasting the raw multi-line private key directly into the secret box
+     failed every time ("ssh: no key found") regardless of copy method
+     (terminal copy, scp+Notepad) - the multi-line PEM format kept
+     getting corrupted somewhere in the copy/paste/textarea chain. Fixed
+     by base64-encoding the key (`base64 -w0 ~/.ssh/github_deploy_key`,
+     one unbroken line - can't suffer the same corruption) and decoding
+     it back to a file in a workflow step before ssh-action uses it.
+  3. That decoded key file needs to live inside `${{ github.workspace }}`,
+     not /tmp - ssh-action runs as an isolated Docker container that only
+     shares the workspace with the runner, not /tmp.
+  4. That file needs chmod 644, not 600 - ssh-action's container reads it
+     as a different UID than the runner user that created it; 600 caused
+     "permission denied". Safe to loosen since this action uses Go's
+     crypto/ssh library directly (no OpenSSH-CLI permission strictness
+     involved) and the runner VM is destroyed right after the job.
+  5. The deploy key's PUBLIC half was never actually added to the VPS's
+     ~/.ssh/authorized_keys either (same "reported done, wasn't" pattern
+     as #1) - `cat ~/.ssh/github_deploy_key.pub >> ~/.ssh/authorized_keys`
+     fixed it for real.
+  6. One transient "dial tcp: i/o timeout" from GitHub's runner that
+     resolved on retry alone - VPS was directly reachable at the time, so
+     likely either a runner-side blip or fail2ban briefly reacting to the
+     many rapid connection attempts during this same debugging session.
+
+Ongoing test commits made to hostinger_vps_setup.txt itself while
+debugging this (blank lines appended, commits like "Trigger CD pipeline
+test (attempt N)") are harmless but visible in git log - fine to leave,
+not worth a history rewrite.
+
+WILDCARD CERTIFICATE (2026-08-30/31): DONE and CONFIRMED - test.examvaults.in
+(and by extension every current/future tenant subdomain) now gets a real
+Let's Encrypt cert automatically, issuer "Let's Encrypt" (CN=YR2), SAN
+covering both examvaults.in and *.examvaults.in. No per-tenant action
+needed going forward. Real journey, in order (each step below was tested
+live and failed before the next fix - skipping any one of them reproduces
+the original "TRAEFIK DEFAULT CERT" / browser privacy-error symptom):
+
+  0. STARTING POINT: HTTP-01 challenge (the original Step 7 setup) can
+     NEVER issue wildcard certs - this isn't a config bug, it's a hard
+     ACME/Let's Encrypt rule (wildcards require DNS-01). Confirmed via
+     Traefik's own log: "No available solvers were found for the
+     challenge ... solvers=http-01 type=dns-01" whenever it tried the
+     *.examvaults.in SAN. Had to switch challenge types entirely, not
+     just fix syntax.
+  1. Switched Traefik's own static config (its Docker Manager app, NOT
+     this repo) from acme.httpchallenge to acme.dnschallenge with
+     provider=hostinger - lego (Traefik's ACME library) supports
+     Hostinger's DNS API natively. This edit silently didn't save the
+     first time (same "reported done, wasn't" pattern as the SSH saga) -
+     always verify via Traefik's own "Static configuration loaded" DEBUG
+     log line after redeploying, not just by re-opening the yaml editor.
+  2. Added HOSTINGER_API_TOKEN to Traefik's "Environment" box in Docker
+     Manager - but that box ONLY provides ${VAR} substitution values for
+     the main yaml, it does NOT automatically become a real environment
+     variable inside the running container. Confirmed via error:
+     "cannot get ACME client hostinger: some credentials information are
+     missing: HOSTINGER_API_TOKEN" despite the token clearly being in
+     that box. Fix: added an explicit `environment:` block to the
+     traefik service in the MAIN yaml (not the Environment box) with
+     `HOSTINGER_API_TOKEN=${HOSTINGER_API_TOKEN}` - that's what actually
+     passes it into the container.
+  3. Got past auth, DNS-01 actually created the challenge TXT record via
+     Hostinger's API - but then timed out (60s default) verifying it
+     propagated, because lego was checking via the HOST's own local
+     resolver (127.0.0.53, inherited since Traefik runs network_mode:
+     host) instead of a real public one. Fixed with
+     --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=8.8.8.8:53,1.1.1.1:53.
+  4. STILL timed out even against Google's 8.8.8.8 - a genuinely slow
+     first-propagation delay for a brand-new TXT record on Hostinger's
+     DNS (unrelated to the resolver choice; A records added hours
+     earlier were already fully propagated and unaffected). Fixed by
+     raising the timeout well past the 60s default: added
+     HOSTINGER_PROPAGATION_TIMEOUT=300 and HOSTINGER_POLLING_INTERVAL=5
+     as two more ${VAR}-substituted environment: entries (same
+     Environment-box-plus-main-yaml-environment-block pattern as step 2).
+     This is what finally worked.
+
+Final working traefik command block (Docker Manager's own app, not this
+repo) needs, relative to the original HTTP-01 setup:
+  - REMOVED: --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+    and .httpchallenge.entrypoint=web
+  - ADDED: --certificatesresolvers.letsencrypt.acme.dnschallenge=true,
+    .dnschallenge.provider=hostinger,
+    .dnschallenge.resolvers=8.8.8.8:53,1.1.1.1:53
+  - traefik service's `environment:` block: HOSTINGER_API_TOKEN,
+    HOSTINGER_PROPAGATION_TIMEOUT=${...} (300),
+    HOSTINGER_POLLING_INTERVAL=${...} (5), each also mirrored as a plain
+    KEY=value line in the separate "Environment" substitution box.
+This repo's docker-compose.traefik.yml only needed the tls.domains
+override (main=examvaults.in, sans=*.examvaults.in) on the frontend
+router - everything else above lives on the VPS's Traefik app config,
+outside this repo.
+
+Wherever you see <ALL_CAPS_LIKE_THIS>, that's a value YOU generate/choose,
+not something already decided. Nothing in this file is a real secret -
+every password/key below is a placeholder for you to replace with your own
+random value when you actually create the .env file on the VPS.
+
+
+STEP 1 - GET YOUR VPS LOGIN DETAILS FROM HOSTINGER
+-----------------------------------------------------
+Hostinger emails you (and shows in hPanel -> VPS -> Overview) three things
+once the VPS finishes provisioning:
+  - Public IP address (e.g. 168.231.xx.xx)
+  - Username: root
+  - Password: a random one Hostinger generated for you
+
+Log in once to confirm it works, then change it immediately (step 2)
+because the auto-generated root password sits in Hostinger's email/panel
+history, which is not somewhere you want your only copy of a root
+password to live long-term:
+
+    ssh root@<YOUR_VPS_IP>
+    (enter the Hostinger-generated password when prompted)
+
+
+STEP 2 - SECURE THE SERVER (do this before anything else)
+---------------------------------------------------------
+2a. Change the root password to one only you know:
+    passwd
+    (enter a new strong password twice - store it in a password manager,
+    not in any file in this repo)
+
+2b. Create a non-root user for day-to-day work (best practice - root
+    should only be used when truly needed):
+    adduser examvault-admin
+    (set a password when prompted - again, password manager, not a file)
+    usermod -aG sudo examvault-admin
+    usermod -aG docker examvault-admin
+
+2c. (Optional but recommended) set up SSH key login instead of passwords,
+    then disable password SSH login entirely - ask me for these exact
+    steps when you're ready, they're a bit more involved and easy to lock
+    yourself out with if rushed.
+
+From here on, SSH in as examvault-admin, not root:
+    ssh examvault-admin@<YOUR_VPS_IP>
+
+
+STEP 3 - POINT YOUR DOMAIN AT THE VPS (GoDaddy DNS)
+----------------------------------------------------
+In GoDaddy's DNS management for examvaults.in, add:
+  - A record, host "@"        -> <YOUR_VPS_IP>   (examvaults.in itself)
+  - A record, host "api"      -> <YOUR_VPS_IP>   (api.examvaults.in)
+  - A record, host "*"        -> <YOUR_VPS_IP>   (wildcard - every tenant
+    subdomain like stanford.examvaults.in, for later multi-tenant use)
+
+DNS can take anywhere from a few minutes to a few hours to propagate.
+Check with: nslookup examvaults.in (from your own PC) before moving on -
+if it doesn't yet return your VPS IP, wait and retry rather than
+troubleshooting Traefik/certs prematurely.
+
+For the wildcard (*) record's TLS certificate specifically, Traefik needs
+a GoDaddy API key/secret (not just the DNS record) to prove domain
+ownership via DNS-01 challenge - get one from
+https://developer.godaddy.com/keys (Production key, not OTE/test) and
+keep the key+secret pair for step 6.
+
+
+STEP 4 - CONFIRM DOCKER + TRAEFIK ARE ALREADY RUNNING
+------------------------------------------------------
+The VPS image already includes these - just verify:
+    docker --version
+    docker compose version
+    docker ps
+    (you should see a traefik container already listed and running)
+
+If git isn't already installed:
+    sudo apt update && sudo apt install -y git
+
+
+STEP 5 - CLONE THE REPO
+------------------------
+    cd ~
+    git clone https://github.com/gaaneshkambale-ctrl/ExamVault.git
+    cd ExamVault
+
+
+STEP 6 - CREATE YOUR .env FILE (all the secrets live here)
+------------------------------------------------------------
+    cp .env.example .env
+    nano .env      (or any editor you're comfortable with)
+
+Fill in every value. What each one is and how to generate it:
+
+  SQL_SA_PASSWORD=<STRONG_PASSWORD_YOU_CHOOSE>
+    The containerized SQL Server's "sa" (admin) login password. Must
+    satisfy SQL Server's complexity rules (8+ chars, upper+lower+digit+
+    symbol). Generate one with: openssl rand -base64 24
+
+  RABBITMQ_USER=examvault
+  RABBITMQ_PASSWORD=<STRONG_PASSWORD_YOU_CHOOSE>
+    RabbitMQ's login. Do NOT use "guest"/"guest" - RabbitMQ blocks that
+    account from any non-localhost connection. Generate the password the
+    same way: openssl rand -base64 24
+
+  JWT_SIGNING_KEY=<LONG_RANDOM_SECRET>
+    Every backend service signs/validates login tokens with this exact
+    same string - if you ever change it later, every logged-in user gets
+    signed out at once. Generate with: openssl rand -base64 48
+
+  N8N_USER_WEBHOOK_URL=https://your-n8n-host/webhook/examvault/notify-credential
+  N8N_NOTIFICATION_WEBHOOK_URL=https://your-n8n-host/webhook/examvault/notify
+  N8N_AI_WEBHOOK_URL=https://your-n8n-host/webhook/examvault/generate-questions
+    Not something to generate - these are your EXISTING n8n instance's
+    real webhook URLs (same ones already used for local dev/Azure). Copy
+    them from wherever you have them saved, or from n8n's own UI.
+
+  METERED_API_KEY=<FROM_YOUR_METERED_DASHBOARD>
+  METERED_APP_DOMAIN=<YOURAPP>.metered.live
+    Your existing Metered.ca account (student exam-recording/proctoring
+    video) - Secret Key from Metered's dashboard, not something to
+    generate yourself.
+
+Save and exit (in nano: Ctrl+O, Enter, Ctrl+X).
+
+IMPORTANT: .env is already in .gitignore - never `git add .env` or commit
+it. Treat everything in it as a real secret from this point on.
+
+
+STEP 7 - WILDCARD CERTIFICATE  [NOT NEEDED - SKIP]
+-------------------------------------------------------
+Originally planned: a GoDaddy/Hostinger API key so Traefik could get one
+wildcard cert for *.examvaults.in via DNS-01 challenge. Checked the VPS's
+actual Traefik config (Hostinger's Docker Manager .yaml editor, the
+"traefik" app) and it's set up for HTTP-01 challenge only
+(--certificatesresolvers.letsencrypt.acme.httpchallenge=true), which
+cannot issue wildcard certs at all - no DNS provider API key is even
+wired in. No action needed though: HTTP-01 issues a separate cert per
+exact hostname automatically the first time that hostname gets a real
+request, and since the wildcard DNS A record (Step 3) already routes
+every subdomain to this VPS, each tenant subdomain will just get its own
+cert lazily on first visit. Skip this step entirely.
+
+
+STEP 8 - RESTRICT PORTS BEFORE GOING LIVE  [DONE - see docker-compose.prod.yml]
+---------------------------------------------------------------------------------
+Written already: `docker-compose.prod.yml` at repo root. It overrides every
+internal service's (and gateway/frontend's) `ports:` to empty, so nothing
+publishes to the public IP directly - only Traefik will front gateway and
+frontend (Step 9). This file is separate from docker-compose.yml, which
+stays untouched for local dev.
+
+
+STEP 9 - ADD TRAEFIK ROUTING LABELS  [DONE - confirmed against real config]
+----------------------------------------------------------------------------
+Written and CONFIRMED (via the actual Traefik .yaml editor in Hostinger's
+Docker Manager, not guessed): `docker-compose.traefik.yml` at repo root,
+labels routing gateway -> api.examvaults.in and frontend ->
+examvaults.in/*.examvaults.in (VITE_API_BASE_URL build arg fix lives in
+docker-compose.prod.yml). Confirmed details:
+  - Traefik runs with network_mode: host (not a custom Docker network),
+    so no `traefik.docker.network` label or network join needed - it
+    reaches labeled containers via the Docker socket regardless of
+    network.
+  - certresolver name: "letsencrypt" - confirmed correct.
+  - entrypoint name: "websecure" - confirmed correct.
+No remaining unknowns here.
+
+Command to run everything together once Step 6's .env is ready:
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build
+
+
+STEP 10 - BUILD AND START EVERYTHING
+----------------------------------------
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml build
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml ps
+(all three -f flags every time from now on, since prod config lives across
+all three files - or `alias dc-prod="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml"`
+once, then just `dc-prod up -d` etc.)
+    (SQL Server and RabbitMQ should show "healthy" first - they have
+    healthchecks; every *-api service starts after; execution-worker and
+    notification-worker start last and already have restart:
+    unless-stopped so a slow RabbitMQ startup doesn't kill them
+    permanently)
+
+    docker compose logs -f gateway
+    (watch for startup errors before moving on)
+
+
+STEP 11 - VERIFY IT'S ACTUALLY WORKING
+------------------------------------------
+  - https://examvaults.in loads the frontend, with a valid padlock/cert
+  - https://api.examvaults.in/health (or the Gateway's own health route)
+    responds
+  - Log in as an existing test user, confirm the dashboard loads
+  - Try creating an exam/question end to end once, not just the login
+    screen
+
+
+STEP 12 - FIREWALL
+----------------------
+    sudo ufw allow OpenSSH
+    sudo ufw allow 80
+    sudo ufw allow 443
+    sudo ufw enable
+    sudo ufw status
+(Only 22/80/443 should show as allowed - everything else stays closed to
+the public internet, reachable only inside the Docker network.)
+
+
+STEP 13 - BACKUPS
+---------------------
+Set up a nightly cron job that dumps the SQL Server databases somewhere
+off the VPS (or at minimum, a separate disk/volume) - ask me for the
+exact `docker exec ... sqlcmd BACKUP DATABASE` command + cron entry when
+you're ready to wire this up; don't skip it once real user data exists.
+
+
+ONGOING - WHAT TO WATCH
+----------------------------
+  - Disk usage: Piston's package volume grows every time a new language
+    version gets used for the first time.
+  - RAM: KVM2 (8GB) is the tight end of what this stack needs - watch for
+    swapping under real traffic (`free -h`, `docker stats`), be ready to
+    upgrade the VPS plan if so.
+  - To deploy a code update later: `git pull`, `docker compose build`,
+    `docker compose up -d` (only rebuilds/restarts what changed).
+
+
+
+
+
+
+
+
+

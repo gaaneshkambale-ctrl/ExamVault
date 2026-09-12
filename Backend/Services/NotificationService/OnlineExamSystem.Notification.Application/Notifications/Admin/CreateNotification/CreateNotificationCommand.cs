@@ -13,4 +13,8 @@ public record CreateNotificationCommand(
     Guid AdminUserId,
     string BearerToken,
     bool SendEmail = true,
-    bool SendInApp = true);
+    bool SendInApp = true,
+    // Instructor is restricted to notifications tied to an exam they
+    // created themselves (RelatedExamId must be set and match) - null for
+    // Admin/SuperAdmin, unrestricted.
+    Guid? OwnerUserId = null);

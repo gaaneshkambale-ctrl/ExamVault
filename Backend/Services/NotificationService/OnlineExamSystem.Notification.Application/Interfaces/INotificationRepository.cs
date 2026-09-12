@@ -63,9 +63,12 @@ public interface INotificationRepository
         string? status,
         int page,
         int pageSize,
+        IReadOnlyList<Guid>? ownedExamIds = null,
         CancellationToken cancellationToken = default);
 
-    Task<NotificationHistoryStats> GetHistoryStatsAsync(CancellationToken cancellationToken = default);
+    Task<NotificationHistoryStats> GetHistoryStatsAsync(
+        IReadOnlyList<Guid>? ownedExamIds = null,
+        CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<NotificationEntity>> GetByBatchIdAsync(
         Guid batchId,

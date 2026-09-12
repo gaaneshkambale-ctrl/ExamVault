@@ -1,0 +1,40 @@
+================================================================================
+                    ANTIGRAVITY ACTION PLAN & RESEARCH
+================================================================================
+
+Date: 2026-08-27
+Workspace: ExamVault
+Topic: Domain Name Migration from Examvault.com to Examvaults.in
+
+--------------------------------------------------------------------------------
+1. OBJECTIVE & SCOPE
+--------------------------------------------------------------------------------
+
+Goal: Update all production and display domain references across frontend, backend Gateway CORS, email settings, and documentation from `examvault.com` / `*.examvault.com` to `examvaults.in` / `*.examvaults.in`.
+
+--------------------------------------------------------------------------------
+2. TARGETED ACTION PLAN
+--------------------------------------------------------------------------------
+
+[ ] Step 1: Update Frontend Pages and Helpers
+    - `src/pages/platform/CreateOrganization.tsx` -> Display `.examvaults.in` suffix in subdomain input.
+    - `src/pages/platform/OrganizationDetails.tsx` -> Display `{tenant.slug}.examvaults.in`.
+    - `src/pages/platform/OrganizationsAndPlans.tsx` -> Display `{tenant.slug}.examvaults.in`.
+    - `src/pages/platform/ManageTenants.tsx` -> Display `{tenant.slug}.examvaults.in`.
+    - `src/pages/platform/PlatformDashboard.tsx` -> Display `{tenant.slug}.examvaults.in`.
+    - `src/pages/platform/monitoring/ActiveOrganizations.tsx` -> Display `{tenant.slug}.examvaults.in`.
+    - `src/pages/platform/EmailSettings.tsx` -> Default sender `no-reply@examvaults.in`.
+    - `src/utils/tenant.ts` & `src/utils/tenant.test.ts` -> Update domain tests for `examvaults.in`.
+
+[ ] Step 2: Update Backend Gateway & UserService
+    - `OnlineExamSystem.ApiGateway/Program.cs` -> Update CORS policy to allow `*.examvaults.in` (and retain `.examvault.com` for compatibility).
+    - `TenantResolutionMiddleware.cs`, `Tenant.cs`, `AppUrlSettings.cs` -> Update comments/defaults.
+
+[ ] Step 3: Verification & Automated Tests
+    - Run Frontend Vitest suite (`npm test -- --run`).
+    - Run TypeScript checks (`npx tsc --noEmit`).
+    - Build Backend projects (`dotnet build`).
+    - Rebuild Gateway and UserService Docker containers.
+    - Update `Antigravity_changes.txt`.
+
+================================================================================

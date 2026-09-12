@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import readXlsxFile from 'read-excel-file/browser';
 import writeXlsxFile from 'write-excel-file/browser';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import { createUser } from '../../api/userApi';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
@@ -17,10 +18,38 @@ interface ImportRow {
   email: string;
   role: string;
   phoneNumber: string;
+  rollNumber: string;
   status: 'Valid' | string;
 }
 
-const TEMPLATE_HEADERS = ['Full Name', 'Email', 'Role', 'Phone Number'];
+const TEMPLATE_HEADERS = ['Full Name', 'Email', 'Role', 'Phone Number', 'Roll Number'];
+
+function UploadIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  );
+}
+
+function ListCheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
 
 const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
 
@@ -52,10 +81,11 @@ async function downloadTemplate() {
       { value: 'jane.doe@example.com' },
       { value: 'Student' },
       { value: '9876543210' },
+      { value: 'R-1001' },
     ],
   ];
   await writeXlsxFile(data, {
-    columns: [{ width: 24 }, { width: 28 }, { width: 14 }, { width: 18 }],
+    columns: [{ width: 24 }, { width: 28 }, { width: 14 }, { width: 18 }, { width: 16 }],
   }).toFile('user-import-template.xlsx');
 }
 
@@ -95,6 +125,7 @@ export default function ImportUsers() {
         email: cells[1] ? String(cells[1]).trim() : '',
         role: cells[2] ? String(cells[2]).trim() : '',
         phoneNumber: cells[3] ? String(cells[3]).trim() : '',
+        rollNumber: cells[4] ? String(cells[4]).trim() : '',
         status: 'Valid',
       }));
       const validated = parsed.map((row) => ({ ...row, status: validateRow(row, parsed) }));
@@ -130,8 +161,8 @@ export default function ImportUsers() {
           fullName: row.fullName,
           email: row.email,
           role: row.role as UserRole,
-          isActive: false,
           phoneNumber: row.phoneNumber,
+          rollNumber: row.rollNumber || null,
         };
         return createUser(request);
       }),
@@ -169,10 +200,18 @@ export default function ImportUsers() {
   return (
     <AdminLayout active="Users">
       <div className="d-flex justify-content-between align-items-center mb-1">
-        <div>
-          <p className="text-muted small mb-1">Users / Bulk Import Users</p>
-          <h1 className="h4 fw-bold mb-1 text-primary">Bulk Import Users</h1>
-          <p className="text-muted mb-0">Import multiple users at once using an Excel (.xlsx) file.</p>
+        <div className="d-flex align-items-center gap-3">
+          <div
+            className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+            style={{ width: 44, height: 44, background: '#eef2ff', color: '#4f46e5' }}
+          >
+            <UploadIcon />
+          </div>
+          <div>
+            <p className="text-muted small mb-1">Users / Bulk Import Users</p>
+            <h1 className="h4 fw-bold mb-1 text-primary">Bulk Import Users</h1>
+            <p className="text-muted mb-0">Import multiple users at once using an Excel (.xlsx) file.</p>
+          </div>
         </div>
         <Button variant="outline-primary" onClick={() => void downloadTemplate()}>
           Download Sample File
@@ -196,14 +235,12 @@ export default function ImportUsers() {
         <Col xs={12} md={7}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body className="p-4">
-              <h2 className="h6 fw-bold mb-1">Upload File</h2>
-              <p className="text-muted small mb-3">Upload an Excel file with user details.</p>
+              <SectionHeader icon={<UploadIcon />} title="Upload File" subtitle="Upload an Excel file with user details." />
 
               <div
-                className="border border-2 border-dashed rounded-3 text-center py-5 px-3"
+                className={`border border-2 border-dashed rounded-3 text-center py-5 px-3 ${isDragOver ? 'bg-primary-subtle' : 'bg-body-tertiary'}`}
                 style={{
                   borderColor: isDragOver ? '#4f46e5' : '#dee2e6',
-                  background: isDragOver ? '#eef2ff' : '#f8f9fa',
                   cursor: 'pointer',
                 }}
                 onClick={() => fileInputRef.current?.click()}
@@ -254,7 +291,7 @@ export default function ImportUsers() {
         <Col xs={12} md={5}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body className="p-4">
-              <h2 className="h6 fw-bold mb-3">File Guidelines</h2>
+              <SectionHeader icon={<InfoIcon />} title="File Guidelines" />
               <ul className="small text-muted ps-3 mb-0">
                 <li className="mb-2">Download the sample file and follow the format.</li>
                 <li className="mb-2">
@@ -262,7 +299,7 @@ export default function ImportUsers() {
                 </li>
                 <li className="mb-2">Email must be unique, both within the file and across existing users.</li>
                 <li className="mb-2">Password isn't collected here - it's auto-generated and emailed on creation.</li>
-                <li>Phone Number is optional.</li>
+                <li>Phone Number and Roll Number are both optional.</li>
               </ul>
             </Card.Body>
           </Card>
@@ -272,10 +309,10 @@ export default function ImportUsers() {
       {rows.length > 0 && (
         <Card className="border-0 shadow-sm mt-3">
           <Card.Body className="p-4">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h2 className="h6 fw-bold mb-0">
-                Preview &amp; Validate ({validRows.length} of {rows.length} rows ready to import)
-              </h2>
+            <SectionHeader
+              icon={<ListCheckIcon />}
+              title={`Preview & Validate (${validRows.length} of ${rows.length} rows ready to import)`}
+              action={
               <div className="d-flex gap-2">
                 <Link to="/admin/users" className="btn btn-outline-secondary">
                   Cancel
@@ -291,7 +328,8 @@ export default function ImportUsers() {
                   )}
                 </Button>
               </div>
-            </div>
+              }
+            />
 
             {createError && <Alert variant="danger">{createError}</Alert>}
             {createdCount > 0 && (
@@ -299,13 +337,14 @@ export default function ImportUsers() {
             )}
 
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th>Row</th>
                   <th>Full Name</th>
                   <th>Email</th>
                   <th>Role</th>
                   <th>Phone Number</th>
+                  <th>Roll Number</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -317,6 +356,7 @@ export default function ImportUsers() {
                     <td>{row.email}</td>
                     <td>{row.role}</td>
                     <td>{row.phoneNumber || '-'}</td>
+                    <td>{row.rollNumber || '-'}</td>
                     <td>
                       <Badge bg={row.status === 'Valid' ? 'success' : 'danger'}>{row.status}</Badge>
                     </td>

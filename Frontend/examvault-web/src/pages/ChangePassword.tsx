@@ -6,6 +6,7 @@ import BrandMark from '../components/BrandMark';
 import { changeMyPassword } from '../api/userApi';
 import { useAuth } from '../hooks/useAuth';
 import { extractServerError } from '../utils/apiError';
+import { dashboardPathForRole } from '../utils/roleRouting';
 
 const requirements: Array<{ label: string; test: (value: string) => boolean }> = [
   { label: 'At least 8 characters', test: (v) => v.length >= 8 },
@@ -50,9 +51,7 @@ export default function ChangePassword() {
       await changeMyPassword({ currentPassword, newPassword });
       clearMustChangePassword();
       if (forced) {
-        const destination =
-          user?.role === 'SuperAdmin' ? '/platform/dashboard' : user?.role === 'Admin' ? '/admin/dashboard' : '/dashboard';
-        navigate(destination, { replace: true });
+        navigate(user ? dashboardPathForRole(user.role) : '/dashboard', { replace: true });
       } else {
         setStatus('success');
         setCurrentPassword('');

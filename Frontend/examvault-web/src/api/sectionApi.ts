@@ -1,5 +1,5 @@
 import apiClient from './axiosClient';
-import type { SectionOrderItem, SectionRequest, SectionResponse } from '../types/section';
+import type { PlatformSectionResponse, SectionOrderItem, SectionRequest, SectionResponse } from '../types/section';
 
 export async function listSections(examId: string): Promise<SectionResponse[]> {
   const { data } = await apiClient.get<SectionResponse[]>(`/api/exams/${examId}/sections`);
@@ -39,4 +39,9 @@ export async function deleteSection(examId: string, sectionId: string): Promise<
 
 export async function reorderSections(examId: string, order: SectionOrderItem[]): Promise<void> {
   await apiClient.put(`/api/exams/${examId}/sections/reorder`, { order });
+}
+
+export async function listAllSections(): Promise<PlatformSectionResponse[]> {
+  const { data } = await apiClient.get<PlatformSectionResponse[]>('/api/exams/sections');
+  return data;
 }

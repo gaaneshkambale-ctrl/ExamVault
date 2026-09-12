@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import TablePagination from '../../components/reports/TablePagination';
 import { useNotificationHistory, useNotificationHistoryStats } from '../../hooks/useNotifications';
@@ -18,7 +18,7 @@ import type {
   NotificationType,
 } from '../../types/notification';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 const CHANNEL_OPTIONS: { value: NotificationChannelFilter; label: string }[] = [
   { value: 'InAppEmail', label: 'In-App + Email' },
@@ -40,6 +40,7 @@ export default function NotificationHistory() {
   const [status, setStatus] = useState<NotificationHistoryStatus | 'All'>('All');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [cancelTarget, setCancelTarget] = useState<NotificationBatchSummaryResponse | null>(null);
 
   const queryClient = useQueryClient();
@@ -47,7 +48,7 @@ export default function NotificationHistory() {
   const { data, isLoading, isError } = useNotificationHistory(
     type === 'All' ? undefined : type,
     page,
-    PAGE_SIZE,
+    pageSize,
     search,
     channel === 'All' ? undefined : channel,
     status === 'All' ? undefined : status,
@@ -56,7 +57,7 @@ export default function NotificationHistory() {
 
   const items = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const invalidateHistory = () =>
     queryClient.invalidateQueries({ queryKey: ['notifications', 'admin', 'history'] });
@@ -77,7 +78,7 @@ export default function NotificationHistory() {
   const resetPage = () => setPage(1);
 
   return (
-    <AdminLayout active="History">
+    <RoleAwareLayout active="History">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="h4 fw-bold mb-1 text-primary">Notification History</h1>
@@ -206,7 +207,7 @@ export default function NotificationHistory() {
 
           {!isLoading && !isError && items.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Notification</th>
                   <th>Type</th>
@@ -288,10 +289,16 @@ export default function NotificationHistory() {
       <TablePagination
         page={page}
         totalPages={totalPages}
-        rangeStart={totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
-        rangeEnd={Math.min(page * PAGE_SIZE, totalCount)}
+        rangeStart={totalCount === 0 ? 0 : (page - 1) * pageSize + 1}
+        rangeEnd={Math.min(page * pageSize, totalCount)}
         totalCount={totalCount}
         onPageChange={setPage}
+        pageSize={pageSize}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
       />
 
       <Modal show={!!cancelTarget} onHide={() => setCancelTarget(null)} centered>
@@ -315,6 +322,6 @@ export default function NotificationHistory() {
           </Button>
         </Modal.Footer>
       </Modal>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

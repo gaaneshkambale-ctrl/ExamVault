@@ -8,16 +8,20 @@ import { useTenants } from '../../hooks/useTenants';
 import { createTenant, createTenantAdmin } from '../../api/tenantsApi';
 import { listPlans } from '../../api/plansApi';
 import { extractServerError } from '../../utils/apiError';
+import { isValidEmail } from '../../utils/email';
+import { ORGANIZATION_TYPES } from '../../types/tenant';
 
 // Matches org_submenu.png's Create Organization page. Real fields: Name,
-// Subdomain, and (new this pass) Admin Full Name/Email - if both are
-// filled, this page makes a second real API call (createTenantAdmin)
-// right after the tenant is created, so creating an org and its first
-// admin is one step instead of the old create-then-separately-add-admin
-// flow. Every other field in the mockup (Org Code, Org Type, Phone,
-// Designation, the whole Address section, the 3 toggles) has no backing
-// field anywhere in this codebase - shown disabled with a "not saved
-// yet" hint rather than silently accepting and discarding input.
+// Subdomain, Organization Type, Address, and Admin Full Name/Email/Phone
+// Number/Designation - if Full Name and Email are filled, this page makes
+// a second real API call (createTenantAdmin) right after the tenant is
+// created, so creating an org and its first admin is one step instead of
+// the old create-then-separately-add-admin flow. Organization Code is no
+// longer a manual field - the backend generates a unique one automatically
+// on creation (CreateTenantHandler -> OrganizationCodeGenerator), visible
+// afterward on the org's Details page. The mockup's 3 toggles still have no
+// backing field anywhere in this codebase - shown disabled with a "not
+// saved yet" hint rather than silently accepting and discarding input.
 export default function CreateOrganization() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -26,33 +30,73 @@ export default function CreateOrganization() {
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [orgType, setOrgType] = useState('');
   const [planId, setPlanId] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [country, setCountry] = useState('');
   const [adminFullName, setAdminFullName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
+  const [adminPhoneNumber, setAdminPhoneNumber] = useState('');
+  const [adminDesignation, setAdminDesignation] = useState('');
   const [adminWarning, setAdminWarning] = useState('');
+  const [isTrial, setIsTrial] = useState(false);
+  const [trialEndDate, setTrialEndDate] = useState('');
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const tenant = await createTenant({ name, slug, planId: planId || undefined });
+      const tenant = await createTenant({
+        name,
+        slug,
+        planId: planId || undefined,
+        isTrial,
+        trialEndsAtUtc: isTrial && trialEndDate ? new Date(trialEndDate).toISOString() : undefined,
+        organizationType: orgType || undefined,
+        addressLine1: addressLine1.trim() || undefined,
+        addressLine2: addressLine2.trim() || undefined,
+        city: city.trim() || undefined,
+        state: state.trim() || undefined,
+        postalCode: postalCode.trim() || undefined,
+        country: country.trim() || undefined,
+      });
+      let adminError: string | null = null;
       if (adminFullName.trim() && adminEmail.trim()) {
         try {
-          await createTenantAdmin(tenant.id, { fullName: adminFullName, email: adminEmail });
+          await createTenantAdmin(tenant.id, {
+            fullName: adminFullName,
+            email: adminEmail,
+            phoneNumber: adminPhoneNumber.trim() || undefined,
+            designation: adminDesignation.trim() || undefined,
+          });
         } catch (error) {
-          setAdminWarning(
-            `${tenant.name} was created, but the admin account couldn't be added: ${extractServerError(error)}`,
-          );
+          adminError = `${tenant.name} was created, but the admin account couldn't be added: ${extractServerError(error)}`;
         }
       }
-      return tenant;
+      return { tenant, adminError };
     },
-    onSuccess: (tenant) => {
+    onSuccess: ({ tenant, adminError }) => {
       queryClient.invalidateQueries({ queryKey: ['tenants'] });
-      navigate(`/platform/organizations/${tenant.id}`);
+      if (adminError) {
+        // Stay on this page instead of navigating away - the org was
+        // created but its admin wasn't, and the user needs to actually
+        // see why (previously this warning was set right before an
+        // immediate navigate(), so it was set but never rendered).
+        setAdminWarning(adminError);
+      } else {
+        navigate(`/platform/organizations/${tenant.id}`);
+      }
     },
   });
 
+  const adminEmailInvalid = adminEmail.trim().length > 0 && !isValidEmail(adminEmail);
+
   const activeOrgs = (tenants ?? []).filter((t) => t.isActive).slice(0, 5);
   const suspendedOrgs = (tenants ?? []).filter((t) => !t.isActive).slice(0, 5);
+  const trialOrgs = (tenants ?? []).filter((t) => t.isTrial).slice(0, 5);
+  const minTrialDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   return (
     <PlatformLayout active="org-create">
@@ -73,34 +117,34 @@ export default function CreateOrganization() {
                   <Form.Group controlId="orgName">
                     <Form.Label>Organization Name *</Form.Label>
                     <Form.Control value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Greenfield University" />
+                    <Form.Text className="text-muted">
+                      A unique Organization Code will be generated automatically from this name.
+                    </Form.Text>
                   </Form.Group>
                 </Col>
-                <Col md={6}>
-                  <Form.Group controlId="orgCode">
-                    <Form.Label>Organization Code</Form.Label>
-                    <Form.Control disabled placeholder="e.g. GFU2026" />
-                    <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
-                  </Form.Group>
-                </Col>
-              </Row>
-              <Row className="g-3 mb-2">
                 <Col md={6}>
                   <Form.Group controlId="orgSlug">
                     <Form.Label>Subdomain *</Form.Label>
                     <div className="d-flex align-items-center gap-2">
                       <Form.Control value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="greenfield" />
-                      <span className="text-muted text-nowrap">.examvault.com</span>
+                      <span className="text-muted text-nowrap">.examvaults.in</span>
                     </div>
                     <Form.Text className="text-muted">This will be used for tenant access.</Form.Text>
                   </Form.Group>
                 </Col>
+              </Row>
+              <Row className="g-3 mb-2">
                 <Col md={6}>
                   <Form.Group controlId="orgType">
                     <Form.Label>Organization Type</Form.Label>
-                    <Form.Select disabled>
-                      <option>Select type</option>
+                    <Form.Select value={orgType} onChange={(e) => setOrgType(e.target.value)}>
+                      <option value="">Select type</option>
+                      {ORGANIZATION_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
                     </Form.Select>
-                    <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
                   </Form.Group>
                 </Col>
               </Row>
@@ -117,6 +161,27 @@ export default function CreateOrganization() {
                       ))}
                     </Form.Select>
                     <Form.Text className="text-muted">Determines which Admin console modules this organization can use.</Form.Text>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group controlId="orgTrial">
+                    <Form.Label className="d-block">Trial</Form.Label>
+                    <Form.Check
+                      type="checkbox"
+                      id="orgIsTrial"
+                      label="Mark as trial organization"
+                      checked={isTrial}
+                      onChange={(e) => setIsTrial(e.target.checked)}
+                    />
+                    {isTrial && (
+                      <Form.Control
+                        type="date"
+                        className="mt-2"
+                        min={minTrialDate}
+                        value={trialEndDate}
+                        onChange={(e) => setTrialEndDate(e.target.value)}
+                      />
+                    )}
                   </Form.Group>
                 </Col>
               </Row>
@@ -141,7 +206,9 @@ export default function CreateOrganization() {
                       value={adminEmail}
                       onChange={(e) => setAdminEmail(e.target.value)}
                       placeholder="admin@greenfield.edu"
+                      isInvalid={adminEmailInvalid}
                     />
+                    <Form.Control.Feedback type="invalid">Enter a valid email address.</Form.Control.Feedback>
                   </Form.Group>
                 </Col>
               </Row>
@@ -149,15 +216,21 @@ export default function CreateOrganization() {
                 <Col md={6}>
                   <Form.Group controlId="adminPhone">
                     <Form.Label>Phone Number</Form.Label>
-                    <Form.Control disabled placeholder="+1 202-555-0198" />
-                    <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
+                    <Form.Control
+                      value={adminPhoneNumber}
+                      onChange={(e) => setAdminPhoneNumber(e.target.value)}
+                      placeholder="+1 202-555-0198"
+                    />
                   </Form.Group>
                 </Col>
                 <Col md={6}>
                   <Form.Group controlId="adminDesignation">
                     <Form.Label>Designation</Form.Label>
-                    <Form.Control disabled placeholder="System Administrator" />
-                    <Form.Text className="text-muted">Not saved yet - no backend field exists.</Form.Text>
+                    <Form.Control
+                      value={adminDesignation}
+                      onChange={(e) => setAdminDesignation(e.target.value)}
+                      placeholder="System Administrator"
+                    />
                   </Form.Group>
                 </Col>
               </Row>
@@ -166,9 +239,46 @@ export default function CreateOrganization() {
               </p>
 
               <h2 className="h6 fw-bold mb-3 mt-4">Address Information</h2>
-              <div className="text-muted small border rounded-3 p-3 mb-3">
-                Address fields aren't connected yet - no backend field exists on the organization record.
-              </div>
+              <Row className="g-3 mb-2">
+                <Col md={6}>
+                  <Form.Group controlId="orgAddressLine1">
+                    <Form.Label>Address Line 1</Form.Label>
+                    <Form.Control value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} placeholder="Street address" />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group controlId="orgAddressLine2">
+                    <Form.Label>Address Line 2 (optional)</Form.Label>
+                    <Form.Control value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} placeholder="Apartment, suite, etc." />
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row className="g-3 mb-3">
+                <Col md={3}>
+                  <Form.Group controlId="orgCity">
+                    <Form.Label>City</Form.Label>
+                    <Form.Control value={city} onChange={(e) => setCity(e.target.value)} />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group controlId="orgState">
+                    <Form.Label>State</Form.Label>
+                    <Form.Control value={state} onChange={(e) => setState(e.target.value)} />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group controlId="orgPostalCode">
+                    <Form.Label>Postal Code</Form.Label>
+                    <Form.Control value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group controlId="orgCountry">
+                    <Form.Label>Country</Form.Label>
+                    <Form.Control value={country} onChange={(e) => setCountry(e.target.value)} />
+                  </Form.Group>
+                </Col>
+              </Row>
 
               <h2 className="h6 fw-bold mb-3 mt-4">Additional Settings</h2>
               <div className="text-muted small border rounded-3 p-3 mb-4">
@@ -182,7 +292,13 @@ export default function CreateOrganization() {
                 </Link>
                 <Button
                   variant="primary"
-                  disabled={!name.trim() || !slug.trim() || createMutation.isPending}
+                  disabled={
+                    !name.trim() ||
+                    !slug.trim() ||
+                    (isTrial && !trialEndDate) ||
+                    adminEmailInvalid ||
+                    createMutation.isPending
+                  }
                   onClick={() => createMutation.mutate()}
                 >
                   {createMutation.isPending ? 'Creating...' : '+ Create Organization'}
@@ -214,7 +330,18 @@ export default function CreateOrganization() {
           <Card className="border-0 shadow-sm mb-3">
             <Card.Body>
               <h2 className="h6 fw-bold mb-3">Trial Organizations</h2>
-              <div className="text-center text-muted small py-4">Not connected yet.</div>
+              {trialOrgs.length === 0 && <div className="text-muted small py-3 text-center">No trial organizations.</div>}
+              <div className="d-flex flex-column gap-2">
+                {trialOrgs.map((tenant) => (
+                  <div key={tenant.id} className="d-flex align-items-center gap-2">
+                    <OrgAvatar name={tenant.name} size={28} />
+                    <div className="small text-truncate">{tenant.name}</div>
+                  </div>
+                ))}
+              </div>
+              <Link to="/platform/organizations/trial" className="small text-decoration-none d-inline-block mt-2">
+                View all trial &rarr;
+              </Link>
             </Card.Body>
           </Card>
 

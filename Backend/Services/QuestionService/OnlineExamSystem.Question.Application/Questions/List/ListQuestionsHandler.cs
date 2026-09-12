@@ -20,6 +20,12 @@ public class ListQuestionsHandler
             query.SectionId,
             query.UnassignedOnly,
             cancellationToken);
+
+        if (query.OwnerUserId is { } ownerUserId)
+        {
+            questions = questions.Where(q => q.CreatedByUserId == ownerUserId).ToList();
+        }
+
         if (questions.Count == 0)
         {
             return [];

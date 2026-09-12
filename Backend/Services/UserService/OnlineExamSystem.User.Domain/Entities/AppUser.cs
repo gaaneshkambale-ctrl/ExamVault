@@ -33,10 +33,26 @@ public class AppUser : BaseEntity
     public DateTime? DateOfBirth { get; set; }
     public string? Location { get; set; }
     public string? Department { get; set; }
+    public string? Designation { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
+
+    // Account lockout (Security Settings > Password Policy's "Maximum Login
+    // Attempts") - incremented on each wrong-password login by LoginUserHandler,
+    // reset to 0 on a successful login. LockoutEndUtc is null while unlocked;
+    // set to UtcNow + PlatformSettings.LockoutMinutes once the attempt count hits
+    // PlatformSettings.MaxLoginAttempts, and checked (not just relied on the
+    // counter) so the lockout actually expires on its own.
+    public int FailedLoginAttempts { get; set; }
+    public DateTime? LockoutEndUtc { get; set; }
 
     // Real auto-increment counter (same UseIdentityColumn() pattern as
     // ExamAssignment.AssignmentNumber) powering the "EV-ADM-0001"-style
     // formatted user id shown on the profile page - not stored as a string.
     public int UserNumber { get; set; }
+
+    // Which Admin/SuperAdmin created this account - real accountability for
+    // who added a user to the system. Null for self-registered accounts
+    // (RegisterUserHandler - there's no admin creator, the user created
+    // themselves) and for pre-existing accounts that predate this field.
+    public Guid? CreatedByUserId { get; set; }
 }

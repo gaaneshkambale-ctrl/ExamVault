@@ -22,6 +22,7 @@ export interface CreateExamRequest {
   passingMarks: number;
   instructions: string;
   examTypeId?: string | null;
+  tags?: string;
 }
 
 export interface ExamSettings {
@@ -51,21 +52,53 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
   createdOn: string;
   examTypeName?: string | null;
   tenantId: string;
+  tags: string;
+  createdByUserId: string;
+  createdByName: string | null;
 }
 
 // Dynamic, admin-manageable exam-purpose classification (Practice/Mock/
 // Certification/etc.) - distinct from CreationMethod (Manual/AiGenerated) and
 // from Category (free-text subject tag).
+// The six Default*/PassingScorePercent/NegativeMarking* fields are optional
+// per-type overrides of the tenant's global Exam Defaults (Settings > Exam
+// Defaults) - null/undefined means "inherit the tenant default". See
+// CreateExamHandler.cs (backend) for where the two get merged.
 export interface ExamTypeOption {
   id: string;
   name: string;
+  code: string;
+  isActive: boolean;
   purpose: string | null;
   createdAtUtc: string;
+  defaultDurationMinutes?: number | null;
+  passingScorePercent?: number | null;
+  defaultMaxAttempts?: number | null;
+  negativeMarkingEnabled?: boolean | null;
+  negativeMarkingValue?: number | null;
+  autoSubmitEnabled?: boolean | null;
 }
 
 export interface CreateExamTypeRequest {
   name: string;
   purpose?: string | null;
+  defaultDurationMinutes?: number | null;
+  passingScorePercent?: number | null;
+  defaultMaxAttempts?: number | null;
+  negativeMarkingEnabled?: boolean | null;
+  negativeMarkingValue?: number | null;
+  autoSubmitEnabled?: boolean | null;
+}
+
+export interface UpdateExamTypeRequest {
+  name: string;
+  purpose?: string | null;
+  defaultDurationMinutes?: number | null;
+  passingScorePercent?: number | null;
+  defaultMaxAttempts?: number | null;
+  negativeMarkingEnabled?: boolean | null;
+  negativeMarkingValue?: number | null;
+  autoSubmitEnabled?: boolean | null;
 }
 
 export interface ReminderSettingsResponse {
@@ -86,15 +119,6 @@ export interface ProctoringSettingsResponse {
   multipleMonitorsEnabled: boolean;
   sessionTimeoutMinutes: number;
   updatedAtUtc?: string;
-}
-
-export interface GeneralSettingsResponse {
-  organizationName: string;
-  supportEmail: string;
-  language: string;
-  timezone: string;
-  dateFormat: string;
-  updatedAtUtc: string;
 }
 
 export type QuestionNavigationMode = 'Free' | 'Sequential';

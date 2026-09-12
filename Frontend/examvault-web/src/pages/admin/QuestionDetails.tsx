@@ -1,7 +1,9 @@
 import { Badge, Card, ListGroup, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useQuestion } from '../../hooks/useQuestions';
 import type { QuestionDifficulty, QuestionType } from '../../types/question';
 import { PROGRAMMING_LANGUAGES } from '../../types/question';
@@ -30,6 +32,9 @@ export default function QuestionDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: question, isLoading, isError } = useQuestion(id);
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Edit');
 
   const backTo = question
     ? question.sectionId
@@ -38,14 +43,16 @@ export default function QuestionDetails() {
     : '/admin/exams';
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Question Details</h1>
         {question && (
           <div className="d-flex align-items-center gap-3">
-            <Link to={`/admin/questions/${question.id}/edit`} className="btn btn-primary">
-              Edit
-            </Link>
+            {canEditQuestions && (
+              <Link to={`/admin/questions/${question.id}/edit`} className="btn btn-primary">
+                Edit
+              </Link>
+            )}
             <DeleteQuestionButton
               questionId={question.id}
               examId={question.examId}
@@ -97,13 +104,43 @@ export default function QuestionDetails() {
                   {question.starterCode && (
                     <>
                       <div className="text-muted small mb-2">Starter Code</div>
-                      <pre className="bg-light border rounded p-3 mb-3">{question.starterCode}</pre>
+                      <pre className="bg-body-tertiary border rounded p-3 mb-3">{question.starterCode}</pre>
                     </>
                   )}
                   {question.sampleAnswer && (
                     <>
                       <div className="text-muted small mb-2">Sample Answer (grading reference)</div>
-                      <pre className="bg-light border rounded p-3 mb-0">{question.sampleAnswer}</pre>
+                      <pre className="bg-body-tertiary border rounded p-3 mb-3">{question.sampleAnswer}</pre>
+                    </>
+                  )}
+                  {(question.sampleInput || question.sampleOutput) && (
+                    <div className="d-flex gap-3 mb-3">
+                      {question.sampleInput && (
+                        <div className="flex-fill">
+                          <div className="text-muted small mb-2">Sample Input</div>
+                          <pre className="bg-body-tertiary border rounded p-3 mb-0">{question.sampleInput}</pre>
+                        </div>
+                      )}
+                      {question.sampleOutput && (
+                        <div className="flex-fill">
+                          <div className="text-muted small mb-2">Sample Output</div>
+                          <pre className="bg-body-tertiary border rounded p-3 mb-0">{question.sampleOutput}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {question.constraints && (
+                    <>
+                      <div className="text-muted small mb-2">
+                        {question.programmingLanguage === 'Sql' ? 'Notes' : 'Constraints'}
+                      </div>
+                      <ul className="mb-0">
+                        {question.constraints
+                          .split('\n')
+                          .map((line) => line.trim())
+                          .filter(Boolean)
+                          .map((line, i) => <li key={i}>{line}</li>)}
+                      </ul>
                     </>
                   )}
                 </>
@@ -128,6 +165,6 @@ export default function QuestionDetails() {
           )}
         </Card.Body>
       </Card>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

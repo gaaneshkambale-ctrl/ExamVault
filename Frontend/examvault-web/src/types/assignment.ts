@@ -60,6 +60,7 @@ export interface ExamAssignmentResponse {
   enableProctoring: boolean;
   enableLiveVideo: boolean;
   createdAtUtc: string;
+  cancelledAtUtc: string | null;
 }
 
 export interface MyAssignmentResponse {
@@ -91,6 +92,7 @@ export interface AssignmentListItemResponse {
   startAtUtc: string;
   endAtUtc: string;
   createdAtUtc: string;
+  cancelledAtUtc: string | null;
 }
 
 export type AssignmentStatus = 'Upcoming' | 'Active' | 'Expired';
@@ -102,4 +104,35 @@ export function getAssignmentStatus(startAtUtc: string, endAtUtc: string): Assig
   if (now < start) return 'Upcoming';
   if (now > end) return 'Expired';
   return 'Active';
+}
+
+// Separate from getAssignmentStatus (used by AdminDashboard/ActiveExams,
+// left untouched) - the Exam Scheduled page's mockup has exactly four
+// buckets with no distinct "Active/Ongoing" card, so "currently in
+// progress" folds into StartingToday here rather than getting its own
+// bucket.
+export type ScheduleStatus = 'Cancelled' | 'Completed' | 'StartingToday' | 'Upcoming';
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+export function getScheduleStatus(assignment: {
+  startAtUtc: string;
+  endAtUtc: string;
+  cancelledAtUtc: string | null;
+}): ScheduleStatus {
+  if (assignment.cancelledAtUtc) return 'Cancelled';
+
+  const now = new Date();
+  const start = new Date(assignment.startAtUtc);
+  const end = new Date(assignment.endAtUtc);
+
+  if (now.getTime() > end.getTime()) return 'Completed';
+  if (now.getTime() >= start.getTime() || isSameCalendarDay(now, start)) return 'StartingToday';
+  return 'Upcoming';
 }

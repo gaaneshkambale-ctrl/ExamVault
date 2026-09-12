@@ -75,6 +75,7 @@ public class NotificationRepository : INotificationRepository
         string? status,
         int page,
         int pageSize,
+        IReadOnlyList<Guid>? ownedExamIds = null,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Notifications.AsQueryable();
@@ -106,6 +107,7 @@ public class NotificationRepository : INotificationRepository
                 HasInApp = g.Any(n => n.ShowInApp),
                 HasEmail = g.Any(n => n.EmailStatus != EmailStatus.Skipped),
                 TenantId = g.Min(n => n.TenantId),
+                RelatedExamId = g.Min(n => n.RelatedExamId),
             });
 
         // Channel/status are derived from per-batch aggregates rather than
@@ -116,8 +118,20 @@ public class NotificationRepository : INotificationRepository
         var now = DateTime.UtcNow;
         var all = await grouped.ToListAsync(cancellationToken);
 
+        var ownedExamIdSet = ownedExamIds?.ToHashSet();
+
         var filtered = all.Where(i =>
         {
+            // Instructor sees only batches tied to an exam they own - a
+            // batch with no RelatedExamId at all (an Admin broadcast to
+            // AllStudents/Admins/Groups) is never "their own exam"
+            // notification, so it's excluded too, not just ones for other
+            // exams.
+            if (ownedExamIdSet is not null && (i.RelatedExamId is not { } relatedExamId || !ownedExamIdSet.Contains(relatedExamId)))
+            {
+                return false;
+            }
+
             var isScheduled = i.ScheduledAtUtc.HasValue && i.ScheduledAtUtc.Value > now;
             var statusLabel = i.Failed > 0 ? "Failed" : isScheduled ? "Scheduled" : "Delivered";
             if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, statusLabel, StringComparison.OrdinalIgnoreCase))
@@ -159,25 +173,36 @@ public class NotificationRepository : INotificationRepository
         return (summaries, totalCount);
     }
 
-    public async Task<NotificationHistoryStats> GetHistoryStatsAsync(CancellationToken cancellationToken = default)
+    public async Task<NotificationHistoryStats> GetHistoryStatsAsync(
+        IReadOnlyList<Guid>? ownedExamIds = null,
+        CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var todayStartUtc = now.Date;
 
-        var sentToday = await _dbContext.Notifications
+        // Instructor sees stats for their own exam notifications only - a
+        // row with no RelatedExamId (Admin broadcast) is excluded, same as
+        // GetHistoryAsync's own ownership filter.
+        var baseQuery = _dbContext.Notifications.AsQueryable();
+        if (ownedExamIds is not null)
+        {
+            baseQuery = baseQuery.Where(n => n.RelatedExamId != null && ownedExamIds.Contains(n.RelatedExamId.Value));
+        }
+
+        var sentToday = await baseQuery
             .Where(n => n.CreatedAtUtc >= todayStartUtc && n.EmailStatus != EmailStatus.Pending)
             .CountAsync(cancellationToken);
-        var delivered = await _dbContext.Notifications
+        var delivered = await baseQuery
             .Where(n => n.EmailStatus == EmailStatus.Delivered)
             .CountAsync(cancellationToken);
-        var failed = await _dbContext.Notifications
+        var failed = await baseQuery
             .Where(n => n.EmailStatus == EmailStatus.Failed)
             .CountAsync(cancellationToken);
-        var scheduled = await _dbContext.Notifications
+        var scheduled = await baseQuery
             .Where(n => n.ScheduledAtUtc != null && n.ScheduledAtUtc > now)
             .CountAsync(cancellationToken);
-        var total = await _dbContext.Notifications.CountAsync(cancellationToken);
-        var pending = await _dbContext.Notifications
+        var total = await baseQuery.CountAsync(cancellationToken);
+        var pending = await baseQuery
             .Where(n => n.EmailStatus == EmailStatus.Pending)
             .CountAsync(cancellationToken);
 

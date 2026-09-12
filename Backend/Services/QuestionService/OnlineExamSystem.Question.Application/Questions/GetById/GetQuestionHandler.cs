@@ -21,6 +21,13 @@ public class GetQuestionHandler
             return null;
         }
 
+        // Deliberately not distinguishing "doesn't exist" from "not yours" -
+        // both look like a 404 to an Instructor who doesn't own this question.
+        if (query.OwnerUserId is { } ownerUserId && question.CreatedByUserId != ownerUserId)
+        {
+            return null;
+        }
+
         var options = await _questionRepository.GetOptionsByQuestionIdAsync(question.Id, cancellationToken);
         var parameters = await _questionRepository.GetParametersByQuestionIdAsync(question.Id, cancellationToken);
         var testCases = await _questionRepository.GetTestCasesByQuestionIdAsync(question.Id, cancellationToken);

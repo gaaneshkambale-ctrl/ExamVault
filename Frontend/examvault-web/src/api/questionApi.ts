@@ -1,8 +1,13 @@
 import apiClient from './axiosClient';
-import type { CreateQuestionRequest, QuestionResponse, UpdateQuestionRequest } from '../types/question';
+import type { CreateQuestionRequest, PlatformQuestionResponse, QuestionResponse, UpdateQuestionRequest } from '../types/question';
 
 export async function createQuestion(request: CreateQuestionRequest): Promise<QuestionResponse> {
   const { data } = await apiClient.post<QuestionResponse>('/api/questions', request);
+  return data;
+}
+
+export async function listAllQuestions(): Promise<PlatformQuestionResponse[]> {
+  const { data } = await apiClient.get<PlatformQuestionResponse[]>('/api/questions/all');
   return data;
 }
 

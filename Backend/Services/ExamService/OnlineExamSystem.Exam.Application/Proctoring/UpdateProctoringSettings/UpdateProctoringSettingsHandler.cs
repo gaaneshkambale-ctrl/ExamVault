@@ -28,6 +28,7 @@ public class UpdateProctoringSettingsHandler
         settings.MultipleMonitorsEnabled = command.MultipleMonitorsEnabled;
         settings.SessionTimeoutMinutes = command.SessionTimeoutMinutes;
         settings.UpdatedAtUtc = DateTime.UtcNow;
+        settings.UpdatedByUserId = command.UpdatedByUserId;
 
         await _examRepository.SaveChangesAsync(cancellationToken);
 

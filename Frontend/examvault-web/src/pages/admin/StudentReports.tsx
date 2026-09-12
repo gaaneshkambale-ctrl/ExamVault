@@ -1,18 +1,22 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
+import TablePagination from '../../components/reports/TablePagination';
 import DonutChart from '../../components/charts/DonutChart';
 import { ViewIcon, UsersIcon } from '../../components/icons/ActionIcons';
 import { UserCheckIcon, TargetIcon, CheckCircleIcon, AlertTriangleIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
-import { useUsers } from '../../hooks/useUsers';
+import { useStudents } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 import type { AdminAttemptResultResponse } from '../../types/result';
 import { SCORE_BUCKETS } from '../../utils/scoreBuckets';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function statusLabel(avgPercent: number): { text: string; variant: string } {
   if (avgPercent >= 90) return { text: 'Excellent', variant: 'success' };
@@ -35,16 +39,18 @@ interface StudentAgg {
 
 export default function StudentReports() {
   const { data: exams } = useExams();
-  const { data: users, isLoading: isLoadingUsers } = useUsers();
+  const { data: users, isLoading: isLoadingUsers } = useStudents();
   const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(exams);
 
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [studentFilter, setStudentFilter] = useState('All');
   const [examFilter, setExamFilter] = useState('All');
   const [modalStudent, setModalStudent] = useState<StudentAgg | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const loading = isLoadingUsers || isLoadingResults;
-  const students = useMemo(() => (users ?? []).filter((u) => u.role === 'Student'), [users]);
+  const students = useMemo(() => users ?? [], [users]);
 
   const buildAggregates = useCallback(
     (r: DateRange): StudentAgg[] => {
@@ -118,8 +124,18 @@ export default function StudentReports() {
     [activeStudents],
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [studentFilter, examFilter, range]);
+
+  const totalPages = Math.max(1, Math.ceil(activeStudents.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedStudents = activeStudents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = activeStudents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, activeStudents.length);
+
   return (
-    <AdminLayout active="Student Reports">
+    <RoleAwareLayout active="Student Reports">
       <h1 className="h4 fw-bold mb-1 text-primary">Student Reports</h1>
       <p className="text-muted mb-4">Detailed performance and activity reports for students.</p>
 
@@ -220,7 +236,7 @@ export default function StudentReports() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Score Distribution</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><TargetIcon /></span>} title="Score Distribution" />
                   <DonutChart data={distribution} centerLabel="Students" />
                 </Card.Body>
               </Card>
@@ -228,7 +244,9 @@ export default function StudentReports() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className="p-0">
-                  <h2 className="h6 fw-bold p-3 pb-2 mb-0">Top Students</h2>
+                  <div className="p-3 pb-0">
+                    <SectionHeader icon={<span className="text-primary d-flex"><UserCheckIcon /></span>} title="Top Students" />
+                  </div>
                   {topStudents.length === 0 ? (
                     <div className="text-center text-muted py-5">No attempts yet.</div>
                   ) : (
@@ -267,12 +285,14 @@ export default function StudentReports() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Student Performance Overview</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<span className="text-primary d-flex"><CheckCircleIcon /></span>} title="Student Performance Overview" />
+              </div>
               {activeStudents.length === 0 ? (
                 <div className="text-center text-muted py-5">No students match your filters.</div>
               ) : (
                 <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th className="ps-4">Student</th>
                       <th>Exams Attempted</th>
@@ -285,7 +305,7 @@ export default function StudentReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeStudents.map((s) => (
+                    {pagedStudents.map((s) => (
                       <tr key={s.userId}>
                         <td className="ps-4">
                           <div className="fw-medium">{s.fullName}</div>
@@ -313,6 +333,21 @@ export default function StudentReports() {
                     ))}
                   </tbody>
                 </Table>
+              )}
+              {activeStudents.length > 0 && (
+                <div className="p-3">
+                  <TablePagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    totalCount={activeStudents.length}
+                    onPageChange={setPage}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setPageSize}
+                  />
+                </div>
               )}
             </Card.Body>
           </Card>
@@ -352,6 +387,6 @@ export default function StudentReports() {
           )}
         </Modal.Body>
       </Modal>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

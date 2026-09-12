@@ -9,7 +9,11 @@ namespace OnlineExamSystem.User.Application.Tests;
 public class ChangePasswordHandlerTests
 {
     private static ChangePasswordHandler CreateHandler(FakeUserRepository repository) =>
-        new(repository, new ChangePasswordValidator(), new PasswordHasher<AppUser>());
+        new(
+            repository,
+            new FakeTenantRepository(),
+            new ChangePasswordValidator(new FakePasswordPolicyProvider()),
+            new PasswordHasher<AppUser>());
 
     private static async Task<AppUser> SeedUser(
         FakeUserRepository repository,

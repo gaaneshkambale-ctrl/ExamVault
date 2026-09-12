@@ -3,7 +3,9 @@ import { Card, Col, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
+import { TargetIcon, AlertTriangleIcon } from '../../components/reports/ReportIcons';
 import { useExam } from '../../hooks/useExams';
 import { getExamResultsForAdmin } from '../../api/resultApi';
 
@@ -151,7 +153,7 @@ export default function ExamReportDetails() {
 
           <Card className="border-0 shadow-sm mb-4">
             <Card.Body>
-              <h2 className="h6 fw-bold mb-3">Score Distribution</h2>
+              <SectionHeader icon={<TargetIcon />} title="Score Distribution" />
               <ScoreDistributionChart data={stats.distribution} />
             </Card.Body>
           </Card>
@@ -159,12 +161,15 @@ export default function ExamReportDetails() {
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
               <div className="p-4 pb-3">
-                <h2 className="h6 fw-bold mb-0">Most Missed Questions</h2>
-                {stats.mostMissedQuestions.length > WORST_QUESTIONS_LIMIT && (
-                  <p className="text-muted small mb-0">
-                    Showing the worst {WORST_QUESTIONS_LIMIT} of {stats.mostMissedQuestions.length} questions.
-                  </p>
-                )}
+                <SectionHeader
+                  icon={<AlertTriangleIcon />}
+                  title="Most Missed Questions"
+                  subtitle={
+                    stats.mostMissedQuestions.length > WORST_QUESTIONS_LIMIT
+                      ? `Showing the worst ${WORST_QUESTIONS_LIMIT} of ${stats.mostMissedQuestions.length} questions.`
+                      : undefined
+                  }
+                />
               </div>
 
               {stats.mostMissedQuestions.length === 0 && (

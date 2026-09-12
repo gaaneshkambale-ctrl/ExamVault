@@ -62,7 +62,7 @@ export default function AnswerReviewPanel({ questions }: AnswerReviewPanelProps)
         {isCodeQuestion ? (
           wasAnswered ? (
             <>
-              <pre className="bg-light border rounded-3 p-3 mb-2 small">{question.answerText}</pre>
+              <pre className="bg-body-tertiary border rounded-3 p-3 mb-2 small">{question.answerText}</pre>
               <div className="small mb-4">
                 {question.isPendingGrading ? (
                   <span className="text-warning fw-medium">Pending grading</span>
@@ -74,7 +74,7 @@ export default function AnswerReviewPanel({ questions }: AnswerReviewPanelProps)
               </div>
             </>
           ) : (
-            <div className="rounded-3 p-3 mb-4 bg-light text-muted fst-italic">Not answered</div>
+            <div className="rounded-3 p-3 mb-4 bg-body-tertiary text-muted fst-italic">Not answered</div>
           )
         ) : wasAnswered && isMultiSelect ? (
           <div className="d-flex flex-column gap-2 mb-4">
@@ -102,7 +102,7 @@ export default function AnswerReviewPanel({ questions }: AnswerReviewPanelProps)
             {question.isCorrect ? <CheckIcon /> : <CrossIcon />}
           </div>
         ) : (
-          <div className="rounded-3 p-3 mb-4 bg-light text-muted fst-italic">Not answered</div>
+          <div className="rounded-3 p-3 mb-4 bg-body-tertiary text-muted fst-italic">Not answered</div>
         )}
 
         {!isCodeQuestion && !question.isCorrect && isMultiSelect && correctOptions.length > 0 && (

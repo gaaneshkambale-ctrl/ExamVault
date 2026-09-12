@@ -143,3 +143,22 @@ export function ShieldAlertIcon({ size = 16 }: IconProps) {
     </svg>
   );
 }
+
+export function XCircleIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} {...base}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="15" y1="9" x2="9" y2="15" />
+      <line x1="9" y1="9" x2="15" y2="15" />
+    </svg>
+  );
+}
+
+export function MinusCircleIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} {...base}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="8" y1="12" x2="16" y2="12" />
+    </svg>
+  );
+}

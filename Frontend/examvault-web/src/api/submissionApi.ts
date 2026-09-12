@@ -5,12 +5,20 @@ import type {
   AttemptSectionStateResponse,
   AttemptWithAnswersResponse,
   ExamAttemptResponse,
+  PlatformSubmissionResponse,
   ProctoringViolationType,
   SaveAnswerRequest,
   UngradedAnswerResponse,
   ViolationEventResponse,
   ViolationStatus,
 } from '../types/submission';
+
+// Super Admin platform-wide Submissions browse (SuperAdmin only) - every
+// attempt across every tenant, not one exam's own attempts.
+export async function listAllSubmissions(): Promise<PlatformSubmissionResponse[]> {
+  const { data } = await apiClient.get<PlatformSubmissionResponse[]>('/api/submissions/all');
+  return data;
+}
 
 export async function startAttempt(examId: string): Promise<ExamAttemptResponse> {
   const { data } = await apiClient.post<ExamAttemptResponse>('/api/submissions/start', { examId });

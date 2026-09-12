@@ -14,6 +14,8 @@ public static class FeaturePolicies
 {
     // [Authorize(Policy = ...)] requires a compile-time constant.
     public const string LiveMonitoring = "Feature:LiveMonitoring";
+    public const string ExamSecurity = "Feature:ExamSecurity";
+    public const string Proctoring = "Feature:Proctoring";
     public const string Exams = "Feature:Exams"; // grading is exam-authoring work
 
     // ByExam/ByUser genuinely serve both the Results console (Exam Results,

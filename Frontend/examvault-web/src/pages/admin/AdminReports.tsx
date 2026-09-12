@@ -1,9 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
+import TablePagination from '../../components/reports/TablePagination';
 import LineTrendChart from '../../components/charts/LineTrendChart';
 import { ViewIcon } from '../../components/icons/ActionIcons';
 import { BookIcon, PulseIcon, TargetIcon, CheckCircleIcon, FlagIcon } from '../../components/reports/ReportIcons';
@@ -14,6 +16,8 @@ import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreationMethod } from '../../types/exam';
 import { bucketByDay, computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function avgPercent(rows: { totalScore: number; totalMarks: number }[]): number {
   if (rows.length === 0) return 0;
@@ -30,6 +34,8 @@ export default function AdminReports() {
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [category, setCategory] = useState('All');
   const [creationMethod, setCreationMethod] = useState<'All' | CreationMethod>('All');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const loading = isLoadingExams || isLoadingResults || isLoadingAttempts;
 
@@ -105,8 +111,18 @@ export default function AdminReports() {
     [perExamStats],
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [category, creationMethod, range]);
+
+  const totalPages = Math.max(1, Math.ceil(perExamStats.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedExamStats = perExamStats.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = perExamStats.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, perExamStats.length);
+
   return (
-    <AdminLayout active="Exam Reports">
+    <RoleAwareLayout active="Exam Reports">
       <h1 className="h4 fw-bold mb-1 text-primary">Exam Reports</h1>
       <p className="text-muted mb-4">Detailed insights and analytics about exams.</p>
 
@@ -209,7 +225,7 @@ export default function AdminReports() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Exam Attempts Overview</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><PulseIcon /></span>} title="Exam Attempts Overview" />
                   <LineTrendChart
                     series={[{ name: 'Attempts', color: '#4f46e5', data: attemptsOverview.map((b) => ({ label: b.label, value: b.count })) }]}
                   />
@@ -219,7 +235,9 @@ export default function AdminReports() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className="p-0">
-                  <h2 className="h6 fw-bold p-3 pb-2 mb-0">Top 5 Exams by Attempts</h2>
+                  <div className="p-3 pb-0">
+                    <SectionHeader icon={<span className="text-primary d-flex"><FlagIcon /></span>} title="Top 5 Exams by Attempts" />
+                  </div>
                   {top5.length === 0 ? (
                     <div className="text-center text-muted py-5">No attempts yet.</div>
                   ) : (
@@ -253,12 +271,14 @@ export default function AdminReports() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Exam Summary</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<span className="text-primary d-flex"><BookIcon /></span>} title="Exam Summary" />
+              </div>
               {perExamStats.length === 0 ? (
                 <div className="text-center text-muted py-5">No exams match your filters.</div>
               ) : (
                 <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th className="ps-4">Exam Name</th>
                       <th>Category</th>
@@ -270,7 +290,7 @@ export default function AdminReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {perExamStats.map((s) => (
+                    {pagedExamStats.map((s) => (
                       <tr key={s.exam.id}>
                         <td className="ps-4 fw-medium">{s.exam.title}</td>
                         <td>{s.exam.category}</td>
@@ -294,10 +314,25 @@ export default function AdminReports() {
                   </tbody>
                 </Table>
               )}
+              {perExamStats.length > 0 && (
+                <div className="p-3">
+                  <TablePagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    totalCount={perExamStats.length}
+                    onPageChange={setPage}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setPageSize}
+                  />
+                </div>
+              )}
             </Card.Body>
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

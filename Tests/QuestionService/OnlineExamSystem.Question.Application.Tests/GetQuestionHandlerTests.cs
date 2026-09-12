@@ -37,4 +37,31 @@ public class GetQuestionHandlerTests
 
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task Owner_can_see_their_own_question()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new FakeQuestionRepository();
+        var question = new ExamQuestion { QuestionText = "What is LINQ?", CreatedByUserId = ownerId };
+        await repository.AddAsync(question, []);
+        var handler = new GetQuestionHandler(repository);
+
+        var result = await handler.HandleAsync(new GetQuestionQuery(question.Id, ownerId));
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task Non_owner_cannot_see_another_instructors_question()
+    {
+        var repository = new FakeQuestionRepository();
+        var question = new ExamQuestion { QuestionText = "What is LINQ?", CreatedByUserId = Guid.NewGuid() };
+        await repository.AddAsync(question, []);
+        var handler = new GetQuestionHandler(repository);
+
+        var result = await handler.HandleAsync(new GetQuestionQuery(question.Id, Guid.NewGuid()));
+
+        Assert.Null(result);
+    }
 }

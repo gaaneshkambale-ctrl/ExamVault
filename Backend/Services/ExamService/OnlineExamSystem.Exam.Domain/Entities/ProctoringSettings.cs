@@ -23,4 +23,9 @@ public class ProctoringSettings : TenantScopedEntity
     // the Proctoring card, rather than a new table for one field.
     public int SessionTimeoutMinutes { get; set; } = 30;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    // Who last changed these anti-cheat toggles - real accountability for a
+    // security-relevant config table, not previously tracked (only the
+    // timestamp was). Null until the first real update.
+    public Guid? UpdatedByUserId { get; set; }
 }

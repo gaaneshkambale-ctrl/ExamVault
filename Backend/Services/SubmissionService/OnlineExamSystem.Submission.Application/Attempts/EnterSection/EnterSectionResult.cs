@@ -10,6 +10,7 @@ public class EnterSectionResult
     public bool IsNotInProgress { get; init; }
     public bool IsSectionNotFound { get; init; }
     public bool IsSectionLocked { get; init; }
+    public bool IsSectionAlreadyCompleted { get; init; }
     public AttemptSectionState? State { get; init; }
 
     public static EnterSectionResult Ok(AttemptSectionState state) => new() { Success = true, State = state };
@@ -23,4 +24,6 @@ public class EnterSectionResult
     public static EnterSectionResult SectionNotFound() => new() { IsSectionNotFound = true };
 
     public static EnterSectionResult SectionLocked() => new() { IsSectionLocked = true };
+
+    public static EnterSectionResult SectionAlreadyCompleted() => new() { IsSectionAlreadyCompleted = true };
 }

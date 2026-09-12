@@ -8,6 +8,7 @@ using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
+using OnlineExamSystem.User.Application.Users.ForgotPassword;
 using OnlineExamSystem.User.Application.Users.GetMyPreferences;
 using OnlineExamSystem.User.Application.Users.GetMySessions;
 using OnlineExamSystem.User.Application.Users.GetProfile;
@@ -17,6 +18,7 @@ using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
+using OnlineExamSystem.User.Application.Users.ResetPasswordWithToken;
 using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
 using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
@@ -27,6 +29,7 @@ using OnlineExamSystem.User.Application.Users.UpdateMyPreferences;
 using OnlineExamSystem.User.Application.Users.UpdateMyProfile;
 using OnlineExamSystem.User.Domain.Entities;
 using OnlineExamSystem.User.Domain.Enums;
+using static OnlineExamSystem.User.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.User.API.Controllers;
 
@@ -37,10 +40,13 @@ public class UsersController : ControllerBase
     private readonly RegisterUserHandler _registerUserHandler;
     private readonly GetUserProfileHandler _getUserProfileHandler;
     private readonly ListUsersHandler _listUsersHandler;
+    private readonly ListStudentsHandler _listStudentsHandler;
     private readonly CreateUserHandler _createUserHandler;
     private readonly UpdateUserHandler _updateUserHandler;
     private readonly DeleteUserHandler _deleteUserHandler;
     private readonly ResetPasswordHandler _resetPasswordHandler;
+    private readonly ForgotPasswordHandler _forgotPasswordHandler;
+    private readonly ResetPasswordWithTokenHandler _resetPasswordWithTokenHandler;
     private readonly ChangePasswordHandler _changePasswordHandler;
     private readonly LoginUserHandler _loginUserHandler;
     private readonly RefreshTokenHandler _refreshTokenHandler;
@@ -54,6 +60,7 @@ public class UsersController : ControllerBase
     private readonly RevokeSessionHandler _revokeSessionHandler;
     private readonly GetMyPreferencesHandler _getMyPreferencesHandler;
     private readonly UpdateMyPreferencesHandler _updateMyPreferencesHandler;
+    private readonly IUserRepository _userRepository;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<UsersController> _logger;
 
@@ -70,10 +77,13 @@ public class UsersController : ControllerBase
         RegisterUserHandler registerUserHandler,
         GetUserProfileHandler getUserProfileHandler,
         ListUsersHandler listUsersHandler,
+        ListStudentsHandler listStudentsHandler,
         CreateUserHandler createUserHandler,
         UpdateUserHandler updateUserHandler,
         DeleteUserHandler deleteUserHandler,
         ResetPasswordHandler resetPasswordHandler,
+        ForgotPasswordHandler forgotPasswordHandler,
+        ResetPasswordWithTokenHandler resetPasswordWithTokenHandler,
         ChangePasswordHandler changePasswordHandler,
         LoginUserHandler loginUserHandler,
         RefreshTokenHandler refreshTokenHandler,
@@ -87,16 +97,20 @@ public class UsersController : ControllerBase
         RevokeSessionHandler revokeSessionHandler,
         GetMyPreferencesHandler getMyPreferencesHandler,
         UpdateMyPreferencesHandler updateMyPreferencesHandler,
+        IUserRepository userRepository,
         IAuditClient auditClient,
         ILogger<UsersController> logger)
     {
         _registerUserHandler = registerUserHandler;
         _getUserProfileHandler = getUserProfileHandler;
         _listUsersHandler = listUsersHandler;
+        _listStudentsHandler = listStudentsHandler;
         _createUserHandler = createUserHandler;
         _updateUserHandler = updateUserHandler;
         _deleteUserHandler = deleteUserHandler;
         _resetPasswordHandler = resetPasswordHandler;
+        _forgotPasswordHandler = forgotPasswordHandler;
+        _resetPasswordWithTokenHandler = resetPasswordWithTokenHandler;
         _changePasswordHandler = changePasswordHandler;
         _loginUserHandler = loginUserHandler;
         _refreshTokenHandler = refreshTokenHandler;
@@ -110,6 +124,7 @@ public class UsersController : ControllerBase
         _revokeSessionHandler = revokeSessionHandler;
         _getMyPreferencesHandler = getMyPreferencesHandler;
         _updateMyPreferencesHandler = updateMyPreferencesHandler;
+        _userRepository = userRepository;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -164,6 +179,26 @@ public class UsersController : ControllerBase
                 new { message = "Your account has been deactivated. Contact an administrator." });
         }
 
+        if (result.IsAccountLocked)
+        {
+            _logger.LogWarning("Login blocked for locked account {Email} until {LockoutEndUtc}.", request.Email, result.LockoutEndUtc);
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message = $"Too many failed login attempts. Try again after {result.LockoutEndUtc:HH:mm} UTC.",
+                    lockoutEndUtc = result.LockoutEndUtc,
+                });
+        }
+
+        if (result.IsMaintenanceMode)
+        {
+            _logger.LogWarning("Login blocked for {Email} - platform is in maintenance mode.", request.Email);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The platform is currently undergoing maintenance. Please try again shortly." });
+        }
+
         if (!result.Success)
         {
             _logger.LogWarning("Login failed for email {Email}.", request.Email);
@@ -172,19 +207,55 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} logged in successfully.", user.Id);
-        await _auditClient.RecordAsync(
-            user.TenantId,
-            "Auth",
-            "User login",
-            null,
-            null,
-            user.Id,
-            user.FullName,
-            HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
         var profile = ToProfileResponse(user);
         var response = new LoginResponse(profile, result.AccessToken!, result.RefreshToken!);
         return Ok(response);
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var command = new ForgotPasswordCommand(request.Email, request.TenantSlug);
+        var result = await _forgotPasswordHandler.HandleAsync(command, cancellationToken);
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        // Always this same generic message - see ForgotPasswordHandler's own
+        // comment for why the response can never differ based on whether the
+        // email/tenant combination actually exists.
+        return Ok(new { message = "If an account exists for this email, we've sent a password reset link." });
+    }
+
+    [HttpPost("reset-password-with-token")]
+    public async Task<IActionResult> ResetPasswordWithToken(
+        ResetPasswordWithTokenRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new ResetPasswordWithTokenCommand(request.Token, request.NewPassword);
+        var result = await _resetPasswordWithTokenHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsInvalidOrExpiredToken)
+        {
+            return BadRequest(new { message = "This reset link is invalid or has expired. Please request a new one." });
+        }
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        return Ok(new { message = "Your password has been reset. You can now log in with your new password." });
     }
 
     [HttpPost("refresh-token")]
@@ -218,26 +289,43 @@ public class UsersController : ControllerBase
     // regular Admin still only ever sees their own tenant's users through
     // it (see UserRepository.GetAllAsync's own comment).
     [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = UsersView)]
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
         var users = await _listUsersHandler.HandleAsync(new ListUsersQuery(), cancellationToken);
-        return Ok(users.Select(ToResponse));
+        var names = await ActorNameResolver.ResolveAsync(_userRepository, users.Select(u => u.CreatedByUserId), cancellationToken);
+        return Ok(users.Select(u => ToResponse(u, u.CreatedByUserId.HasValue ? names.GetValueOrDefault(u.CreatedByUserId.Value) : null)));
+    }
+
+    // Deliberately its own endpoint rather than reusing List above: Instructor
+    // has no "Users - View" permission (the spec's "Users ❌") and must never
+    // see the full user directory (other Admins/Instructors), but does need a
+    // students-only picker for Assign Students - this is that narrower slice,
+    // gated by role only, same shape as Assignments reusing the Exams policy.
+    [Authorize(Roles = "Admin,Instructor")]
+    [HttpGet("students")]
+    public async Task<IActionResult> ListStudents(CancellationToken cancellationToken)
+    {
+        var students = await _listStudentsHandler.HandleAsync(new ListStudentsQuery(), cancellationToken);
+        return Ok(students.Select(ToStudentResponse));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost]
     public async Task<IActionResult> Create(CreateUserRequest request, CancellationToken cancellationToken)
     {
         var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
+        var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var command = new CreateUserCommand(
             tenantId,
             request.FullName,
             request.Email,
             request.Role,
-            request.IsActive,
             request.PhoneNumber,
-            request.RollNumber);
+            request.RollNumber,
+            createdByUserId);
         var result = await _createUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.EmailAlreadyExists)
@@ -261,10 +349,22 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} created by admin.", user.Id);
-        return StatusCode(StatusCodes.Status201Created, ToResponse(user));
+        await _auditClient.RecordAsync(
+            tenantId,
+            "Users",
+            "Created user",
+            user.FullName,
+            user.Id.ToString(),
+            createdByUserId,
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, ToResponse(user, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateUserRequest request, CancellationToken cancellationToken)
     {
@@ -309,13 +409,15 @@ public class UsersController : ControllerBase
             result.User!.FullName,
             id.ToString(),
             adminId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
-        return Ok(ToResponse(result.User!));
+            cancellationToken: cancellationToken);
+        var updatedUserCreatedByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, updatedUserCreatedByName));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
@@ -333,10 +435,21 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} deleted by admin {AdminId}.", id, currentUserId);
+        await _auditClient.RecordAsync(
+            Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!),
+            "Users",
+            "Deleted user",
+            result.FullName,
+            id.ToString(),
+            currentUserId,
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
         return NoContent();
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
     {
@@ -356,10 +469,12 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} deactivated by admin {AdminId}.", id, currentUserId);
-        return Ok(ToResponse(result.User!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPost("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken)
     {
@@ -373,10 +488,12 @@ public class UsersController : ControllerBase
         }
 
         _logger.LogInformation("User {UserId} reactivated by admin.", id);
-        return Ok(ToResponse(result.User!));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, result.User!.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(result.User!, createdByName));
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersEdit)]
     [HttpPut("{id:guid}/reset-password")]
     public async Task<IActionResult> ResetPassword(
         Guid id,
@@ -436,6 +553,7 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = UsersView)]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
@@ -445,13 +563,17 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "User not found." });
         }
 
-        return Ok(ToResponse(user));
+        var createdByName = await ActorNameResolver.ResolveOneAsync(_userRepository, user.CreatedByUserId, cancellationToken);
+        return Ok(ToResponse(user, createdByName));
     }
 
-    // Admin-only counterpart to GetMyPhoto - lets admin screens (e.g. Live
-    // Monitoring's student avatars) render another user's photo, which no
-    // endpoint supported before this.
-    [Authorize(Roles = "Admin")]
+    // Admin/Instructor counterpart to GetMyPhoto - lets monitoring/results
+    // screens (e.g. Live Monitoring's student avatars) render another user's
+    // photo, which no endpoint supported before this. Role-gated only (no
+    // "Users - View" permission or ownership check) since a profile photo
+    // by itself carries far less sensitivity than the user directory these
+    // screens deliberately avoid exposing to Instructor.
+    [Authorize(Roles = "Admin,Instructor")]
     [HttpGet("{id:guid}/photo")]
     public async Task<IActionResult> GetPhoto(Guid id, CancellationToken cancellationToken)
     {
@@ -502,7 +624,8 @@ public class UsersController : ControllerBase
             request.Gender,
             request.DateOfBirth,
             request.Location,
-            request.Department);
+            request.Department,
+            request.Designation);
         var result = await _updateMyProfileHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
@@ -582,7 +705,7 @@ public class UsersController : ControllerBase
             userId,
             result.User!.FullName,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
         return NoContent();
     }
 
@@ -696,7 +819,7 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
-    private static UserListItemResponse ToResponse(AppUser user) =>
+    private static UserListItemResponse ToResponse(AppUser user, string? createdByName) =>
         new(
             user.Id,
             user.FullName,
@@ -708,7 +831,12 @@ public class UsersController : ControllerBase
             user.PhotoData is not null,
             user.RollNumber,
             user.TenantId,
-            user.LastLoginAtUtc);
+            user.LastLoginAtUtc,
+            user.CreatedByUserId,
+            createdByName);
+
+    private static StudentSummaryResponse ToStudentResponse(AppUser user) =>
+        new(user.Id, user.FullName, user.Email, user.RollNumber, user.PhotoData is not null);
 
     private static UserSessionResponse ToResponse(RefreshToken token)
     {
@@ -737,6 +865,7 @@ public class UsersController : ControllerBase
         {
             UserRole.Admin => "ADM",
             UserRole.SuperAdmin => "SUP",
+            UserRole.Instructor => "INS",
             _ => "STU",
         };
         return $"EV-{roleCode}-{user.UserNumber:D4}";
@@ -757,6 +886,7 @@ public class UsersController : ControllerBase
             user.DateOfBirth,
             user.Location,
             user.Department,
+            user.Designation,
             user.LastLoginAtUtc,
             user.CreatedAtUtc,
             FormatUserId(user),

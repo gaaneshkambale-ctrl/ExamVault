@@ -214,6 +214,9 @@ resource userApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'ServiceBus__TopicName', value: 'examvault.events' }
             { name: 'N8n__WebhookUrl', secretRef: 'n8n-webhook-url' }
             { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
+            { name: 'App__FrontendBaseUrl', value: 'https://examvaults.in' }
+            { name: 'App__BaseDomain', value: 'examvaults.in' }
+            { name: 'App__Scheme', value: 'https' }
           ]
         }
       ]
@@ -363,6 +366,7 @@ resource aiApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Jwt__AccessTokenMinutes', value: '15' }
             { name: 'Jwt__RefreshTokenDays', value: '7' }
             { name: 'N8n__WebhookUrl', secretRef: 'n8n-webhook-url' }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]
@@ -414,6 +418,7 @@ resource submissionApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Services__ExamServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
             { name: 'Metered__ApiKey', secretRef: 'metered-api-key' }
             { name: 'Metered__AppDomain', value: meteredAppDomain }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]
@@ -462,6 +467,7 @@ resource resultApi 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Services__ExamServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/exam-api/method' }
             { name: 'Services__QuestionServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/question-api/method' }
             { name: 'Services__SubmissionServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/submission-api/method' }
+            { name: 'Services__NotificationServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/notification-api/method' }
           ]
         }
       ]
@@ -586,6 +592,9 @@ resource gateway 'Microsoft.App/containerApps@2023-05-01' = {
       activeRevisionsMode: 'Single'
       ingress: { external: true, targetPort: 8080, transport: 'auto' }
       dapr: { enabled: true, appId: 'gateway', appProtocol: 'http', appPort: 8080 }
+      secrets: [
+        { name: 'jwt-signing-key', value: jwtSigningKey }
+      ]
     }
     template: {
       containers: [
@@ -595,6 +604,9 @@ resource gateway 'Microsoft.App/containerApps@2023-05-01' = {
           resources: { cpu: json('0.25'), memory: '0.5Gi' }
           env: [
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Azure' }
+            { name: 'Jwt__Issuer', value: jwtIssuer }
+            { name: 'Jwt__Audience', value: jwtAudience }
+            { name: 'Jwt__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'Cors__AllowedOrigins', value: 'https://ca-frontend-${environmentName}.${internalDomain}' }
             { name: 'Services__UserServiceBaseUrl', value: 'http://localhost:3500/v1.0/invoke/user-api/method' }
             { name: 'ReverseProxy__Clusters__users-cluster__Destinations__users-api__Address', value: 'http://localhost:3500/v1.0/invoke/user-api/method' }

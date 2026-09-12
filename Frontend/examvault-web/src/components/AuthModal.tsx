@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react';
 import { Modal } from 'react-bootstrap';
+import { useQuery } from '@tanstack/react-query';
 import LoginForm from './auth/LoginForm';
 import RegisterForm from './auth/RegisterForm';
+import ForgotPasswordForm from './auth/ForgotPasswordForm';
 import BrandMark from './BrandMark';
+import { getPlatformBranding } from '../api/platformSettingsApi';
 
-export type AuthMode = 'login' | 'register';
+export type AuthMode = 'login' | 'register' | 'forgot-password';
 
 interface AuthModalProps {
   mode: AuthMode;
@@ -107,6 +110,16 @@ function AuthShell({ panel, onClose, children }: { panel: ReactNode; onClose: ()
 }
 
 export default function AuthModal({ mode, onClose }: AuthModalProps) {
+  // Real Platform Settings > General "Platform Name"/"Platform Tagline" -
+  // the one place this console shows them to someone who hasn't logged in
+  // yet. Falls back to the same static copy this modal always had while
+  // loading or if no admin has ever set a custom tagline.
+  const { data: branding } = useQuery({ queryKey: ['platform-branding'], queryFn: getPlatformBranding });
+  const platformName = branding?.platformName || 'ExamVault';
+  const tagline = branding?.platformTagline
+    ? branding.platformTagline
+    : `Join ${platformName} and simplify the way you create, conduct and analyze exams.`;
+
   if (mode === 'login') {
     return (
       <Modal show onHide={onClose} centered size="lg" contentClassName="p-0 overflow-hidden border-0">
@@ -134,6 +147,33 @@ export default function AuthModal({ mode, onClose }: AuthModalProps) {
     );
   }
 
+  if (mode === 'forgot-password') {
+    return (
+      <Modal show onHide={onClose} centered size="lg" contentClassName="p-0 overflow-hidden border-0">
+        <AuthShell
+          onClose={onClose}
+          panel={
+            <AuthPanel>
+              <DotGrid />
+              <div className="text-center">
+                <div className="d-flex justify-content-center mb-3">
+                  <BrandMark size={64} />
+                </div>
+                <h4 className="fw-bold mb-2">Reset Your Password</h4>
+                <p className="text-muted small">We'll help you get back into your account.</p>
+              </div>
+              <div className="d-flex justify-content-center">
+                <LockIllustration />
+              </div>
+            </AuthPanel>
+          }
+        >
+          <ForgotPasswordForm />
+        </AuthShell>
+      </Modal>
+    );
+  }
+
   return (
     <Modal show onHide={onClose} centered size="lg" contentClassName="p-0 overflow-hidden border-0">
       <AuthShell
@@ -148,9 +188,7 @@ export default function AuthModal({ mode, onClose }: AuthModalProps) {
               <h4 className="fw-bold mb-2">
                 Create Your <span className="text-primary">Account</span>
               </h4>
-              <p className="text-muted small">
-                Join ExamVault and simplify the way you create, conduct and analyze exams.
-              </p>
+              <p className="text-muted small">{tagline}</p>
             </div>
             <div className="d-flex justify-content-center">
               <ClipboardIllustration />

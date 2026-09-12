@@ -11,9 +11,12 @@ namespace OnlineExamSystem.ApiGateway.Multitenancy;
 // act on, since a service-to-service call could forge one.
 public class TenantResolutionMiddleware
 {
-    // The reserved entry point for Super Admin tenant-management screens
-    // (Phase 4) - it isn't itself a tenant, so it always passes through.
-    private static readonly string[] ReservedSlugs = ["platform"];
+    // Reserved, non-tenant hostnames under the wildcard domain: "platform" is
+    // the Super Admin entry point (Phase 4), "api" is this Gateway's own
+    // custom domain (api.examvaults.in), "www" is the frontend's apex alias.
+    // None of these are ever a real tenant slug, so all must always pass
+    // through unresolved rather than 404ing as an unknown organization.
+    private static readonly string[] ReservedSlugs = ["platform", "api", "www"];
 
     private readonly RequestDelegate _next;
 
@@ -51,11 +54,20 @@ public class TenantResolutionMiddleware
     internal static string? ExtractSubdomain(string host)
     {
         if (string.IsNullOrWhiteSpace(host)) return null;
-        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return null;
-        if (IPAddress.TryParse(host, out _)) return null;
-        if (host.EndsWith(".azurecontainerapps.io", StringComparison.OrdinalIgnoreCase)) return null;
 
-        var labels = host.Split('.');
+        // Strip port if present (e.g. "stanford.localhost:5000")
+        var cleanHost = host.Split(':')[0];
+        if (cleanHost.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return null;
+        if (IPAddress.TryParse(cleanHost, out _)) return null;
+        if (cleanHost.EndsWith(".azurecontainerapps.io", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var labels = cleanHost.Split('.');
+        // Support *.localhost (e.g. "stanford.localhost") in local dev
+        if (labels.Length == 2 && labels[1].Equals("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return labels[0];
+        }
+        // Support production domains (e.g. "stanford.examvaults.in" or "stanford.examvault.com")
         return labels.Length >= 3 ? labels[0] : null;
     }
 }

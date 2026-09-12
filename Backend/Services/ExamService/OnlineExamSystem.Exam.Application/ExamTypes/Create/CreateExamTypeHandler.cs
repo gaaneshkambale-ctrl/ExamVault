@@ -25,10 +25,21 @@ public class CreateExamTypeHandler
             return CreateExamTypeResult.Invalid(errors);
         }
 
+        var existingCodes = (await _examRepository.GetAllExamTypesAsync(cancellationToken)).Select(t => t.Code);
+        var code = ExamTypeCodeGenerator.Generate(command.Name, existingCodes);
+
         var examType = new Domain.Entities.ExamType
         {
             Name = command.Name,
+            Code = code,
+            IsActive = true,
             Purpose = command.Purpose,
+            DefaultDurationMinutes = command.DefaultDurationMinutes,
+            PassingScorePercent = command.PassingScorePercent,
+            DefaultMaxAttempts = command.DefaultMaxAttempts,
+            NegativeMarkingEnabled = command.NegativeMarkingEnabled,
+            NegativeMarkingValue = command.NegativeMarkingValue,
+            AutoSubmitEnabled = command.AutoSubmitEnabled,
         };
 
         await _examRepository.AddExamTypeAsync(examType, cancellationToken);

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, ListGroup, Row, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import SectionHeader from '../../components/SectionHeader';
+import { useAuth } from '../../hooks/useAuth';
 import { useExams } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
 import { useGroups } from '../../hooks/useGroups';
@@ -12,6 +14,32 @@ import { createNotification } from '../../api/notificationApi';
 import type { CreateNotificationResponse, NotificationSendToType } from '../../types/notification';
 import { containsExamFieldPlaceholder, substituteExamFields } from '../../utils/notificationTemplates';
 import { extractServerError } from '../../utils/apiError';
+
+function ComposerIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function OptionsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
+function SendIconHeader() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  );
+}
 
 function toDatetimeLocalValue(date: Date): string {
   const offset = date.getTimezoneOffset();
@@ -28,20 +56,33 @@ const DELIVERY_CHANNELS = [
 ] as const;
 
 export default function CreateNotification() {
+  const { user: currentUser } = useAuth();
+  // Instructor is restricted to "Own Exam notifications" - only
+  // ExamCandidates makes sense (AllStudents/Groups/SelectedStudents/Admins
+  // would let them broadcast beyond their own exam, which the backend now
+  // rejects outright - see CreateNotificationHandler). useUsers()/
+  // useGroups() are Admin-only endpoints Instructor has no permission for,
+  // so they're disabled entirely rather than left to 403 uselessly.
+  const isInstructor = currentUser?.role === 'Instructor';
   const { data: exams } = useExams();
-  const { data: users } = useUsers();
-  const { data: groups } = useGroups();
+  const { data: users } = useUsers(!isInstructor);
+  const { data: groups } = useGroups(!isInstructor);
+  // Notification Templates stays Admin-only per spec ("Notification
+  // Templates ❌") - GET admin/templates would 403 for Instructor, so the
+  // whole template-driven composer path is skipped for them; they type
+  // Title/Message directly instead (see canSubmit/NOTIFICATION_TYPE_FOR_INSTRUCTOR below).
   const { data: templates, isLoading: isLoadingTemplates } = useNotificationTemplates(
     undefined,
     undefined,
     undefined,
     'Active',
+    !isInstructor,
   );
 
   const [templateId, setTemplateId] = useState('');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
-  const [recipientKind, setRecipientKind] = useState<RecipientKind>('AllStudents');
+  const [recipientKind, setRecipientKind] = useState<RecipientKind>(isInstructor ? 'ExamCandidates' : 'AllStudents');
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [studentSearch, setStudentSearch] = useState('');
@@ -132,7 +173,7 @@ export default function CreateNotification() {
   const messageHasExamPlaceholder = containsExamFieldPlaceholder(title) || containsExamFieldPlaceholder(message);
 
   const canSubmit =
-    !!template &&
+    (!!template || isInstructor) &&
     title.trim().length > 0 &&
     message.trim().length > 0 &&
     (recipientKind !== 'SelectedStudents' || selectedUserIds.size > 0) &&
@@ -142,7 +183,7 @@ export default function CreateNotification() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!template) throw new Error('Select a notification template first.');
+      if (!template && !isInstructor) throw new Error('Select a notification template first.');
 
       let sendTo: NotificationSendToType;
       let userIds: string[] | null = null;
@@ -167,7 +208,10 @@ export default function CreateNotification() {
       return createNotification({
         title: finalTitle,
         message: finalMessage,
-        type: template.type,
+        // Instructor has no template to derive a type from (Notification
+        // Templates stays Admin-only) - their only sendTo is ExamCandidates,
+        // so "Exam" is always the correct type.
+        type: template?.type ?? 'Exam',
         sendTo,
         userIds,
         relatedExamId: relatedExamId || null,
@@ -186,13 +230,14 @@ export default function CreateNotification() {
 
   if (created) {
     return (
-      <AdminLayout active="Create Notification">
+      <RoleAwareLayout active="Create Notification">
         <Card className="border-0 shadow-sm">
           <Card.Body className="p-5 text-center">
             <div className="display-6 text-success mb-3">&#10003;</div>
             <h1 className="h4 fw-bold mb-2">Notification Sent</h1>
             <p className="text-muted mb-4">
-              Delivered to {created.recipientCount} recipient{created.recipientCount === 1 ? '' : 's'}.
+              Queued for {created.recipientCount} recipient{created.recipientCount === 1 ? '' : 's'}. Delivery
+              status will update in History shortly.
             </p>
             <div className="d-flex justify-content-center gap-2">
               <Link to={`/admin/notifications/history/${created.batchId}`} className="btn btn-primary">
@@ -204,17 +249,17 @@ export default function CreateNotification() {
             </div>
           </Card.Body>
         </Card>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
   if (isLoadingTemplates) {
     return (
-      <AdminLayout active="Create Notification">
+      <RoleAwareLayout active="Create Notification">
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
@@ -225,7 +270,7 @@ export default function CreateNotification() {
   );
 
   return (
-    <AdminLayout active="Create Notification">
+    <RoleAwareLayout active="Create Notification">
       <h1 className="h4 fw-bold mb-1 text-primary">Send Notification</h1>
       <p className="text-muted mb-4">Compose and send targeted in-app and email notifications.</p>
 
@@ -239,7 +284,7 @@ export default function CreateNotification() {
         <Col lg={8}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body className="p-4">
-              <h2 className="h6 fw-bold mb-3">Notification Composer</h2>
+              <SectionHeader icon={<ComposerIcon />} title="Notification Composer" />
               <Form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -247,19 +292,21 @@ export default function CreateNotification() {
                 }}
               >
                 <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-bold">Notification Type *</Form.Label>
-                      <Form.Select value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
-                        {(templates ?? []).map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </Form.Select>
-                    </Form.Group>
-                  </Col>
-                  <Col md={6}>
+                  {!isInstructor && (
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label className="fw-bold">Notification Type *</Form.Label>
+                        <Form.Select value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+                          {(templates ?? []).map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </Form.Select>
+                      </Form.Group>
+                    </Col>
+                  )}
+                  <Col md={isInstructor ? 12 : 6}>
                     <Form.Group className="mb-3">
                       <Form.Label className="fw-bold">Delivery Channels</Form.Label>
                       <Form.Select value={channel} onChange={(e) => setChannel(e.target.value as typeof channel)}>
@@ -279,20 +326,25 @@ export default function CreateNotification() {
                       <Form.Label className="fw-bold">Recipients *</Form.Label>
                       <Form.Select
                         value={recipientKind}
+                        disabled={isInstructor}
                         onChange={(e) => setRecipientKind(e.target.value as RecipientKind)}
                       >
-                        <option value="AllStudents">All Students</option>
-                        <option value="Groups">Groups / Batches</option>
-                        <option value="SelectedStudents">Individual Students</option>
+                        {!isInstructor && (
+                          <>
+                            <option value="AllStudents">All Students</option>
+                            <option value="Groups">Groups / Batches</option>
+                            <option value="SelectedStudents">Individual Students</option>
+                          </>
+                        )}
                         <option value="ExamCandidates">Exam Candidates</option>
-                        <option value="Admins">Admins</option>
+                        {!isInstructor && <option value="Admins">Admins</option>}
                       </Form.Select>
                     </Form.Group>
                   </Col>
                   <Col md={6}>
                     <Form.Group className="mb-3">
                       <Form.Label className="fw-bold">&nbsp;</Form.Label>
-                      <div className="form-control bg-light text-muted">
+                      <div className="form-control bg-body-tertiary text-muted">
                         {recipientCount === null
                           ? 'Recipients determined at send time'
                           : `${recipientCount} recipient${recipientCount === 1 ? '' : 's'} selected`}
@@ -400,7 +452,9 @@ export default function CreateNotification() {
                   </div>
                 </Form.Group>
 
-                <h2 className="h6 fw-bold mb-2 mt-4">Options</h2>
+                <div className="mt-4">
+                  <SectionHeader icon={<OptionsIcon />} title="Options" />
+                </div>
                 <ListGroup variant="flush" className="mb-3">
                   <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-2">
                     <span className={selectedChannel.sendEmail ? 'text-success' : 'text-muted'}>
@@ -474,7 +528,7 @@ export default function CreateNotification() {
         <Col lg={4}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body className="p-4">
-              <h2 className="h6 fw-bold mb-3">Delivery Summary</h2>
+              <SectionHeader icon={<SendIconHeader />} title="Delivery Summary" />
 
               <div className="text-muted small">Recipients</div>
               <div className="h5 fw-bold mb-3">
@@ -492,7 +546,7 @@ export default function CreateNotification() {
                 <Badge bg={canSubmit ? 'success' : 'secondary'}>{canSubmit ? 'Ready to Send' : 'Incomplete'}</Badge>
               </div>
 
-              <Card className="border-0" style={{ background: '#eef2ff' }}>
+              <Card className="border-0 bg-primary-subtle">
                 <Card.Body className="p-3">
                   <div className="fw-bold text-primary mb-2">Preview</div>
                   <div className="fw-bold small">{previewTitle}</div>
@@ -507,6 +561,6 @@ export default function CreateNotification() {
           </Card>
         </Col>
       </Row>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

@@ -9,8 +9,16 @@ namespace OnlineExamSystem.User.Application.Tests;
 
 public class RegisterUserHandlerTests
 {
-    private static RegisterUserHandler CreateHandler(FakeUserRepository repository, FakeEventPublisher? eventPublisher = null) =>
-        new(repository, new RegisterUserValidator(), new PasswordHasher<AppUser>(), eventPublisher ?? new FakeEventPublisher());
+    private static RegisterUserHandler CreateHandler(
+        FakeUserRepository repository,
+        FakeEventPublisher? eventPublisher = null,
+        FakePlatformSettingsRepository? platformSettingsRepository = null) =>
+        new(
+            repository,
+            new RegisterUserValidator(new FakePasswordPolicyProvider()),
+            new PasswordHasher<AppUser>(),
+            eventPublisher ?? new FakeEventPublisher(),
+            platformSettingsRepository ?? new FakePlatformSettingsRepository());
 
     [Fact]
     public async Task Valid_registration_creates_user_with_hashed_password()
@@ -70,5 +78,22 @@ public class RegisterUserHandlerTests
 
         Assert.False(result.Success);
         Assert.True(result.EmailAlreadyExists);
+    }
+
+    [Fact]
+    public async Task Registration_is_rejected_when_self_registration_is_disabled()
+    {
+        var repository = new FakeUserRepository();
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { AllowSelfRegistration = false },
+        };
+        var handler = CreateHandler(repository, platformSettingsRepository: platformSettings);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.Null(await repository.GetByEmailAsync("jane@example.com"));
     }
 }

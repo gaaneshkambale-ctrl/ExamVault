@@ -28,7 +28,13 @@ public class LogoutHandlerTests
 
         await logoutHandler.HandleAsync(new LogoutCommand(rawToken));
 
-        var refreshHandler = new RefreshTokenHandler(repository, new FakePlanRepository(), Jwt);
+        var refreshHandler = new RefreshTokenHandler(
+            repository,
+            new FakeTenantRepository(),
+            new FakePlanRepository(),
+            new FakeRolePermissionRepository(),
+            new FakePlatformSettingsRepository(),
+            Jwt);
         var result = await refreshHandler.HandleAsync(new RefreshTokenCommand(rawToken));
         Assert.False(result.Success);
     }

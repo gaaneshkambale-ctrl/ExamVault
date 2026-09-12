@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Card, ListGroup, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import { reorderSections } from '../../api/sectionApi';
 import { useSections } from '../../hooks/useSections';
 import type { SectionResponse } from '../../types/section';
@@ -53,7 +53,7 @@ export default function ReorderSections() {
   };
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Reorder Sections</h1>
         <p className="text-muted mb-0">Use the arrows to change the order sections appear in for students.</p>
@@ -120,6 +120,6 @@ export default function ReorderSections() {
           {saving ? 'Saving...' : 'Save Order'}
         </Button>
       </div>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

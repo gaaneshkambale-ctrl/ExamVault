@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import { useExams } from '../../hooks/useExams';
+import { usePermissions } from '../../hooks/usePermissions';
 import { getMyAttempt } from '../../api/submissionApi';
 import { getMyAssignmentForExam } from '../../api/assignmentApi';
 import { getAssignmentStatus } from '../../types/assignment';
@@ -14,13 +16,14 @@ const creationMethodLabel: Record<CreationMethod, string> = {
   AiGenerated: 'AI Generated',
 };
 
-type Tab = 'All' | 'Upcoming' | 'In Progress' | 'Completed' | 'Expired';
-const TABS: Tab[] = ['All', 'Upcoming', 'In Progress', 'Completed', 'Expired'];
+type Tab = 'All' | 'Upcoming' | 'Live' | 'In Progress' | 'Completed' | 'Expired';
+const TABS: Tab[] = ['All', 'Upcoming', 'Live', 'In Progress', 'Completed', 'Expired'];
 
-type RowStatus = 'Upcoming' | 'In Progress' | 'Completed' | 'Expired';
+type RowStatus = 'Upcoming' | 'Live' | 'In Progress' | 'Completed' | 'Expired';
 
 const statusVariant: Record<RowStatus, string> = {
   Upcoming: 'primary',
+  Live: 'info',
   'In Progress': 'warning',
   Completed: 'success',
   Expired: 'danger',
@@ -86,9 +89,11 @@ function timeLeftLabel(startedAtUtc: string | null, durationMinutes: number): st
   return `${Math.ceil(remainingMs / 60000)} min`;
 }
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE_OPTIONS = [6, 25, 50];
 
 export default function MyExams() {
+  const { hasPermission } = usePermissions();
+  const canViewResults = hasPermission('Results - View');
   const { data: exams, isLoading, isError } = useExams();
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab');
@@ -96,6 +101,7 @@ export default function MyExams() {
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<'All' | CreationMethod>('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   // Only Published exams are relevant to a student.
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
@@ -112,7 +118,7 @@ export default function MyExams() {
   // Exam wizard) overrides the exam's default - matches StartAttemptHandler's
   // `assignment?.MaxAttempts ?? exam.MaxAttempts` fallback on the backend.
   // Its start/end window also drives Start Date/Due Date and the
-  // Upcoming-vs-Expired split below, same reasoning Active Exams already
+  // Upcoming/Live/Expired split below, same reasoning Active Exams already
   // applies on the admin side (an exam's own startAtUtc/endAtUtc are rarely
   // set - the real window lives on the assignment).
   const assignmentQueries = useQueries({
@@ -134,8 +140,13 @@ export default function MyExams() {
 
     let rowStatus: RowStatus;
     if (!attempt) {
-      const windowExpired = !!(startAtUtc && endAtUtc) && getAssignmentStatus(startAtUtc, endAtUtc) === 'Expired';
-      rowStatus = windowExpired ? 'Expired' : 'Upcoming';
+      if (startAtUtc && endAtUtc) {
+        const windowStatus = getAssignmentStatus(startAtUtc, endAtUtc);
+        rowStatus = windowStatus === 'Expired' ? 'Expired' : windowStatus === 'Active' ? 'Live' : 'Upcoming';
+      } else {
+        // No scheduled window at all - nothing to wait for, so it's available now.
+        rowStatus = 'Live';
+      }
     } else if (attempt.attempt.status === 'InProgress') {
       rowStatus = 'In Progress';
     } else {
@@ -158,6 +169,7 @@ export default function MyExams() {
   const counts = {
     total: rows.length,
     upcoming: rows.filter((r) => r.rowStatus === 'Upcoming').length,
+    live: rows.filter((r) => r.rowStatus === 'Live').length,
     inProgress: rows.filter((r) => r.rowStatus === 'In Progress').length,
     completed: rows.filter((r) => r.rowStatus === 'Completed').length,
   };
@@ -179,11 +191,11 @@ export default function MyExams() {
     setPage(1);
   }, [tab, typeFilter, searchText]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredExams.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredExams.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedExams = filteredExams.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredExams.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredExams.length);
+  const pagedExams = filteredExams.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredExams.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredExams.length);
 
   const loading = isLoading || isLoadingAttempts;
 
@@ -193,7 +205,7 @@ export default function MyExams() {
       <p className="text-muted mb-4">View and start your assigned exams.</p>
 
       <Row className="g-3 mb-4">
-        <Col md={3}>
+        <Col md={4} lg>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Total Exams</div>
@@ -202,16 +214,25 @@ export default function MyExams() {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4} lg>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Upcoming</div>
               <div className="h4 fw-bold mb-0 text-primary">{counts.upcoming}</div>
-              <div className="text-muted small">Not started</div>
+              <div className="text-muted small">Not started yet</div>
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4} lg>
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small mb-1">Live</div>
+              <div className="h4 fw-bold mb-0 text-info">{counts.live}</div>
+              <div className="text-muted small">Ready to start</div>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col md={4} lg>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">In Progress</div>
@@ -220,7 +241,7 @@ export default function MyExams() {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4} lg>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               <div className="text-muted small mb-1">Completed</div>
@@ -274,6 +295,7 @@ export default function MyExams() {
               <Form.Select value={tab} onChange={(e) => setTab(e.target.value as Tab)}>
                 <option value="All">All Status</option>
                 <option value="Upcoming">Upcoming</option>
+                <option value="Live">Live</option>
                 <option value="In Progress">In Progress</option>
                 <option value="Completed">Completed</option>
                 <option value="Expired">Expired</option>
@@ -301,10 +323,10 @@ export default function MyExams() {
 
           {!loading && !isError && pagedExams.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Exam Details</th>
-                  <th>Type</th>
+                  <th>Exam Type</th>
                   <th>Duration</th>
                   <th>Start Date</th>
                   <th>Due Date</th>
@@ -316,7 +338,7 @@ export default function MyExams() {
                 {pagedExams.map((exam) => {
                   const start = formatDateTime(exam.startAtUtc);
                   const due = formatDateTime(exam.endAtUtc);
-                  const dueUrgent = exam.rowStatus === 'Upcoming' || exam.rowStatus === 'In Progress';
+                  const dueUrgent = exam.rowStatus === 'Live' || exam.rowStatus === 'In Progress';
                   return (
                     <tr key={exam.id}>
                       <td className="ps-4">
@@ -331,7 +353,7 @@ export default function MyExams() {
                           </div>
                         </div>
                       </td>
-                      <td>Online Exam</td>
+                      <td>{exam.examTypeName ?? '—'}</td>
                       <td>{exam.durationMinutes} min</td>
                       <td>
                         <div>{start.date}</div>
@@ -346,6 +368,14 @@ export default function MyExams() {
                       </td>
                       <td className="pe-4">
                         {exam.rowStatus === 'Upcoming' && (
+                          <div className="d-flex flex-column align-items-start gap-1">
+                            <span className="text-muted small">Not started yet</span>
+                            <Link to={`/exams/${exam.id}`} className="btn btn-link btn-sm p-0">
+                              View Details →
+                            </Link>
+                          </div>
+                        )}
+                        {exam.rowStatus === 'Live' && (
                           <div className="d-flex align-items-center gap-2">
                             <Link to={`/exams/${exam.id}`} className="btn btn-outline-primary btn-sm">
                               Start Exam
@@ -367,9 +397,11 @@ export default function MyExams() {
                         )}
                         {exam.rowStatus === 'Completed' && (
                           <div className="d-flex flex-column align-items-start gap-1">
-                            <Link to={`/results/${exam.id}`} className="btn btn-outline-secondary btn-sm">
-                              View Result →
-                            </Link>
+                            {canViewResults && (
+                              <Link to={`/results/${exam.id}`} className="btn btn-outline-secondary btn-sm">
+                                View Result →
+                              </Link>
+                            )}
                             {exam.hasRetakesLeft && (
                               <Link to={`/exams/${exam.id}`} className="btn btn-link btn-sm p-0">
                                 Retake Exam
@@ -389,23 +421,17 @@ export default function MyExams() {
       </Card>
 
       {!loading && !isError && filteredExams.length > 0 && (
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <div className="text-muted small">
-            Showing {rangeStart} to {rangeEnd} of {filteredExams.length} exams
-          </div>
-          <Pagination className="mb-0">
-            <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                {p}
-              </Pagination.Item>
-            ))}
-            <Pagination.Next
-              disabled={currentPage === totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            />
-          </Pagination>
-        </div>
+        <TablePagination
+          page={currentPage}
+          totalPages={totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          totalCount={filteredExams.length}
+          onPageChange={setPage}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setPageSize}
+        />
       )}
     </StudentLayout>
   );

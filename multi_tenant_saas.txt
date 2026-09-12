@@ -14,8 +14,8 @@ DECISIONS LOCKED IN (confirmed with the user before writing this plan)
    enforced by application code (every repository must filter by tenant),
    not by the database engine itself - Phase 2 below exists specifically
    to make it hard to forget that filter.
-2. Tenant identification: SUBDOMAIN PER ORG, e.g. stanford.examvault.com,
-   acmecorp.examvault.com. Resolved from the request's Host header before
+2. Tenant identification: SUBDOMAIN PER ORG, e.g. stanford.examvaults.in,
+   acmecorp.examvaults.in. Resolved from the request's Host header before
    auth even runs.
 3. Scope: FOUNDATION ONLY. Billing, subscription tiers, and payment
    collection are explicitly OUT of scope for this plan - a later plan,
@@ -198,7 +198,7 @@ PHASE 3 — Gateway + subdomain resolution
   take the subdomain into account so `GetByEmailAsync` is scoped to the
   right tenant BEFORE a token is even issued.
 - Azure Container Apps: the Gateway's ingress needs one or more custom
-  domains with wildcard DNS (`*.examvault.com` -> Gateway) plus a managed
+  domains with wildcard DNS (`*.examvaults.in` -> Gateway) plus a managed
   certificate - not configured today (Infra/env.bicep only outputs the
   default `*.azurecontainerapps.io` FQDN). This is an infra change, not
   just app code - flagged here so it's not discovered mid-implementation.
@@ -207,7 +207,7 @@ PHASE 4 — Frontend
 ------------------------------------------------------------------------
 - `axiosClient.ts` must stop relying purely on the build-time
   `VITE_API_BASE_URL` constant. Since the Gateway will sit behind ONE
-  wildcard domain (`*.examvault.com`) rather than a different backend
+  wildcard domain (`*.examvaults.in`) rather than a different backend
   per subdomain, the simplest fix is: keep `VITE_API_BASE_URL` pointing
   at the shared Gateway domain (not per-tenant), and let the Gateway's
   Host-header resolution (Phase 3) do the tenant split - meaning the
@@ -216,10 +216,10 @@ PHASE 4 — Frontend
   confirming during implementation once the exact DNS/ingress shape is
   decided - called out as the one piece of this plan with a real
   "decide when you get there" branch.
-- Login page: if arriving via `stanford.examvault.com`, the login form
+- Login page: if arriving via `stanford.examvaults.in`, the login form
   is implicitly scoped to that tenant (no visible change needed - the
   Gateway/User Service resolves tenant from the Host header server-side).
-  A super-admin login (platform.examvault.com or similar reserved
+  A super-admin login (platform.examvaults.in or similar reserved
   subdomain) is a second, separate flow into the new tenant-management
   screens from Phase 1.
 - New Super Admin screens (small, not a full redesign): list tenants,
@@ -287,7 +287,7 @@ branches above using the reasoning already written into Phase 3/4):
      this isn't a network call on every request. Unknown slug or
      `IsActive == false` -> reject with 404 before the request reaches
      any backend service.
-   - A reserved `platform` slug (e.g. `platform.examvault.com`) always
+   - A reserved `platform` slug (e.g. `platform.examvaults.in`) always
      passes through unresolved - it's the Super Admin's entry point
      (Phase 4 UI), not a tenant.
    - Per the design already settled above: this middleware does NOT
@@ -484,7 +484,7 @@ throwaway "Throwaway Verify Co" tenant, confirmed it appeared Active,
 added two admins to it (second one to see the now-fixed success message,
 both confirmed to exist in ExamVault.UserDb via direct SQL), deactivated
 it, confirmed the list flipped it to Inactive, and confirmed the Gateway
-immediately rejected `throwaway-verify.examvault.com` afterward (closing
+immediately rejected `throwaway-verify.examvaults.in` afterward (closing
 the Phase 3+4 loop for real, not just each phase in isolation). Also
 reconfirmed the pre-existing (not newly introduced) gap that
 `/dashboard`/`/exams`/`/results`/`/certificates`/`/notifications`/

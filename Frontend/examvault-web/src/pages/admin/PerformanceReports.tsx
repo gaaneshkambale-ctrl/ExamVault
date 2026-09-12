@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
+import TablePagination from '../../components/reports/TablePagination';
 import LineTrendChart from '../../components/charts/LineTrendChart';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
 import { TargetIcon, ArrowUpIcon, ArrowDownIcon, CheckCircleIcon, TrendingUpIcon } from '../../components/reports/ReportIcons';
@@ -13,6 +15,8 @@ import { SCORE_BUCKETS } from '../../utils/scoreBuckets';
 import { bucketByDay, computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 import type { AdminAttemptResultResponse } from '../../types/result';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function percentOf(r: AdminAttemptResultResponse): number {
   return r.totalMarks > 0 ? (r.totalScore / r.totalMarks) * 100 : 0;
@@ -25,6 +29,8 @@ export default function PerformanceReports() {
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [category, setCategory] = useState('All');
   const [examFilter, setExamFilter] = useState('All');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const filteredExamIds = useMemo(() => {
     const allowed = (exams ?? []).filter((e) => category === 'All' || e.category === category).map((e) => e.id);
@@ -108,8 +114,18 @@ export default function PerformanceReports() {
       });
   }, [exams, current.results, prior.results, filteredExamIds]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [category, examFilter, range]);
+
+  const totalPages = Math.max(1, Math.ceil(performanceByExam.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedPerformance = performanceByExam.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = performanceByExam.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, performanceByExam.length);
+
   return (
-    <AdminLayout active="Performance Reports">
+    <RoleAwareLayout active="Performance Reports">
       <h1 className="h4 fw-bold mb-1 text-primary">Performance Reports</h1>
       <p className="text-muted mb-4">Analyze performance trends and metrics.</p>
 
@@ -196,7 +212,7 @@ export default function PerformanceReports() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Performance Trend</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><TrendingUpIcon /></span>} title="Performance Trend" />
                   <LineTrendChart
                     series={[
                       { name: 'Average Score', color: '#4f46e5', data: trend.avgSeries, isPercent: true },
@@ -209,7 +225,7 @@ export default function PerformanceReports() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Score Range Analysis</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><TargetIcon /></span>} title="Score Range Analysis" />
                   <ScoreDistributionChart data={scoreRangeAnalysis} />
                 </Card.Body>
               </Card>
@@ -218,12 +234,14 @@ export default function PerformanceReports() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Performance by Exam</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<span className="text-primary d-flex"><ArrowUpIcon /></span>} title="Performance by Exam" />
+              </div>
               {performanceByExam.length === 0 ? (
                 <div className="text-center text-muted py-5">No attempts match your filters.</div>
               ) : (
                 <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th className="ps-4">Exam</th>
                       <th>Average Score</th>
@@ -234,7 +252,7 @@ export default function PerformanceReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {performanceByExam.map((p) => (
+                    {pagedPerformance.map((p) => (
                       <tr key={p.exam.id}>
                         <td className="ps-4 fw-medium">{p.exam.title}</td>
                         <td>{Math.round(p.averageScore)}%</td>
@@ -253,10 +271,25 @@ export default function PerformanceReports() {
                   </tbody>
                 </Table>
               )}
+              {performanceByExam.length > 0 && (
+                <div className="p-3">
+                  <TablePagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    totalCount={performanceByExam.length}
+                    onPageChange={setPage}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setPageSize}
+                  />
+                </div>
+              )}
             </Card.Body>
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

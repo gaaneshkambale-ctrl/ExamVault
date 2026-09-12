@@ -9,6 +9,13 @@ public class ExamPaper : TenantScopedEntity
     public string? ExamCode { get; set; }
     public string Description { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+
+    // Genuinely free-text (unlike Category, which is UI-constrained to
+    // EXAM_CATEGORIES) - comma-separated, single string column rather than
+    // a normalized many-to-many table, matching this codebase's own stated
+    // intent for Tags ("a simple string field... matching how Category is
+    // handled" per ActionPlan.txt) rather than building a full tagging system.
+    public string Tags { get; set; } = string.Empty;
     public bool ContainsSections { get; set; }
     public CreationMethod CreationMethod { get; set; } = CreationMethod.Manual;
     public Guid? ExamTypeId { get; set; }

@@ -109,7 +109,7 @@ export default function GradeAnswers() {
 
           {!isLoading && !isError && rows.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Student</th>
                   <th>Question</th>
@@ -154,7 +154,7 @@ export default function GradeAnswers() {
                       </td>
                       <td style={{ maxWidth: 360 }}>
                         <pre
-                          className="bg-light border rounded p-2 mb-0 small"
+                          className="bg-body-tertiary border rounded p-2 mb-0 small"
                           style={{ maxHeight: 200, overflow: 'auto' }}
                         >
                           {row.answerText}

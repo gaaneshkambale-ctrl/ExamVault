@@ -15,4 +15,10 @@ public class FakeUserDirectoryClient : IUserDirectoryClient
         string bearerToken,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(_users);
+
+    public Task<IReadOnlyList<UserDirectoryEntry>> GetStudentsAsync(
+        string bearerToken,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<UserDirectoryEntry>>(
+            _users.Where(u => string.Equals(u.Role, "Student", StringComparison.OrdinalIgnoreCase)).ToList());
 }

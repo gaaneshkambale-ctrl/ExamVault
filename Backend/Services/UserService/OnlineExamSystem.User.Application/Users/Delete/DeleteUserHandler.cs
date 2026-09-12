@@ -24,6 +24,6 @@ public class DeleteUserHandler
         await _userRepository.RemoveAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        return DeleteUserResult.Ok();
+        return DeleteUserResult.Ok(user.FullName);
     }
 }

@@ -54,7 +54,7 @@ public class PistonClient : IPistonClient
             body.Compile?.Code,
             body.Run.Stdout,
             body.Run.Stderr,
-            body.Run.Code);
+            body.Run.Code ?? -1);
     }
 
     private sealed class ExecuteRequest
@@ -100,6 +100,10 @@ public class PistonClient : IPistonClient
     {
         public string Stdout { get; init; } = string.Empty;
         public string Stderr { get; init; } = string.Empty;
-        public int Code { get; init; }
+
+        // Piston returns exactly one of code/signal - code is null when the
+        // process was killed by a signal (timeout, OOM, segfault) instead of
+        // exiting normally.
+        public int? Code { get; init; }
     }
 }

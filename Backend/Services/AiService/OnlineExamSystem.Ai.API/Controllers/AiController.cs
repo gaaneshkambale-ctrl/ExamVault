@@ -3,12 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Ai.Application.Generate;
 using OnlineExamSystem.Shared.Contracts.Responses.Ai;
 using ContractGenerateQuestionsRequest = OnlineExamSystem.Shared.Contracts.Requests.Ai.GenerateQuestionsRequest;
+using static OnlineExamSystem.Ai.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Ai.API.Controllers;
 
 [ApiController]
 [Route("api/ai")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Instructor")]
 public class AiController : ControllerBase
 {
     private readonly GenerateQuestionsHandler _generateQuestionsHandler;
@@ -21,6 +22,7 @@ public class AiController : ControllerBase
     }
 
     [HttpPost("generate-questions")]
+    [Authorize(Policy = QuestionsCreate)]
     public async Task<IActionResult> GenerateQuestions(
         ContractGenerateQuestionsRequest request,
         CancellationToken cancellationToken)

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Card, Col, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import PercentageRing from '../../components/PercentageRing';
 import { ViewIcon } from '../../components/icons/ActionIcons';
 import { useExams } from '../../hooks/useExams';
+import { usePermissions } from '../../hooks/usePermissions';
 import { getMyResult } from '../../api/resultApi';
 import { getMyAttempt } from '../../api/submissionApi';
 import type { CreationMethod } from '../../types/exam';
@@ -50,13 +52,15 @@ function ExamRowIcon() {
   );
 }
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE_OPTIONS = [5, 25, 50];
 const RECENT_COUNT = 5;
 
 export default function MyResults() {
+  const { hasPermission } = usePermissions();
   const { data: exams, isLoading: isLoadingExams } = useExams();
   const [tab, setTab] = useState<'All' | 'Recent'>('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
 
@@ -137,12 +141,24 @@ export default function MyResults() {
     setPage(1);
   }, [tab]);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const visibleRows =
-    tab === 'Recent' ? rows.slice(0, RECENT_COUNT) : rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = rows.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, rows.length);
+    tab === 'Recent' ? rows.slice(0, RECENT_COUNT) : rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = rows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, rows.length);
+
+  if (!hasPermission('Results - View')) {
+    return (
+      <StudentLayout active="My Results">
+        <h1 className="h4 fw-bold mb-1 text-primary">My Results</h1>
+        <Alert variant="warning" className="mb-0">
+          You don't currently have access to view results. Contact your organization's admin if you believe
+          this is a mistake.
+        </Alert>
+      </StudentLayout>
+    );
+  }
 
   return (
     <StudentLayout active="My Results">
@@ -226,7 +242,7 @@ export default function MyResults() {
 
               {!loading && visibleRows.length > 0 && (
                 <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th className="ps-4">Exam Title</th>
                       <th>Score</th>
@@ -301,26 +317,17 @@ export default function MyResults() {
           </Card>
 
           {!loading && tab === 'All' && rows.length > 0 && (
-            <div className="d-flex justify-content-between align-items-center mt-3">
-              <div className="text-muted small">
-                Showing {rangeStart} to {rangeEnd} of {rows.length} results
-              </div>
-              <Pagination className="mb-0">
-                <Pagination.Prev
-                  disabled={currentPage === 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                />
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                    {p}
-                  </Pagination.Item>
-                ))}
-                <Pagination.Next
-                  disabled={currentPage === totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                />
-              </Pagination>
-            </div>
+            <TablePagination
+              page={currentPage}
+              totalPages={totalPages}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              totalCount={rows.length}
+              onPageChange={setPage}
+              pageSize={pageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </Col>
 
