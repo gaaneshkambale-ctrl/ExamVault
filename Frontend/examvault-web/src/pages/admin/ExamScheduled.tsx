@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Badge, Button, Card, Col, Modal, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import MiniCalendar from '../../components/MiniCalendar';
 import { EditIcon } from '../../components/icons/ActionIcons';
 import { useAssignments, useCancelAssignment } from '../../hooks/useAssignments';
@@ -318,7 +318,7 @@ export default function ExamScheduled() {
   }
 
   return (
-    <AdminLayout active="Scheduled Exams">
+    <RoleAwareLayout active="Scheduled Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="h4 fw-bold mb-0 text-primary">Scheduled Exams</h1>
@@ -398,6 +398,6 @@ export default function ExamScheduled() {
           </Button>
         </Modal.Footer>
       </Modal>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

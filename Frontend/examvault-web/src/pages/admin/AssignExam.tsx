@@ -3,14 +3,14 @@ import type { ChangeEvent } from 'react';
 import { Alert, Button, Card, Col, Form, InputGroup, ListGroup, Nav, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import TablePagination from '../../components/reports/TablePagination';
 import { createAssignment, updateAssignment } from '../../api/assignmentApi';
 import { useAssignment } from '../../hooks/useAssignments';
 import { useExams } from '../../hooks/useExams';
 import { useGroups } from '../../hooks/useGroups';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
-import { useUsers } from '../../hooks/useUsers';
+import { useStudents } from '../../hooks/useUsers';
 import { useFeatures } from '../../hooks/useFeatures';
 import type { AssignmentTargetType, ExamAssignmentResponse } from '../../types/assignment';
 import { extractServerError } from '../../utils/apiError';
@@ -131,7 +131,7 @@ export default function AssignExam() {
     useAssignment(assignmentId);
   const { data: exams, isLoading: examsLoading } = useExams();
   const { data: groups } = useGroups();
-  const { data: users } = useUsers();
+  const { data: students = [] } = useStudents();
   const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
   const { hasFeature } = useFeatures();
   // Real gate, not cosmetic - Submission Service's JoinRecording now
@@ -208,7 +208,6 @@ export default function AssignExam() {
     setPrefilled(true);
   }, [isEditMode, existingAssignment, prefilled]);
 
-  const students = useMemo(() => (users ?? []).filter((u) => u.role === 'Student'), [users]);
   // Only Published exams are assignable - an assignment on a Draft/Archived
   // exam would be silently invisible to students, so it's excluded here
   // rather than allowed through and failing at submit time.
@@ -348,28 +347,28 @@ export default function AssignExam() {
 
   if (isEditMode && (assignmentLoading || !prefilled) && !assignmentError) {
     return (
-      <AdminLayout active="Exams">
+      <RoleAwareLayout active="Exams">
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
   if (isEditMode && assignmentError) {
     return (
-      <AdminLayout active="Exams">
+      <RoleAwareLayout active="Exams">
         <div className="text-center text-muted py-5">
           Couldn't load this assignment.{' '}
           <Link to="/admin/exams">Back to Exams</Link>
         </div>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
   if (createdAssignment) {
     return (
-      <AdminLayout active="Exams">
+      <RoleAwareLayout active="Exams">
         <Card className="border-0 shadow-sm mx-auto" style={{ maxWidth: 560 }}>
           <Card.Body className="p-4 text-center">
             <div
@@ -447,12 +446,12 @@ export default function AssignExam() {
             </div>
           </Card.Body>
         </Card>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <h1 className="h4 fw-bold mb-1 text-primary">{isEditMode ? 'Edit Assignment' : 'Assign Exam'}</h1>
       <p className="text-muted mb-4">
         {isEditMode
@@ -1149,6 +1148,6 @@ export default function AssignExam() {
           )}
         </div>
       </div>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

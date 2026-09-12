@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import TablePagination from '../../components/reports/TablePagination';
 import { DownloadIcon } from '../../components/icons/ActionIcons';
 import { useExamTypeReportData } from '../../hooks/useExamTypeReportData';
-import { useUsers } from '../../hooks/useUsers';
+import { useStudents } from '../../hooks/useUsers';
 import { exportRowsToCsv } from '../../utils/exportCsv';
 import { computePercentile, computeRank, getExamResultScheme } from '../../utils/examResultScheme';
 import type { AdminAttemptResultResponse } from '../../types/result';
@@ -19,7 +19,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50];
 export default function ExamTypeStudentPerformance() {
   const { typeId } = useParams<{ typeId: string }>();
   const { examType, examsOfType, resultsOfType, isLoading: isLoadingType } = useExamTypeReportData(typeId);
-  const { data: users, isLoading: isLoadingUsers } = useUsers();
+  const { data: users, isLoading: isLoadingUsers } = useStudents();
   const loading = isLoadingType || isLoadingUsers;
   const scheme = getExamResultScheme(examType?.name);
 
@@ -29,7 +29,7 @@ export default function ExamTypeStudentPerformance() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
-  const students = useMemo(() => (users ?? []).filter((u) => u.role === 'Student'), [users]);
+  const students = useMemo(() => users ?? [], [users]);
 
   // Rank/Percentile only make sense within one exam's cohort (different
   // exams in the same type can have different max marks/difficulty), so
@@ -96,7 +96,7 @@ export default function ExamTypeStudentPerformance() {
   const rangeEnd = Math.min(currentPage * pageSize, rows.length);
 
   return (
-    <AdminLayout active="Exam Type Performance">
+    <RoleAwareLayout active="Exam Type Performance">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
           <p className="text-muted small mb-1">Reports / By Exam Type / Student Performance</p>
@@ -272,6 +272,6 @@ export default function ExamTypeStudentPerformance() {
           </Card.Body>
         </Card>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

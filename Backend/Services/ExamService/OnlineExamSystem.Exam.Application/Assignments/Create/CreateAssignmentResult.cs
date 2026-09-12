@@ -8,6 +8,7 @@ public class CreateAssignmentResult
     public bool IsExamNotFound { get; init; }
     public bool IsExamNotPublished { get; init; }
     public bool IsGroupNotFound { get; init; }
+    public bool IsForbidden { get; init; }
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
     public ExamAssignment? Assignment { get; init; }
     public IReadOnlyList<Guid> TargetUserIds { get; init; } = Array.Empty<Guid>();
@@ -24,4 +25,6 @@ public class CreateAssignmentResult
     public static CreateAssignmentResult ExamNotPublished() => new() { IsExamNotPublished = true };
 
     public static CreateAssignmentResult GroupNotFound() => new() { IsGroupNotFound = true };
+
+    public static CreateAssignmentResult Forbidden() => new() { IsForbidden = true };
 }

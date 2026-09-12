@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import { updateExam } from '../../api/examApi';
 import { createNotification } from '../../api/notificationApi';
@@ -140,7 +140,7 @@ export default function PublishResults() {
   const rows = activeTab === 'ready' ? readyExams : publishedExams;
 
   return (
-    <AdminLayout active="Publish Results">
+    <RoleAwareLayout active="Publish Results">
       <h1 className="h4 fw-bold mb-1 text-primary">Publish Results</h1>
       <p className="text-muted mb-4">Review and publish exam results to students.</p>
 
@@ -334,6 +334,6 @@ export default function PublishResults() {
           </Card.Body>
         </Card>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

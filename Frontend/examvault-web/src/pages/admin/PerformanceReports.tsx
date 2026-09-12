@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
@@ -125,7 +125,7 @@ export default function PerformanceReports() {
   const rangeEnd = Math.min(currentPage * pageSize, performanceByExam.length);
 
   return (
-    <AdminLayout active="Performance Reports">
+    <RoleAwareLayout active="Performance Reports">
       <h1 className="h4 fw-bold mb-1 text-primary">Performance Reports</h1>
       <p className="text-muted mb-4">Analyze performance trends and metrics.</p>
 
@@ -290,6 +290,6 @@ export default function PerformanceReports() {
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

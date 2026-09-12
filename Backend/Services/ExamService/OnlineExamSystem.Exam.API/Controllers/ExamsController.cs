@@ -133,10 +133,17 @@ public class ExamsController : ControllerBase
 
     // SuperAdmin/Admin get unrestricted tenant-wide (or cross-tenant, for
     // SuperAdmin - GetAllAsync's own EF query filter IsSuperAdmin bypass is
-    // what actually scopes that) access. Instructor is now scoped to exams
-    // they created themselves - same ownership principle Update enforces.
-    // Student keeps its separate published+assigned scope (handled inside
-    // the handlers, not here).
+    // what actually scopes that) access. Instructor is scoped to exams they
+    // created themselves - a scoped teaching role, not a second Admin (see
+    // the "Instructor role model" plan in ActionPlan.txt: an instructor
+    // should only ever see/manage/report on exams they own or are
+    // explicitly assigned to, enforced server-side, not just hidden menu
+    // items). Reports/Results for an instructor's own exams are reachable
+    // from this same owned-only exam list - see that plan for the still-
+    // outstanding work extending the same ownership check to Questions,
+    // Live Monitoring, and Results/Reports themselves. Student keeps its
+    // separate published+assigned scope (handled inside the handlers, not
+    // here).
     private ExamAccessScope GetCallerExamAccessScope() =>
         User.IsInRole("Admin") || User.IsInRole("SuperAdmin")
             ? ExamAccessScope.All
@@ -226,18 +233,30 @@ public class ExamsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
 
-        var result = await _deleteExamHandler.HandleAsync(new DeleteExamCommand(id, bearerToken), cancellationToken);
+        // Instructor is restricted to exams they created themselves, same
+        // ownership rule Update/ChangeStatus already enforce; Admin/
+        // SuperAdmin remain unrestricted (null = no ownership check).
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
+        var result = await _deleteExamHandler.HandleAsync(new DeleteExamCommand(id, bearerToken, ownerUserId), cancellationToken);
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Exam not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         _logger.LogInformation("Exam {ExamId} deleted.", id);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
@@ -43,7 +43,7 @@ export default function ExamTypeWiseReport() {
   const rangeEnd = Math.min(currentPage * pageSize, rows.length);
 
   return (
-    <AdminLayout active="Exam Type Performance">
+    <RoleAwareLayout active="Exam Type Performance">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
           <p className="text-muted small mb-1">Reports / By Exam Type</p>
@@ -221,6 +221,6 @@ export default function ExamTypeWiseReport() {
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

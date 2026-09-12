@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import TablePagination from '../../components/reports/TablePagination';
 import { useNotificationHistory, useNotificationHistoryStats } from '../../hooks/useNotifications';
@@ -78,7 +78,7 @@ export default function NotificationHistory() {
   const resetPage = () => setPage(1);
 
   return (
-    <AdminLayout active="History">
+    <RoleAwareLayout active="History">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="h4 fw-bold mb-1 text-primary">Notification History</h1>
@@ -322,6 +322,6 @@ export default function NotificationHistory() {
           </Button>
         </Modal.Footer>
       </Modal>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
@@ -9,7 +9,7 @@ import DonutChart from '../../components/charts/DonutChart';
 import { ViewIcon, UsersIcon } from '../../components/icons/ActionIcons';
 import { UserCheckIcon, TargetIcon, CheckCircleIcon, AlertTriangleIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
-import { useUsers } from '../../hooks/useUsers';
+import { useStudents } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
@@ -39,7 +39,7 @@ interface StudentAgg {
 
 export default function StudentReports() {
   const { data: exams } = useExams();
-  const { data: users, isLoading: isLoadingUsers } = useUsers();
+  const { data: users, isLoading: isLoadingUsers } = useStudents();
   const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(exams);
 
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
@@ -50,7 +50,7 @@ export default function StudentReports() {
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const loading = isLoadingUsers || isLoadingResults;
-  const students = useMemo(() => (users ?? []).filter((u) => u.role === 'Student'), [users]);
+  const students = useMemo(() => users ?? [], [users]);
 
   const buildAggregates = useCallback(
     (r: DateRange): StudentAgg[] => {
@@ -135,7 +135,7 @@ export default function StudentReports() {
   const rangeEnd = Math.min(currentPage * pageSize, activeStudents.length);
 
   return (
-    <AdminLayout active="Student Reports">
+    <RoleAwareLayout active="Student Reports">
       <h1 className="h4 fw-bold mb-1 text-primary">Student Reports</h1>
       <p className="text-muted mb-4">Detailed performance and activity reports for students.</p>
 
@@ -387,6 +387,6 @@ export default function StudentReports() {
           )}
         </Modal.Body>
       </Modal>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

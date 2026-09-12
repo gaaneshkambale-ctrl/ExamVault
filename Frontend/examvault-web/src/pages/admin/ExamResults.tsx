@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Dropdown, Form, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
@@ -17,7 +17,7 @@ import {
   ActivityIcon,
 } from '../../components/reports/ReportIcons';
 import { useExams, useExamTypes } from '../../hooks/useExams';
-import { useUsers } from '../../hooks/useUsers';
+import { useStudents } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { computeDelta, getCalendarMonthWindows, getDefaultRange, bucketByDay, isWithinRange } from '../../utils/dateRange';
@@ -77,7 +77,7 @@ function KebabIcon() {
 export default function ExamResults() {
   const { data: exams, isLoading: isLoadingExams } = useExams();
   const { data: examTypes } = useExamTypes();
-  const { data: users } = useUsers();
+  const { data: users } = useStudents();
   const examIds = useMemo(() => (exams ?? []).map((e) => e.id), [exams]);
   const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(exams);
   const { attemptsByExam, isLoading: isLoadingAttempts } = useAttemptsByExam(examIds);
@@ -317,7 +317,7 @@ export default function ExamResults() {
   const rangeEnd = Math.min(currentPage * pageSize, filteredExamStats.length);
 
   return (
-    <AdminLayout active="Exam Results">
+    <RoleAwareLayout active="Exam Results">
       <div className="text-muted small mb-2">Results / Exam Results</div>
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
         <div>
@@ -672,6 +672,6 @@ export default function ExamResults() {
           </Card>
         </Col>
       </Row>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

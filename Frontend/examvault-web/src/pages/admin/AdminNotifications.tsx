@@ -1,10 +1,10 @@
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import NotificationsListContent from '../../components/notifications/NotificationsListContent';
 
 export default function AdminNotifications() {
   return (
-    <AdminLayout active="Notifications">
+    <RoleAwareLayout active="Notifications">
       <NotificationsListContent />
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

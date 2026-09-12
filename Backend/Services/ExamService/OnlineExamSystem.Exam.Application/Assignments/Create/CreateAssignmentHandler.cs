@@ -49,6 +49,11 @@ public class CreateAssignmentHandler
             return CreateAssignmentResult.ExamNotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return CreateAssignmentResult.Forbidden();
+        }
+
         if (exam.Status != ExamStatus.Published)
         {
             return CreateAssignmentResult.ExamNotPublished();

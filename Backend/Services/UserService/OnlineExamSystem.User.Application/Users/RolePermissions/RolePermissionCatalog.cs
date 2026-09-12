@@ -3,14 +3,16 @@ using OnlineExamSystem.User.Domain.Enums;
 namespace OnlineExamSystem.User.Application.Users.RolePermissions;
 
 // Server-side mirror of the frontend's constants/cosmeticRolePermissions.ts
-// - kept in sync manually. Most of these 12 permissions are still a
-// persisted preview only (not enforced) - "Users - View"/"Users - Edit" are
-// the Phase 1 exception, actually checked via PermissionPolicies. The role
-// list and permission keys here are also the allow-list
-// UpdateRolePermissionsValidator checks against, and DefaultsForRole is the
-// one-time seed GetAllRolePermissionsHandler writes the first time a tenant
-// ever touches this feature (and the fallback GetForRoleAsync uses for a
-// tenant that never has).
+// - kept in sync manually. Most of these are genuinely enforced server-side
+// via each service's own PermissionPolicies.cs (ExamService, QuestionService,
+// ResultService, UserService, SubmissionService) - "Dashboard - View" and
+// "Certificates - View" are the only two still a persisted preview only,
+// with no backend policy wired to them yet. The role list and permission
+// keys here are also the allow-list UpdateRolePermissionsValidator checks
+// against, and DefaultsForRole is the one-time seed
+// GetAllRolePermissionsHandler writes the first time a tenant ever touches
+// this feature (and the fallback GetForRoleAsync uses for a tenant that
+// never has).
 public static class RolePermissionCatalog
 {
     // The real UserRole enum has no space ("SuperAdmin"); the catalog's
@@ -51,14 +53,18 @@ public static class RolePermissionCatalog
         "Dashboard - View",
         "Exams - Create",
         "Exams - Edit",
+        "Assignments - Manage",
         "Questions - Create",
         "Questions - Edit",
         "Results - View",
+        "Live Monitoring - View",
+        "Security Violations - View",
         "Users - View",
         "Users - Edit",
         "Settings - View",
         "Settings - Edit",
         "Reports - View",
+        "Notifications - Create",
         "Certificates - View",
     ];
 
@@ -69,7 +75,9 @@ public static class RolePermissionCatalog
         "Instructor" =>
         [
             "Dashboard - View", "Exams - Create", "Exams - Edit",
-            "Questions - Create", "Questions - Edit", "Results - View",
+            "Assignments - Manage", "Questions - Create", "Questions - Edit",
+            "Results - View", "Live Monitoring - View", "Security Violations - View",
+            "Reports - View", "Notifications - Create",
         ],
         "Student" => ["Dashboard - View", "Results - View", "Certificates - View"],
         "Viewer" => ["Dashboard - View", "Results - View", "Reports - View"],

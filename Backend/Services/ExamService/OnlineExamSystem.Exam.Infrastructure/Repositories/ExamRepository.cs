@@ -204,21 +204,30 @@ public class ExamRepository : IExamRepository
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<AssignmentWithExamTitle>> GetAllAssignmentsAsync(
+        Guid? ownerUserId = null,
         CancellationToken cancellationToken = default)
     {
         var assignments = await _dbContext.ExamAssignments
             .OrderByDescending(a => a.CreatedAtUtc)
             .ToListAsync(cancellationToken);
-        var examTitles = await _dbContext.Exams.ToDictionaryAsync(e => e.Id, e => e.Title, cancellationToken);
+        var examInfo = await _dbContext.Exams
+            .ToDictionaryAsync(e => e.Id, e => new { e.Title, e.CreatedByUserId }, cancellationToken);
         var targetCounts = await _dbContext.ExamAssignmentTargets
             .GroupBy(t => t.ExamAssignmentId)
             .Select(g => new { AssignmentId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(g => g.AssignmentId, g => g.Count, cancellationToken);
 
+        if (ownerUserId is { } owner)
+        {
+            assignments = assignments
+                .Where(a => examInfo.TryGetValue(a.ExamId, out var info) && info.CreatedByUserId == owner)
+                .ToList();
+        }
+
         return assignments
             .Select(a => new AssignmentWithExamTitle(
                 a,
-                examTitles.GetValueOrDefault(a.ExamId, "Unknown Exam"),
+                examInfo.TryGetValue(a.ExamId, out var info) ? info.Title : "Unknown Exam",
                 targetCounts.GetValueOrDefault(a.Id)))
             .ToList();
     }

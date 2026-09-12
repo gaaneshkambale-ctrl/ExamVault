@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Card, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportTabs from '../../components/reports/ReportTabs';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
@@ -67,7 +67,7 @@ export default function ExamTypeComparison() {
   }, [chartData, tab]);
 
   return (
-    <AdminLayout active="Exam Type Performance">
+    <RoleAwareLayout active="Exam Type Performance">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
           <p className="text-muted small mb-1">Reports / By Exam Type / Comparison</p>
@@ -118,6 +118,6 @@ export default function ExamTypeComparison() {
           )}
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

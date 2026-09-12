@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Card, Col, Modal, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import { useNotificationBatchDetails } from '../../hooks/useNotifications';
 import { deleteNotificationBatch, resendNotificationBatch } from '../../api/notificationApi';
@@ -44,7 +44,7 @@ export default function NotificationBatchDetails() {
   });
 
   return (
-    <AdminLayout active="History">
+    <RoleAwareLayout active="History">
       <Link to="/admin/notifications/history" className="text-decoration-none small d-inline-block mb-3">
         &larr; Back to History
       </Link>
@@ -197,6 +197,6 @@ export default function NotificationBatchDetails() {
           </Button>
         </Modal.Footer>
       </Modal>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

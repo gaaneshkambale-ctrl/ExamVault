@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Card, Col, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import ReportTabs from '../../components/reports/ReportTabs';
@@ -97,7 +97,7 @@ export default function ExamTypeQuestionAnalysis() {
   }, [questionAggs, resultsOfType]);
 
   return (
-    <AdminLayout active="Exam Type Performance">
+    <RoleAwareLayout active="Exam Type Performance">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
           <p className="text-muted small mb-1">Reports / By Exam Type / Question Analysis</p>
@@ -304,6 +304,6 @@ export default function ExamTypeQuestionAnalysis() {
           )}
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

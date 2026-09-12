@@ -10,6 +10,7 @@ public static class PermissionPolicies
 {
     public const string ExamsCreate = "Permission:Exams-Create";
     public const string ExamsEdit = "Permission:Exams-Edit";
+    public const string AssignmentsManage = "Permission:Assignments-Manage";
     public const string SettingsView = "Permission:Settings-View";
     public const string SettingsEdit = "Permission:Settings-Edit";
 
@@ -17,6 +18,7 @@ public static class PermissionPolicies
     {
         options.AddPolicy(ExamsCreate, policy => policy.RequireAssertion(RequiresPermission("Exams - Create")));
         options.AddPolicy(ExamsEdit, policy => policy.RequireAssertion(RequiresPermission("Exams - Edit")));
+        options.AddPolicy(AssignmentsManage, policy => policy.RequireAssertion(RequiresPermission("Assignments - Manage")));
         options.AddPolicy(SettingsView, policy => policy.RequireAssertion(RequiresPermission("Settings - View")));
         options.AddPolicy(SettingsEdit, policy => policy.RequireAssertion(RequiresPermission("Settings - Edit")));
     }

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../../layouts/AdminLayout';
+import RoleAwareLayout from '../../../layouts/RoleAwareLayout';
 import UserAvatar from '../../../components/UserAvatar';
+import { useAuth } from '../../../hooks/useAuth';
 import { useExams } from '../../../hooks/useExams';
-import { useUsers } from '../../../hooks/useUsers';
+import { useStudents } from '../../../hooks/useUsers';
 import { useViolationsByExam } from '../../../hooks/useSubmissions';
 import { updateViolationStatus } from '../../../api/submissionApi';
 import { severityVariant, violationDescription, violationLabel } from '../../../utils/proctoring';
@@ -20,7 +21,17 @@ function formatTime(value: string): string {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function StatusAction({ violation }: { violation: ViolationEventResponse }) {
+const STATUS_BADGE: Record<ViolationStatus, { bg: string; text: string; label: string }> = {
+  Open: { bg: 'danger-subtle', text: 'danger-emphasis', label: 'Open' },
+  UnderInvestigation: { bg: 'warning-subtle', text: 'warning-emphasis', label: 'Under Investigation' },
+  Resolved: { bg: 'success-subtle', text: 'success-emphasis', label: 'Resolved' },
+};
+
+// Updating a violation's status stays an Admin-only action server-side
+// (UpdateViolationStatus) - the spec grants Instructor "Security Violations
+// ✅ Own Exams" as a view, not a triage workflow, so Instructor sees the
+// same status as a plain badge instead of a button that would 403.
+function StatusAction({ violation, canManage }: { violation: ViolationEventResponse; canManage: boolean }) {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (status: ViolationStatus) => updateViolationStatus(violation.id, status),
@@ -29,10 +40,11 @@ function StatusAction({ violation }: { violation: ViolationEventResponse }) {
     },
   });
 
-  if (violation.status === 'Resolved') {
+  if (!canManage || violation.status === 'Resolved') {
+    const badge = STATUS_BADGE[violation.status];
     return (
-      <Badge bg="success-subtle" text="success-emphasis">
-        Resolved
+      <Badge bg={badge.bg} text={badge.text}>
+        {badge.label}
       </Badge>
     );
   }
@@ -58,8 +70,10 @@ function StatusAction({ violation }: { violation: ViolationEventResponse }) {
 }
 
 export default function SecurityViolations() {
+  const { user: currentUser } = useAuth();
+  const canManage = currentUser?.role === 'Admin';
   const { data: exams, isLoading: isLoadingExams, isError: isExamsError } = useExams();
-  const { data: users } = useUsers();
+  const { data: users } = useStudents();
   const [searchText, setSearchText] = useState('');
   const [examFilter, setExamFilter] = useState('All');
   const [severityFilter, setSeverityFilter] = useState<'All' | ViolationSeverity>('All');
@@ -139,7 +153,7 @@ export default function SecurityViolations() {
   const loading = isLoadingExams || isLoadingViolations;
 
   return (
-    <AdminLayout active="Security Violations">
+    <RoleAwareLayout active="Security Violations">
       <h1 className="h4 fw-bold mb-1 text-primary">Security Violations</h1>
       <p className="text-muted mb-4">Live feed of proctoring violations across all active exams.</p>
 
@@ -275,7 +289,7 @@ export default function SecurityViolations() {
                       </td>
                       <td>{formatTime(violation.detectedAtUtc)}</td>
                       <td className="pe-4">
-                        <StatusAction violation={violation} />
+                        <StatusAction violation={violation} canManage={canManage} />
                       </td>
                     </tr>
                   );
@@ -325,6 +339,6 @@ export default function SecurityViolations() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

@@ -7,7 +7,7 @@ import { CheckCircleIcon, MinusCircleIcon } from '../../components/reports/Repor
 import { useAuth } from '../../hooks/useAuth';
 import { useUsers } from '../../hooks/useUsers';
 import { useRolePermissions, useUpdateRolePermissions } from '../../hooks/useRolePermissions';
-import { BarChartIcon, EditIcon, UsersIcon } from '../../components/icons/ActionIcons';
+import { BarChartIcon, EditIcon, SendIcon, ShieldIcon, UsersIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import {
   COSMETIC_PERMISSIONS,
   COSMETIC_ROLE_PERMISSIONS,
@@ -106,6 +106,15 @@ function ShieldCheckIcon() {
   );
 }
 
+function BellIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
 interface PermissionModule {
   name: string;
   icon: ReactNode;
@@ -120,11 +129,15 @@ interface PermissionModule {
 const PERMISSION_MODULES: PermissionModule[] = [
   { name: 'Dashboard', icon: <GridIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', permissions: ['Dashboard - View'] },
   { name: 'Exams', icon: <ClipboardIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', permissions: ['Exams - Create', 'Exams - Edit'] },
+  { name: 'Assignments', icon: <SendIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', permissions: ['Assignments - Manage'] },
   { name: 'Questions', icon: <QuestionCircleIcon />, iconBg: '#ecfdf5', iconColor: '#059669', permissions: ['Questions - Create', 'Questions - Edit'] },
   { name: 'Results', icon: <BarChartIcon />, iconBg: '#fff7ed', iconColor: '#d97706', permissions: ['Results - View'] },
+  { name: 'Live Monitoring', icon: <ViewIcon />, iconBg: '#fff7ed', iconColor: '#d97706', permissions: ['Live Monitoring - View'] },
+  { name: 'Security', icon: <ShieldIcon />, iconBg: '#fef2f2', iconColor: '#dc2626', permissions: ['Security Violations - View'] },
   { name: 'Users', icon: <UsersIcon />, iconBg: '#ede9fe', iconColor: '#7c3aed', permissions: ['Users - View', 'Users - Edit'] },
   { name: 'Settings', icon: <GearIcon />, iconBg: '#e0f2fe', iconColor: '#0284c7', permissions: ['Settings - View', 'Settings - Edit'] },
   { name: 'Reports', icon: <DocumentIcon />, iconBg: '#ecfdf5', iconColor: '#059669', permissions: ['Reports - View'] },
+  { name: 'Notifications', icon: <BellIcon />, iconBg: '#fef9c3', iconColor: '#ca8a04', permissions: ['Notifications - Create'] },
   { name: 'Certificates', icon: <ShieldCheckIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', permissions: ['Certificates - View'] },
 ];
 
@@ -217,8 +230,18 @@ export default function RolesPermissions() {
     return matchesSearch && matchesStatus;
   });
 
+  // What a role is even allowed to have - reuses the same per-role default
+  // arrays (ADMIN_PERMISSIONS/INSTRUCTOR_PERMISSIONS/STUDENT_PERMISSIONS)
+  // that already encode "what makes sense for this role" (e.g. Certificates
+  // - View is Student-only). Scopes the edit modal to just those, instead of
+  // showing all 15 permissions - including ones that don't apply to the role
+  // being edited at all (Users - View for Instructor, say) - for every role.
+  const allowedPermissionsForRole = (role: string): string[] =>
+    roles.find((r) => r.role === role)?.defaultPermissions ?? [...COSMETIC_PERMISSIONS];
+
   const openEdit = (role: string, fallback: string[]) => {
-    setDraftPermissions(new Set(permissionsFor(role, fallback)));
+    const allowed = new Set(allowedPermissionsForRole(role));
+    setDraftPermissions(new Set(permissionsFor(role, fallback).filter((p) => allowed.has(p))));
     setEditingRole(role);
   };
 
@@ -441,30 +464,38 @@ export default function RolesPermissions() {
 
           <div className="fw-bold mb-2">Permission Modules</div>
           <Row className="g-4">
-            {PERMISSION_MODULES.map((mod) => (
-              <Col xs={12} md={4} key={mod.name}>
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <div
-                    className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
-                    style={{ width: 28, height: 28, background: mod.iconBg, color: mod.iconColor }}
-                  >
-                    {mod.icon}
-                  </div>
-                  <span className="fw-medium small">{mod.name}</span>
-                </div>
-                {mod.permissions.map((perm) => (
-                  <Form.Check
-                    key={perm}
-                    type="checkbox"
-                    id={`edit-perm-${perm}`}
-                    label={perm}
-                    className="mb-1"
-                    checked={draftPermissions.has(perm)}
-                    onChange={() => togglePermission(perm)}
-                  />
-                ))}
-              </Col>
-            ))}
+            {editingRole &&
+              (() => {
+                const allowed = new Set(allowedPermissionsForRole(editingRole));
+                return PERMISSION_MODULES.map((mod) => {
+                  const modulePermissions = mod.permissions.filter((perm) => allowed.has(perm));
+                  if (modulePermissions.length === 0) return null;
+                  return (
+                    <Col xs={12} md={4} key={mod.name}>
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <div
+                          className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                          style={{ width: 28, height: 28, background: mod.iconBg, color: mod.iconColor }}
+                        >
+                          {mod.icon}
+                        </div>
+                        <span className="fw-medium small">{mod.name}</span>
+                      </div>
+                      {modulePermissions.map((perm) => (
+                        <Form.Check
+                          key={perm}
+                          type="checkbox"
+                          id={`edit-perm-${perm}`}
+                          label={perm}
+                          className="mb-1"
+                          checked={draftPermissions.has(perm)}
+                          onChange={() => togglePermission(perm)}
+                        />
+                      ))}
+                    </Col>
+                  );
+                });
+              })()}
           </Row>
         </Modal.Body>
         <Modal.Footer>

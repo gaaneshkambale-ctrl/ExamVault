@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Pagination, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../../layouts/AdminLayout';
+import RoleAwareLayout from '../../../layouts/RoleAwareLayout';
 import UserAvatar from '../../../components/UserAvatar';
 import { ViewIcon } from '../../../components/icons/ActionIcons';
 import { useExams } from '../../../hooks/useExams';
-import { useUsers } from '../../../hooks/useUsers';
+import { useStudents } from '../../../hooks/useUsers';
 import { useQuestionCountsByExam } from '../../../hooks/useQuestions';
 import { useAttemptsWithAnswersByExam } from '../../../hooks/useSubmissions';
 import { attemptViolationCount, getRiskLevel, type RiskLevel } from '../../../utils/proctoring';
@@ -44,7 +44,7 @@ interface AttemptRow {
 
 export default function StudentAttempts() {
   const { data: exams, isLoading: isLoadingExams, isError: isExamsError } = useExams();
-  const { data: users } = useUsers();
+  const { data: users } = useStudents();
   const [searchText, setSearchText] = useState('');
   const [riskOnly, setRiskOnly] = useState(false);
   const [examFilter, setExamFilter] = useState('All');
@@ -154,7 +154,7 @@ export default function StudentAttempts() {
   const loading = isLoadingExams || isLoadingAttempts;
 
   return (
-    <AdminLayout active="Student Attempts">
+    <RoleAwareLayout active="Student Attempts">
       <h1 className="h4 fw-bold mb-1 text-primary">Student Attempts</h1>
       <p className="text-muted mb-4">Monitor students who are currently taking exams.</p>
 
@@ -385,6 +385,6 @@ export default function StudentAttempts() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

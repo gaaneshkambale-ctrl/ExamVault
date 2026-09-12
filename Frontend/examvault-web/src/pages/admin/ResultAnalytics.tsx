@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
@@ -115,7 +115,7 @@ export default function ResultAnalytics() {
   }, [filteredResults, examById]);
 
   return (
-    <AdminLayout active="Result Analytics">
+    <RoleAwareLayout active="Result Analytics">
       <h1 className="h4 fw-bold mb-1 text-primary">Result Analytics</h1>
       <p className="text-muted mb-4">Detailed analytics and insights of results.</p>
 
@@ -261,6 +261,6 @@ export default function ResultAnalytics() {
           </Row>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

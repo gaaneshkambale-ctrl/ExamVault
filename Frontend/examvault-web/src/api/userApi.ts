@@ -11,6 +11,7 @@ import type {
   ResetPasswordRequest,
   ResetPasswordWithTokenRequest,
   PlatformUserListItem,
+  StudentSummary,
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UserListItem,
@@ -119,6 +120,11 @@ export async function listUsers(): Promise<UserListItem[]> {
 // SuperAdmin-role rows a tenant Admin's own call never returns.
 export async function listAllUsers(): Promise<PlatformUserListItem[]> {
   const { data } = await apiClient.get<PlatformUserListItem[]>('/api/users');
+  return data;
+}
+
+export async function listStudents(): Promise<StudentSummary[]> {
+  const { data } = await apiClient.get<StudentSummary[]>('/api/users/students');
   return data;
 }
 

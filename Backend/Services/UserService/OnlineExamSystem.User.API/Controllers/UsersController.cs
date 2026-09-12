@@ -40,6 +40,7 @@ public class UsersController : ControllerBase
     private readonly RegisterUserHandler _registerUserHandler;
     private readonly GetUserProfileHandler _getUserProfileHandler;
     private readonly ListUsersHandler _listUsersHandler;
+    private readonly ListStudentsHandler _listStudentsHandler;
     private readonly CreateUserHandler _createUserHandler;
     private readonly UpdateUserHandler _updateUserHandler;
     private readonly DeleteUserHandler _deleteUserHandler;
@@ -76,6 +77,7 @@ public class UsersController : ControllerBase
         RegisterUserHandler registerUserHandler,
         GetUserProfileHandler getUserProfileHandler,
         ListUsersHandler listUsersHandler,
+        ListStudentsHandler listStudentsHandler,
         CreateUserHandler createUserHandler,
         UpdateUserHandler updateUserHandler,
         DeleteUserHandler deleteUserHandler,
@@ -102,6 +104,7 @@ public class UsersController : ControllerBase
         _registerUserHandler = registerUserHandler;
         _getUserProfileHandler = getUserProfileHandler;
         _listUsersHandler = listUsersHandler;
+        _listStudentsHandler = listStudentsHandler;
         _createUserHandler = createUserHandler;
         _updateUserHandler = updateUserHandler;
         _deleteUserHandler = deleteUserHandler;
@@ -293,6 +296,19 @@ public class UsersController : ControllerBase
         var users = await _listUsersHandler.HandleAsync(new ListUsersQuery(), cancellationToken);
         var names = await ActorNameResolver.ResolveAsync(_userRepository, users.Select(u => u.CreatedByUserId), cancellationToken);
         return Ok(users.Select(u => ToResponse(u, u.CreatedByUserId.HasValue ? names.GetValueOrDefault(u.CreatedByUserId.Value) : null)));
+    }
+
+    // Deliberately its own endpoint rather than reusing List above: Instructor
+    // has no "Users - View" permission (the spec's "Users ❌") and must never
+    // see the full user directory (other Admins/Instructors), but does need a
+    // students-only picker for Assign Students - this is that narrower slice,
+    // gated by role only, same shape as Assignments reusing the Exams policy.
+    [Authorize(Roles = "Admin,Instructor")]
+    [HttpGet("students")]
+    public async Task<IActionResult> ListStudents(CancellationToken cancellationToken)
+    {
+        var students = await _listStudentsHandler.HandleAsync(new ListStudentsQuery(), cancellationToken);
+        return Ok(students.Select(ToStudentResponse));
     }
 
     [Authorize(Roles = "Admin")]
@@ -551,10 +567,13 @@ public class UsersController : ControllerBase
         return Ok(ToResponse(user, createdByName));
     }
 
-    // Admin-only counterpart to GetMyPhoto - lets admin screens (e.g. Live
-    // Monitoring's student avatars) render another user's photo, which no
-    // endpoint supported before this.
-    [Authorize(Roles = "Admin")]
+    // Admin/Instructor counterpart to GetMyPhoto - lets monitoring/results
+    // screens (e.g. Live Monitoring's student avatars) render another user's
+    // photo, which no endpoint supported before this. Role-gated only (no
+    // "Users - View" permission or ownership check) since a profile photo
+    // by itself carries far less sensitivity than the user directory these
+    // screens deliberately avoid exposing to Instructor.
+    [Authorize(Roles = "Admin,Instructor")]
     [HttpGet("{id:guid}/photo")]
     public async Task<IActionResult> GetPhoto(Guid id, CancellationToken cancellationToken)
     {
@@ -815,6 +834,9 @@ public class UsersController : ControllerBase
             user.LastLoginAtUtc,
             user.CreatedByUserId,
             createdByName);
+
+    private static StudentSummaryResponse ToStudentResponse(AppUser user) =>
+        new(user.Id, user.FullName, user.Email, user.RollNumber, user.PhotoData is not null);
 
     private static UserSessionResponse ToResponse(RefreshToken token)
     {

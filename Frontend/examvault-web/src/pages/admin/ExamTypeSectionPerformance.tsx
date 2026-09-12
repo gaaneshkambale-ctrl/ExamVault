@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Card, Col, Form, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import { BookIcon, CheckCircleIcon } from '../../components/reports/ReportIcons';
@@ -101,7 +101,7 @@ export default function ExamTypeSectionPerformance() {
   }, [sectionAggs]);
 
   return (
-    <AdminLayout active="Exam Type Performance">
+    <RoleAwareLayout active="Exam Type Performance">
       <div className="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
         <div>
           <p className="text-muted small mb-1">Reports / By Exam Type / Section Performance</p>
@@ -202,6 +202,6 @@ export default function ExamTypeSectionPerformance() {
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

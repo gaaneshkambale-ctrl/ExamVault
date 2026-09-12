@@ -86,14 +86,18 @@ const DEFAULTS_BY_ROLE: Record<TenantRole, CosmeticPermission[]> = {
 const SERVER_ENFORCED_PERMISSIONS = new Set<CosmeticPermission>([
   'Exams - Create',
   'Exams - Edit',
+  'Assignments - Manage',
   'Questions - Create',
   'Questions - Edit',
   'Results - View',
+  'Live Monitoring - View',
+  'Security Violations - View',
   'Users - View',
   'Users - Edit',
   'Settings - View',
   'Settings - Edit',
   'Reports - View',
+  'Notifications - Create',
 ]);
 
 function RoleGridIcon() {
@@ -183,6 +187,39 @@ function RoleAwardIcon() {
   );
 }
 
+function RoleSendIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  );
+}
+
+function RoleEyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function RoleShieldAlertIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+function RoleBellIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
 function RoleLockIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -217,14 +254,18 @@ const PERMISSION_INFO: Record<CosmeticPermission, { icon: ReactNode; iconBg: str
   'Dashboard - View': { icon: <RoleGridIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', description: 'View dashboard and analytics.' },
   'Exams - Create': { icon: <RoleDocumentPlusIcon />, iconBg: '#dcfce7', iconColor: '#16a34a', description: 'Create new exams.' },
   'Exams - Edit': { icon: <RolePencilIcon />, iconBg: '#ffedd5', iconColor: '#ea580c', description: 'Edit existing exams.' },
+  'Assignments - Manage': { icon: <RoleSendIcon />, iconBg: '#eef2ff', iconColor: '#4f46e5', description: 'Assign and schedule exams for students.' },
   'Questions - Create': { icon: <RoleQuestionCircleIcon />, iconBg: '#ede9fe', iconColor: '#7c3aed', description: 'Create new questions.' },
   'Questions - Edit': { icon: <RoleQuestionCircleIcon />, iconBg: '#dbeafe', iconColor: '#2563eb', description: 'Edit existing questions.' },
   'Results - View': { icon: <RoleBarChartIcon />, iconBg: '#dbeafe', iconColor: '#2563eb', description: 'View exam results.' },
+  'Live Monitoring - View': { icon: <RoleEyeIcon />, iconBg: '#fff7ed', iconColor: '#d97706', description: 'View active exams and student attempts in progress.' },
+  'Security Violations - View': { icon: <RoleShieldAlertIcon />, iconBg: '#fef2f2', iconColor: '#dc2626', description: 'View proctoring security violations.' },
   'Users - View': { icon: <RoleUsersIcon />, iconBg: '#dbeafe', iconColor: '#2563eb', description: 'View users and their details.' },
   'Users - Edit': { icon: <RoleUserEditIcon />, iconBg: '#ffedd5', iconColor: '#ea580c', description: 'Edit user information.' },
   'Settings - View': { icon: <RoleGearIcon />, iconBg: '#dcfce7', iconColor: '#16a34a', description: 'View organization settings.' },
   'Settings - Edit': { icon: <RoleGearIcon />, iconBg: '#dcfce7', iconColor: '#16a34a', description: 'Edit organization settings.' },
   'Reports - View': { icon: <RolePieChartIcon />, iconBg: '#fce7f3', iconColor: '#db2777', description: 'View reports and analytics.' },
+  'Notifications - Create': { icon: <RoleBellIcon />, iconBg: '#fef9c3', iconColor: '#ca8a04', description: 'Send notifications about their own exams.' },
   'Certificates - View': { icon: <RoleAwardIcon />, iconBg: '#fef9c3', iconColor: '#ca8a04', description: 'View certificates.' },
 };
 

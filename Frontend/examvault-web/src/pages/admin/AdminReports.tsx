@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
@@ -122,7 +122,7 @@ export default function AdminReports() {
   const rangeEnd = Math.min(currentPage * pageSize, perExamStats.length);
 
   return (
-    <AdminLayout active="Exam Reports">
+    <RoleAwareLayout active="Exam Reports">
       <h1 className="h4 fw-bold mb-1 text-primary">Exam Reports</h1>
       <p className="text-muted mb-4">Detailed insights and analytics about exams.</p>
 
@@ -333,6 +333,6 @@ export default function AdminReports() {
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

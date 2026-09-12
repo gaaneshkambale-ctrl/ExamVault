@@ -200,9 +200,12 @@ public class FakeExamRepository : IExamRepository
             _assignments.Where(a => a.ExamId == examId).OrderByDescending(a => a.CreatedAtUtc).ToList());
 
     public Task<IReadOnlyList<AssignmentWithExamTitle>> GetAllAssignmentsAsync(
+        Guid? ownerUserId = null,
         CancellationToken cancellationToken = default)
     {
         var result = _assignments
+            .Where(a => ownerUserId is null ||
+                _exams.FirstOrDefault(e => e.Id == a.ExamId)?.CreatedByUserId == ownerUserId)
             .OrderByDescending(a => a.CreatedAtUtc)
             .Select(a => new AssignmentWithExamTitle(
                 a,

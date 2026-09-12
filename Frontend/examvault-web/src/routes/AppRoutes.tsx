@@ -235,7 +235,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/assignments/new"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AssignExam />
           </ProtectedRoute>
         }
@@ -243,7 +243,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/assignments/:id/edit"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AssignExam />
           </ProtectedRoute>
         }
@@ -267,7 +267,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/exams/scheduled"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamScheduled />
           </ProtectedRoute>
         }
@@ -363,7 +363,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/active-exams"
         element={
-          <ProtectedRoute roles={['Admin']} feature="LiveMonitoring">
+          <ProtectedRoute roles={['Admin', 'Instructor']} feature="LiveMonitoring">
             <ActiveExams />
           </ProtectedRoute>
         }
@@ -371,7 +371,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/student-attempts"
         element={
-          <ProtectedRoute roles={['Admin']} feature="LiveMonitoring">
+          <ProtectedRoute roles={['Admin', 'Instructor']} feature="LiveMonitoring">
             <StudentAttempts />
           </ProtectedRoute>
         }
@@ -379,7 +379,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/live-monitoring/security-violations"
         element={
-          <ProtectedRoute roles={['Admin']} feature="ExamSecurity">
+          <ProtectedRoute roles={['Admin', 'Instructor']} feature="ExamSecurity">
             <SecurityViolations />
           </ProtectedRoute>
         }
@@ -396,7 +396,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/results/exams"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamResults />
           </ProtectedRoute>
         }
@@ -404,7 +404,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/results/students"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <StudentResults />
           </ProtectedRoute>
         }
@@ -412,7 +412,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/results/students/:examId/:attemptId"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <StudentResultDetails />
           </ProtectedRoute>
         }
@@ -420,7 +420,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/results/analytics"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ResultAnalytics />
           </ProtectedRoute>
         }
@@ -428,7 +428,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/results/publish"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <PublishResults />
           </ProtectedRoute>
         }
@@ -437,7 +437,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exams"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AdminReports />
           </ProtectedRoute>
         }
@@ -445,7 +445,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/students"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <StudentReports />
           </ProtectedRoute>
         }
@@ -453,7 +453,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/performance"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <PerformanceReports />
           </ProtectedRoute>
         }
@@ -469,7 +469,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exam-type-wise"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamTypeWiseReport />
           </ProtectedRoute>
         }
@@ -477,7 +477,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exam-type-wise/comparison"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamTypeComparison />
           </ProtectedRoute>
         }
@@ -485,7 +485,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exam-type/:typeId"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamTypeDetails />
           </ProtectedRoute>
         }
@@ -493,7 +493,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exam-type/:typeId/performance"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamTypePerformanceAnalysis />
           </ProtectedRoute>
         }
@@ -501,7 +501,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exam-type/:typeId/students"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamTypeStudentPerformance />
           </ProtectedRoute>
         }
@@ -509,7 +509,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exam-type/:typeId/questions"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamTypeQuestionAnalysis />
           </ProtectedRoute>
         }
@@ -517,7 +517,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/reports/exam-type/:typeId/sections"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <ExamTypeSectionPerformance />
           </ProtectedRoute>
         }
@@ -693,7 +693,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications/create"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <CreateNotification />
           </ProtectedRoute>
         }
@@ -701,7 +701,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications/history/:batchId"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <NotificationBatchDetails />
           </ProtectedRoute>
         }
@@ -709,7 +709,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications/history"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <NotificationHistory />
           </ProtectedRoute>
         }
@@ -725,7 +725,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications/:id"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AdminNotificationDetails />
           </ProtectedRoute>
         }
@@ -733,7 +733,7 @@ export default function AppRoutes() {
       <Route
         path="/admin/notifications"
         element={
-          <ProtectedRoute roles={['Admin']}>
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
             <AdminNotifications />
           </ProtectedRoute>
         }

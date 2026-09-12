@@ -11,12 +11,14 @@ public static class PermissionPolicies
     public const string SettingsView = "Permission:Settings-View";
     public const string SettingsEdit = "Permission:Settings-Edit";
     public const string ReportsView = "Permission:Reports-View";
+    public const string NotificationsCreate = "Permission:Notifications-Create";
 
     public static void AddPermissionPolicies(this AuthorizationOptions options)
     {
         options.AddPolicy(SettingsView, policy => policy.RequireAssertion(RequiresPermission("Settings - View")));
         options.AddPolicy(SettingsEdit, policy => policy.RequireAssertion(RequiresPermission("Settings - Edit")));
         options.AddPolicy(ReportsView, policy => policy.RequireAssertion(RequiresPermission("Reports - View")));
+        options.AddPolicy(NotificationsCreate, policy => policy.RequireAssertion(RequiresPermission("Notifications - Create")));
     }
 
     // SuperAdmin always passes. Otherwise the caller needs the permission

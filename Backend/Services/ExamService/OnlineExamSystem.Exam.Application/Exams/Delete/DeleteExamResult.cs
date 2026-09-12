@@ -4,6 +4,7 @@ public class DeleteExamResult
 {
     public bool Success { get; init; }
     public bool IsNotFound { get; init; }
+    public bool IsForbidden { get; init; }
     // Only set when Success - the exam's own row is gone by the time the
     // controller sees this, so it needs these carried back to write a real
     // audit entry (same "TenantId is the affected org, entityId/details
@@ -15,4 +16,6 @@ public class DeleteExamResult
         new() { Success = true, TenantId = tenantId, Title = title };
 
     public static DeleteExamResult NotFound() => new() { Success = false, IsNotFound = true };
+
+    public static DeleteExamResult Forbidden() => new() { Success = false, IsForbidden = true };
 }

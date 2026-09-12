@@ -1,3 +1,3 @@
 namespace OnlineExamSystem.Exam.Application.Exams.Delete;
 
-public record DeleteExamCommand(Guid ExamId, string BearerToken);
+public record DeleteExamCommand(Guid ExamId, string BearerToken, Guid? OwnerUserId = null);

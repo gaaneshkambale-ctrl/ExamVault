@@ -28,6 +28,7 @@ using OnlineExamSystem.Submission.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Submission;
 using OnlineExamSystem.Shared.Contracts.Responses.Submission;
 using static OnlineExamSystem.Submission.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Submission.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Submission.API.Controllers;
 
@@ -616,16 +617,29 @@ public class SubmissionsController : ControllerBase
     // so a narrower role list here 403s the whole feature for whichever
     // role got left out (found live: Instructor could open exam results in
     // the UI, but the report always failed because this endpoint didn't
-    // recognize the Instructor role yet). Every other action on this
-    // controller (proctoring, grading, force-submit, live-watch) is
-    // deliberately Admin-only and unaffected by this change.
+    // recognize the Instructor role yet). This action, LiveByExam, and
+    // ViolationsByExam now all enforce exam ownership for Instructor (see
+    // ListAttemptsByExamHandler's comment) - the role list alone used to
+    // be the only gate here, which meant any Instructor could already view
+    // any other exam's attempts/answers by examId. Proctoring's actual
+    // control actions (grading, force-submit, live-watch, recording) stay
+    // Admin-only - the spec marks Instructor's Proctoring access
+    // conditional ("only if implemented/in plan"), and those are write/
+    // control actions on a live exam, not a read-only list.
     [HttpGet("by-exam/{examId:guid}")]
     [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = ResultsOrReports)]
+    [Authorize(Policy = ResultsView)]
     public async Task<IActionResult> ByExam(Guid examId, CancellationToken cancellationToken)
     {
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         var attempts = await _listAttemptsByExamHandler.HandleAsync(
-            new ListAttemptsByExamQuery(examId),
+            new ListAttemptsByExamQuery(examId, bearerToken, ownerUserId),
             cancellationToken);
 
         return Ok(attempts
@@ -640,12 +654,19 @@ public class SubmissionsController : ControllerBase
     // includes InProgress attempts too - Live Monitoring's Active Exams
     // screen needs to see exams with a student currently mid-attempt.
     [HttpGet("by-exam/{examId:guid}/live")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = LiveMonitoring)]
+    [Authorize(Policy = LiveMonitoringView)]
     public async Task<IActionResult> LiveByExam(Guid examId, CancellationToken cancellationToken)
     {
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         var attempts = await _listLiveAttemptsByExamHandler.HandleAsync(
-            new ListLiveAttemptsByExamQuery(examId),
+            new ListLiveAttemptsByExamQuery(examId, bearerToken, ownerUserId),
             cancellationToken);
 
         return Ok(attempts
@@ -672,12 +693,19 @@ public class SubmissionsController : ControllerBase
     // violation occurrence for the exam (not just the running *Count totals
     // on ExamAttempt), each with its own timestamp/severity/status.
     [HttpGet("by-exam/{examId:guid}/violations")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = ExamSecurity)]
+    [Authorize(Policy = SecurityViolationsView)]
     public async Task<IActionResult> ViolationsByExam(Guid examId, CancellationToken cancellationToken)
     {
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         var events = await _listViolationsByExamHandler.HandleAsync(
-            new ListViolationsByExamQuery(examId),
+            new ListViolationsByExamQuery(examId, bearerToken, ownerUserId),
             cancellationToken);
 
         return Ok(events.Select(e => ToResponse(e.Event, examId, e.UserId)).ToList());
@@ -728,12 +756,19 @@ public class SubmissionsController : ControllerBase
     // that has free-text content but hasn't been assigned marks yet, across all
     // completed attempts for this exam.
     [HttpGet("ungraded")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ResultsView)]
     public async Task<IActionResult> Ungraded([FromQuery] Guid examId, CancellationToken cancellationToken)
     {
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         var answers = await _listUngradedAnswersByExamHandler.HandleAsync(
-            new ListUngradedAnswersByExamQuery(examId),
+            new ListUngradedAnswersByExamQuery(examId, ownerUserId, bearerToken),
             cancellationToken);
 
         return Ok(answers
@@ -747,8 +782,9 @@ public class SubmissionsController : ControllerBase
     }
 
     [HttpPut("{attemptId:guid}/answers/{questionId:guid}/grade")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ResultsView)]
     public async Task<IActionResult> GradeAnswer(
         Guid attemptId,
         Guid questionId,
@@ -756,9 +792,12 @@ public class SubmissionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var adminUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var authorizationHeader = Request.Headers["Authorization"].ToString();
+        var bearerToken = authorizationHeader["Bearer ".Length..];
+        var ownerUserId = User.IsInRole("Instructor") ? adminUserId : (Guid?)null;
 
         var result = await _gradeAnswerHandler.HandleAsync(
-            new GradeAnswerCommand(attemptId, questionId, request.MarksAwarded, adminUserId),
+            new GradeAnswerCommand(attemptId, questionId, request.MarksAwarded, adminUserId, ownerUserId, bearerToken),
             cancellationToken);
 
         if (result.ValidationErrors.Any())
@@ -768,6 +807,11 @@ public class SubmissionsController : ControllerBase
                     .Select((error, index) => (error, index))
                     .GroupBy(_ => "request")
                     .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (result.IsNotFound)

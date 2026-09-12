@@ -14,6 +14,7 @@ using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Exam.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -74,13 +75,15 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = AssignmentsManage)]
     public async Task<IActionResult> Create(CreateAssignmentRequest request, CancellationToken cancellationToken)
     {
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
         var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ownerUserId = User.IsInRole("Instructor") ? createdByUserId : (Guid?)null;
 
         var command = new CreateAssignmentCommand(
             request.ExamId,
@@ -101,7 +104,8 @@ public class AssignmentsController : ControllerBase
             request.EnableProctoring,
             request.EnableLiveVideo,
             bearerToken,
-            createdByUserId);
+            createdByUserId,
+            ownerUserId);
 
         var result = await _createAssignmentHandler.HandleAsync(command, cancellationToken);
 
@@ -112,6 +116,11 @@ public class AssignmentsController : ControllerBase
                     .Select((error, index) => (error, index))
                     .GroupBy(_ => "request")
                     .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (result.IsExamNotFound)
@@ -150,12 +159,16 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = AssignmentsManage)]
     public async Task<IActionResult> Update(Guid id, UpdateAssignmentRequest request, CancellationToken cancellationToken)
     {
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
 
         var command = new UpdateAssignmentCommand(
             id,
@@ -175,7 +188,8 @@ public class AssignmentsController : ControllerBase
             request.AutoSubmitOnTimeOver,
             request.EnableProctoring,
             request.EnableLiveVideo,
-            bearerToken);
+            bearerToken,
+            ownerUserId);
 
         var result = await _updateAssignmentHandler.HandleAsync(command, cancellationToken);
 
@@ -186,6 +200,11 @@ public class AssignmentsController : ControllerBase
                     .Select((error, index) => (error, index))
                     .GroupBy(_ => "request")
                     .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (result.IsNotFound)
@@ -203,28 +222,38 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = AssignmentsManage)]
     public async Task<IActionResult> List([FromQuery] Guid? examId, CancellationToken cancellationToken)
     {
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
         if (examId is { } id)
         {
             var assignments = await _listAssignmentsForExamHandler.HandleAsync(
-                new ListAssignmentsForExamQuery(id),
+                new ListAssignmentsForExamQuery(id, ownerUserId),
                 cancellationToken);
             return Ok(assignments.Select(a => ToResponse(a.Assignment, a.TargetUserIds)));
         }
 
-        var all = await _listAllAssignmentsHandler.HandleAsync(new ListAllAssignmentsQuery(), cancellationToken);
+        var all = await _listAllAssignmentsHandler.HandleAsync(new ListAllAssignmentsQuery(ownerUserId), cancellationToken);
         return Ok(all.Select(ToListItemResponse));
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = AssignmentsManage)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _getAssignmentHandler.HandleAsync(new GetAssignmentQuery(id), cancellationToken);
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
+        var result = await _getAssignmentHandler.HandleAsync(new GetAssignmentQuery(id, ownerUserId), cancellationToken);
         if (result is null)
         {
             return NotFound(new { message = "Assignment not found." });
@@ -234,11 +263,21 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = AssignmentsManage)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _deleteAssignmentHandler.HandleAsync(new DeleteAssignmentCommand(id), cancellationToken);
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
+        var result = await _deleteAssignmentHandler.HandleAsync(new DeleteAssignmentCommand(id, ownerUserId), cancellationToken);
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
 
         if (result.IsNotFound)
         {
@@ -253,11 +292,21 @@ public class AssignmentsController : ControllerBase
     // cascades its targets) so the Exam Scheduled list can still show a
     // cancelled sitting rather than making it disappear.
     [HttpPost("{id:guid}/cancel")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = AssignmentsManage)]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _cancelAssignmentHandler.HandleAsync(new CancelAssignmentCommand(id), cancellationToken);
+        var ownerUserId = User.IsInRole("Instructor")
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : (Guid?)null;
+
+        var result = await _cancelAssignmentHandler.HandleAsync(new CancelAssignmentCommand(id, ownerUserId), cancellationToken);
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
+        }
 
         if (result.IsNotFound)
         {

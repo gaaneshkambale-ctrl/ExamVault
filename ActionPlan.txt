@@ -10223,3 +10223,1083 @@ you actually navigated from - would have been stale/wrong left as
 tsc --noEmit, npm run build, npm run lint all clean; frontend rebuilt
 and redeployed.
 
+
+---
+
+"intructor role not work as per expectation because report view, result
+view not working" [screenshots: instructor's Exams list showing 0
+exams despite the tenant having real exams, and the instructor's own
+Assigned Roles tab showing Results-View/Reports-View as real, active
+permissions] - traced two contributing issues, not one:
+
+1. InstructorSidebar.tsx only ever had "Dashboard"/"Exams" hardcoded -
+   no Reports/Results nav section exists there at all, unlike Admin's
+   sidebar (confirmed, not yet changed - see below).
+2. The REAL root cause of "0 exams": ExamsController.cs's
+   GetCallerExamAccessScope() scoped Instructor to
+   ExamAccessScope.OwnedOnly (exams they personally created) - a prior,
+   deliberate decision. This instructor's tenant (Test Admin,
+   4f80983a-...) has real exams, but none created by this instructor,
+   so their list was correctly empty per that rule - and since the only
+   route to a specific exam's report/result page is by clicking through
+   from the Exams list, their granted Results-View/Reports-View
+   permissions had no reachable UI at all. Confirmed via DB query
+   (Users table) that this instructor's TenantId matches a tenant with
+   real exams.
+
+Asked the user how to fix (AskUserQuestion) - broadening Instructor's
+exam-list visibility to all tenant exams (matching Admin) vs. building
+a separate "assigned to me" concept. User picked broadening.
+
+Fix: GetCallerExamAccessScope() now returns ExamAccessScope.All for
+Instructor too (previously only Admin/SuperAdmin). Verified this is
+visibility-only, not a write-access expansion: UpdateExamHandler.cs
+independently checks exam.CreatedByUserId != ownerUserId regardless of
+list scope, so an instructor still can't edit an exam they don't own -
+only see it and its reports now. Left the now-unreachable
+ExamAccessScope.OwnedOnly enum value and IExamRepository.GetOwnedAsync
+in place rather than ripping them out - a real, cohesively-scoped
+capability that's simply not currently invoked, not sprawl.
+
+Did NOT add new Reports/Results sidebar sections for Instructor in this
+pass - the existing unconditional "View Results" icon
+(BarChartIcon -> /admin/reports/{examId}) on the Exams list page (which
+Instructor already has) now works correctly once the list is populated,
+since that route was already Instructor-accessible
+(ProtectedRoute roles={['Admin','Instructor']}). Flagged to the user
+that dedicated top-level Reports/Results menu sections for Instructor
+(matching Admin's fuller nav) would be a separate, further scope
+decision if still wanted after this fix.
+
+dotnet build (full solution) clean; ExamService application tests
+(91/91) pass unchanged, confirming the handler layer itself wasn't
+touched. exam-api rebuilt and redeployed, came up cleanly.
+
+
+---
+
+"bug - those exam intructor created that exam see but here not happening
+every exam seen" - direct reversal of the "broaden Instructor to see all
+tenant exams" fix from two turns ago. Reverted
+GetCallerExamAccessScope() back to OwnedOnly for Instructor immediately
+(exam-api rebuilt/redeployed) - confirmed via 91/91 ExamService
+application tests still passing that the handler layer itself was
+untouched by either the broaden or the revert.
+
+Then the user pasted a full "Instructor role model" spec (own-exam-only
+across essentially every module: Exams, Questions, Assignments, Live
+Monitoring, Results, Reports, Notifications - server-side ownership
+checks, not just hidden menu items - plus a full nested Instructor
+sidebar). This is a real multi-service RBAC initiative, not a quick fix
+- logging the full target state and an honest phase breakdown here
+rather than half-building pieces of all of it in one pass.
+
+DONE THIS SESSION (Exams module, ExamService):
+- Create/Edit/Publish/Unpublish/Archive already had Instructor
+  ownership enforcement from a prior session (ChangeExamStatusHandler/
+  UpdateExamHandler both check exam.CreatedByUserId != ownerUserId).
+- Delete was the one gap - was [Authorize(Roles = "Admin")] only, no
+  Instructor access at all. Extended it to match the same pattern:
+  DeleteExamCommand/DeleteExamResult gained OwnerUserId/IsForbidden,
+  DeleteExamHandler checks ownership before removing, controller now
+  allows Instructor + computes ownerUserId + maps Forbidden -> 403.
+  Exam list scope (GetCallerExamAccessScope) stays OwnedOnly for
+  Instructor, as it was before the brief broaden-then-revert.
+- Exams module for Instructor is now fully spec-compliant: Create/Edit/
+  Delete/Publish/Schedule(exam itself, not yet assignments - see below)
+  Own Exams all ownership-enforced server-side.
+
+CONFIRMED STILL MISSING (checked, not yet built) - in the order the
+spec's own module list suggests, roughly increasing effort/risk:
+
+1. Assignments ("Assign Students"/"Schedule Own Exams" is really this
+   controller, not just the exam's own Publish) - AssignmentsController
+   is ENTIRELY [Authorize(Roles = "Admin")] today, zero Instructor
+   access on Create/Update/List/Get/Delete/Cancel. ExamAssignments
+   already has a CreatedByUserId column (confirmed via direct DB
+   inspection earlier this session) - same ownership-check shape as
+   Exams should translate directly, plus likely an exam-ownership check
+   too (can only assign an exam you own). Frontend: AppRoutes.tsx role
+   guards + an "Assign Exam"/"Assigned Students" instructor-facing UI
+   (today these are admin-only pages).
+
+2. Question Bank ("My Questions", Create/Edit Own, AI Generation) -
+   QuestionService's ExamQuestion has no per-question CreatedByUserId of
+   its own - ownership is naturally "the exam this question belongs to"
+   (exam.CreatedByUserId), so this needs QuestionService to either (a)
+   look up exam ownership via a cross-service call to ExamService per
+   request, or (b) denormalize CreatedByUserId onto ExamQuestion at
+   creation time to avoid an N+1 cross-service check on every question
+   list/edit. Needs a design decision before implementing, not just a
+   copy of the Exams pattern.
+
+3. Live Monitoring / Student Attempts / Security Violations / Proctoring
+   (SubmissionService) - entirely keyed by ExamId with no ownership
+   concept at all today. Needs the same kind of cross-service exam-
+   ownership check IExamLookupClient already proves is a safe, working
+   pattern for other purposes this session (Sequential/Locked
+   enforcement) - but applied to list/filter endpoints, which is a
+   different shape of change than the single-attempt checks already
+   built.
+
+4. Results / Student Results / Result Analytics / Publish Results /
+   Exam Reports / Student Reports / Performance Reports - same cross-
+   service exam-ownership filtering need, in ResultService this time.
+   "Publish Results" being a WRITE action for Instructor is worth a
+   deliberate confirmation before opening it up - grading/publishing
+   affects students directly, more sensitive than a read-only report.
+
+5. Exam Type Performance - spec says "Limited" view, vaguest requirement
+   in the whole spec - needs its own clarification on what "limited"
+   should mean before building anything.
+
+6. Notifications ("Own exam notifications" only) - lowest priority per
+   the spec's own ❌/✅ marks elsewhere (Notification Templates stays
+   Admin-only) - would need notifications to carry an ExamId and be
+   filterable by exam ownership, doesn't exist today.
+
+7. Full Instructor sidebar rebuild (InstructorSidebar.tsx) - nested
+   groups (Exams/Question Bank/Assignments/Live Monitoring/Results/
+   Reports/Notifications/My Profile) mirroring AdminSidebar's structure
+   - straightforward once the underlying pages/routes above actually
+   exist and are ownership-scoped; building the nav before the pages
+   are real would just create broken/misleading links.
+
+Reported back to the user: Exams module complete, proposed doing the
+rest in the order above (Assignments next, since it's the same
+ownership-check shape as Exams and has zero Instructor access today -
+biggest gap for least design risk) - awaiting direction on whether to
+continue immediately into Assignments or pause here.
+
+
+---
+
+"role permission changes?" - checked RolePermissionCatalog.cs
+(UserService) against the confirmed Instructor role-model spec and
+found a real gap: Instructor's DEFAULT permission set was missing
+"Reports - View" (the spec wants it; the one instructor tested this
+session only had it because an admin manually granted it beyond the
+tenant's stock defaults). Added it to DefaultsForRole("Instructor") and
+its frontend mirror (constants/cosmeticRolePermissions.ts's
+INSTRUCTOR_PERMISSIONS) - this is a one-time-seed default, so it only
+affects tenants that haven't already had their Instructor row seeded;
+not a retroactive backfill for existing tenants (not asked for, would
+be a separate data migration).
+
+Also flagged: AssignmentsController has no permission-catalog entry at
+all (Admin-only by role, nothing to individually toggle) - asked the
+user how the soon-to-be-added Instructor access to it should be gated.
+They picked reusing the existing "Exams" access check rather than
+adding new "Assignments - Create"/"Assignments - Edit" catalog entries -
+same flat role+ownership shape Publish/Delete already use, no new
+catalog surface or frontend Roles & Permissions UI changes needed.
+
+dotnet build (full solution) clean; UserService application tests
+(109/109) pass; frontend tsc/build/lint clean. user-api and frontend
+rebuilt and redeployed.
+
+Next: Assignments module (AssignmentsController) - extend Create/
+Update/List/Get/Delete/Cancel to Admin+Instructor with the same
+ownership-check pattern Exams already uses (ExamAssignments already has
+a CreatedByUserId column), gated by the existing "Exams" policy per the
+decision above.
+
+---
+
+Assignments module (ExamService) - DONE. Extended
+AssignmentsController's Create/Update/List/GetById/Delete/Cancel from
+[Authorize(Roles = "Admin")] to "Admin,Instructor", keeping
+[Authorize(Policy = Exams)] unchanged per the reuse-Exams decision.
+"Mine" (student-facing, no role restriction) untouched.
+
+Ownership is resolved via the ASSIGNMENT'S PARENT EXAM's
+CreatedByUserId, not ExamAssignment's own CreatedByUserId column - an
+instructor can manage any assignment on an exam they own, regardless of
+who literally created that assignment row, matching how Exams
+Update/Delete/Publish already work.
+
+Write actions (Create/Update/Delete/Cancel) added Guid? OwnerUserId to
+their Command, IsForbidden to their Result, and a
+"CreatedByUserId != ownerUserId -> Forbidden" check in the Handler,
+mapped to Forbid() in the controller - same shape as Exams' Delete from
+earlier this session. Read actions (GetById, List-by-exam) return
+null/empty on an out-of-scope exam instead of a distinct Forbidden
+signal, matching GetExamHandler's existing OwnedOnly precedent.
+
+List-all (no examId query param) needed a repository change:
+IExamRepository.GetAllAssignmentsAsync gained a `Guid? ownerUserId =
+null` parameter; ExamRepository's implementation now looks up each
+assignment's exam's CreatedByUserId (via a Title+CreatedByUserId
+dictionary keyed by ExamId) and filters the assignment list to owned
+exams only when ownerUserId is set. FakeExamRepository (test double)
+updated to match the new interface signature - this is what the initial
+build caught (CS0535, missing interface member).
+
+Verification: dotnet build ExamVault.sln clean (0 errors); ExamService
+Application test suite 91/91 pass (all pre-existing tests, none written
+new here - no automated coverage added for the ownership branches
+themselves, worth a follow-up if this module gets touched again);
+exam-api rebuilt (docker compose build exam-api) and redeployed (docker
+compose up -d exam-api), logs show clean startup with the reminder
+background job running normally.
+
+Instructor role-model progress so far: Exams (done, prior + this
+session's Delete fix) and Assignments (done, this entry) are both fully
+server-side ownership-enforced. Remaining, in the previously-agreed
+order: Question Bank (QuestionService, needs a cross-service-lookup-vs-
+denormalize design decision), Live Monitoring/Student Attempts/Security
+Violations/Proctoring (SubmissionService, needs LIST-level cross-
+service filtering, not just single-record checks), Results/Reports
+(ResultService, same filtering need; Publish Results as an Instructor
+write action still wants its own explicit confirmation), Exam Type
+Performance ("Limited" view - vaguest requirement, needs its own
+clarification), Notifications (lowest priority, needs exams-linkage
+that doesn't exist today), and finally the InstructorSidebar.tsx
+rebuild (deliberately last, once real ownership-scoped routes exist to
+link to).
+
+Not yet reported to the user in this exact form - reporting back now,
+next module (Question Bank) awaits their go-ahead/design input.
+
+---
+
+"test it - instructor" -> live-tested the Exams+Assignments ownership
+work end-to-end via the real browser (user logged themselves into a
+real Instructor account, "Mahesh sathe", on the test.localhost tenant;
+I drove the UI directly, no fabricated data). Tenant confirmed to have
+other instructors/exams already in it (via a direct read-only SQL
+query against ExamVault.UserDb/ExamVault.ExamDb, used only to find real
+IDs to test against - no data changed via SQL).
+
+Confirmed working end-to-end:
+- Instructor's /admin/exams list started at 0 exams (tenant has exams,
+  just none owned by this instructor) - OwnedOnly scope correct.
+- Instructor created + published a real exam ("Instructor Ownership
+  Test Exam", 1 question) through the full wizard - CreatedByUserId
+  correctly stamped; it then appeared in their own list (1/1).
+- Instructor navigating directly to another instructor's exam
+  (AD35E3CA-EB6C-4D8B-8089-7ADC08A436C9, "c# exam", owned by a
+  different user) got "Couldn't load this exam. It may not exist." -
+  no title/data leaked - confirms GetExamHandler's OwnedOnly scope
+  really blocks direct-URL access, not just list hiding.
+- Own exam's detail page loaded "Assigned Students (0)" with no error -
+  confirms the Assignments List-by-exam GET (now Instructor-authorized)
+  actually works end-to-end, not just in the unit tests.
+- Deleted their own exam via the UI afterward (cleanup) - exercised the
+  real ownership-checked Delete endpoint from earlier this session,
+  succeeded as expected for an owner.
+
+Found a real gap (not yet fixed - needs a design decision, see below):
+the "Assign Students" button on ExamDetails.tsx already appears for
+Instructor (unconditional on role) and links to
+/admin/assignments/new?examId=..., but that route (and
+/admin/assignments/:id/edit, and /admin/exams/scheduled) is still
+`<ProtectedRoute roles={['Admin']}>` in AppRoutes.tsx - clicking it
+silently redirects Instructor back to their dashboard. So today's
+Instructor can't actually reach the Create/Update/Cancel/Delete
+Assignment UI at all despite the backend now allowing it.
+
+Widening just the route roles isn't a safe fix by itself: AssignExam.tsx
+loads its student picker via useUsers() -> GET /api/users, which is
+`[Authorize(Roles = "Admin,SuperAdmin")]` in UsersController - Instructor
+is deliberately excluded there, and the spec explicitly wants "Users ❌"
+for Instructor (no access to the full user directory, which would also
+expose other Admins/Instructors' identities, not just students). There
+is no separate students-only list endpoint today. Opening the route
+without addressing this would just trade one broken page for another.
+
+Reported this to the user as the real blocker rather than silently
+patching around it - needs a decision on how Instructor gets a
+students-only (not full Users-View) list to assign exams to before the
+Assignments module is actually usable end-to-end for them.
+
+User picked "New students-only endpoint (Recommended)". Implemented:
+
+- Backend (UserService): new GET /api/users/students
+  ([Authorize(Roles = "Admin,Instructor")], no UsersView policy - a
+  narrower role-only gate, same shape as Assignments reusing the Exams
+  policy) - ListStudentsQuery/ListStudentsHandler filter
+  IUserRepository.GetAllAsync (already tenant-scoped) down to
+  Role == Student, returned as a new minimal StudentSummaryResponse
+  (Id/FullName/Email/RollNumber only - deliberately not the full
+  UserListItemResponse, so Instructor never sees other Admins/
+  Instructors' identities).
+- Frontend: StudentSummary type, listStudents() API call, useStudents()
+  hook; AssignExam.tsx switched from useUsers() (Admin/SuperAdmin-only)
+  to useStudents(). AppRoutes.tsx widened /admin/assignments/new,
+  /admin/assignments/:id/edit, and /admin/exams/scheduled from
+  roles={['Admin']} to ['Admin','Instructor'] - all three were verified
+  to have no other Admin-only page-level dependencies (ExamScheduled.tsx
+  only calls useAssignments/useCancelAssignment; AssignExam.tsx's other
+  dependency, useGroups(), stays Admin-only - see known-gap note below).
+
+Live-tested the ENTIRE flow end-to-end as instructor Mahesh sathe after
+redeploying user-api+frontend: clicking "Assign Students" no longer
+redirects to the dashboard; the student picker loaded "Available
+Students (35)" - all genuine student accounts, confirming the new
+endpoint actually works and stays Instructor-safe. Found and fixed a
+SECOND real gap this uncovered that unit tests could never catch (no
+FakeExamRepository call chain touches it): CreateAssignmentHandler's
+"AllStudents" target type resolves every student id via
+UserServiceClient.GetAllStudentUserIdsAsync, which was STILL calling
+the full GET /api/users (Admin/SuperAdmin-only) with the caller's own
+forwarded bearer token - so "Assign to All Students" 500'd for an
+Instructor even after the frontend picker worked, with exam-api's log
+showing the real cause: HttpRequestException 403 from UserServiceClient
+.GetAllUsersAsync, inside CreateAssignmentHandler.HandleAsync line 82.
+Fixed by pointing GetAllStudentUserIdsAsync at the new
+GET /api/users/students instead (same fix shape, this time server-to-
+server rather than frontend-to-backend). UpdateAssignmentHandler shares
+the same method so it's fixed too. (GetGroupMembersAsync, used for
+"Batch" target type, still calls GroupsController which is entirely
+Admin-only - Batch/Group assignment for Instructor is a known, not yet
+addressed, follow-up; spec doesn't explicitly require it.)
+
+After the fix: dotnet build clean, ExamService tests 91/91, exam-api
+rebuilt+redeployed, clean startup confirmed via logs. Re-ran the full
+live flow: exam created -> published -> "Assign Students" -> All
+Students (35) -> confirmed -> "Exam Assigned Successfully! Assignment
+ID ASG-13009" - genuinely created, visible on the exam's own "Assigned
+Students (1)" panel. Then exercised cleanup as further live
+verification: deleted the assignment via its own Delete button
+(ownership-checked DeleteAssignmentHandler - succeeded, panel went back
+to 0), then deleted the test exam itself (ownership-checked
+DeleteExamHandler - succeeded, list back to empty). Both confirm the
+write-path ownership checks built earlier this session work for a real
+owner, not just via unit tests.
+
+Browser note: hit the known persistent 0x0-viewport bug mid-session
+(computer/read_page/screenshot stopped resolving real element bounding
+boxes, silently no-opping clicks on non-<button> role="button" divs
+like the exam-type picker cards) - worked around it by using
+javascript_tool to resolve elements by text/role and call .click()
+directly in page JS, which doesn't depend on viewport geometry; get_
+page_text and find kept working throughout and were used to verify
+state after every step rather than trusting screenshots.
+
+Not committed/pushed yet - holding per the standing rule until the user
+asks. Full Instructor role-model status: Exams and Assignments modules
+are both now genuinely usable end-to-end (not just ownership-enforced
+on paper). Remaining per the previously-agreed order: Question Bank,
+Live Monitoring/Results/Reports (SubmissionService/ResultService),
+Exam Type Performance, Notifications, and the InstructorSidebar.tsx
+rebuild - plus the newly-identified Batch/Group-assignment gap for
+Instructor, still open, low priority per spec.
+
+---
+
+"menu not seen in intructor? only dashboard and exams menu seen" -
+user's report right after the Assignments work above, before they'd
+navigated to Scheduled Exams themselves. Investigated and found TWO
+real bugs, not one:
+
+1. InstructorSidebar.tsx's navItems genuinely only had Dashboard/Exams -
+   never updated when Assignments became real earlier this session.
+   Added a third entry, "Scheduled Exams" -> /admin/exams/scheduled
+   (same icon AdminSidebar already uses for its own "Scheduled Exams"
+   item, for visual consistency), and extended the InstructorNavItem
+   union type to include it.
+
+2. Bigger find: ExamScheduled.tsx and AssignExam.tsx - both widened to
+   Instructor today - still hardcoded `<AdminLayout>` directly instead
+   of `<RoleAwareLayout>` (the wrapper every other Instructor-reachable
+   exam page uses, which picks InstructorSidebar vs AdminSidebar by
+   role). AdminLayout renders AdminSidebar unconditionally - so even
+   with today's route-guard fix, an Instructor opening either page
+   would have seen the FULL Admin sidebar (Users, Roles, Organization
+   Settings, Platform Settings, everything), not their own scoped one -
+   a real information-disclosure-shaped UX bug (showing nav to features
+   Instructor has no access to), just not caught earlier since neither
+   page had been live-tested post-widening from a sidebar-visibility
+   angle specifically. Switched both to RoleAwareLayout - ExamScheduled
+   keeps active="Scheduled Exams" (added to InstructorNavItem in fix 1
+   above), AssignExam's four AdminLayout call sites all already used
+   active="Exams", already valid for InstructorNavItem, so no further
+   type changes needed there.
+
+Verified: npm run build clean (would have caught any InstructorNavItem
+type mismatch); frontend rebuilt+redeployed, clean nginx startup.
+Live-checked as instructor Mahesh sathe: sidebar now shows Dashboard /
+Exams / Scheduled Exams (confirmed via the accessibility tree, not just
+a screenshot); navigating to /admin/exams/scheduled renders that same
+3-item Instructor sidebar (not Admin's), page loads correctly with real
+calendar data, no redirect.
+
+---
+
+User re-pasted the full Instructor spec (unchanged from earlier) right
+after the sidebar fix - read as "keep going per this checklist," not a
+new requirement. Had just launched an Explore agent to scope Question
+Bank's ownership design (cross-service ExamService lookup vs
+denormalizing CreatedByUserId onto ExamQuestion) when the user said
+"ingore question bank" - skipping that module for now, per their
+explicit instruction. Its findings (if the agent still returns them)
+should be disregarded; do not act on them without being asked again.
+
+Moving to the next item in the previously-agreed order: Live
+Monitoring / Student Attempts / Security Violations / Proctoring
+(SubmissionService) - needs cross-service exam-ownership filtering on
+LIST endpoints specifically (single-record checks are a different, easier
+shape already partially proven out with Assignments/Exams).
+
+Explore agent came back with good news: turned out much simpler than
+feared. All three target endpoints (`by-exam/{examId}`,
+`by-exam/{examId}/live`, `by-exam/{examId}/violations`) are single-exam
+lookups already (no "set of owned exam ids" filtering needed).
+SubmissionService already has its own ExamServiceClient/IExamLookupClient
+calling ExamService's GET api/exams/{id} - just needed CreatedByUserId
+added to the wire response mapping (ExamResponse already carries it, no
+ExamService change needed).
+
+Found a real, ALREADY-LIVE security gap while investigating: ByExam
+(`GET /api/submissions/by-exam/{examId}`, "Student Attempts") was
+already `[Authorize(Roles = "Admin,Instructor")]` from an earlier
+session's bug fix (widened to unblock Instructor viewing exam results),
+but had ZERO ownership check - any Instructor in the tenant could
+already view any OTHER exam's full student attempts + submitted
+answers just by knowing/guessing its examId. This was the most urgent
+fix, not a "nice to have" - closes a live cross-instructor data leak
+that predates this session's Instructor-role initiative entirely.
+
+Implemented:
+- ExamLookupResult gained CreatedByUserId (nullable, default null so
+  existing callers/tests are unaffected); ExamServiceClient.GetExamAsync
+  populates it from the exam API response.
+- ListAttemptsByExamHandler ("Student Attempts"), ListLiveAttemptsByExam
+  Handler ("Live Monitoring"), ListViolationsByExamHandler ("Security
+  Violations") all gained the same Guid? OwnerUserId + BearerToken
+  Query params -> IExamLookupClient.GetExamAsync ownership check ->
+  empty list on mismatch (same shape as every other List handler this
+  session, read-path = empty not 403).
+- SubmissionsController: ByExam kept Admin,Instructor (already there,
+  now actually enforced); LiveByExam and ViolationsByExam widened from
+  Admin-only to Admin,Instructor, same Exams/ExamSecurity/LiveMonitoring
+  policies reused unchanged. All three now extract bearerToken +
+  ownerUserId and thread them through.
+
+Deliberately NOT touched: SetLiveWatch, WatchRecording, ForceSubmit
+(the actual Proctoring CONTROL actions - toggling live camera watching,
+force-submitting a student's exam) stay Admin-only. Spec marks
+Instructor's "Proctoring" access with an asterisk ("only if implemented
+and in plan"), and these are write/control actions with real behavioral
+risk if misused mid-exam, categorically different from a read-only
+list - flagging this as its own decision point rather than bundling it
+in silently, same caution as the earlier-flagged "Publish Results"
+item.
+
+Testing: added ownership-check test cases (mismatch -> empty, match ->
+returns data) to ListAttemptsByExamHandlerTests and
+ListViolationsByExamHandlerTests; ListLiveAttemptsByExamHandler had ZERO
+existing test coverage before this (confirmed via glob), so wrote a new
+ListLiveAttemptsByExamHandlerTests.cs from scratch covering both the
+pre-existing live-vs-submitted-attempts behavior and the new ownership
+branch - not leaving the same "no test coverage on the new branch" gap
+flagged after the Assignments work.
+
+Verification: dotnet build clean; SubmissionService Application tests
+104/104 (was ~97, +7 new); submission-api rebuilt+redeployed, clean
+startup via logs. Not live-browser-tested this round (no live-monitoring/
+proctoring UI screens exist for Instructor yet in the frontend - this is
+purely a backend authorization fix; the data is reachable via the API
+now but there's no Instructor-facing page calling these endpoints yet,
+same "page doesn't exist yet" situation Assignments was in before this
+session opened it up).
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+"test instructor" - live-tested the SubmissionsController.ByExam
+security fix (the already-live gap found while scoping this module)
+through the real UI, as instructor Mahesh sathe, since /admin/reports/
+:examId is the one Instructor-reachable page that actually chains into
+it (ExamService's own exam detail -> ResultService.ByExam ->
+SubmissionService.ByExam, server-to-server).
+
+Negative case: navigated directly to another instructor's exam's report
+(/admin/reports/AD35E3CA-...), a real exam ("c# exam") confirmed via SQL
+earlier this session to be owned by a different user in the same
+tenant. Page rendered nothing but "Back to Exam Reports" - no title,
+no data. Checked actual network calls: GET /api/exams/{id} -> 404 (this
+one blocked earlier, at ExamService's own pre-existing OwnedOnly scope
+- not the fix from this round) AND GET /api/results/by-exam/{id} -> 404
+(this is ResultService.ByExam, which chains into the SubmissionService
+endpoint I just fixed). Confirms no data leaks either way, though notes
+the practical attack path this session's fix protects against is a
+DIRECT call to /api/submissions/by-exam/{examId} (or the results chain)
+bypassing the frontend's own exam-detail fetch entirely - relying on
+"the frontend happens to check something else first" is not real
+authorization, which is exactly why the SubmissionService-level fix was
+still necessary regardless of this UI-level result.
+
+Positive case: created + published a real exam ("Reports Ownership
+Test Exam") as this instructor, then loaded its own report page -
+"Total Attempts 0", clean render, no error. Gateway logs confirmed both
+GET /api/exams/{id} and GET /api/results/by-exam/{id} returned 200.
+Confirms the ownership check's match branch (CreatedByUserId ==
+ownerUserId) doesn't false-positive and break the legitimate owner's
+own path. Deleted the test exam afterward as cleanup.
+
+Did not test Live Monitoring/Security Violations endpoints via browser
+this round - no Instructor-reachable frontend page exists yet
+(/admin/live-monitoring/* routes are still roles={['Admin']} at the
+route level; only the backend API was opened this session). That
+remains true and unchanged from the earlier report to the user.
+
+---
+
+"i want all feature in roles and permissions" - reversed the earlier
+"reuse existing Exams check" decision for Assignments specifically;
+user wants every capability built this session to be a real, toggleable
+Roles & Permissions catalog entry, not just a role+ownership check.
+Investigated the actual enforcement architecture first (Explore agent)
+rather than guessing - key findings: 10 of the original 12 catalog
+permissions are genuinely enforced (only Dashboard-View/Certificates-
+View are decorative, contrary to a stale code comment claiming most
+were preview-only); enforcement is JWT-claims-based (permission grants
+require re-login to take effect, revocations take effect within ~30s
+via a PermissionVersionGuard - only present in ExamService/
+QuestionService, not ResultService/UserService/SubmissionService);
+ownership + permission-catalog checks already compose today (Exams-Edit
+stacks both), so this was not new architectural territory.
+
+Added 3 new permissions to RolePermissionCatalog.cs (now 15 total):
+"Assignments - Manage" (Assign Students), "Live Monitoring - View",
+"Security Violations - View". Deliberately did NOT add a 4th for
+"Student Attempts" - reused the EXISTING "Results - View" permission
+for SubmissionsController.ByExam instead, extending the "must stay in
+lockstep with ResultsController.ByExam" invariant already documented in
+code to the permission layer too, rather than adding a second
+independently-togglable permission for what's really one capability.
+
+Enforcement wiring:
+- ExamService: new AssignmentsManage policy in PermissionPolicies.cs
+  (same RequiresPermission+PermissionVersionGuard shape as Exams-Create/
+  Edit), added to all 6 AssignmentsController actions alongside the
+  existing Exams feature-policy check.
+- SubmissionService: had ZERO permission-catalog integration before
+  today (only FeaturePolicies.cs existed) - built a new
+  PermissionPolicies.cs from scratch, simple claim-check style matching
+  ResultService/UserService's simpler pattern (no version-guard). Wired
+  ByExam->ResultsView, LiveByExam->LiveMonitoringView,
+  ViolationsByExam->SecurityViolationsView, stacked alongside the
+  existing FeaturePolicies checks (plan-feature gates are a separate,
+  orthogonal axis from role-permissions - not replaced).
+
+Frontend: added the 3 new keys to COSMETIC_PERMISSIONS and
+INSTRUCTOR_PERMISSIONS (ADMIN_PERMISSIONS is a filter over the master
+list, no change needed there); added 3 new PERMISSION_MODULES groups
+to RolesPermissions.tsx's edit-modal grid (reused ViewIcon/ShieldIcon/
+SendIcon from ActionIcons.tsx); added matching SERVER_ENFORCED_
+PERMISSIONS + PERMISSION_INFO entries (new RoleSendIcon/RoleEyeIcon/
+RoleShieldAlertIcon helpers) to the platform SuperAdmin's
+OrganizationDetails.tsx - TypeScript's Record<CosmeticPermission,...>
+on PERMISSION_INFO force-compiles a check that no new key was missed.
+
+Verification: full build clean; UserService tests 109/109 (no test
+hardcoded the old "12 permissions" count); ExamService 91/91 and
+SubmissionService 104/104 unchanged (only controller attributes + a
+new Application-independent policies file touched, no handler/query
+signature changes). Rebuilt+redeployed user-api, exam-api,
+submission-api, frontend.
+
+Live-verified via the real Roles & Permissions UI as Admin (Amit Mane):
+"Total Permissions" correctly jumped 12->15 with 3 unassigned; opened
+"Edit Instructor Permissions" and confirmed all 3 new entries render
+correctly grouped with their icons; checked all 3 boxes for Instructor
+and saved - confirmed via direct DB read afterward that Instructor's
+RolePermissions rows now include them.
+
+Found and had to work through a REAL, live regression this surfaced:
+existing tenants' persisted RolePermission rows don't retroactively
+gain new catalog keys (confirmed by the Explore agent, then hit for
+real) - the moment AssignmentsManage/LiveMonitoringView/
+SecurityViolationsView became genuinely enforced, this tenant's Admin
+(whose row predated today's 3 new keys) started getting real 403s on
+Scheduled Exams and Live Monitoring, confirmed via gateway logs. Admin
+can't self-edit their own role's permissions in the UI (by design) and
+no second Admin/SuperAdmin account was available, so this couldn't be
+fixed through the normal product flow. Drafted the exact 3-row SQL
+INSERT needed and asked the user how to proceed rather than run a
+database write myself without asking (a genuine write action, correctly
+gated) - user chose to run it themselves; they did, and a DB read
+confirmed the 3 rows landed for Admin's role on this tenant.
+
+Also had to re-explain: permission grants are baked into the JWT at
+login, so the ALREADY-LOGGED-IN instructor's existing session token
+still lacked the new claims even after the DB was updated - user
+re-logged in as instructor, which picked up the fresh claims. Re-tested
+the full flow end to end after that: created+published a real exam,
+Scheduled Exams/Assign Students pages loaded cleanly (gateway logs
+showed 200s, not silently-swallowed 403s), created a real "All
+Students" assignment through the actual POST /api/assignments endpoint
+now gated by the new Assignments - Manage permission (gateway log
+confirmed 201 Created), then cleaned up (deleted the assignment and the
+test exam).
+
+IMPORTANT open item flagged to the user, not yet resolved: this same
+"existing tenant's persisted permissions don't retroactively gain new
+defaults" gap applies to EVERY other existing tenant, not just this
+test one - anywhere this ships beyond local dev, every existing
+tenant's Admin/Instructor rows will be missing these 3 keys the moment
+this deploys, and Admin's self-edit restriction means it can't always
+be fixed through the UI alone. Needs a real decision (a one-time
+backfill migration seeding any DefaultsForRole permission a tenant's
+role doesn't already have, or something else) before this goes beyond
+local dev - not yet designed or built.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+"still menu not seen in intructor" + "continue and update slidbar" - the
+permission-modal fix was correct, but the user's real ask was the
+sidebar itself: Instructor had been granted Live Monitoring/Security
+Violations/Results/Reports permissions but the sidebar and routes never
+followed - a rebuild I'd deliberately deferred earlier this session
+("until the underlying pages/routes are real and ownership-scoped").
+Since Assignments already proved that shape out this session, and the
+user explicitly asked to continue, did it now rather than deferring
+again.
+
+Investigated first (Explore agent) which Admin-only pages are actually
+safe to open before touching routes/sidebar, specifically to avoid
+repeating the ExamScheduled/AssignExam AdminLayout mistake from
+earlier. Good news: ActiveExams.tsx, StudentAttempts.tsx,
+SecurityViolations.tsx (Live Monitoring), ExamResults.tsx (Results),
+and AdminReports.tsx (Reports) are ALL backend-safe as-is - none call a
+tenant-wide "all exams" endpoint; every one derives its data from
+useExams() (already OwnedOnly-scoped for Instructor since earlier this
+session) and then fans out to per-owned-exam attempt/violation/result
+calls. Zero data-scoping changes needed in any of the 5 pages
+themselves.
+
+Found and fixed a real gap the investigation surfaced: all 4 of
+ActiveExams/StudentAttempts/SecurityViolations/ExamResults call
+useUsers() (Admin/SuperAdmin-only, GET /api/users) purely to resolve
+attempters' name/photo for display - would have 403'd for Instructor
+exactly like AssignExam.tsx's picker did before that fix. Swapped all 4
+to the existing useStudents() hook instead (same students-only endpoint
+built earlier for Assign Students) - extended StudentSummaryResponse/
+StudentSummary with a HasPhoto field since these 4 pages (unlike
+AssignExam's picker) also render avatar images, which the original
+narrower DTO didn't carry. Also found GET /api/users/{id}/photo
+(Admin-only, added in a prior session specifically "to let admin
+screens like Live Monitoring's student avatars render another user's
+photo") was never extended to Instructor either - widened its role
+check to Admin,Instructor (role-only, no ownership check - a lone
+photo is far less sensitive than the user directory, matching the
+same reasoning as the students endpoint).
+
+Also found and fixed: SecurityViolations.tsx's per-row status
+button (Investigate/Resolve) has no role gating in the UI at all - would
+have shown Instructor a working-looking control that 403s on click,
+since UpdateViolationStatus stays Admin-only server-side (spec grants
+Instructor a view, not a triage workflow, for Security Violations).
+Added a canManage check (Admin only) so Instructor sees the same status
+as a read-only badge instead.
+
+Rebuilt InstructorSidebar.tsx: kept it a flat list with two visual
+section headers ("Live Monitoring", "Results & Reports") rather than
+building AdminSidebar's full collapsible-group machinery - only 8 links
+total, not worth the added complexity. Widened all 5 corresponding
+AppRoutes.tsx routes from roles={['Admin']} to ['Admin','Instructor'],
+using RoleAwareLayout (not raw AdminLayout) in all 5 page files this
+time, learned from the earlier mistake.
+
+Verification: full backend build clean, UserService tests 109/109;
+frontend build clean (one real TS error caught mid-build: my
+STATUS_BADGE map used 'New' as a key, but ViolationStatus's real values
+are Open/UnderInvestigation/Resolved - fixed immediately, TypeScript
+caught it before it ever reached the browser). Rebuilt+redeployed
+user-api and frontend, clean startup both.
+
+Live-verified as instructor Mahesh sathe: sidebar now shows all 8 items
+(Dashboard, Exams, Scheduled Exams, Active Exams, Student Attempts,
+Security Violations, Exam Results, Exam Reports) via the accessibility
+tree; clicked through all 5 newly-opened pages - each rendered its own
+real (empty, since this instructor owns 0 exams right now) dashboard
+with no error state; checked gateway logs across the whole sequence -
+zero 4xx/5xx responses, including api/users/students calls succeeding
+on every page that needed attempter names.
+
+Deliberately NOT done yet, flagged as follow-up not silently expanded
+into: Student Results/Result Analytics/Publish Results (other Results
+sub-pages), Student Reports/Performance Reports/Exam Type Performance/
+Audit Reports (other Reports sub-pages - Audit Reports is explicit
+"❌" in the spec and must stay Admin-only), Proctoring (control actions,
+already flagged earlier as needing its own decision), and Notifications.
+None of these were investigated for tenant-wide-vs-per-exam data safety
+the way the 5 shipped today were - would need the same investigation
+pass before opening any of them.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+"continue" - moved to the remaining Results/Reports sub-pages per the
+follow-up list from the last entry. Investigated first (Explore agent),
+same pattern as before.
+
+Widened to Instructor (all confirmed own-exams-scoped, all safe
+data-wise): Student Results (StudentResults.tsx + its drill-down
+StudentResultDetails.tsx), Result Analytics (ResultAnalytics.tsx),
+Student Reports (StudentReports.tsx), Performance Reports
+(PerformanceReports.tsx). All 5 files: AdminLayout -> RoleAwareLayout,
+routes widened to ['Admin','Instructor'] in AppRoutes.tsx, sidebar
+entries added to InstructorSidebar.tsx (now 12 items total).
+
+Found and fixed the SAME useUsers()-403 gap again, in 4 more files this
+time (ActiveExams/StudentAttempts/SecurityViolations/ExamResults were
+fixed last entry; this round: StudentResults.tsx, StudentReports.tsx,
+and StudentResultDetails.tsx, which used a different single-user hook -
+useUser(id), also Admin-only - swapped to deriving from useStudents()'s
+list + .find() instead, consistent with how the other pages already
+build a lookup map from the full students list). StudentReports.tsx
+also had a now-redundant `.filter(u => u.role === 'Student')` line,
+removed since useStudents() is already pre-filtered server-side.
+
+Did NOT widen (both explicitly flagged to the user as needing a
+decision, not silently opened or silently skipped):
+
+1. Publish Results (PublishResults.tsx, /admin/results/publish) - a
+   WRITE action. The core publish call (PUT /api/exams/{id}) already
+   has a real Instructor+ownership path from earlier this session's
+   Exams work - not the blocker. The blocker: its "notify students"
+   sub-step calls POST /api/notifications, which is Admin-only with NO
+   Instructor path at all (NotificationsController.cs). Opening this
+   page as-is would let Instructor publish results but 403 the instant
+   they leave "notify students" checked (the default) - a real backend
+   gap, not a frontend-only fix like the others.
+
+2. Exam Type Performance (ExamTypeWiseReport.tsx family,
+   /admin/reports/exam-type-wise and its many sub-routes) - the
+   top-level list page itself is confirmed safe (aggregates only from
+   useExams()'s owned set, same pattern as everything else), but spec
+   calls this "👁️ Limited" (vague) and the investigation didn't trace
+   the 6 further sub-pages (exam-type/:typeId and its performance/
+   students/questions/sections children) in depth. Opening just the top
+   level would let Instructor click into an unverified sub-page and
+   either leak data or dead-end - didn't want to guess given the
+   ambiguity in the spec wording itself.
+
+Verification: frontend build clean (tsc caught nothing new this round);
+frontend rebuilt+redeployed, clean nginx startup. Live-verified as
+instructor Mahesh sathe: sidebar now shows 12 items via the
+accessibility tree; clicked through all 4 newly-opened top-level pages
+(Student Results, Result Analytics, Student Reports, Performance
+Reports) - each rendered its own real empty-state dashboard; Student
+Reports specifically confirmed "Total Students: 35" resolved correctly
+via the useStudents() swap. Checked gateway logs across the whole
+sequence - zero 4xx/5xx responses.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+User chose "Build the real fix now" for Publish Results' notify-students
+gap, and "Investigate the sub-pages first" for Exam Type Performance.
+Investigated both (Explore agent), then implemented both fully.
+
+**Exam Type Performance** (6 sub-pages + the already-safe top level):
+5 of 6 sub-pages (ExamTypeComparison, ExamTypeDetails,
+ExamTypePerformanceAnalysis, ExamTypeQuestionAnalysis,
+ExamTypeSectionPerformance) confirmed safe as-is - same useExams()-owned
+fan-out pattern as everything else. The 6th, ExamTypeStudentPerformance
+.tsx, had the SAME useUsers()-403 gap found repeatedly this session -
+fixed the same way (useStudents() + drop the now-redundant
+`.filter(role === 'Student')`). All 7 files (including the top-level
+list page, deferred from two entries ago pending this investigation):
+AdminLayout -> RoleAwareLayout, routes widened to ['Admin','Instructor']
+in AppRoutes.tsx, one new "Exam Type Performance" sidebar entry added
+(matching AdminSidebar's own pattern - only the top level gets a nav
+link, sub-pages are reached by drilling in from it).
+
+**Publish Results notify-students fix** - this went deeper than a
+frontend change. Root cause: `CreateNotificationHandler`
+unconditionally calls `IUserDirectoryClient.GetAllUsersAsync` (GET
+/api/users, Admin/SuperAdmin-only) to resolve ANY notification's
+recipients, regardless of caller role - so even with the controller
+role-widened, an Instructor's own notification attempt would 403
+internally before ever reaching the recipient-filtering logic.
+
+Implemented, mirroring the SubmissionService cross-service pattern from
+earlier this session:
+- New IExamLookupClient/ExamServiceClient in NotificationService
+  (NotificationService had NO ExamService client at all before this -
+  its only cross-service exam-adjacent client, IExamAssignmentLookupClient,
+  talks to Assignments, not exam ownership), registered against the
+  already-configured Services:ExamServiceBaseUrl.
+- IUserDirectoryClient gained GetStudentsAsync (GET /api/users/students)
+  as the Instructor-safe alternative to GetAllUsersAsync.
+- CreateNotificationCommand/Result gained OwnerUserId/IsForbidden.
+  CreateNotificationHandler: when OwnerUserId is set, RelatedExamId is
+  now REQUIRED and must resolve (via the new client) to an exam that
+  caller owns, else Forbidden (write action - real 403, not the
+  read-path "return empty" convention) - checked before touching
+  recipients at all; then uses GetStudentsAsync instead of
+  GetAllUsersAsync specifically when OwnerUserId is set (Admin/
+  SuperAdmin unaffected, still uses the full directory for their
+  Admins-targeting notifications).
+- Added a genuinely new permission-catalog entry, "Notifications -
+  Create" (17th total now... wait, 16th - matches the "I want all
+  features in roles and permissions" ask from earlier rather than
+  gating on ownership alone with no toggle) - RolePermissionCatalog.cs,
+  NotificationService's own PermissionPolicies.cs (it already had the
+  full PermissionVersionGuard infrastructure wired, just no
+  Notifications policy using it yet), and the full frontend trio
+  (cosmeticRolePermissions.ts, RolesPermissions.tsx new "Notifications"
+  module with a new BellIcon, OrganizationDetails.tsx SERVER_ENFORCED_
+  PERMISSIONS + PERMISSION_INFO with a new RoleBellIcon).
+- NotificationsController.Create: Admin-only -> Admin,Instructor +
+  new NotificationsCreate permission policy stacked alongside the
+  existing Notifications feature-policy.
+- PublishResults.tsx: AdminLayout -> RoleAwareLayout, route widened.
+
+Testing: added FakeExamLookupClient + GetStudentsAsync to
+FakeUserDirectoryClient (NotificationService.Application.Tests), 3 new
+CreateNotificationHandlerTests cases (no-exam -> forbidden, wrong-owner
+-> forbidden, correct-owner -> succeeds and resolves only students).
+Full build clean; NotificationService tests 26/26 (was 23, +3);
+UserService 109/109 unchanged. Frontend build clean.
+
+Hit the SAME "existing tenant doesn't retroactively get the new
+permission" issue as the last entry, for the 3rd time this session -
+expected at this point, not a new bug. Confirmed via DB Instructor's
+row was missing "Notifications - Create" after redeploy; as Admin,
+opened Instructor's edit modal (now showing a clean 8-module grid
+thanks to the earlier role-scoping fix - "Notifications" module has
+just the one checkbox) and granted it. First save attempt appeared to
+silently not take (DB still missing it right after) - re-did the
+checkbox-then-save sequence more carefully (screenshotting the checked
+state before saving this time) and the second attempt persisted
+correctly; not fully certain whether the first attempt was a real UI
+timing issue or my own tooling raced ahead of a save that was still
+in flight - flagging in case it recurs, but the end state is correct
+and verified via direct DB read.
+
+Live-verified as instructor Mahesh sathe (fresh login again, same
+JWT-claims-are-baked-in-at-login reason as before): sidebar now shows
+14 items total via the accessibility tree; Publish Results loads
+cleanly ("Ready to Publish (0)", no exams to publish yet since this
+instructor has none right now - the page's own useGroups() call 403s
+for Instructor exactly like the already-accepted Batch/Group gap
+elsewhere, handled gracefully by the page's existing `groups ?? []`
+fallback, not a new issue); Exam Type Performance and its Comparison
+sub-page both load cleanly with real tenant-wide exam-type taxonomy
+data (9 exam types) and zero per-owner leak. Did NOT live-test an
+actual publish-with-notify-students click end-to-end - this instructor
+has no exam with real submitted attempts to publish right now, and
+creating one needs a student account to actually take an exam, which
+isn't available. Backend logic is covered by the 3 new unit tests
+instead.
+
+Not committed/pushed - holding per standing rule. This is very likely
+the natural stopping point for this whole Instructor-role initiative
+unless the user has more specific gaps to report - Assignments, Exams,
+Live Monitoring, Results, Reports, and Notifications are now all
+genuinely built, ownership-scoped, and permission-gated for Instructor;
+remaining known gaps (Batch/Group assignment, Proctoring's control
+actions, Question Bank, the cross-tenant default-permission-backfill
+migration) are all deliberately deferred and already flagged to the
+user, not silently left incomplete.
+
+---
+
+User checked ALL 15 boxes for Instructor (screenshot showed Users-View/
+Edit, Settings-View/Edit, Certificates-View all checked too) and asked
+why "student" wasn't seen anywhere - traced this to the Roles &
+Permissions edit modal showing the SAME full 15-permission list for
+every role being edited, with no indication of which permissions
+actually apply to which role (e.g. Certificates-View is a student-only
+concept per an existing code comment, but was checkable - and now
+checked - for Instructor). User's actual ask, confirmed via follow-up
+("those are related to intructor shoe them only"): scope each role's
+edit modal to only the permissions relevant to that role.
+
+Implemented in RolesPermissions.tsx (the tenant Admin's own console -
+deliberately did NOT touch the platform SuperAdmin's OrganizationDetails
+.tsx equivalent, which explicitly documents itself as intentionally
+unrestricted: "every permission below can still be toggled and saved
+either way"):
+- New allowedPermissionsForRole(role) helper reuses the existing
+  ADMIN_PERMISSIONS/INSTRUCTOR_PERMISSIONS/STUDENT_PERMISSIONS arrays
+  (already encode "what makes sense for this role") as the definitive
+  allow-list, rather than inventing a second parallel concept.
+- openEdit() now filters the role's persisted permissions down to just
+  the allowed set before seeding draftPermissions - so opening+saving a
+  role's modal also cleans up any previously-granted permission that
+  doesn't belong to that role, not just hides it cosmetically.
+- The modal's PERMISSION_MODULES render is filtered the same way per
+  module; a module with zero relevant permissions for the role being
+  edited (e.g. "Users" when editing Instructor) doesn't render at all.
+
+Verified live as Admin (Amit Mane) after rebuild+redeploy: Instructor's
+edit modal now shows only 9 modules/permissions (Dashboard, Exams x2,
+Assignments, Questions x2, Results, Live Monitoring, Security, Reports)
+- no Users/Settings/Certificates. Student's edit modal shows only
+Dashboard/Results/Certificates, with Certificates - View now exclusive
+to Student as intended. Re-opened Instructor's modal and clicked Save
+Changes with no further edits specifically to flush the cleanup - a DB
+read afterward confirmed Instructor's RolePermissions rows dropped from
+15 down to the correct 10 (the accidentally-granted Users-View/Edit,
+Settings-View/Edit, and Certificates-View rows are gone; all 9
+spec-aligned ones remain).
+
+Not committed/pushed - holding per standing rule.
+
+
+---
+
+Instructor Notifications: closed two more real security/reliability gaps
+found via code re-review and live testing, then completed a full live E2E
+verification with real data.
+
+1. SendTo=ExamCandidates tightening (CreateNotificationHandler.cs):
+   an Instructor naming an owned exam could still pick SendTo=AllStudents/
+   Groups/SelectedStudents/Admins and broadcast tenant-wide - the original
+   ownership check only verified RelatedExamId ownership, not that SendTo
+   was actually ExamCandidates. Fixed by requiring both conditions. Updated
+   one existing test, added
+   Instructor_cannot_broadcast_to_all_students_even_naming_an_owned_exam.
+
+2. GET /api/notifications/admin/history/stats 403'd for Instructor even
+   after GetHistory itself was fixed - a separate, untouched
+   endpoint/handler/repository method powering the History page's 4 stat
+   cards. Found via gateway logs (403 interleaved with 200s) during live
+   testing. Fixed by extending the same ownedExamIds filtering pattern to
+   GetNotificationHistoryStatsQuery/Handler/INotificationRepository.
+   GetHistoryStatsAsync/NotificationRepository, mirroring GetHistoryAsync's
+   fix exactly. Added GetNotificationHistoryStatsHandlerTests.cs (2 tests).
+
+3. CreateNotification.tsx was permanently un-submittable for Instructor:
+   useNotificationTemplates() hits the correctly-Admin-only
+   GET /api/notifications/admin/templates (403 for Instructor), and
+   canSubmit/the mutation both hard-required a template. Fixed by disabling
+   the templates query for Instructor, relaxing canSubmit to
+   (!!template || isInstructor), defaulting type to 'Exam', and hiding the
+   now-pointless "Notification Type" dropdown column in the JSX for
+   Instructor.
+
+Final NotificationService test count: 30/30 passing.
+
+Live E2E test performed as real Instructor account (Mahesh sathe,
+test.localhost): created "Notification Test Exam" -> added a True/False
+question -> published -> assigned all 35 students -> sent a real
+notification (Exam Candidates, no template) -> confirmed it appears
+correctly (and only - ownership filter working) in Notification History,
+with History's stat cards showing accurate counts. Test exam + assignment
+deleted afterward to clean up.
+
+Two new findings surfaced during this live test, NOT part of the
+Instructor-scoping work and NOT yet fixed (flagging, not silently fixing):
+
+A. Pre-existing reliability bug (affects Admin too, not Instructor-
+   specific): CreateNotificationHandler sends emails synchronously, one
+   recipient at a time, in a loop inside the request handler, and only
+   persists the Notification batch to the DB at the end. With 35
+   recipients and a real (slow, ~7-10s per call) email webhook, the
+   request exceeded the API gateway's timeout. The gateway cancelled the
+   connection; the emails had already gone out for real, but the handler
+   never reached its final SaveChangesAsync, so NO notification records
+   were persisted at all - nothing in History, no delivery tracking, and
+   the sender saw a generic "Something went wrong" error despite the
+   emails already being delivered. Confirmed via direct read-only DB query
+   (0 rows in NotificationDb.Notifications for the test exam) after the
+   emails had already gone out per notification-api's own logs. Retried
+   the same send as "In-App Only" (skips the slow email loop) and it
+   completed correctly. Root fix would mean moving recipient email
+   sending off the synchronous request path (e.g. into
+   notification-worker) - out of scope for today, flagged for the user.
+
+B. Real, pre-existing feature gap for Instructor found via code
+   re-review while investigating (A): ExamDetails.tsx (an existing,
+   already-Instructor-accessible page, not touched this session) calls
+   useUngradedAnswers(id) unconditionally to decide whether to show a
+   "Grade Code Answers" button. The backing endpoints -
+   GET /api/submissions/ungraded and PUT .../grade in
+   SubmissionsController.cs - are both [Authorize(Roles = "Admin")] only,
+   so they 403 for Instructor. The button silently never appears for
+   Instructor even when their own exam has manually-gradable Code/
+   Programming answers waiting - meaning Instructor currently has no way
+   to grade their own exam's code questions. Not fixed yet - needs the
+   same ownership-check design work as the rest of this session
+   (SubmissionService's PermissionPolicies.cs would need a new policy,
+   plus an ownership check on both actions since GradeAnswer is a write).
+   Flagged to the user for a decision on whether to build this now or
+   defer.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+Fixed the two gaps flagged above (user chose "fix now" for both).
+
+1. Instructor grading gap (SubmissionService): GET /api/submissions/ungraded
+   and PUT .../answers/{questionId}/grade were both [Authorize(Roles =
+   "Admin")] only. Widened both to "Admin,Instructor" + added the existing
+   ResultsView policy (reusing "Results - View", matching this
+   controller's own established lockstep-permission precedent rather than
+   inventing a new permission). Added ownership checks:
+   - ListUngradedAnswersByExamQuery/Handler gained OwnerUserId/BearerToken,
+     same "return empty, not 403" read-path convention as
+     ListAttemptsByExamHandler.
+   - GradeAnswerCommand/Handler gained OwnerUserId/BearerToken; the handler
+     now loads the attempt first (to get its ExamId, since the command
+     only carries AttemptId/QuestionId), looks up the exam via
+     IExamLookupClient, and returns the new GradeAnswerResult.Forbidden()
+     (mapped to controller Forbid()) on an ownership mismatch - write-path
+     convention, matching CreateNotificationHandler's Forbidden() pattern.
+   Added 3 new tests (Instructor_grading_queue_for_an_exam_they_do_not_own_is_empty,
+   Instructor_grading_an_answer_on_an_exam_they_own_succeeds,
+   Instructor_cannot_grade_an_answer_on_an_exam_they_do_not_own).
+   SubmissionService.Application.Tests: 107/107 passing. Rebuilt/redeployed
+   submission-api, clean startup confirmed via logs.
+
+2. Notification send data-loss/timeout bug (NotificationService): root
+   cause was NotificationPersistenceService.CreateNotificationsAsync
+   sending every recipient's email synchronously in a loop and calling
+   SaveChangesAsync exactly once, at the end. Fixed by splitting the work:
+   - All recipient rows are now persisted immediately as EmailStatus.Pending
+     (one fast SaveChangesAsync) before any email is attempted - a
+     cancelled/timed-out request can no longer lose the batch, since it's
+     already durably stored the moment the method returns.
+   - Actual per-recipient email sending is handed to a new
+     INotificationDispatchQueue (Channel-backed, Infrastructure) and
+     processed by a new NotificationDispatchBackgroundService (BackgroundService,
+     registered like the existing SystemErrorLogRetentionCleanupService)
+     that runs in-process in Notification.API, using its own DI scope per
+     item (IServiceScopeFactory) and IgnoreQueryFilters() on its one
+     read/write (no ambient HttpContext/tenant in a background loop - same
+     reasoning as every other background-consumer read in this service).
+   - This is the single shared persistence method used by
+     CreateNotificationHandler, ResendNotificationBatchHandler, AND all of
+     NotificationService.Worker's event consumers (ExamAssignedConsumer
+     etc.) - fixing it here fixes the same underlying risk everywhere, not
+     just the admin-composed send path.
+   - CreateNotification.tsx's success message changed from "Delivered to N
+     recipients" to "Queued for N recipients. Delivery status will update
+     in History shortly." to match the new (accurate) immediate-return
+     behavior.
+   NotificationService.Application.Tests: 30/30 passing (interface
+   unchanged, only the Infrastructure implementation changed - no fakes
+   needed updating). Rebuilt/redeployed notification-api and frontend,
+   clean startup confirmed via logs.
+
+   Live-verified with a fresh real exam + 35 real assigned students +
+   In-App+Email send, as Instructor: the POST returned in ~1s (201, no
+   gateway timeout), History immediately showed the batch with recipients
+   accruing Delivered status over the next ~45s as the background service
+   worked through the real email webhook, and a direct read-only DB query
+   confirmed all 35 rows reached EmailStatus=Delivered. Zero 4xx/5xx in
+   gateway logs for the entire test. Test exam deleted afterward.
+
+   Known minor follow-up NOT addressed (out of scope for this fix): the
+   batch-level "Status" column shown in History/GetHistoryAsync has no
+   distinct "Pending"/"Sending" bucket - immediately after a large send it
+   will optimistically show "Delivered" for a batch that is still being
+   dispatched in the background, correcting itself once dispatch finishes.
+   Pre-existing status-label simplification, just more visible now that
+   sending is asynchronous.
+
+Not committed/pushed - holding per standing rule.

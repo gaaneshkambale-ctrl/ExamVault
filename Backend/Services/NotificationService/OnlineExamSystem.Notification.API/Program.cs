@@ -74,6 +74,8 @@ public class Program
 
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
+        builder.Services.AddSingleton<INotificationDispatchQueue, NotificationDispatchQueue>();
+        builder.Services.AddHostedService<NotificationDispatchBackgroundService>();
         builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
 
         // Trailing slash is required: HttpClient/Uri combine a relative request path against
@@ -93,6 +95,8 @@ public class Program
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IExamAssignmentLookupClient, ExamAssignmentLookupClient>(client =>
+            client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IExamLookupClient, ExamServiceClient>(client =>
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
         builder.Services.AddScoped<GetMyNotificationsHandler>();

@@ -117,6 +117,17 @@ export interface PlatformUserListItem extends Omit<UserListItem, 'role'> {
   role: UserRole | 'SuperAdmin';
 }
 
+// GET /api/users/students - the Instructor-reachable slice of GET /api/users
+// (which requires "Users - View", a permission Instructor deliberately never
+// has). Only the fields an "assign this exam to students" picker needs.
+export interface StudentSummary {
+  id: string;
+  fullName: string;
+  email: string;
+  rollNumber: string | null;
+  hasPhoto: boolean;
+}
+
 export interface CreateUserRequest {
   fullName: string;
   email: string;

@@ -29,6 +29,14 @@ public class DeleteExamHandler
             return DeleteExamResult.NotFound();
         }
 
+        // Instructor is restricted to exams they created themselves, same
+        // ownership rule Update/ChangeStatus already enforce; Admin/
+        // SuperAdmin remain unrestricted (null = no ownership check).
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return DeleteExamResult.Forbidden();
+        }
+
         await _examRepository.RemoveAsync(exam, cancellationToken);
         await _examRepository.SaveChangesAsync(cancellationToken);
 

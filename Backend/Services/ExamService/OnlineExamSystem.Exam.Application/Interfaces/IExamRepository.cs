@@ -84,7 +84,11 @@ public interface IExamRepository
         Guid examId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Every assignment tenant-wide, with its exam's title - optionally filtered
+    /// to assignments whose exam's CreatedByUserId matches ownerUserId (the Instructor
+    /// ownership scope; null for Admin/SuperAdmin's unrestricted view).</summary>
     Task<IReadOnlyList<AssignmentWithExamTitle>> GetAllAssignmentsAsync(
+        Guid? ownerUserId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Returns true if the assignment was found and removed (its targets cascade with it).</summary>

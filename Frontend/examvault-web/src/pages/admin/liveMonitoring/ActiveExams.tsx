@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Badge, Card, Col, Form, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../../layouts/AdminLayout';
+import RoleAwareLayout from '../../../layouts/RoleAwareLayout';
 import UserAvatar from '../../../components/UserAvatar';
-import { useUsers } from '../../../hooks/useUsers';
+import { useStudents } from '../../../hooks/useUsers';
 import { useActiveExamCards, type ActiveExamStatus } from '../../../hooks/useActiveExamCards';
 import { attemptViolationCount } from '../../../utils/proctoring';
 import { EXAM_CATEGORIES } from '../../../types/exam';
@@ -23,7 +23,7 @@ function formatTime(value: string | null): string {
 
 export default function ActiveExams() {
   const { cards: allCards, isLoading: loading, isError: isExamsError } = useActiveExamCards();
-  const { data: users } = useUsers();
+  const { data: users } = useStudents();
   const [examNameFilter, setExamNameFilter] = useState<'All' | string>('All');
   const [categoryFilter, setCategoryFilter] = useState<'All' | string>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -60,7 +60,7 @@ export default function ActiveExams() {
   };
 
   return (
-    <AdminLayout active="Active Exams">
+    <RoleAwareLayout active="Active Exams">
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1">
         <div>
           <h1 className="h4 fw-bold mb-1 text-primary">Active Exams</h1>
@@ -283,6 +283,6 @@ export default function ActiveExams() {
           </Card.Body>
         </Card>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

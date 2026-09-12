@@ -1,6 +1,13 @@
 namespace OnlineExamSystem.Submission.Application.Interfaces;
 
-public record ExamLookupResult(Guid Id, string Status, int MaxAttempts, DateTime? StartAtUtc, DateTime? EndAtUtc, int DurationMinutes);
+public record ExamLookupResult(
+    Guid Id,
+    string Status,
+    int MaxAttempts,
+    DateTime? StartAtUtc,
+    DateTime? EndAtUtc,
+    int DurationMinutes,
+    Guid? CreatedByUserId = null);
 
 public record SectionLookupResult(
     Guid Id,

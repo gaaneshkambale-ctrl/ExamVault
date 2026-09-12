@@ -19,4 +19,11 @@ public record CreateAssignmentCommand(
     bool EnableProctoring,
     bool EnableLiveVideo,
     string BearerToken,
-    Guid CreatedByUserId);
+    Guid CreatedByUserId,
+    // Instructor is restricted to exams they created themselves, same
+    // ownership rule ExamsController's Update/Delete/ChangeStatus already
+    // enforce; Admin/SuperAdmin remain unrestricted (null = no ownership
+    // check). Distinct from CreatedByUserId above (always set, records
+    // provenance) even though they're the same value for an Instructor
+    // caller.
+    Guid? OwnerUserId = null);

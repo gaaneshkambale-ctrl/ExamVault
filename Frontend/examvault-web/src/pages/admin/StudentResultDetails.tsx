@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import UserAvatar from '../../components/UserAvatar';
 import DonutChart from '../../components/charts/DonutChart';
 import { ViewIcon, DownloadIcon, ShieldIcon, EditIcon } from '../../components/icons/ActionIcons';
 import { useExam } from '../../hooks/useExams';
-import { useUser } from '../../hooks/useUsers';
+import { useStudents } from '../../hooks/useUsers';
 import { useSections } from '../../hooks/useSections';
 import { useQuestions } from '../../hooks/useQuestions';
 import { useAttemptsByExam, useViolationsByExam } from '../../hooks/useSubmissions';
@@ -103,7 +103,8 @@ export default function StudentResultDetails() {
   const previousResult = resultIndex > 0 ? sortedResults[resultIndex - 1] : null;
   const nextResult = resultIndex >= 0 && resultIndex < sortedResults.length - 1 ? sortedResults[resultIndex + 1] : null;
 
-  const { data: student } = useUser(result?.userId);
+  const { data: students } = useStudents();
+  const student = students?.find((s) => s.id === result?.userId);
 
   const attempt = useMemo(
     () => (examId ? (attemptsByExam[examId] ?? []).find((a) => a.id === attemptId) : undefined),
@@ -162,21 +163,21 @@ export default function StudentResultDetails() {
 
   if (loading) {
     return (
-      <AdminLayout active="Student Results">
+      <RoleAwareLayout active="Student Results">
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
   if (!exam || !result) {
     return (
-      <AdminLayout active="Student Results">
+      <RoleAwareLayout active="Student Results">
         <div className="text-center text-muted py-5">
           Result not found. <Link to="/admin/results/students">Back to Student Results</Link>
         </div>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
@@ -190,7 +191,7 @@ export default function StudentResultDetails() {
       : null;
 
   return (
-    <AdminLayout active="Student Results">
+    <RoleAwareLayout active="Student Results">
       <div className="text-muted small mb-2">
         <Link to="/admin/results/students" className="text-decoration-none">
           Student Results
@@ -659,6 +660,6 @@ export default function StudentResultDetails() {
           </Card>
         </Col>
       </Row>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

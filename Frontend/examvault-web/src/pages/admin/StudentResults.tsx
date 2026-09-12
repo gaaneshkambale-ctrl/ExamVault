@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import TablePagination from '../../components/reports/TablePagination';
 import { ViewIcon, DownloadIcon, ShieldIcon } from '../../components/icons/ActionIcons';
 import { CheckCircleIcon, AlertTriangleIcon, ActivityIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
-import { useUsers } from '../../hooks/useUsers';
+import { useStudents } from '../../hooks/useUsers';
 import { useGroups, useGroup } from '../../hooks/useGroups';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
@@ -65,7 +65,7 @@ function integrityScore(result: AdminAttemptResultResponse): number {
 
 export default function StudentResults() {
   const { data: exams, isLoading: isLoadingExams } = useExams();
-  const { data: users, isLoading: isLoadingUsers } = useUsers();
+  const { data: users, isLoading: isLoadingUsers } = useStudents();
   const { data: groups } = useGroups();
   const examIds = useMemo(() => (exams ?? []).map((e) => e.id), [exams]);
   const { attemptsByExam } = useAttemptsByExam(examIds);
@@ -241,7 +241,7 @@ export default function StudentResults() {
   const rangeEnd = Math.min(currentPage * pageSize, filteredRows.length);
 
   return (
-    <AdminLayout active="Student Results">
+    <RoleAwareLayout active="Student Results">
       <h1 className="h4 fw-bold mb-1 text-primary">Student Results</h1>
       <p className="text-muted mb-4">View individual student results and performance.</p>
 
@@ -512,6 +512,6 @@ export default function StudentResults() {
           )}
         </Modal.Body>
       </Modal>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

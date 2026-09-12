@@ -154,6 +154,7 @@ public class Program
         builder.Services.AddScoped<RegisterUserHandler>();
         builder.Services.AddScoped<GetUserProfileHandler>();
         builder.Services.AddScoped<ListUsersHandler>();
+        builder.Services.AddScoped<ListStudentsHandler>();
         builder.Services.AddScoped<GetUsersByIdsHandler>();
         builder.Services.AddScoped<IValidator<CreateUserCommand>, CreateUserValidator>();
         builder.Services.AddScoped<CreateUserHandler>();

@@ -21,6 +21,15 @@ public class CancelAssignmentHandler
             return CancelAssignmentResult.NotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId)
+        {
+            var exam = await _examRepository.GetByIdAsync(assignment.ExamId, cancellationToken);
+            if (exam is null || exam.CreatedByUserId != ownerUserId)
+            {
+                return CancelAssignmentResult.Forbidden();
+            }
+        }
+
         assignment.CancelledAtUtc = DateTime.UtcNow;
         await _examRepository.SaveChangesAsync(cancellationToken);
 
