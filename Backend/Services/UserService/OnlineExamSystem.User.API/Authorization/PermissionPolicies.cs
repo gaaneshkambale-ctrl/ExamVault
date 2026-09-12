@@ -20,6 +20,8 @@ public static class PermissionPolicies
 {
     public const string UsersView = "Permission:Users-View";
     public const string UsersEdit = "Permission:Users-Edit";
+    public const string SettingsView = "Permission:Settings-View";
+    public const string SettingsEdit = "Permission:Settings-Edit";
 
     public static void AddPermissionPolicies(this AuthorizationOptions options)
     {
@@ -29,5 +31,11 @@ public static class PermissionPolicies
         options.AddPolicy(UsersEdit, policy => policy.RequireAssertion(context =>
             context.User.IsInRole("SuperAdmin") ||
             context.User.HasClaim(PermissionClaimTypes.Permission, "Users - Edit")));
+        options.AddPolicy(SettingsView, policy => policy.RequireAssertion(context =>
+            context.User.IsInRole("SuperAdmin") ||
+            context.User.HasClaim(PermissionClaimTypes.Permission, "Settings - View")));
+        options.AddPolicy(SettingsEdit, policy => policy.RequireAssertion(context =>
+            context.User.IsInRole("SuperAdmin") ||
+            context.User.HasClaim(PermissionClaimTypes.Permission, "Settings - Edit")));
     }
 }

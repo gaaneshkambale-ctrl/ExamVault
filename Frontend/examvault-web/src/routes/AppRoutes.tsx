@@ -56,6 +56,7 @@ import ExamTypeComparison from '../pages/admin/ExamTypeComparison';
 import ExamTypeQuestionAnalysis from '../pages/admin/ExamTypeQuestionAnalysis';
 import ExamTypeSectionPerformance from '../pages/admin/ExamTypeSectionPerformance';
 import AdminSettings from '../pages/admin/AdminSettings';
+import OrganizationSettings from '../pages/admin/OrganizationSettings';
 import ExamSettingsPage from '../pages/admin/settings/ExamSettingsPage';
 import SecuritySettingsPage from '../pages/admin/settings/SecuritySettingsPage';
 import ProctoringSettingsPage from '../pages/admin/settings/ProctoringSettingsPage';
@@ -743,6 +744,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['Admin']}>
             <AdminSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings/organization"
+        element={
+          <ProtectedRoute roles={['Admin']}>
+            <OrganizationSettings />
           </ProtectedRoute>
         }
       />

@@ -66,4 +66,51 @@ public class Tenant : BaseEntity
     // detect a stale token (one issued before the bump) within one cache
     // cycle instead of waiting for its natural ~15-minute expiry.
     public int PermissionVersion { get; set; }
+
+    // Organization Settings (tenant self-service profile, distinct from the
+    // SuperAdmin-only provisioning fields above) - identity/contact/branding
+    // used on the tenant's own PDF report letterhead and portal.
+    public string? ShortName { get; set; }
+    public int? EstablishedYear { get; set; }
+    public string? Website { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? ContactPhone { get; set; }
+    public string? AlternatePhone { get; set; }
+    public string? RegistrationNumber { get; set; }
+    public string? TaxIdentificationNumber { get; set; }
+    public string? TimeZone { get; set; }
+
+    public byte[]? LogoData { get; set; }
+    public string? LogoContentType { get; set; }
+    public byte[]? FaviconData { get; set; }
+    public string? FaviconContentType { get; set; }
+
+    public string? PrimaryColor { get; set; }
+    public string? SecondaryColor { get; set; }
+    public string? AccentColor { get; set; }
+    public string? TextColor { get; set; }
+
+    // Rendered on PDF reports as the signing authority - see
+    // Authorized Signatory card on the Organization Settings page.
+    public string? SignatoryName { get; set; }
+    public string? SignatoryDesignation { get; set; }
+    public byte[]? SignatureImageData { get; set; }
+    public string? SignatureImageContentType { get; set; }
+
+    public bool ShowLogoOnPdfReports { get; set; } = true;
+    public bool IncludeAddressInPdfFooter { get; set; } = true;
+    public bool ShowMottoTagline { get; set; } = true;
+    public bool EnableMultiCampus { get; set; } = false;
+
+    // PDF & Report Settings tab - options specific to the generated report
+    // document itself, distinct from the organization-identity toggles above.
+    public bool ShowQrCodeForVerification { get; set; } = true;
+    public bool ShowContactDetails { get; set; } = true;
+    public bool ShowPageNumbers { get; set; } = true;
+    public bool UseBrandColorsInReportHeader { get; set; } = true;
+    public bool EnableWatermark { get; set; } = false;
+    public string? MottoTagline { get; set; }
+    public string? DefaultAcademicYear { get; set; }
+    public string? DefaultLanguage { get; set; }
+    public string? DateFormat { get; set; }
 }

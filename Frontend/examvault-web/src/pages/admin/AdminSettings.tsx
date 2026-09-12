@@ -7,6 +7,7 @@ import type { SettingsCardRow } from '../../components/settings/SettingsCard';
 import { useExamDefaults, useProctoringSettings, useReminderSettings } from '../../hooks/useExams';
 import { useMyPreferences } from '../../hooks/useNotifications';
 import { useFeatures } from '../../hooks/useFeatures';
+import { useOrganizationSettings } from '../../hooks/useOrganizationSettings';
 
 const icon = {
   exam: (
@@ -41,6 +42,13 @@ const icon = {
       <line x1="6" y1="17" x2="6.01" y2="17" />
     </svg>
   ),
+  organization: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 21h18" />
+      <path d="M5 21V7l7-4 7 4v14" />
+      <path d="M9 9h1M9 13h1M14 9h1M14 13h1M9 21v-4h6v4" />
+    </svg>
+  ),
 };
 
 const YesBadge = ({ on }: { on: boolean }) => (
@@ -62,8 +70,9 @@ export default function AdminSettings() {
   const { data: proctoring, isLoading: loadingProctoring } = useProctoringSettings();
   const { data: reminders, isLoading: loadingReminders } = useReminderSettings();
   const { data: preferences } = useMyPreferences();
+  const { data: organization, isLoading: loadingOrganization } = useOrganizationSettings();
 
-  const isLoading = loadingExamDefaults || loadingProctoring || loadingReminders;
+  const isLoading = loadingExamDefaults || loadingProctoring || loadingReminders || loadingOrganization;
 
   const resultPref = (preferences ?? []).find((p) => p.type === 'Result');
   const anyEmailEnabled = (preferences ?? []).some((p) => p.emailEnabled);
@@ -117,7 +126,27 @@ export default function AdminSettings() {
         ]
       : [];
 
+    const organizationRows: SettingsCardRow[] = organization
+      ? [
+          { label: 'Institution Name', value: organization.name },
+          { label: 'Contact Email', value: organization.contactEmail ?? '—' },
+          { label: 'Logo Uploaded', value: <YesBadge on={organization.hasLogo} /> },
+          { label: 'Authorized Signatory', value: organization.signatoryName ?? '—' },
+        ]
+      : [];
+
     return [
+      {
+        key: 'organization',
+        icon: icon.organization,
+        iconBg: '#e0e7ff',
+        iconColor: '#4338ca',
+        title: 'Organization Settings',
+        subtitle: 'Manage institution details, branding, and PDF/report defaults.',
+        rows: organizationRows,
+        manageLabel: 'Manage Organization Settings',
+        manageTo: '/admin/settings/organization',
+      },
       {
         key: 'exam',
         icon: icon.exam,
@@ -163,7 +192,7 @@ export default function AdminSettings() {
         manageTo: '/admin/settings/notifications',
       },
     ];
-  }, [examDefaults, proctoring, reminders, preferences, resultPref, anyEmailEnabled, anyInAppEnabled, remindersEnabledCount]);
+  }, [examDefaults, proctoring, reminders, preferences, resultPref, anyEmailEnabled, anyInAppEnabled, remindersEnabledCount, organization]);
 
   const filteredCards = useMemo(() => {
     // Security/Proctoring Settings edit the same ProctoringSettings entity

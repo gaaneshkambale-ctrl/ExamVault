@@ -188,6 +188,10 @@ export default function ManageExams() {
   // these actions, matching what ExamsController actually enforces.
   const canCreateExams = user?.role !== 'Instructor' || hasPermission('Exams - Create');
   const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
+  // Only Admin sees who authored each exam - Instructor's own list is
+  // already scoped to exams they created themselves, so the column would
+  // just repeat their own name on every row.
+  const showCreatedBy = user?.role !== 'Instructor';
   const { data: exams, isLoading, isError } = useExams();
   const { data: examTypes } = useExamTypes();
   const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
@@ -484,6 +488,7 @@ export default function ManageExams() {
                     <th>Total Marks</th>
                     <th>Status</th>
                     <th>Created On</th>
+                    {showCreatedBy && <th>Created By</th>}
                     <th className="pe-4">Actions</th>
                   </tr>
                 </thead>
@@ -538,6 +543,14 @@ export default function ManageExams() {
                             {new Date(exam.createdOn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </td>
+                        {showCreatedBy && (
+                          <td>
+                            <span className="d-inline-flex align-items-center gap-1 small">
+                              <PersonIcon />
+                              {exam.createdByName ?? 'Unknown'}
+                            </span>
+                          </td>
+                        )}
                         <td className="pe-4">
                           <div className="d-flex gap-2">
                             <Link

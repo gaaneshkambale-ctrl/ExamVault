@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OnlineExamSystem.User.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using OnlineExamSystem.User.Infrastructure.Persistence;
 namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(UserDbContext))]
-    partial class UserDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260912102115_AddOrganizationSettingsToTenant")]
+    partial class AddOrganizationSettingsToTenant
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -488,9 +491,6 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.Property<string>("AddressLine2")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("AlternatePhone")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("City")
                         .HasColumnType("nvarchar(max)");
 
@@ -519,9 +519,6 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("EnableMultiCampus")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EnableWatermark")
                         .HasColumnType("bit");
 
                     b.Property<int?>("EstablishedYear")
@@ -591,28 +588,16 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.Property<string>("PrimaryColor")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("RegistrationNumber")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("SecondaryColor")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ShortName")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("ShowContactDetails")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("ShowLogoOnPdfReports")
                         .HasColumnType("bit");
 
                     b.Property<bool>("ShowMottoTagline")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ShowPageNumbers")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ShowQrCodeForVerification")
                         .HasColumnType("bit");
 
                     b.Property<string>("SignatoryDesignation")
@@ -635,9 +620,6 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                     b.Property<string>("State")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("TaxIdentificationNumber")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("TextColor")
                         .HasColumnType("nvarchar(max)");
 
@@ -646,9 +628,6 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("TrialEndsAtUtc")
                         .HasColumnType("datetime2");
-
-                    b.Property<bool>("UseBrandColorsInReportHeader")
-                        .HasColumnType("bit");
 
                     b.Property<string>("Website")
                         .HasColumnType("nvarchar(max)");
@@ -668,40 +647,30 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             EnableMultiCampus = false,
-                            EnableWatermark = false,
                             IncludeAddressInPdfFooter = true,
                             IsActive = true,
                             IsTrial = false,
                             Name = "Default",
                             PermissionVersion = 0,
                             PlanId = new Guid("33333333-3333-3333-3333-333333333333"),
-                            ShowContactDetails = true,
                             ShowLogoOnPdfReports = true,
                             ShowMottoTagline = true,
-                            ShowPageNumbers = true,
-                            ShowQrCodeForVerification = true,
-                            Slug = "default",
-                            UseBrandColorsInReportHeader = true
+                            Slug = "default"
                         },
                         new
                         {
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
                             CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             EnableMultiCampus = false,
-                            EnableWatermark = false,
                             IncludeAddressInPdfFooter = true,
                             IsActive = true,
                             IsTrial = false,
                             Name = "Platform",
                             PermissionVersion = 0,
                             PlanId = new Guid("33333333-3333-3333-3333-333333333333"),
-                            ShowContactDetails = true,
                             ShowLogoOnPdfReports = true,
                             ShowMottoTagline = true,
-                            ShowPageNumbers = true,
-                            ShowQrCodeForVerification = true,
-                            Slug = "platform",
-                            UseBrandColorsInReportHeader = true
+                            Slug = "platform"
                         });
                 });
 

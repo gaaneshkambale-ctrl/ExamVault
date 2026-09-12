@@ -11367,3 +11367,140 @@ In-App Only, confirmed it landed in History as Delivered. Zero 4xx/5xx in
 gateway logs across the whole test.
 
 Not committed/pushed - holding per standing rule.
+
+---
+
+Built a new "Organization Settings" page for Admin, from a design mockup
+the user provided (ChatGPT Image Sep 12, 2026, 03_35_56 PM.png). Confirmed
+scope with the user first: mockup showed 5 tabs but only "General" had
+visible fields, so built General fully and working end-to-end; the other
+4 (Branding & Assets, PDF Report Settings, Email Settings, Security &
+Compliance) are tab placeholders ("X's settings are coming soon.") rather
+than fabricated content, since nothing specified what should be in them.
+
+Surveyed first (via Explore agent) to avoid duplicating existing
+infrastructure: nothing like this existed - AdminSettings.tsx's 4 existing
+cards (Exam/Security/Proctoring/Notification) are all exam-behavior
+config, not organization identity/branding; the SuperAdmin's own
+OrganizationDetails.tsx only edits Name/Slug/OrgCode/OrgType/Address, no
+logo/branding/contact/signatory fields exist anywhere; MyTenantController
+existed but was GET-only.
+
+Backend (UserService):
+- Tenant.cs gained ~23 new columns: ShortName, EstablishedYear, Website,
+  ContactEmail, ContactPhone, TimeZone, Logo/Favicon/SignatureImage
+  (Data + ContentType byte[] pairs, same blob-column pattern as AppUser's
+  own PhotoData), Primary/Secondary/Accent/TextColor, SignatoryName/
+  Designation, 4 boolean toggles (ShowLogoOnPdfReports/
+  IncludeAddressInPdfFooter/ShowMottoTagline/EnableMultiCampus), and
+  MottoTagline/DefaultAcademicYear/DefaultLanguage/DateFormat.
+- New EF migration AddOrganizationSettingsToTenant - hand-corrected the
+  scaffolded defaultValue: false to true for the three "on by default"
+  toggles (ShowLogoOnPdfReports/IncludeAddressInPdfFooter/ShowMottoTagline)
+  so existing tenant rows get sensible defaults instead of everything
+  silently off, matching the C# property initializers' actual intent.
+- New Application handlers: GetOrganizationSettingsHandler,
+  UpdateOrganizationSettingsHandler (+Validator - hex color regex, email
+  format, established year range 1800-2100), UpdateOrganizationAssetHandler
+  (one handler + an OrganizationAssetKind enum for Logo/Favicon/Signature,
+  rather than three near-identical handlers, since the shape is genuinely
+  identical for all three).
+- Extended MyTenantController with GET/PUT api/tenants/mine/settings and
+  GET/POST/DELETE api/tenants/mine/{logo,favicon,signature} - upload/
+  delete gated Admin,SuperAdmin + the (newly added to UserService)
+  SettingsEdit permission policy; GET settings gated by SettingsView;
+  asset GETs are [Authorize] only (any tenant member can see their org's
+  branding). Added SettingsView/SettingsEdit to UserService's own
+  PermissionPolicies.cs - its header comment already claimed to enforce
+  these but never actually did until now.
+- UserService.Application.Tests: 118/118 passing (9 new tests across the
+  two new handlers).
+
+Frontend:
+- types/organizationSettings.ts, api/organizationSettingsApi.ts (reuses
+  the exact multipart-upload + authenticated-blob-fetch pattern from
+  fetchMyPhotoObjectUrl), hooks/useOrganizationSettings.ts.
+- pages/admin/OrganizationSettings.tsx - matches the mockup's General tab
+  layout (Institution Information, Logo & Visual Identity, Address &
+  Location, Default Branding Colors with live hex + reset-to-default,
+  Authorized Signatory, a live Report Header Preview driven by current
+  unsaved draft state, Additional Settings toggles) at
+  /admin/settings/organization, Admin-only.
+- Added a 5th "Organization Settings" card to AdminSettings.tsx's existing
+  dashboard (matching its established card+"Manage X Settings" pattern)
+  rather than inventing the mockup's own left-sidebar "Organization"
+  group with 4 other non-existent sub-pages.
+
+Live-verified as the real Admin (Amit Mane, test.localhost): page loads
+pre-filled with real tenant data; edited Short Name/Website/Contact Email/
+Motto and saved - confirmed truly persisted via a full page reload (not
+just optimistic UI); uploaded a synthetic logo (canvas-generated PNG,
+since the real file-share path was outside this session's allowed dirs) -
+confirmed it persisted after reload too; removed it - confirmed cleared.
+Zero 4xx/5xx in gateway logs across the entire test.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+Extended Organization Settings with the "PDF Report Settings" tab (was a
+placeholder), from a second mockup the user provided
+(ChatGPT Image Sep 12, 2026, 04_13_36 PM.png). That mockup showed a
+standalone "PDF & Report Settings" page with its own 7 sub-tabs, but only
+"Institution Profile" (which duplicated the already-built General tab's
+fields, plus 3 new ones) and a "Live PDF Preview" panel had visible
+content. Confirmed scope with the user first, same pattern as before:
+
+1. Institution Profile's overlapping fields (Name/Type/Address/etc.)
+   reuse the SAME Tenant record already built - no duplicate storage. The
+   3 genuinely new fields (Alternate Phone, Registration/Accreditation
+   No., Tax/Identification No.) were added to the EXISTING "Institution
+   Information" card on the General tab, not re-shown on a second tab.
+2. Only Institution Profile + Live PDF Preview + Additional Options were
+   in scope; the other 6 sub-tabs from the mockup (Branding & Logo as its
+   own tab, Academic Information, Report Templates, Signatures & Seals,
+   Compliance & Footer, Preview & Examples) were skipped as not shown.
+
+Since Branding & Logo was ALSO already fully covered by the General tab
+(Logo & Visual Identity + Default Branding Colors cards), the "PDF Report
+Settings" tab itself ended up rendering only what's genuinely new: a
+detailed Live PDF Preview (sample report body - obviously-fake data
+matching the mockup's own John Doe/SXU2026001 sample) plus 5 new
+PDF-specific toggles (Show QR code for verification, Show contact
+details, Show page numbers, Use brand colors in report header, Enable
+watermark) - avoiding showing Institution Profile/Branding twice on one
+page.
+
+Backend: Tenant.cs +8 columns (AlternatePhone, RegistrationNumber,
+TaxIdentificationNumber, ShowQrCodeForVerification, ShowContactDetails,
+ShowPageNumbers, UseBrandColorsInReportHeader, EnableWatermark); new
+migration AddPdfReportSettingsToTenant (same defaultValue: true
+hand-correction as the first migration, for the four "on by default"
+toggles); extended OrganizationSettingsResponse/
+UpdateOrganizationSettingsRequest/Command/Handler/Validator - no new
+endpoints needed, same GET/PUT api/tenants/mine/settings. UserService.
+Application.Tests: 118/118 still passing (existing tests' ValidCommand
+helper updated for the new positional args).
+
+Frontend: extended types/organizationSettings.ts; added a
+PdfReportSettingsTab component inside OrganizationSettings.tsx (not a
+separate page/route) with a live-computed sample report (percentage/
+result/grade derived from real math on fixed sample marks, all 5 new
+toggles reactively show/hide preview sections) and a genuinely working
+"Download Sample" button - generates a real PDF client-side via jsPDF
+(already a project dependency, used as a static import since it's
+already bundled elsewhere) using the org's actual current branding +
+the same fixed sample data, self-contained rather than touching the
+shared pdfReportKit.ts used by real report generation elsewhere.
+
+Live-verified as Amit Mane (Admin, test.localhost): Institution
+Information card shows the 3 new fields correctly; PDF Report Settings
+tab renders the full sample report with correct computed totals (41/50,
+82%, PASS, Grade A); toggling "Show QR code" reactively hid/showed that
+section; clicked "Download Sample" - confirmed the actual downloaded PDF
+(read directly) contains the org's real name/motto/address with the
+sample student data and correct total; toggled "Use brand colors in
+report header" off, saved, reloaded the page fresh - confirmed the
+setting persisted. Zero 4xx/5xx in gateway logs across the entire test.
+
+Not committed/pushed - holding per standing rule.
