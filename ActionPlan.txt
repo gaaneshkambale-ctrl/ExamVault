@@ -11303,3 +11303,67 @@ Fixed the two gaps flagged above (user chose "fix now" for both).
    sending is asynchronous.
 
 Not committed/pushed - holding per standing rule.
+
+---
+
+Tested Admin's own Notifications flow (as requested: "test the notification
+admin working like instructor") - as the real Admin account (Amit Mane,
+test.localhost). Found and fixed a real, currently-live regression before
+it went further:
+
+FOUND: Admin was 403'ing on three separate features - Assignments
+(GET /api/assignments), Live Monitoring (GET /api/submissions/by-exam/
+{id}/live), and Notifications (GET /api/notifications/admin/history,
+/history/stats, /history/{batchId}) - confirmed live via gateway logs
+while logged in as Amit Mane. Root cause: this session added four new
+granular permissions to RolePermissionCatalog's Admin/Instructor defaults
+(Assignments - Manage, Live Monitoring - View, Security Violations - View,
+Notifications - Create) and started requiring them on the corresponding
+endpoints for BOTH roles, not just Instructor - but DefaultsForRole is
+only a one-time seed written the first time a tenant ever touches Roles &
+Permissions (per the catalog's own comment). test.localhost's Admin role
+had already been seeded (11 permissions) before these four existed, so it
+never picked them up - a real live instance of the "existing tenant
+doesn't retroactively get new default permissions" gap flagged multiple
+times earlier this session, this time hitting Admin, not just Instructor.
+
+FIXED PROPERLY (not just a one-off SQL patch): added a real EF Core
+migration, BackfillNewRolePermissions
+(Backend/Services/UserService/.../Migrations/
+20260912084605_BackfillNewRolePermissions.cs), scaffolded via
+`dotnet ef migrations add` and hand-written following
+SplitLiveMonitoringFeature's own established precedent for this exact
+kind of backfill. Up() inserts any of the four new keys missing from an
+already-seeded Admin/Instructor RolePermissions row (scoped to only
+Role IN ('Admin','Instructor') with an existing row - a tenant that's
+never touched the feature keeps resolving live via DefaultsForRole and
+was never at risk). Backfilling these four specifically is safe because
+none of them could have been intentionally removed by any tenant before
+this session - they didn't exist in the UI to uncheck. Down() is a
+best-effort reversal (deletes the four keys from Admin/Instructor rows
+tenant-wide), matching the same "not perfectly reversible, acceptable"
+reasoning as the precedent migration.
+
+Verified: rebuilt/redeployed user-api, migration applied cleanly on
+startup (confirmed via __EFMigrationsHistory + logs), UserService
+Application tests 109/109 passing. Checked all 3 real tenants in the DB -
+only test.localhost had ever seeded RolePermissions rows (the other two
+rely on the live fallback and were never affected); its Admin went from
+11 to 15 permissions, Instructor already had all 11 of its own defaults
+(no gap there, already manually granted earlier this session). No full
+logout needed - a page reload's token refresh alone picked up the new
+claims.
+
+Live-verified Admin's full Notifications flow end-to-end after the fix:
+Notification History and Live Monitoring both load cleanly (zero 403s),
+History correctly shows ALL tenant notifications (unlike Instructor's
+ownership-filtered view - both the Instructor's own two earlier test
+sends AND Admin's own new one all appear). Admin's compose form correctly
+still requires a Notification Template (unlike Instructor's relaxed
+flow) and offers the full recipient set (All Students/Groups/Individual/
+Exam Candidates/Admins) - created a throwaway template since this tenant
+had none yet (pre-existing, unrelated condition), sent to 35 students
+In-App Only, confirmed it landed in History as Delivered. Zero 4xx/5xx in
+gateway logs across the whole test.
+
+Not committed/pushed - holding per standing rule.
