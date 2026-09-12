@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Offcanvas } from 'react-bootstrap';
 import BrandMark from './BrandMark';
@@ -7,13 +7,16 @@ export type InstructorNavItem =
   | 'Dashboard'
   | 'Exams'
   | 'Scheduled Exams'
+  | 'Live Monitoring'
   | 'Active Exams'
   | 'Student Attempts'
   | 'Security Violations'
+  | 'Results'
   | 'Exam Results'
   | 'Student Results'
   | 'Result Analytics'
   | 'Publish Results'
+  | 'Reports'
   | 'Exam Reports'
   | 'Student Reports'
   | 'Performance Reports'
@@ -23,43 +26,66 @@ export type InstructorNavItem =
   | 'History'
   | 'Profile';
 
-interface NavLink {
-  kind: 'link';
+interface NavChild {
   label: InstructorNavItem;
   path: string;
 }
 
-interface NavSection {
-  kind: 'section';
-  label: string;
+interface NavItem {
+  label: InstructorNavItem;
+  path: string | null;
+  children?: NavChild[];
 }
 
-type NavEntry = NavLink | NavSection;
-
-// Flat rather than AdminSidebar's collapsible groups - Instructor's own set
-// is small enough that an always-visible list reads better than building
-// expand/collapse machinery for it. Section labels are purely visual
-// grouping, not separate routes.
-const navItems: NavEntry[] = [
-  { kind: 'link', label: 'Dashboard', path: '/instructor/dashboard' },
-  { kind: 'link', label: 'Exams', path: '/admin/exams' },
-  { kind: 'link', label: 'Scheduled Exams', path: '/admin/exams/scheduled' },
-  { kind: 'section', label: 'Live Monitoring' },
-  { kind: 'link', label: 'Active Exams', path: '/admin/live-monitoring/active-exams' },
-  { kind: 'link', label: 'Student Attempts', path: '/admin/live-monitoring/student-attempts' },
-  { kind: 'link', label: 'Security Violations', path: '/admin/live-monitoring/security-violations' },
-  { kind: 'section', label: 'Results & Reports' },
-  { kind: 'link', label: 'Exam Results', path: '/admin/results/exams' },
-  { kind: 'link', label: 'Student Results', path: '/admin/results/students' },
-  { kind: 'link', label: 'Result Analytics', path: '/admin/results/analytics' },
-  { kind: 'link', label: 'Publish Results', path: '/admin/results/publish' },
-  { kind: 'link', label: 'Exam Reports', path: '/admin/reports/exams' },
-  { kind: 'link', label: 'Student Reports', path: '/admin/reports/students' },
-  { kind: 'link', label: 'Performance Reports', path: '/admin/reports/performance' },
-  { kind: 'link', label: 'Exam Type Performance', path: '/admin/reports/exam-type-wise' },
-  { kind: 'link', label: 'Notifications', path: '/admin/notifications' },
-  { kind: 'link', label: 'Create Notification', path: '/admin/notifications/create' },
-  { kind: 'link', label: 'History', path: '/admin/notifications/history' },
+// Same collapsible menu/submenu shape as AdminSidebar (a group's own label
+// is both a link to its default page and an expand/collapse toggle) -
+// Instructor's set is just AdminSidebar's own groups with Users/Exam Types/
+// Proctoring/Audit Reports/Notification Templates/Settings removed, since
+// those stay Admin-only.
+const navItems: NavItem[] = [
+  { label: 'Dashboard', path: '/instructor/dashboard' },
+  {
+    label: 'Exams',
+    path: '/admin/exams',
+    children: [{ label: 'Scheduled Exams', path: '/admin/exams/scheduled' }],
+  },
+  {
+    label: 'Live Monitoring',
+    path: '/admin/live-monitoring/active-exams',
+    children: [
+      { label: 'Active Exams', path: '/admin/live-monitoring/active-exams' },
+      { label: 'Student Attempts', path: '/admin/live-monitoring/student-attempts' },
+      { label: 'Security Violations', path: '/admin/live-monitoring/security-violations' },
+    ],
+  },
+  {
+    label: 'Results',
+    path: '/admin/results/exams',
+    children: [
+      { label: 'Exam Results', path: '/admin/results/exams' },
+      { label: 'Student Results', path: '/admin/results/students' },
+      { label: 'Result Analytics', path: '/admin/results/analytics' },
+      { label: 'Publish Results', path: '/admin/results/publish' },
+    ],
+  },
+  {
+    label: 'Reports',
+    path: '/admin/reports/exams',
+    children: [
+      { label: 'Exam Reports', path: '/admin/reports/exams' },
+      { label: 'Student Reports', path: '/admin/reports/students' },
+      { label: 'Performance Reports', path: '/admin/reports/performance' },
+      { label: 'Exam Type Performance', path: '/admin/reports/exam-type-wise' },
+    ],
+  },
+  {
+    label: 'Notifications',
+    path: '/admin/notifications',
+    children: [
+      { label: 'Create Notification', path: '/admin/notifications/create' },
+      { label: 'History', path: '/admin/notifications/history' },
+    ],
+  },
 ];
 
 const iconPaths: Partial<Record<InstructorNavItem, ReactNode>> = {
@@ -87,6 +113,12 @@ const iconPaths: Partial<Record<InstructorNavItem, ReactNode>> = {
       <line x1="3" y1="10" x2="21" y2="10" />
     </>
   ),
+  'Live Monitoring': (
+    <>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
   'Active Exams': (
     <>
       <circle cx="12" cy="12" r="10" />
@@ -107,6 +139,13 @@ const iconPaths: Partial<Record<InstructorNavItem, ReactNode>> = {
       <line x1="12" y1="17" x2="12.01" y2="17" />
     </>
   ),
+  Results: (
+    <>
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+    </>
+  ),
   'Exam Results': (
     <>
       <circle cx="12" cy="8" r="7" />
@@ -123,6 +162,19 @@ const iconPaths: Partial<Record<InstructorNavItem, ReactNode>> = {
     <>
       <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
       <path d="M22 12A10 10 0 0 0 12 2v10z" />
+    </>
+  ),
+  'Publish Results': (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </>
+  ),
+  Reports: (
+    <>
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
     </>
   ),
   'Exam Reports': (
@@ -145,13 +197,6 @@ const iconPaths: Partial<Record<InstructorNavItem, ReactNode>> = {
     <>
       <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
       <polyline points="17 6 23 6 23 12" />
-    </>
-  ),
-  'Publish Results': (
-    <>
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
     </>
   ),
   'Exam Type Performance': (
@@ -182,13 +227,13 @@ const iconPaths: Partial<Record<InstructorNavItem, ReactNode>> = {
   ),
 };
 
-function NavIcon({ label }: { label: InstructorNavItem }) {
+function NavIcon({ label, size = 16 }: { label: InstructorNavItem; size?: number }) {
   const path = iconPaths[label];
   if (!path) return null;
   return (
     <svg
-      width="16"
-      height="16"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -208,7 +253,27 @@ interface InstructorSidebarProps {
   onClose?: () => void;
 }
 
+function isSectionActive(item: NavItem, active: InstructorNavItem): boolean {
+  return item.label === active || (item.children?.some((child) => child.label === active) ?? false);
+}
+
 export default function InstructorSidebar({ active, show = false, onClose = () => {} }: InstructorSidebarProps) {
+  const [openSections, setOpenSections] = useState<Set<InstructorNavItem>>(
+    () => new Set(navItems.filter((item) => item.children && isSectionActive(item, active)).map((item) => item.label)),
+  );
+
+  const toggleSection = (label: InstructorNavItem) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  };
+
   return (
     <Offcanvas show={show} onHide={onClose} responsive="md" className="flex-shrink-0" style={{ width: 240 }}>
       <div className="d-flex flex-column h-100 text-white" style={{ background: '#0f172a' }}>
@@ -224,32 +289,86 @@ export default function InstructorSidebar({ active, show = false, onClose = () =
             ExamVault
           </div>
           <nav className="d-flex flex-column gap-1 flex-grow-1">
-            {navItems.map((item) =>
-              item.kind === 'section' ? (
-                <div
-                  key={item.label}
-                  className="px-3 pt-3 pb-1 text-uppercase small fw-bold"
-                  style={{ color: '#64748b', fontSize: 11, letterSpacing: '0.05em' }}
-                >
-                  {item.label}
+            {navItems.map((item) => {
+              const isOpen = item.children ? openSections.has(item.label) : false;
+              return (
+                <div key={item.label}>
+                  {item.path ? (
+                    <div
+                      className="d-flex align-items-center rounded-2"
+                      style={
+                        item.label === active
+                          ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
+                          : { color: '#94a3b8' }
+                      }
+                    >
+                      <Link
+                        to={item.path}
+                        onClick={onClose}
+                        className="px-3 py-2 text-decoration-none flex-grow-1 d-flex align-items-center gap-2"
+                        style={{ color: 'inherit' }}
+                      >
+                        <NavIcon label={item.label} />
+                        {item.label}
+                      </Link>
+                      {item.children && (
+                        <button
+                          type="button"
+                          onClick={() => toggleSection(item.label)}
+                          aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${item.label}`}
+                          className="btn btn-sm p-0 border-0 bg-transparent d-flex align-items-center justify-content-center me-2"
+                          style={{ color: 'inherit', width: 20, height: 20 }}
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{
+                              transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                              transition: 'transform 0.15s ease',
+                            }}
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="px-3 py-2 rounded-2 d-flex align-items-center gap-2" style={{ color: '#475569' }}>
+                      <NavIcon label={item.label} />
+                      {item.label}
+                    </span>
+                  )}
+                  {item.children && isOpen && (
+                    <div className="d-flex flex-column gap-1 mt-1">
+                      {item.children.map((child) => (
+                        <Link
+                          key={child.label}
+                          to={child.path}
+                          onClick={onClose}
+                          className="py-1 rounded-2 text-decoration-none small d-flex align-items-center gap-2"
+                          style={{
+                            paddingLeft: '2.25rem',
+                            paddingRight: '0.75rem',
+                            ...(child.label === active
+                              ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
+                              : { color: '#94a3b8' }),
+                          }}
+                        >
+                          <NavIcon label={child.label} size={14} />
+                          {child.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <Link
-                  key={item.label}
-                  to={item.path}
-                  onClick={onClose}
-                  className="px-3 py-2 rounded-2 text-decoration-none d-flex align-items-center gap-2"
-                  style={
-                    item.label === active
-                      ? { background: '#4f46e5', color: 'white', fontWeight: 500 }
-                      : { color: '#94a3b8' }
-                  }
-                >
-                  <NavIcon label={item.label} />
-                  {item.label}
-                </Link>
-              ),
-            )}
+              );
+            })}
           </nav>
         </div>
       </div>
