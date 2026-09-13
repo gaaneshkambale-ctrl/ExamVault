@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useMyResult } from '../../hooks/useResults';
+import { useOrganizationAcademicConfig } from '../../hooks/useOrganizationAcademicConfig';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuth } from '../../hooks/useAuth';
 import { getGrade } from '../../types/result';
@@ -41,6 +42,7 @@ export default function ResultDetails() {
   const { data: result, isLoading, isError } = useMyResult(examId);
   const { data: exam } = useExam(examId);
   const { user } = useAuth();
+  const { data: academicConfig } = useOrganizationAcademicConfig();
 
   const percentage =
     result && result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
@@ -182,9 +184,15 @@ export default function ResultDetails() {
                 generateResultPdf(result, {
                   studentName: user?.fullName,
                   studentEmail: user?.email,
+                  rollNumber: user?.rollNumber,
+                  program: user?.academicFields?.program,
                   examCode: exam?.examCode ?? null,
                   examType: exam?.examTypeName ?? exam?.category ?? null,
                   durationMinutes: exam?.durationMinutes,
+                  rank: result.rank ?? undefined,
+                  totalParticipants: result.totalParticipants ?? undefined,
+                  averageAccuracyPercent: result.averageAccuracy ?? undefined,
+                  enabledResultFields: academicConfig?.resultFields,
                 })
               }
             >

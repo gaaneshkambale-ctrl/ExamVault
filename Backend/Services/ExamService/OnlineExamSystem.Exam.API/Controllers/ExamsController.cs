@@ -75,7 +75,8 @@ public class ExamsController : ControllerBase
             createdByUserId,
             request.ExamCode,
             request.ExamTypeId,
-            request.Tags);
+            request.Tags,
+            request.AcademicFields);
 
         var result = await _createExamHandler.HandleAsync(command, cancellationToken);
 
@@ -189,7 +190,8 @@ public class ExamsController : ControllerBase
             request.ConfirmBeforeSubmit,
             request.ExamCode,
             request.ExamTypeId,
-            ownerUserId);
+            ownerUserId,
+            request.AcademicFields);
 
         var result = await _updateExamHandler.HandleAsync(command, cancellationToken);
 
@@ -393,5 +395,8 @@ public class ExamsController : ControllerBase
             exam.TenantId,
             exam.Tags,
             exam.CreatedByUserId,
-            createdByName);
+            createdByName,
+            string.IsNullOrEmpty(exam.AcademicFieldsJson)
+                ? null
+                : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(exam.AcademicFieldsJson));
 }

@@ -12,12 +12,14 @@ import { DownloadIcon } from '../../components/icons/ActionIcons';
 import { useExam } from '../../hooks/useExams';
 import { useUsers } from '../../hooks/useUsers';
 import { useMyTenant } from '../../hooks/useTenants';
+import { useOrganizationBranding } from '../../hooks/useOrganizationSettings';
 import { useQuestionsByExamIds } from '../../hooks/useQuestions';
 import { useSectionsByExamIds } from '../../hooks/useSections';
 import { useAssignmentsForExam } from '../../hooks/useAssignments';
 import { useAuth } from '../../hooks/useAuth';
 import { getExamResultsForAdmin } from '../../api/resultApi';
 import { getExamResultScheme } from '../../utils/examResultScheme';
+import { isReportTypeAvailable } from '../../constants/reportTypeCatalog';
 import { buildAdvanceExamReport } from '../../utils/advanceExamReport';
 import { buildQuestionDifficulty, buildSectionWiseStats } from '../../utils/advanceExamReportAnalysis';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
@@ -46,6 +48,7 @@ export default function AdvanceExamReport() {
   });
   const { data: users, isLoading: isLoadingUsers } = useUsers();
   const { data: myTenant } = useMyTenant();
+  const { data: branding } = useOrganizationBranding();
   const { user: currentUser } = useAuth();
   const examIds = useMemo(() => (examId ? [examId] : []), [examId]);
   const { questionsByExam } = useQuestionsByExamIds(examIds);
@@ -54,6 +57,12 @@ export default function AdvanceExamReport() {
 
   const loading = isLoadingExam || isLoadingResults || isLoadingUsers;
   const scheme = getExamResultScheme(exam?.examTypeName ?? undefined);
+  // Certificate visibility is gated on two independent axes: the exam's own
+  // Exam Type (scheme.showCertificate, above) AND the tenant's Organization
+  // Type (reportTypeCatalog.ts) - a Coaching Institute or Recruitment
+  // tenant never offers certificates regardless of how an individual exam
+  // happens to be typed.
+  const showCertificate = scheme.showCertificate && isReportTypeAvailable(branding?.organizationType, 'certificate');
 
   // Exam.startAtUtc/endAtUtc are frequently null - scheduling in this app is
   // actually enforced per-assignment, not per-exam (see StartAttemptHandler.cs's
@@ -304,7 +313,7 @@ export default function AdvanceExamReport() {
                       {scheme.showRankPercentile && <th>Rank</th>}
                       {scheme.showRankPercentile && <th>Percentile</th>}
                       <th>Submitted On</th>
-                      {scheme.showCertificate && <th className="pe-4">Certificate</th>}
+                      {showCertificate && <th className="pe-4">Certificate</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -328,7 +337,7 @@ export default function AdvanceExamReport() {
                           {scheme.showRankPercentile && <td>{entry.row.rank ?? '—'}</td>}
                           {scheme.showRankPercentile && <td>{entry.row.percentile !== null ? `${entry.row.percentile}%` : '—'}</td>}
                           <td>{new Date(entry.row.attempt.submittedAtUtc).toLocaleString()}</td>
-                          {scheme.showCertificate && (
+                          {showCertificate && (
                             <td className="pe-4">
                               {entry.row.attempt.passed ? (
                                 <button
@@ -356,7 +365,7 @@ export default function AdvanceExamReport() {
                           {scheme.showRankPercentile && <td>—</td>}
                           {scheme.showRankPercentile && <td>—</td>}
                           <td>—</td>
-                          {scheme.showCertificate && <td className="pe-4">—</td>}
+                          {showCertificate && <td className="pe-4">—</td>}
                         </tr>
                       ),
                     )}

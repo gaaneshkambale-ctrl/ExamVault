@@ -35,4 +35,5 @@ public record ExamResponse(
     Guid TenantId = default,
     string Tags = "",
     Guid CreatedByUserId = default,
-    string? CreatedByName = null);
+    string? CreatedByName = null,
+    Dictionary<string, string>? AcademicFields = null);

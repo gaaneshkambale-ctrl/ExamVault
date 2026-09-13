@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getOrganizationSettings,
+  getOrganizationBranding,
   updateOrganizationSettings,
   uploadOrganizationAsset,
   removeOrganizationAsset,
@@ -8,11 +9,24 @@ import {
 import type { UpdateOrganizationSettingsRequest } from '../types/organizationSettings';
 
 const QUERY_KEY = ['organization-settings'];
+const BRANDING_QUERY_KEY = ['organization-branding'];
 
 export function useOrganizationSettings() {
   return useQuery({
     queryKey: QUERY_KEY,
     queryFn: getOrganizationSettings,
+  });
+}
+
+// Same data as useOrganizationSettings, but via the "branding" endpoint any
+// authenticated tenant member can call (not just Admin/SuperAdmin) - for
+// UI, like the student sidebar, that needs to read organizationType (eg. to
+// gate the "My Certificates" nav item per reportTypeCatalog.ts) without
+// Settings permission.
+export function useOrganizationBranding() {
+  return useQuery({
+    queryKey: BRANDING_QUERY_KEY,
+    queryFn: getOrganizationBranding,
   });
 }
 

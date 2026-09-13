@@ -51,6 +51,7 @@ export const ACADEMIC_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
   ],
   'Training Institute': [
     { key: 'trainingProgram', label: 'Training Program' },
+    { key: 'trainingCenter', label: 'Training Center' },
     { key: 'module', label: 'Module' },
     { key: 'batch', label: 'Batch' },
     { key: 'trainer', label: 'Trainer' },
@@ -60,7 +61,10 @@ export const ACADEMIC_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
   'Corporate / L&D': [
     { key: 'businessUnit', label: 'Business Unit' },
     { key: 'department', label: 'Department' },
+    { key: 'location', label: 'Location' },
     { key: 'trainingProgram', label: 'Training Program' },
+    { key: 'trainer', label: 'Trainer' },
+    { key: 'batch', label: 'Batch' },
     { key: 'competencyFramework', label: 'Competency Framework' },
   ],
   'Certification Institute': [
@@ -95,12 +99,26 @@ export const RESULT_FIELD_CATALOG: FieldDef[] = [
   { key: 'unanswered', label: 'Unanswered' },
   { key: 'remarks', label: 'Remarks' },
   { key: 'qrVerification', label: 'QR Verification' },
+  { key: 'moduleWiseScore', label: 'Module-wise Score' },
+  { key: 'practicalScore', label: 'Practical Score' },
+  { key: 'theoryScore', label: 'Theory Score' },
+  { key: 'trainerRemarks', label: 'Trainer Remarks' },
+  { key: 'competency', label: 'Competency' },
+  { key: 'skills', label: 'Skills' },
+  { key: 'attendance', label: 'Attendance' },
+  { key: 'aptitude', label: 'Aptitude' },
+  { key: 'logicalReasoning', label: 'Logical Reasoning' },
+  { key: 'technical', label: 'Technical' },
+  { key: 'coding', label: 'Coding' },
+  { key: 'communication', label: 'Communication' },
+  { key: 'recommendation', label: 'Recommendation' },
+  { key: 'hiringStatus', label: 'Hiring Status' },
 ];
 
 export const RESULT_FIELD_KEYS_BY_TYPE: Record<string, string[]> = {
   College: ['studentName', 'studentId', 'examName', 'examDate', 'marks', 'percentage', 'grade', 'result', 'remarks'],
   University: ['studentName', 'studentId', 'examName', 'examDate', 'marks', 'percentage', 'grade', 'result', 'remarks'],
-  School: ['studentName', 'studentId', 'examName', 'examDate', 'marks', 'percentage', 'grade', 'result', 'remarks'],
+  School: ['studentName', 'studentId', 'examName', 'examDate', 'marks', 'percentage', 'grade', 'attendance', 'result', 'remarks'],
   'Coaching Institute': [
     'studentName',
     'studentId',
@@ -117,10 +135,39 @@ export const RESULT_FIELD_KEYS_BY_TYPE: Record<string, string[]> = {
     'unanswered',
     'result',
   ],
-  'Training Institute': ['studentName', 'studentId', 'examName', 'duration', 'marks', 'percentage', 'grade', 'result', 'remarks'],
-  'Corporate / L&D': ['studentName', 'examName', 'percentage', 'grade', 'result', 'remarks'],
-  'Certification Institute': ['studentName', 'examName', 'percentage', 'grade', 'result', 'qrVerification'],
-  'Recruitment / Hiring': ['studentName', 'examName', 'duration', 'percentage', 'rank', 'percentile', 'result', 'remarks'],
+  'Training Institute': [
+    'studentName',
+    'studentId',
+    'examName',
+    'duration',
+    'marks',
+    'percentage',
+    'grade',
+    'result',
+    'moduleWiseScore',
+    'practicalScore',
+    'theoryScore',
+    'trainerRemarks',
+  ],
+  'Corporate / L&D': ['studentName', 'examName', 'percentage', 'grade', 'competency', 'skills', 'result', 'remarks'],
+  'Certification Institute': ['studentName', 'examName', 'marks', 'percentage', 'grade', 'competency', 'result', 'qrVerification'],
+  'Recruitment / Hiring': [
+    'studentName',
+    'examName',
+    'duration',
+    'marks',
+    'aptitude',
+    'logicalReasoning',
+    'technical',
+    'coding',
+    'communication',
+    'percentage',
+    'percentile',
+    'rank',
+    'result',
+    'recommendation',
+    'hiringStatus',
+  ],
 };
 
 export const DEFAULT_RESULT_FIELD_KEYS: string[] = ['studentName', 'examName', 'marks', 'percentage', 'grade', 'result'];
@@ -187,6 +234,7 @@ export const STUDENT_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
   ],
   'Corporate / L&D': [
     { key: 'department', label: 'Department' },
+    { key: 'designation', label: 'Designation' },
     { key: 'manager', label: 'Manager' },
   ],
   'Certification Institute': [{ key: 'certificateNo', label: 'Certificate No.' }],
@@ -223,4 +271,57 @@ export const DEFAULT_ROLL_NUMBER_LABEL = 'Roll No. / ID';
 export function getRollNumberLabelForType(organizationType: string | null | undefined): string {
   if (!organizationType) return DEFAULT_ROLL_NUMBER_LABEL;
   return ROLL_NUMBER_LABEL_BY_TYPE[organizationType] ?? DEFAULT_ROLL_NUMBER_LABEL;
+}
+
+// Which fields to capture on an EXAM at Create/Edit Exam time - eg. a
+// College's Semester, a Coaching Institute's Test Series. Deliberately
+// excludes fields the exam already has natively regardless of org type
+// (Title, Category, Duration, Total Marks, Passing Marks, Exam Type) - this
+// catalog only covers what's genuinely type-specific and otherwise has
+// nowhere to be captured. Stored as ExamPaper.AcademicFieldsJson (see
+// Backend/.../ExamPaper.cs) - same flexible-schema reasoning as the
+// Organization/Student catalogs above.
+export const EXAM_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
+  College: [
+    { key: 'semester', label: 'Semester' },
+    { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
+  ],
+  University: [
+    { key: 'semester', label: 'Semester' },
+    { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
+  ],
+  School: [
+    { key: 'term', label: 'Term' },
+    { key: 'subject', label: 'Subject' },
+    { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
+  ],
+  'Coaching Institute': [
+    { key: 'testSeries', label: 'Test Series' },
+    { key: 'testDate', label: 'Test Date', placeholder: 'e.g. 12 Apr 2026' },
+  ],
+  'Training Institute': [
+    { key: 'course', label: 'Course' },
+    { key: 'module', label: 'Module' },
+    { key: 'assessmentDate', label: 'Assessment Date', placeholder: 'e.g. 12 Apr 2026' },
+  ],
+  'Corporate / L&D': [
+    { key: 'trainingPeriod', label: 'Training Period' },
+    { key: 'assessmentDate', label: 'Assessment Date', placeholder: 'e.g. 12 Apr 2026' },
+  ],
+  'Certification Institute': [
+    { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
+    { key: 'validFrom', label: 'Valid From' },
+    { key: 'validUntil', label: 'Valid Until' },
+  ],
+  'Recruitment / Hiring': [
+    { key: 'assessmentType', label: 'Assessment Type', placeholder: 'e.g. Technical, Aptitude, Coding' },
+    { key: 'assessmentDate', label: 'Assessment Date', placeholder: 'e.g. 12 Apr 2026' },
+  ],
+};
+
+export const DEFAULT_EXAM_FIELDS: FieldDef[] = [];
+
+export function getExamFieldsForType(organizationType: string | null | undefined): FieldDef[] {
+  if (!organizationType) return DEFAULT_EXAM_FIELDS;
+  return EXAM_FIELDS_BY_TYPE[organizationType] ?? DEFAULT_EXAM_FIELDS;
 }

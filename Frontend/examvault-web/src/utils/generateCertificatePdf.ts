@@ -1,6 +1,11 @@
 import { jsPDF } from 'jspdf';
 import { getGrade } from '../types/result';
-import type { ResultSummaryResponse } from '../types/result';
+import type { AdminAttemptResultResponse, ResultSummaryResponse } from '../types/result';
+
+// Only ever reads totalMarks/totalScore/passed/examTitle/submittedAtUtc -
+// fields common to both a student's own result and an Admin-fetched
+// attempt, so this accepts either, same as generateResultPdf.ts does.
+type CertificateResult = AdminAttemptResultResponse | ResultSummaryResponse;
 
 const LOGO_URL = '/examvault-logo.png';
 const WORDMARK_URL = '/examvault-logo-wordmark.png';
@@ -74,7 +79,7 @@ function loadWordmark(): Promise<{ dataUrl: string; aspectRatio: number } | null
 // document, then either saved straight to disk or turned into a Blob to hand
 // to the Web Share API.
 export async function buildCertificatePdf(
-  result: ResultSummaryResponse,
+  result: CertificateResult,
   studentName: string,
   extras: CertificateExtras = {},
 ): Promise<jsPDF> {
@@ -189,7 +194,7 @@ export async function buildCertificatePdf(
 }
 
 export async function generateCertificatePdf(
-  result: ResultSummaryResponse,
+  result: CertificateResult,
   studentName: string,
   extras: CertificateExtras = {},
 ): Promise<void> {
@@ -198,7 +203,7 @@ export async function generateCertificatePdf(
 }
 
 export async function getCertificatePdfFile(
-  result: ResultSummaryResponse,
+  result: CertificateResult,
   studentName: string,
   extras: CertificateExtras = {},
 ): Promise<File> {

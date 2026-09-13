@@ -18,4 +18,6 @@ public record UserProfileResponse(
     DateTime? LastLoginAtUtc = null,
     DateTime? JoinedOnUtc = null,
     string? FormattedUserId = null,
-    bool IsActive = true);
+    bool IsActive = true,
+    string? RollNumber = null,
+    Dictionary<string, string>? AcademicFields = null);

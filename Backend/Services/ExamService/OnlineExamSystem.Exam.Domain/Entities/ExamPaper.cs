@@ -51,4 +51,13 @@ public class ExamPaper : TenantScopedEntity
     public bool AllowNotes { get; set; }
     public bool AutoSubmitOnTimeEnd { get; set; } = true;
     public bool ConfirmBeforeSubmit { get; set; } = true;
+
+    // Organization-type-specific exam fields captured at Create/Edit Exam
+    // time - eg. a College's Semester, a Coaching Institute's Test Series.
+    // JSON-serialized Dictionary<string,string>, same flexible-schema
+    // approach as AppUser.AcademicFieldsJson and
+    // OrganizationAcademicConfig.AcademicFieldsJson in UserService: which
+    // fields matter varies entirely by the tenant's Organization Type, so
+    // this deliberately isn't a fixed set of new columns.
+    public string? AcademicFieldsJson { get; set; }
 }

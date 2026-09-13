@@ -196,11 +196,13 @@ public class MyTenantController : ControllerBase
     }
 
     // Organization-type-specific fields (eg. a College's University/
-    // Semester, a Coaching Institute's Batch/Rank) - separate from the core
-    // Settings above since these vary per OrganizationType and are purely
-    // storage for now (not yet read by any PDF/report generator).
-    [Authorize(Roles = "Admin,SuperAdmin")]
-    [Authorize(Policy = SettingsView)]
+    // Semester, a Coaching Institute's Batch/Rank). Deliberately open to any
+    // authenticated member of the tenant (not Admin-gated like the write
+    // side below) - the Result Fields half of this is now read by
+    // generateResultPdf.ts for EVERY result download, including a
+    // student's own "My Result" page, which has no Settings permission.
+    // Reading "which fields are enabled" isn't sensitive - same reasoning
+    // as this controller's plain Get() (branding) being open to all roles.
     [HttpGet("academic-config")]
     public async Task<IActionResult> GetAcademicConfig(CancellationToken cancellationToken)
     {

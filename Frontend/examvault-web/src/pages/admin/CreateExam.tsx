@@ -2,17 +2,20 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import { createExam } from '../../api/examApi';
 import { getOrCreateDefaultSection } from '../../api/sectionApi';
+import { getOrganizationBranding } from '../../api/organizationSettingsApi';
 import { validateCreateExam } from '../../utils/createExamValidation';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreateExamRequest, CreationMethod, ExamTypeOption } from '../../types/exam';
 import { useExamDefaults, useExamTypes } from '../../hooks/useExams';
 import { extractServerError } from '../../utils/apiError';
 import { iconForExamType } from '../../utils/examTypeIcons';
+import { getExamFieldsForType } from '../../constants/organizationTypeFieldCatalog';
 import ExamWizardStepper from '../../components/ExamWizardStepper';
 
 const TITLE_MAX = 200;
@@ -32,6 +35,7 @@ const initialFormState: CreateExamRequest = {
   instructions: '',
   examTypeId: null,
   tags: '',
+  academicFields: {},
 };
 
 function ClockIcon() {
@@ -113,10 +117,13 @@ export default function CreateExam() {
   // stops being offered for new ones.
   const examTypes = allExamTypes?.filter((type) => type.isActive);
   const { data: examDefaults } = useExamDefaults();
+  const { data: branding } = useQuery({ queryKey: ['organization-branding'], queryFn: getOrganizationBranding });
+  const examFields = getExamFieldsForType(branding?.organizationType);
   const [form, setForm] = useState<CreateExamRequest>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateExamRequest, string>>>(
     {},
   );
+  const [academicFieldErrors, setAcademicFieldErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
 
@@ -143,6 +150,29 @@ export default function CreateExam() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const updateAcademicField = (key: string, value: string) => {
+    setForm((prev) => ({ ...prev, academicFields: { ...prev.academicFields, [key]: value } }));
+    setAcademicFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  // Every field in the exam's "Academic Details" section (organization-
+  // type-specific - eg. a College's Semester) is mandatory, same rule as
+  // the Student Academic Details section on Add/Edit User.
+  const validateExamAcademicFields = (): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    examFields.forEach((field) => {
+      if (!form.academicFields?.[field.key]?.trim()) {
+        errors[field.key] = `${field.label} is required.`;
+      }
+    });
+    return errors;
+  };
+
   // Selecting a card applies that type's own Duration/Passing Score override
   // (if it has one) on top of whatever the tenant-wide Exam Defaults already
   // prefilled above - same "null means inherit" merge CreateExamHandler does
@@ -167,6 +197,12 @@ export default function CreateExam() {
     const errors = validateCreateExam(form);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
+      return;
+    }
+
+    const academicErrors = validateExamAcademicFields();
+    setAcademicFieldErrors(academicErrors);
+    if (Object.keys(academicErrors).length > 0) {
       return;
     }
 
@@ -399,6 +435,30 @@ export default function CreateExam() {
                     </Form.Group>
                   </Col>
                 </Row>
+
+                {examFields.length > 0 && (
+                  <>
+                    <div className="fw-bold mb-2">
+                      Academic Details ({branding?.organizationType ?? 'Exam'})
+                    </div>
+                    <Row className="mb-3">
+                      {examFields.map((field) => (
+                        <Col xs={12} md={6} key={field.key} className="mb-3">
+                          <Form.Label className="small">
+                            {field.label} <span className="text-danger">*</span>
+                          </Form.Label>
+                          <Form.Control
+                            value={form.academicFields?.[field.key] ?? ''}
+                            placeholder={field.placeholder}
+                            onChange={(e) => updateAcademicField(field.key, e.target.value)}
+                            isInvalid={!!academicFieldErrors[field.key]}
+                          />
+                          <Form.Control.Feedback type="invalid">{academicFieldErrors[field.key]}</Form.Control.Feedback>
+                        </Col>
+                      ))}
+                    </Row>
+                  </>
+                )}
 
                 <Form.Group className="mb-4" controlId="examInstructions">
                   <Form.Label className="fw-bold">Instructions for Students</Form.Label>

@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Result.Application.GetExamReport;
 using OnlineExamSystem.Result.Application.GetResult;
 using OnlineExamSystem.Result.Domain;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Responses.Result;
 using static OnlineExamSystem.Result.API.Authorization.FeaturePolicies;
 using static OnlineExamSystem.Result.API.Authorization.PermissionPolicies;
@@ -39,8 +41,9 @@ public class ResultsController : ControllerBase
 
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
+        var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
 
-        var result = await _getResultHandler.HandleAsync(new GetResultQuery(examId, bearerToken), cancellationToken);
+        var result = await _getResultHandler.HandleAsync(new GetResultQuery(examId, bearerToken, tenantId), cancellationToken);
 
         if (result.IsProviderFailure)
         {
@@ -129,7 +132,14 @@ public class ResultsController : ControllerBase
             attempt.CopyPasteCount,
             attempt.RightClickCount,
             attempt.MultipleMonitorsCount,
-            attempt.HasPendingGrading);
+            attempt.HasPendingGrading,
+            attempt.CorrectCount,
+            attempt.IncorrectCount,
+            attempt.SkippedCount,
+            attempt.Accuracy,
+            attempt.Rank,
+            attempt.Percentile,
+            attempt.TotalParticipants);
 
     private static ResultSummaryResponse ToResponse(ExamResultSummary summary) =>
         new(
@@ -142,7 +152,15 @@ public class ResultsController : ControllerBase
             summary.Passed,
             summary.SubmittedAtUtc,
             summary.Questions?.Select(ToResponse).ToList(),
-            summary.HasPendingGrading);
+            summary.HasPendingGrading,
+            summary.CorrectCount,
+            summary.IncorrectCount,
+            summary.SkippedCount,
+            summary.Accuracy,
+            summary.Rank,
+            summary.Percentile,
+            summary.TotalParticipants,
+            summary.AverageAccuracy);
 
     private static QuestionResultResponse ToResponse(QuestionResult question) =>
         new(

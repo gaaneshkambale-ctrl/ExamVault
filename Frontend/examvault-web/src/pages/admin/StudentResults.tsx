@@ -10,6 +10,7 @@ import { useExams } from '../../hooks/useExams';
 import { useStudents } from '../../hooks/useUsers';
 import { useGroups, useGroup } from '../../hooks/useGroups';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
+import { useOrganizationAcademicConfig } from '../../hooks/useOrganizationAcademicConfig';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { getGrade, type Grade } from '../../types/result';
 import { violationLabel } from '../../utils/proctoring';
@@ -122,6 +123,7 @@ export default function StudentResults() {
   }, [exams]);
 
   const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(exams);
+  const { data: academicConfig } = useOrganizationAcademicConfig();
   const loading = isLoadingExams || isLoadingUsers || isLoadingResults;
 
   const rows: AdminAttemptResultResponse[] = [...allResults].sort(
@@ -205,16 +207,22 @@ export default function StudentResults() {
       sectionStats = undefined;
     }
 
-    // Real rank/average-accuracy across everyone who attempted this same exam -
-    // `rows` already covers every exam's results, just filter down to this one.
+    // Average accuracy across everyone who attempted this same exam - `rows`
+    // already covers every exam's results, just filter down to this one.
+    // Rank/percentile themselves are NOT recomputed here: they come straight
+    // from `result.rank`/`result.totalParticipants`, already computed
+    // server-side (ExamRankingCalculator, latest-attempt-per-user dedup +
+    // standard competition ranking) by the same GetExamReport call that
+    // populated `rows` in the first place - matching the Advance Exam
+    // Report's numbers exactly instead of a third, independently-derived
+    // (and previously incorrect - no tie-handling, no latest-attempt dedup)
+    // calculation.
     const examResults = rows.filter((r) => r.examId === result.examId);
     const accuracyOf = (r: AdminAttemptResultResponse) => {
       const attempted = r.questions.filter((q) => !isSkipped(q));
       const correct = attempted.filter((q) => isQuestionCorrect(q)).length;
       return attempted.length > 0 ? (correct / attempted.length) * 100 : 0;
     };
-    const byScoreDesc = [...examResults].sort((a, b) => b.totalScore - a.totalScore);
-    const rank = byScoreDesc.findIndex((r) => r.attemptId === result.attemptId) + 1;
     const averageAccuracyPercent =
       examResults.length > 0 ? Math.round(examResults.reduce((sum, r) => sum + accuracyOf(r), 0) / examResults.length) : undefined;
 
@@ -228,9 +236,10 @@ export default function StudentResults() {
       attemptStartedAtUtc: attemptStartById.get(result.attemptId) ?? null,
       integrityScorePercent: integrityScore(result),
       sectionStats,
-      rank: rank > 0 ? rank : undefined,
-      totalParticipants: examResults.length,
+      rank: result.rank ?? undefined,
+      totalParticipants: result.totalParticipants ?? undefined,
       averageAccuracyPercent,
+      enabledResultFields: academicConfig?.resultFields,
     });
   };
 

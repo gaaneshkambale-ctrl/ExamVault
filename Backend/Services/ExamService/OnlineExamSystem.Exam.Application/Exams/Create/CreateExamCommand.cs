@@ -13,4 +13,5 @@ public record CreateExamCommand(
     Guid CreatedByUserId,
     string? ExamCode = null,
     Guid? ExamTypeId = null,
-    string Tags = "");
+    string Tags = "",
+    Dictionary<string, string>? AcademicFields = null);

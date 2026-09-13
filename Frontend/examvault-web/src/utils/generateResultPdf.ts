@@ -15,6 +15,7 @@ import {
   TEXT_DARK,
   TEXT_MUTED,
   WEBSITE,
+  drawBadge,
   drawDonutChart,
   drawHeaderBrand,
   drawStatCard,
@@ -30,6 +31,7 @@ import {
   stampFooters,
 } from './pdfReportKit';
 import type { TenantBranding } from './pdfReportKit';
+import { getResultPdfVariant, RESULT_PDF_VARIANT_COPY } from './resultPdfVariants';
 
 export interface ResultPdfSectionStat {
   name: string;
@@ -45,6 +47,8 @@ export interface ResultPdfContext {
   studentName?: string;
   studentEmail?: string;
   rollNumber?: string | null;
+  /** Student's academic-field "Program" (eg. "B.Tech Computer Engineering") - only used by the compact 'academic' variant's Registration/Program info block. Null/undefined shows "—", same fallback as every other optional field here. */
+  program?: string | null;
   examCode?: string | null;
   examType?: string | null;
   durationMinutes?: number;
@@ -57,6 +61,25 @@ export interface ResultPdfContext {
   /** This student's 1-based rank by score among everyone who attempted this exam, and the total attempt count it was ranked against. Omit together when not available. */
   rank?: number;
   totalParticipants?: number;
+  /**
+   * The tenant's admin-configured Result Fields (Organization Settings ->
+   * Academic Configuration -> Result Fields), keyed the same way as
+   * RESULT_FIELD_CATALOG in organizationTypeFieldCatalog.ts. Omit (or pass
+   * an empty array) when the tenant hasn't configured this yet - every
+   * optional section below then falls back to always showing, exactly like
+   * before this field existed, so an unconfigured tenant sees no change.
+   * Only once an admin actively saves a selection does this start hiding
+   * sections. Only fields the backend already computes are gated here
+   * (rank/percentile, accuracy, correct/incorrect/skipped, remarks) - the
+   * org-type-specific fields added for points 4-8 of the architecture doc
+   * (module score, competency, aptitude breakdown, etc.) have nowhere yet
+   * to be captured per-attempt, so there's nothing for them to gate.
+   */
+  enabledResultFields?: string[];
+}
+
+function isResultFieldEnabled(context: ResultPdfContext, key: string): boolean {
+  return !context.enabledResultFields || context.enabledResultFields.length === 0 || context.enabledResultFields.includes(key);
 }
 
 const QUOTE_TEXT = 'Success is the sum of small efforts, repeated day in and day out.';
@@ -90,14 +113,20 @@ function drawStudentReport(
     doc.addPage();
   }
   const questions = result.questions ?? [];
+  const variantCopy = RESULT_PDF_VARIANT_COPY[getResultPdfVariant(branding.organizationType)];
 
   const percentage = result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
   const grade = getGrade(result.totalScore, result.totalMarks, result.passed);
-  const correctCount = questions.filter((q) => !isSkipped(q) && isQuestionCorrect(q)).length;
-  const incorrectCount = questions.filter((q) => !isSkipped(q) && !isQuestionCorrect(q)).length;
-  const skippedCount = questions.filter(isSkipped).length;
-  const totalQuestions = questions.length;
-  const accuracy = totalQuestions - skippedCount > 0 ? Math.round((correctCount / (totalQuestions - skippedCount)) * 100) : 0;
+  // Server-computed (ResultService's QuestionResultScoring) rather than
+  // derived from `questions` here - that array is null whenever the exam's
+  // ShowCorrectAnswers setting is off, but these aggregate counts don't
+  // reveal which specific questions were right/wrong, so they're always
+  // available regardless.
+  const correctCount = result.correctCount;
+  const incorrectCount = result.incorrectCount;
+  const skippedCount = result.skippedCount;
+  const totalQuestions = correctCount + incorrectCount + skippedCount;
+  const accuracy = Math.round(result.accuracy);
   const integrity = context.integrityScorePercent;
   const passingPercent = result.totalMarks > 0 ? Math.round((result.passingMarks / result.totalMarks) * 100) : 0;
 
@@ -150,11 +179,11 @@ function drawStudentReport(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(17);
   setColor(doc, 'setTextColor', TEXT_DARK);
-  doc.text('Exam Result Report', PAGE_WIDTH - MARGIN, y + 10, { align: 'right' });
+  doc.text(variantCopy.title, PAGE_WIDTH - MARGIN, y + 10, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text('Your Learning Journey, Our Commitment', PAGE_WIDTH - MARGIN, y + 15, { align: 'right' });
+  doc.text(variantCopy.tagline, PAGE_WIDTH - MARGIN, y + 15, { align: 'right' });
   setColor(doc, 'setDrawColor', branding.headerColor);
   doc.setLineWidth(0.6);
   doc.line(MARGIN, y + 19, PAGE_WIDTH - MARGIN, y + 19);
@@ -239,7 +268,7 @@ function drawStudentReport(
     statCardH,
     result.passed ? GREEN : RED,
     'Result Status',
-    result.passed ? 'Passed' : 'Failed',
+    result.passed ? variantCopy.statusLabel.passed : variantCopy.statusLabel.failed,
     result.passed ? GREEN : RED,
   );
   drawStatCard(doc, MARGIN + (statW + statGap) * 3, y, statW, statCardH, AMBER, 'Grade', grade, AMBER);
@@ -377,7 +406,11 @@ function drawStudentReport(
   // Performance Analysis mini-stats + Remarks
   const bottomRowH = 28;
   y = ensurePageSpace(doc, y, bottomRowH);
-  const perfW = colW;
+  // Admin's "Result Fields" config (Organization Settings -> Academic
+  // Configuration) can turn the Remarks box off entirely - when it does,
+  // Performance Analysis takes the full row instead of leaving a gap.
+  const showRemarks = isResultFieldEnabled(context, 'remarks');
+  const perfW = showRemarks ? colW : CONTENT_WIDTH;
   panel(doc, MARGIN, y, perfW, bottomRowH);
   panelTitle(doc, 'Performance Analysis', MARGIN + 4, y + 7);
   {
@@ -389,7 +422,7 @@ function drawStudentReport(
         caption: timeTakenPercentOfAllotted !== null ? `${timeTakenPercentOfAllotted}% of time` : undefined,
       });
     }
-    {
+    if (isResultFieldEnabled(context, 'accuracy')) {
       let accuracyCaption: string | undefined;
       let accuracyCaptionColor: { r: number; g: number; b: number } | undefined;
       if (context.averageAccuracyPercent !== undefined) {
@@ -405,7 +438,12 @@ function drawStudentReport(
       }
       miniStats.push({ label: 'Accuracy', value: `${accuracy}%`, caption: accuracyCaption, captionColor: accuracyCaptionColor });
     }
-    if (context.rank !== undefined && context.totalParticipants !== undefined && context.totalParticipants > 0) {
+    if (
+      context.rank !== undefined &&
+      context.totalParticipants !== undefined &&
+      context.totalParticipants > 0 &&
+      isResultFieldEnabled(context, 'rank')
+    ) {
       const percentile = Math.max(1, Math.round((context.rank / context.totalParticipants) * 100));
       miniStats.push({ label: 'Your Rank', value: `${context.rank} / ${context.totalParticipants}`, caption: `Top ${percentile}%` });
     }
@@ -432,22 +470,22 @@ function drawStudentReport(
     });
   }
 
-  const remarksX = MARGIN + perfW + 6;
-  setColor(doc, 'setFillColor', AMBER_BG);
-  setColor(doc, 'setDrawColor', { r: 253, g: 230, b: 138 });
-  doc.setLineWidth(0.3);
-  doc.roundedRect(remarksX, y, colW, bottomRowH, 2, 2, 'FD');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  setColor(doc, 'setTextColor', result.passed ? GREEN : RED);
-  doc.text(result.passed ? 'Good Performance!' : 'Needs Improvement', remarksX + 4, y + 9);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.8);
-  setColor(doc, 'setTextColor', TEXT_DARK);
-  const remarksText = result.passed
-    ? 'You have passed this exam. Keep up the good work!'
-    : 'You did not meet the passing criteria this time. Review the weak sections above and try again.';
-  doc.text(doc.splitTextToSize(remarksText, colW - 8), remarksX + 4, y + 15);
+  if (showRemarks) {
+    const remarksX = MARGIN + perfW + 6;
+    setColor(doc, 'setFillColor', AMBER_BG);
+    setColor(doc, 'setDrawColor', { r: 253, g: 230, b: 138 });
+    doc.setLineWidth(0.3);
+    doc.roundedRect(remarksX, y, colW, bottomRowH, 2, 2, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    setColor(doc, 'setTextColor', result.passed ? GREEN : RED);
+    doc.text(result.passed ? variantCopy.passedHeadline : variantCopy.failedHeadline, remarksX + 4, y + 9);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.8);
+    setColor(doc, 'setTextColor', TEXT_DARK);
+    const remarksText = result.passed ? variantCopy.passedBody : variantCopy.failedBody;
+    doc.text(doc.splitTextToSize(remarksText, colW - 8), remarksX + 4, y + 15);
+  }
   y += bottomRowH + 8;
 
   // Closing quote + brand footer line
@@ -473,7 +511,7 @@ function drawStudentReport(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   setColor(doc, 'setTextColor', TEXT_DARK);
-  doc.text('Exam Result Report', PAGE_WIDTH - MARGIN, y + 4, { align: 'right' });
+  doc.text(variantCopy.title, PAGE_WIDTH - MARGIN, y + 4, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   setColor(doc, 'setTextColor', TEXT_MUTED);
@@ -563,6 +601,238 @@ function drawStudentReport(
   doc.text('This is a computer-generated report and does not require a physical signature.', MARGIN, y + 4);
 }
 
+/**
+ * Compact single-page "Official Examination Report" used for the 'academic'
+ * result PDF variant (College/University/School - see resultPdfVariants.ts)
+ * - built to match a specific university-transcript-style report the user
+ * asked for directly, rather than the richer multi-panel dashboard layout
+ * drawStudentReport() draws for every other Organization Type. Subject-wise
+ * marks reuse the exact same `sections` data (context.sectionStats, falling
+ * back to a single "Overall" row) as the rich layout, so the two never
+ * disagree on totals even though they look completely different.
+ */
+function drawAcademicReport(
+  doc: jsPDF,
+  result: AdminAttemptResultResponse | ResultSummaryResponse,
+  context: ResultPdfContext,
+  branding: TenantBranding,
+  generatedAt: Date,
+  isFirstInDocument: boolean,
+): void {
+  if (!isFirstInDocument) {
+    doc.addPage();
+  }
+  const variantCopy = RESULT_PDF_VARIANT_COPY[getResultPdfVariant(branding.organizationType)];
+
+  const percentage = result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
+  const grade = getGrade(result.totalScore, result.totalMarks, result.passed);
+  const correctCount = result.correctCount;
+  const incorrectCount = result.incorrectCount;
+  const skippedCount = result.skippedCount;
+  const totalQuestions = correctCount + incorrectCount + skippedCount;
+
+  const sections: ResultPdfSectionStat[] =
+    context.sectionStats && context.sectionStats.length > 0
+      ? context.sectionStats
+      : [
+          {
+            name: 'Overall',
+            total: totalQuestions,
+            correct: correctCount,
+            incorrect: incorrectCount,
+            skipped: skippedCount,
+            score: result.totalScore,
+            maxScore: result.totalMarks,
+          },
+        ];
+
+  let y = MARGIN;
+
+  // Header: logo + institution name/tagline (left), address/contact/website (right)
+  const logoH = 12;
+  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo);
+  if (branding.hasOwnLogo) {
+    const logoW = branding.logo ? logoH * branding.logo.ratio : 20;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    setColor(doc, 'setTextColor', TEXT_DARK);
+    doc.text(branding.name, MARGIN + logoW + 4, y + 5.5);
+    if (branding.showMotto && branding.motto) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      setColor(doc, 'setTextColor', TEXT_MUTED);
+      doc.text(branding.motto, MARGIN + logoW + 4, y + 10);
+    }
+  }
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  setColor(doc, 'setTextColor', TEXT_MUTED);
+  [
+    `Generated On: ${generatedAt.toLocaleDateString()}`,
+    branding.addressLine,
+    // Contact/website respect "Show contact details (phone, email, website)"
+    // (Organization Settings -> Reports & Documents) - a real, pre-existing
+    // tenant toggle that generateResultPdf.ts's other layout never actually
+    // read either (see ActionPlan.txt), but this new header is the one
+    // place in this file that prints contact info at all, so it's the one
+    // that needs to respect it.
+    ...(branding.showContactDetails ? [branding.contactLine, branding.website] : []),
+  ]
+    .filter((line): line is string => Boolean(line))
+    .forEach((line, i) => doc.text(line, PAGE_WIDTH - MARGIN, y + 3 + i * 4, { align: 'right' }));
+  y += logoH + 4;
+  setColor(doc, 'setDrawColor', branding.headerColor);
+  doc.setLineWidth(0.6);
+  doc.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
+  y += 9;
+
+  // Centered title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  setColor(doc, 'setTextColor', TEXT_DARK);
+  doc.text(variantCopy.title.toUpperCase(), PAGE_WIDTH / 2, y, { align: 'center' });
+  y += 9;
+
+  // Two-column info panel: Student/Registration/Program | Exam/Date/Duration
+  const infoPanelH = 26;
+  panel(doc, MARGIN, y, CONTENT_WIDTH, infoPanelH);
+  const infoColW = CONTENT_WIDTH / 2;
+  let ly = y + 7;
+  fieldRow(doc, 'Student Name', context.studentName ?? 'Unknown Student', MARGIN + 4, ly, 32, infoColW - 8);
+  ly += 7;
+  fieldRow(doc, 'Registration No.', context.rollNumber ?? '—', MARGIN + 4, ly, 32, infoColW - 8);
+  ly += 7;
+  fieldRow(doc, 'Program', context.program ?? '—', MARGIN + 4, ly, 32, infoColW - 8);
+
+  let ry = y + 7;
+  const infoRightX = MARGIN + infoColW + 4;
+  fieldRow(doc, 'Exam Name', result.examTitle, infoRightX, ry, 26, infoColW - 8);
+  ry += 7;
+  fieldRow(doc, 'Exam Date', new Date(result.submittedAtUtc).toLocaleDateString(), infoRightX, ry, 26, infoColW - 8);
+  ry += 7;
+  fieldRow(doc, 'Duration', context.durationMinutes ? `${context.durationMinutes} Minutes` : '—', infoRightX, ry, 26, infoColW - 8);
+  y += infoPanelH + 8;
+
+  // Subject-wise marks table
+  const tColW = [12, CONTENT_WIDTH - 12 - 30 - 30, 30, 30];
+  const rowH = 7;
+  y = ensurePageSpace(doc, y, rowH * (sections.length + 2));
+  drawTableHeader(doc, MARGIN, y, tColW, ['Q.No', 'Subject / Section', 'Marks', 'Obtained'], rowH);
+  y += rowH;
+  let totalMax = 0;
+  let totalScore = 0;
+  sections.forEach((s, i) => {
+    if (i % 2 === 1) {
+      setColor(doc, 'setFillColor', { r: 250, g: 250, b: 251 });
+      doc.rect(MARGIN, y, tColW.reduce((a, b) => a + b, 0), rowH, 'F');
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    setColor(doc, 'setTextColor', TEXT_DARK);
+    let cx = MARGIN + 2;
+    doc.text(String(i + 1), cx, y + rowH - 2.5);
+    cx += tColW[0];
+    doc.text(s.name, cx, y + rowH - 2.5);
+    cx += tColW[1];
+    doc.text(String(s.maxScore), cx, y + rowH - 2.5);
+    cx += tColW[2];
+    doc.text(String(s.score), cx, y + rowH - 2.5);
+    totalMax += s.maxScore;
+    totalScore += s.score;
+    y += rowH;
+  });
+  setColor(doc, 'setFillColor', { r: 241, g: 245, b: 249 });
+  doc.rect(MARGIN, y, tColW.reduce((a, b) => a + b, 0), rowH, 'F');
+  doc.setFont('helvetica', 'bold');
+  setColor(doc, 'setTextColor', TEXT_DARK);
+  doc.text('Total Marks', MARGIN + 2 + tColW[0], y + rowH - 2.5);
+  doc.text(String(totalMax), MARGIN + 2 + tColW[0] + tColW[1], y + rowH - 2.5);
+  doc.text(String(totalScore), MARGIN + 2 + tColW[0] + tColW[1] + tColW[2], y + rowH - 2.5);
+  y += rowH + 10;
+
+  // Bottom summary row: Percentage / Result / Grade
+  y = ensurePageSpace(doc, y, 22);
+  const summaryColW = CONTENT_WIDTH / 3;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  setColor(doc, 'setTextColor', TEXT_MUTED);
+  doc.text('Percentage', MARGIN, y);
+  doc.text('Result', MARGIN + summaryColW, y);
+  doc.text('Grade', MARGIN + summaryColW * 2, y);
+  y += 9;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  setColor(doc, 'setTextColor', result.passed ? GREEN : RED);
+  doc.text(`${percentage}%`, MARGIN, y);
+  const statusText = (result.passed ? variantCopy.statusLabel.passed : variantCopy.statusLabel.failed).toUpperCase();
+  drawBadge(doc, statusText, MARGIN + summaryColW, y - 6, result.passed ? GREEN : RED, { r: 255, g: 255, b: 255 });
+  setColor(doc, 'setTextColor', AMBER);
+  doc.text(grade, MARGIN + summaryColW * 2, y);
+  y += 16;
+
+  // Sign-off block: Date of Result (left), signature image + name + designation (right)
+  y = ensurePageSpace(doc, y, 24);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  setColor(doc, 'setTextColor', TEXT_MUTED);
+  doc.text('Date of Result', MARGIN, y);
+  doc.setFont('helvetica', 'bold');
+  setColor(doc, 'setTextColor', TEXT_DARK);
+  doc.text(new Date(result.submittedAtUtc).toLocaleDateString(), MARGIN, y + 5);
+
+  const signW = 45;
+  const signX = PAGE_WIDTH - MARGIN - signW;
+  if (branding.signatureImage) {
+    const sigH = 10;
+    doc.addImage(branding.signatureImage.dataUrl, 'PNG', signX, y - 10, sigH * branding.signatureImage.ratio, sigH);
+  }
+  setColor(doc, 'setDrawColor', BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(signX, y + 2, signX + signW, y + 2);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  setColor(doc, 'setTextColor', TEXT_DARK);
+  doc.text(branding.signatoryName ?? 'Authorized Signatory', signX, y + 6);
+  if (branding.signatoryDesignation) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(branding.signatoryDesignation, signX, y + 10);
+  }
+  y += 18;
+
+  // Closing tagline + disclaimer
+  y = ensurePageSpace(doc, y, 14);
+  if (branding.showMotto && branding.motto) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8.5);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(branding.motto, PAGE_WIDTH / 2, y, { align: 'center' });
+    y += 6;
+  }
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7.5);
+  setColor(doc, 'setTextColor', TEXT_MUTED);
+  doc.text('This is a computer-generated report and does not require a physical signature.', PAGE_WIDTH / 2, y, { align: 'center' });
+}
+
+/** Picks the right per-Organization-Type drawing function - the compact single-page academic report, or the richer multi-panel dashboard for every other variant. Keeps generateResultPdf/generateExamResultsBooklet themselves variant-agnostic. */
+function drawReport(
+  doc: jsPDF,
+  result: AdminAttemptResultResponse | ResultSummaryResponse,
+  context: ResultPdfContext,
+  branding: TenantBranding,
+  generatedAt: Date,
+  isFirstInDocument: boolean,
+): void {
+  const variant = getResultPdfVariant(branding.organizationType);
+  if (variant === 'academic') {
+    drawAcademicReport(doc, result, context, branding, generatedAt, isFirstInDocument);
+  } else {
+    drawStudentReport(doc, result, context, branding, generatedAt, isFirstInDocument);
+  }
+}
+
 export async function generateResultPdf(
   result: AdminAttemptResultResponse | ResultSummaryResponse,
   context: ResultPdfContext = {},
@@ -570,7 +840,7 @@ export async function generateResultPdf(
   const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
-  drawStudentReport(doc, result, context, branding, generatedAt, true);
+  drawReport(doc, result, context, branding, generatedAt, true);
   stampFooters(doc, generatedAt, branding.logo);
   doc.save(`${sanitizeFilename(result.examTitle)}-result.pdf`);
 }
@@ -587,7 +857,7 @@ export async function generateExamResultsBooklet(examTitle: string, entries: Exa
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
   entries.forEach(({ result, context }, i) => {
-    drawStudentReport(doc, result, context, branding, generatedAt, i === 0);
+    drawReport(doc, result, context, branding, generatedAt, i === 0);
   });
   stampFooters(doc, generatedAt, branding.logo);
   doc.save(`${sanitizeFilename(examTitle)}-all-results.pdf`);

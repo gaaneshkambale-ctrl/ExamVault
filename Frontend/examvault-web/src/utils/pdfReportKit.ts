@@ -115,6 +115,24 @@ async function loadTenantLogo(): Promise<LogoImage | null> {
   }
 }
 
+/** Same fetch-and-inline pattern as loadTenantLogo, for the Authorized Signatory's uploaded signature image (Organization Settings -> General -> Authorized Signatory) - used by the compact "academic" result PDF variant's sign-off block. Same open GET (no Admin/Settings gating) as logo/favicon, so a student's own result download can render it too. */
+async function loadTenantSignature(): Promise<LogoImage | null> {
+  try {
+    const { data } = await apiClient.get<Blob>('/api/tenants/mine/signature', { responseType: 'blob' });
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read signature image'));
+      reader.readAsDataURL(data);
+    });
+    const img = await loadImage(dataUrl);
+    if (!img || !img.naturalWidth || !img.naturalHeight) return null;
+    return { dataUrl, ratio: img.naturalWidth / img.naturalHeight };
+  } catch {
+    return null;
+  }
+}
+
 export interface TenantBranding {
   /** The tenant's own logo if uploaded and enabled for reports, else the app's own ExamVault logo (loadLogo's existing fallback) - so every report always has a logo to draw, whichever one it turns out to be. */
   logo: LogoImage | null;
@@ -130,6 +148,12 @@ export interface TenantBranding {
   contactLine: string | null;
   showContactDetails: boolean;
   includeAddressInFooter: boolean;
+  /** Drives per-Organization-Type result PDF variants (see resultPdfVariants.ts) - null when the tenant hasn't set one or branding couldn't be loaded, which falls back to the default 'academic' variant. */
+  organizationType: string | null;
+  /** Authorized Signatory's uploaded signature image, name and designation (Organization Settings -> General) - used by the compact "academic" variant's sign-off block. signatureImage is null whenever none is uploaded, same "never fail the report" fallback as logo. */
+  signatureImage: LogoImage | null;
+  signatoryName: string | null;
+  signatoryDesignation: string | null;
 }
 
 /** Resolves everything a report needs to brand itself for the current tenant, with the same "never fail the report" fallback discipline as loadLogo(): any error (not authenticated in this context, network failure, tenant hasn't configured anything) falls back to ExamVault's own fixed branding rather than throwing. */
@@ -153,6 +177,10 @@ export async function loadTenantBranding(): Promise<TenantBranding> {
       contactLine: [settings.contactPhone, settings.contactEmail].filter(Boolean).join(' · ') || null,
       showContactDetails: settings.showContactDetails,
       includeAddressInFooter: settings.includeAddressInPdfFooter,
+      organizationType: settings.organizationType,
+      signatureImage: settings.hasSignature ? await loadTenantSignature() : null,
+      signatoryName: settings.signatoryName,
+      signatoryDesignation: settings.signatoryDesignation,
     };
   } catch {
     return {
@@ -167,6 +195,10 @@ export async function loadTenantBranding(): Promise<TenantBranding> {
       contactLine: null,
       showContactDetails: false,
       includeAddressInFooter: false,
+      organizationType: null,
+      signatureImage: null,
+      signatoryName: null,
+      signatoryDesignation: null,
     };
   }
 }

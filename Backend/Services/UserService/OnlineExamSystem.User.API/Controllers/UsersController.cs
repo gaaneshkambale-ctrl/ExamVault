@@ -895,5 +895,9 @@ public class UsersController : ControllerBase
             user.LastLoginAtUtc,
             user.CreatedAtUtc,
             FormatUserId(user),
-            user.IsActive);
+            user.IsActive,
+            user.RollNumber,
+            string.IsNullOrEmpty(user.AcademicFieldsJson)
+                ? null
+                : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(user.AcademicFieldsJson));
 }

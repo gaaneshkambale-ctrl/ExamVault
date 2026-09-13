@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Domain.Entities;
@@ -105,6 +106,7 @@ public class CreateExamHandler
             NegativeMarkingEnabled = examType?.NegativeMarkingEnabled ?? defaults.NegativeMarkingEnabled,
             NegativeMarks = examType?.NegativeMarkingValue ?? defaults.NegativeMarkingValue,
             AutoSubmitOnTimeEnd = examType?.AutoSubmitEnabled ?? defaults.AutoSubmitEnabled,
+            AcademicFieldsJson = command.AcademicFields is { Count: > 0 } ? JsonSerializer.Serialize(command.AcademicFields) : null,
         };
         exam.ExamCode = GenerateExamCode(command.Category, exam.Id);
 

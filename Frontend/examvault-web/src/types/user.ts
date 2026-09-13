@@ -31,6 +31,8 @@ export interface UserProfile {
   joinedOnUtc: string | null;
   formattedUserId: string | null;
   isActive: boolean;
+  rollNumber: string | null;
+  academicFields: Record<string, string> | null;
 }
 
 export interface UpdateMyProfileRequest {

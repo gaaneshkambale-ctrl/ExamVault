@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/examApi';
+import { getOrganizationBranding } from '../../api/organizationSettingsApi';
 import { useExam, useExamTypes } from '../../hooks/useExams';
 import { validateCreateExam } from '../../utils/createExamValidation';
+import { getExamFieldsForType } from '../../constants/organizationTypeFieldCatalog';
 import type { CreationMethod, ExamResponse, ExamStatus, UpdateExamRequest } from '../../types/exam';
 import { extractServerError } from '../../utils/apiError';
 
@@ -189,11 +191,14 @@ export default function EditExam() {
   const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
   const { data: exam, isLoading, isError } = useExam(id);
   const { data: allExamTypes } = useExamTypes();
+  const { data: branding } = useQuery({ queryKey: ['organization-branding'], queryFn: getOrganizationBranding });
+  const examFields = getExamFieldsForType(branding?.organizationType);
 
   const [form, setForm] = useState<UpdateExamRequest | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof UpdateExamRequest, string>>>(
     {},
   );
+  const [academicFieldErrors, setAcademicFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState('');
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
 
@@ -263,6 +268,26 @@ export default function EditExam() {
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
+  const updateAcademicField = (key: string, value: string) => {
+    setForm((prev) => (prev ? { ...prev, academicFields: { ...prev.academicFields, [key]: value } } : prev));
+    setAcademicFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const validateExamAcademicFields = (currentForm: UpdateExamRequest): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    examFields.forEach((field) => {
+      if (!currentForm.academicFields?.[field.key]?.trim()) {
+        errors[field.key] = `${field.label} is required.`;
+      }
+    });
+    return errors;
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!form) {
@@ -272,6 +297,12 @@ export default function EditExam() {
     const errors = validateCreateExam(form);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
+      return;
+    }
+
+    const academicErrors = validateExamAcademicFields(form);
+    setAcademicFieldErrors(academicErrors);
+    if (Object.keys(academicErrors).length > 0) {
       return;
     }
 
@@ -466,6 +497,28 @@ export default function EditExam() {
                     </Form.Group>
                   </Col>
                 </Row>
+
+                {examFields.length > 0 && (
+                  <>
+                    <SectionHeader icon={<GearIcon />} title={`Academic Details (${branding?.organizationType ?? 'Exam'})`} />
+                    <Row className="mb-3">
+                      {examFields.map((field) => (
+                        <Col xs={12} md={6} key={field.key} className="mb-3">
+                          <Form.Label className="small fw-bold">
+                            {field.label} <span className="text-danger">*</span>
+                          </Form.Label>
+                          <Form.Control
+                            value={form.academicFields?.[field.key] ?? ''}
+                            placeholder={field.placeholder}
+                            onChange={(e) => updateAcademicField(field.key, e.target.value)}
+                            isInvalid={!!academicFieldErrors[field.key]}
+                          />
+                          <Form.Control.Feedback type="invalid">{academicFieldErrors[field.key]}</Form.Control.Feedback>
+                        </Col>
+                      ))}
+                    </Row>
+                  </>
+                )}
 
                 <Form.Group className="mb-4" controlId="editExamInstructions">
                   <Form.Label className="fw-bold">Instructions</Form.Label>

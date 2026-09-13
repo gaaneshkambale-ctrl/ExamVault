@@ -6,6 +6,8 @@ import { usePermissions } from '../hooks/usePermissions';
 import { useLiveExamCount } from '../hooks/useLiveExamCount';
 import { useResultsAndCertificatesCounts } from '../hooks/useResultsAndCertificatesCounts';
 import { useUnreadCount } from '../hooks/useNotifications';
+import { useOrganizationBranding } from '../hooks/useOrganizationSettings';
+import { isReportTypeAvailable } from '../constants/reportTypeCatalog';
 import {
   CertificatesIcon,
   DashboardIcon,
@@ -57,7 +59,18 @@ export default function DashboardSidebar({ active, show = false, onClose = () =>
   // default permission (ResultsController enforces it with no role
   // restriction at all), so hide the nav item rather than leave a link
   // that 403s.
-  const visibleNavItems = navItems.filter((item) => item.label !== 'My Results' || hasPermission('Results - View'));
+  // Certificates aren't a relevant report type for every Organization Type
+  // (eg. a Coaching Institute's test series or a Recruitment assessment -
+  // see reportTypeCatalog.ts) - undefined organizationType (still loading,
+  // or branding failed to load) defaults to available rather than flashing
+  // the item away and back.
+  const { data: branding } = useOrganizationBranding();
+  const showCertificates = branding === undefined || isReportTypeAvailable(branding.organizationType, 'certificate');
+  const visibleNavItems = navItems.filter(
+    (item) =>
+      (item.label !== 'My Results' || hasPermission('Results - View')) &&
+      (item.label !== 'My Certificates' || showCertificates),
+  );
   // Each of these mirrors a real count the destination page itself computes
   // (or, for Notifications, the same unread count the top-bar bell already
   // shows) - not a new definition invented just for the sidebar. Runs on

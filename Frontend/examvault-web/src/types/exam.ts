@@ -23,6 +23,7 @@ export interface CreateExamRequest {
   instructions: string;
   examTypeId?: string | null;
   tags?: string;
+  academicFields?: Record<string, string> | null;
 }
 
 export interface ExamSettings {

@@ -47,7 +47,7 @@ const TABS = [
   'General',
   'Academic Configuration',
   'Branding & Assets',
-  'PDF Report Settings',
+  'Reports & Documents',
   'Email Settings',
   'Security & Compliance',
 ] as const;
@@ -879,9 +879,23 @@ export default function OrganizationSettingsPage() {
           </div>
         </div>
         <div className="text-end">
-          <Badge bg="success-subtle" text="success-emphasis" className="fw-normal mb-1">
-            ● Active
-          </Badge>
+          <div className="mb-1">
+            <Badge bg="success-subtle" text="success-emphasis" className="fw-normal me-1">
+              ● Active
+            </Badge>
+            {/* Organization Type is fixed at creation (see the General tab's own
+                note - only Super Admin can change it), so this is a persistent
+                read-only indicator of which type's rules apply across every tab
+                below, not an editable selector - there's nothing to switch to at
+                this level. Matches the architecture doc's "always-visible
+                Organization Type" intent without fabricating an edit control
+                that doesn't exist here. */}
+            {draft.organizationType && (
+              <Badge bg="primary-subtle" text="primary-emphasis" className="fw-normal">
+                {draft.organizationType}
+              </Badge>
+            )}
+          </div>
           <div className="text-muted small">Organization ID: {settings.organizationCode ?? '—'}</div>
         </div>
       </div>
@@ -911,7 +925,7 @@ export default function OrganizationSettingsPage() {
         ))}
       </div>
 
-      {activeTab === 'PDF Report Settings' ? (
+      {activeTab === 'Reports & Documents' ? (
         <PdfReportSettingsTab draft={draft} set={set} logoUrl={logoUrl} signatureUrl={signatureUrl} />
       ) : activeTab === 'Academic Configuration' ? (
         <AcademicConfigurationTab organizationType={draft.organizationType} />
@@ -1395,7 +1409,7 @@ export default function OrganizationSettingsPage() {
         </>
       )}
 
-      {(activeTab === 'General' || activeTab === 'PDF Report Settings') && (
+      {(activeTab === 'General' || activeTab === 'Reports & Documents') && (
         <div className="d-flex justify-content-end gap-2">
           <Button variant="outline-secondary" onClick={handleReset} disabled={updateMutation.isPending}>
             Reset

@@ -19,6 +19,7 @@ import {
 import { useExams, useExamTypes } from '../../hooks/useExams';
 import { useStudents } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
+import { useOrganizationAcademicConfig } from '../../hooks/useOrganizationAcademicConfig';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { computeDelta, getCalendarMonthWindows, getDefaultRange, bucketByDay, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
@@ -80,6 +81,7 @@ export default function ExamResults() {
   const { data: users } = useStudents();
   const examIds = useMemo(() => (exams ?? []).map((e) => e.id), [exams]);
   const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(exams);
+  const { data: academicConfig } = useOrganizationAcademicConfig();
   const { attemptsByExam, isLoading: isLoadingAttempts } = useAttemptsByExam(examIds);
 
   const [searchText, setSearchText] = useState('');
@@ -98,8 +100,8 @@ export default function ExamResults() {
   const loading = isLoadingExams || isLoadingResults || isLoadingAttempts;
 
   const studentById = useMemo(() => {
-    const map = new Map<string, { fullName: string; email: string }>();
-    for (const user of users ?? []) map.set(user.id, { fullName: user.fullName, email: user.email });
+    const map = new Map<string, { fullName: string; email: string; rollNumber: string | null }>();
+    for (const user of users ?? []) map.set(user.id, { fullName: user.fullName, email: user.email, rollNumber: user.rollNumber });
     return map;
   }, [users]);
 
@@ -281,7 +283,6 @@ export default function ExamResults() {
       const correct = attempted.filter((q) => isQuestionCorrect(q)).length;
       return attempted.length > 0 ? (correct / attempted.length) * 100 : 0;
     };
-    const byScoreDesc = [...results].sort((a, b) => b.totalScore - a.totalScore);
     const averageAccuracyPercent = Math.round(results.reduce((sum, r) => sum + accuracyOf(r), 0) / results.length);
     const attemptStartById = new Map((attemptsByExam[examId] ?? []).map((a) => [a.id, a.startedAtUtc]));
 
@@ -294,15 +295,21 @@ export default function ExamResults() {
         context: {
           studentName: student?.fullName,
           studentEmail: student?.email,
+          rollNumber: student?.rollNumber,
           examCode: exam?.examCode ?? null,
           examType: exam?.examTypeName ?? exam?.category ?? null,
           durationMinutes: exam?.durationMinutes,
           attemptStartedAtUtc: attemptStartById.get(result.attemptId) ?? null,
           integrityScorePercent: integrityScore(result),
           sectionStats,
-          rank: byScoreDesc.findIndex((r) => r.attemptId === result.attemptId) + 1,
-          totalParticipants: results.length,
+          // Server-computed (ExamRankingCalculator, same one behind the
+          // Advance Report) - not recomputed here, matching the fix already
+          // applied to StudentResults.tsx's single-result download, which
+          // had this exact same naive/no-tie-handling bug.
+          rank: result.rank ?? undefined,
+          totalParticipants: result.totalParticipants ?? undefined,
           averageAccuracyPercent,
+          enabledResultFields: academicConfig?.resultFields,
         },
       };
     });

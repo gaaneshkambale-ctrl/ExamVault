@@ -30,4 +30,5 @@ public record UpdateExamCommand(
     // for unrestricted tenant-wide access. When set, the handler requires
     // exam.CreatedByUserId to match, matching the ownership scope List/
     // GetById already enforce for Instructor.
-    Guid? OwnerUserId = null);
+    Guid? OwnerUserId = null,
+    Dictionary<string, string>? AcademicFields = null);
