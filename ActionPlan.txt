@@ -11673,3 +11673,278 @@ action, loadTenantBranding/loadTenantLogo) - verified live/manually
 only; UserService test count unchanged at 118/118.
 
 Not committed/pushed - holding per standing rule.
+
+---
+
+User flagged (with a screenshot) that the "Report Header Preview" card
+on the Organization Settings General tab didn't show the fields they
+expected. Asked a clarifying question; user's exact answer: "Organization
+/Institution Name, Address Line 1, City, State, Country, Main Logo,
+Academic Year".
+
+1. Rebuilt the preview card in OrganizationSettings.tsx to show exactly
+   that list - logo, institution name, Academic Year (was missing
+   entirely before - now reads draft.defaultAcademicYear, "-" if unset),
+   and address as "Address Line 1, City, State, Country" (dropped ZIP,
+   which wasn't in the requested list). Removed two things that were
+   never real tenant fields at all: the hardcoded "OFFICIAL REPORT" /
+   "Assessment | Evaluation | Excellence" placeholder text on the right
+   (leftover mockup copy, not wired to any setting, and didn't match
+   what the real generated PDFs actually show), and the contact
+   phone/email/website line (not in the requested list; still shown
+   elsewhere in the real PDF footer, unaffected).
+
+2. While verifying live, found the institution name text was invisible
+   in the rebuilt preview - it was styled with `color: draft.primaryColor`,
+   and this tenant's Primary Color is #FFFFFF (white-on-white card).
+   Checked and confirmed the SAME bug exists in the real generated
+   result PDF (generateResultPdf.ts line ~137 used
+   `setColor(doc, 'setTextColor', branding.headerColor)` for the
+   institution name text, and this tenant has "Use brand colors in
+   report header" turned ON) - a real, live bug where a tenant picking
+   a light/white brand color would get an invisible institution name on
+   their students' actual result PDFs. Fixed both: preview text now
+   uses the default (unstyled) dark text color, and generateResultPdf.ts
+   now uses the fixed TEXT_DARK constant for the name instead of the
+   tenant's arbitrary headerColor - same "never tie critical readable
+   text to an arbitrary brand color" rule applied earlier to the
+   Percentage/Grade stat cards. headerColor is still used for the
+   decorative divider line only, which was always the intended scope.
+
+Live-verified on tenant test.localhost (D Y patil Colleage, Primary
+Color #FFFFFF, brand-colors-in-header ON): Report Header Preview now
+shows the logo, "D Y patil Colleage" in legible dark text, "Academic
+Year: -", and "Hinjewadi, pune, maharastra, india". Re-downloaded a
+real student result PDF (Bhau Mane) and confirmed via pdftotext
+extraction that "D Y patil Colleage" is present in the header, drawn
+with the fixed dark color fix in place. Frontend build clean, redeployed
+via docker compose build/up frontend.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+Made Organization Types (the "Institution Type" dropdown) backend-driven
+and Super-Admin-managed, instead of a hardcoded frontend list
+(types/tenant.ts's old ORGANIZATION_TYPES const) - explicit user ask:
+"can you make it as dymanic instead of const", confirmed scope via
+AskUserQuestion as "Backend-driven list, Super Admin managed".
+
+1. New OrganizationType entity (UserService) - Name, IsActive, SortOrder,
+   audit fields. Full CQRS: List/Create/Update/Delete handlers,
+   OrganizationTypesController (api/organization-types) - plain GET is
+   [Authorize] (any authenticated user, for the dropdown), GET /all and
+   the write actions stay class-level [Authorize(Roles="SuperAdmin")].
+   Seeded via migration with the user's exact 8 values: College,
+   University, School, Coaching Institute, Training Institute,
+   Corporate / L&D, Certification Institute, Recruitment / Hiring.
+2. New Super Admin page pages/platform/OrganizationTypes.tsx (table +
+   add/edit modal + active toggle + delete confirmation), added to the
+   Organizations sidebar group and routes. Deleting/deactivating a type
+   never touches a tenant's already-stored value (Tenant.OrganizationType
+   is free text, no FK) - only affects the dropdown going forward.
+3. OrganizationSettings.tsx, CreateOrganization.tsx, OrganizationDetails.tsx
+   switched from the removed ORGANIZATION_TYPES const to a live
+   GET /api/organization-types query, with a fallback <option> so an
+   existing tenant's stale/removed value (eg. "Other") still displays
+   instead of going blank.
+
+Bug found + fixed mid-verification: the dropdown stayed empty after
+deploying - root cause was the API Gateway's route table (YARP,
+appsettings.json) requiring an explicit path-prefix entry per route;
+/api/organization-types had no route registered so the gateway 404'd it
+silently. Added "organization-types-route" alongside the existing
+plans-route/tenants-route entries, rebuilt+redeployed the gateway - confirmed
+via gateway logs proxying correctly afterward.
+
+Live-verified on tenant test.localhost: DB query confirms all 8 seeded
+rows; Institution Type dropdown now lists them; UserService tests still
+118/118; frontend + backend builds clean.
+
+---
+
+User then shared a large architecture proposal: since ExamVault will
+serve very different organization types (College, School, Coaching,
+Training, Corporate, Certification, Recruitment), a single fixed result
+PDF isn't enough - the right shape is Organization Type -> Configuration
+Template -> Result/Report layout, built as ONE common result engine with
+per-type fields/sections, not separate controllers/tables per type.
+Confirmed via AskUserQuestion to start with "Admin screen first" -
+Organization Profile + Academic Configuration steps with dynamic
+per-type fields, explicitly no new PDF templates yet (storage/capture
+only this phase).
+
+Also explicit from the user: on Admin's Organization Settings, org Name
+and org Type must NOT be editable by Admin (locked at creation by Super
+Admin) - only org-type-specific ("Academic Configuration") details are
+Admin-editable there.
+
+1. New OrganizationAcademicConfig entity (UserService) - one row per
+   Tenant (unique TenantId), holding AcademicFieldsJson (a
+   Dictionary<string,string>) and ResultFieldsJson (a List<string>),
+   both JSON-serialized rather than modeled as per-type tables/columns -
+   deliberately generic so a new organization type never needs its own
+   table/migration, matching the user's explicit "don't create
+   CollegeConfig/SchoolConfig/... tables" guidance. Get/Update handlers
+   do get-or-create (no row exists until first save). New
+   GET/PUT api/tenants/mine/academic-config on MyTenantController,
+   gated by the same SettingsView/SettingsEdit policies as the rest of
+   Organization Settings. Covered by the existing tenants-route catch-all
+   on the gateway - no gateway change needed this time.
+2. Frontend field catalog (constants/organizationTypeFieldCatalog.ts) -
+   defines which "Academic Fields" (free-text, org-level - eg. College's
+   University/Semester/SGPA-CGPA-Scale, Coaching's Batch/Test Series,
+   Training's Trainer/Competency Framework) and which "Result Fields"
+   (a fixed catalog of ~17 possible result-PDF fields, eg. Rank/
+   Percentile/Accuracy/QR Verification) are relevant, keyed by the
+   organization type's name; falls back to an empty/generic set for any
+   custom type Super Admin adds later that isn't one of the 8 seeded
+   ones. This is presentation-only, not enforced server-side - the
+   backend just stores whatever keys/values it's given.
+3. New "Academic Configuration" tab in OrganizationSettings.tsx - shows
+   the dynamic field inputs + a Result Fields checklist for the tenant's
+   locked organization type, with its own Save button and its own
+   GET/PUT (fully independent of the rest of Organization Settings'
+   draft/save flow). Institution Name and Institution Type on the
+   General tab are now disabled/read-only with a "contact Super Admin to
+   change" note, per the user's explicit lock requirement.
+
+Two real bugs hit and fixed during this build (both caught by build/live
+verification, not by chance):
+- A stray duplicate `</Col>` closing tag left over from the Name/Type
+  lock edit broke the whole file's JSX parsing (`tsc -b && vite build`
+  failed with 11 cascading errors) - found and removed by inspecting the
+  exact line the compiler pointed at.
+- The Save button's first live-test click didn't actually fire the
+  mutation (0 rows in the DB afterward, gateway logs showed only GETs,
+  no PUT) - root-caused to a stale screenshot's coordinates no longer
+  matching the button's on-screen position after the page had
+  re-rendered; fixed the *testing* approach (fresh screenshot
+  immediately before every click) rather than the app - a second,
+  careful attempt round-tripped correctly.
+
+Live-verified end-to-end on tenant test.localhost (College): filled
+"University / Affiliating Body" and checked "Student / Candidate Name"
+under Result Fields, saved, and confirmed via a direct SQL query against
+OrganizationAcademicConfigs that the row exists with the exact JSON
+saved; reloaded the page and confirmed the same values load back.
+Checked gateway + user-api logs across the whole session: zero
+exceptions, zero unhandled errors. UserService build clean, EF migration
+(AddOrganizationAcademicConfig) applied cleanly on container startup,
+118/118 tests still passing, frontend build clean, both images rebuilt
+and redeployed.
+
+Deliberately out of scope this phase, per the user's own "no new PDF
+templates yet" scoping answer: no result/report PDF generator reads
+AcademicFieldsJson/ResultFieldsJson yet - this phase is storage/capture
+only. The full Result Engine + per-type PDF template system from the
+user's proposal remains future work.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+Extended the Organization Type -> dynamic fields pattern one level down,
+from the organization to the STUDENT - user's question "if org type is
+College, where does Enrollment No./PRN/Semester/etc. come from?" was
+answered by checking the actual code: Admin's Add User form only ever
+captured Full Name, Email, Role, Phone, Roll No. (CreateUserRequest) -
+none of those academic fields exist anywhere. Confirmed with the user
+that they should be captured at student-registration (Add/Edit User)
+time, same as Organization Type drives Academic Configuration.
+
+1. New AppUser.AcademicFieldsJson column (nullable, JSON-serialized
+   Dictionary<string,string>) - same flexible-schema reasoning as
+   OrganizationAcademicConfig: fields vary entirely by org type, so no
+   new columns/tables per type. CreateUserCommand/UpdateUserCommand,
+   CreateUserRequest/UpdateUserRequest, and UserListItemResponse all
+   extended with AcademicFields; UsersController's Create/Update actions
+   pass it through, ToResponse deserializes it back.
+2. New frontend field catalog additions (organizationTypeFieldCatalog.ts)
+   - STUDENT_FIELDS_BY_TYPE: College/University get Enrollment No., PRN,
+     Course, Program, Department, Semester, Year, Academic Year, Division;
+     School gets Admission No./Class/Division/Academic Year; Coaching
+     gets Batch/Course/Academic Year; Training gets Batch/Enrollment
+     Date; Corporate gets Department/Manager; Certification gets
+     Certificate No.; Recruitment gets Application ID/Position/
+     Department. Deliberately excludes Full Name/Email/Phone, which stay
+     universal native fields for every type.
+3. CreateUser.tsx and EditUser.tsx both fetch the tenant's Organization
+   Type (GET /api/tenants/mine/branding, already built in an earlier
+   phase) and render the matching dynamic fields as a new "Academic
+   Details ({OrgType})" section - only shown when the role being added/
+   edited is Student, and cleared automatically if the role is switched
+   away from Student before submitting.
+4. Mid-build, user flagged that "Roll No." should NOT be a fixed/
+   universal field either - only Full Name, Email, and Phone should be.
+   Since Roll No. (AppUser.RollNumber) is a real, already-used column
+   elsewhere (Results tables, student pickers) - not something to fold
+   into the new JSON blob - the fix was to keep the same underlying field
+   but relocate it into the dynamic "Academic Details" section and make
+   its LABEL type-specific too (ROLL_NUMBER_LABEL_BY_TYPE): "Roll No."
+   for College/School, "Student ID" for Coaching/Training ("Trainee ID"),
+   "Employee ID" for Corporate, "Candidate ID" for Certification/
+   Recruitment. The Academic Details section now always renders for a
+   Student (not gated on the JSON catalog being non-empty), with this
+   relabeled Roll No. field always first.
+
+Live-verified on tenant test.localhost (College): Add User's Role &
+Access tab shows "Academic Details (College)" with Roll No. first, then
+all 9 College fields; filled Enrollment No. and Semester, submitted, and
+confirmed via direct SQL query that Users.AcademicFieldsJson saved
+exactly {"enrollmentNo":"ENR-2026-001","semester":"VI"}; reopened Edit
+User and confirmed both values (plus the relabeled "Roll No." field)
+loaded back correctly. Confirmed the "User Information" tab now shows
+only Full Name/Email/Phone, with Roll No. completely gone from there.
+UserService: build clean, 118/118 tests still passing, new
+AddAcademicFieldsToAppUser migration applied cleanly (nullable column,
+no backfill needed). Frontend build clean, both images rebuilt/
+redeployed as needed (backend+frontend for the AcademicFields work,
+frontend-only for the later Roll No. relabel).
+
+One transient, unrelated issue noted during verification: a single ~1
+second burst of SQL connection-timeout exceptions in user-api logs
+(pre-existing PlanRepository/RolePermissionRepository/GetBranding
+queries, nothing touched this session) about 13 minutes after a
+redeploy, never recurring before or after - a one-off Docker networking
+blip, not a regression from this work.
+
+Deliberately unchanged: RollNumber's real backend meaning/column - only
+its on-screen label and position moved. No PDF/report generator reads
+AppUser.AcademicFieldsJson yet, same "storage only this phase" scoping
+as the org-level Academic Configuration work.
+
+Not committed/pushed - holding per standing rule.
+
+---
+
+User explicit ask: the whole Student "Academic Details" section (the
+relabeled Roll No./ID plus every type-specific field) is mandatory -
+"create red *". Implemented as real required-field validation, not just
+a visual marker, in both CreateUser.tsx and EditUser.tsx:
+
+- Every label in the Academic Details section now shows a red
+  <span className="text-danger">*</span>.
+- New validateAcademicFields() (both pages) checks Roll No./ID plus
+  every field the current organization type's catalog defines, only
+  when role === 'Student'; returns a Record<string, error message>.
+- CreateUser.tsx: runs on the 'Role & Access' -> 'Additional Details'
+  tab transition (goToTab) and again in handleSubmit - blocks
+  navigation/submission and jumps back to 'Role & Access' if anything's
+  missing, same pattern as the existing Full Name/Email validation.
+- EditUser.tsx: runs in handleSubmit (single-page form, no tabs).
+- Each field gets Bootstrap's isInvalid + Form.Control.Feedback, same as
+  the pre-existing Full Name/Email fields - a real inline "X is
+  required." message per field, clearing itself as soon as that one
+  field is filled in (not just on full re-submit).
+
+Live-verified on tenant test.localhost (College): confirmed every field
+in "Academic Details (College)" shows a red asterisk; clicking
+"Additional Details" with everything blank correctly stayed on "Role &
+Access" and showed a red-bordered "required" message under every field
+(Roll No., Enrollment No., PRN, Course, Program, Department, Semester,
+Year, Academic Year, Division/Class) rather than silently letting
+incomplete data through. Frontend build clean, redeployed via docker
+compose build/up frontend. Zero errors in gateway/user-api logs.
+
+Not committed/pushed - holding per standing rule.

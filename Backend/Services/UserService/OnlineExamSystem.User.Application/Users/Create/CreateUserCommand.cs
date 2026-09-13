@@ -7,4 +7,5 @@ public record CreateUserCommand(
     string Role,
     string? PhoneNumber = null,
     string? RollNumber = null,
-    Guid? CreatedByUserId = null);
+    Guid? CreatedByUserId = null,
+    Dictionary<string, string>? AcademicFields = null);

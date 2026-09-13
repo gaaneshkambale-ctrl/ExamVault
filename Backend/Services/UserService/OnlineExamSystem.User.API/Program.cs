@@ -17,6 +17,10 @@ using OnlineExamSystem.User.Application.Plans.Create;
 using OnlineExamSystem.User.Application.Plans.Delete;
 using OnlineExamSystem.User.Application.Plans.List;
 using OnlineExamSystem.User.Application.Plans.Update;
+using OnlineExamSystem.User.Application.OrganizationTypes.Create;
+using OnlineExamSystem.User.Application.OrganizationTypes.Delete;
+using OnlineExamSystem.User.Application.OrganizationTypes.List;
+using OnlineExamSystem.User.Application.OrganizationTypes.Update;
 using OnlineExamSystem.User.Application.Tenants.AssignPlan;
 using OnlineExamSystem.User.Application.Groups.AddMember;
 using OnlineExamSystem.User.Application.Groups.Create;
@@ -51,8 +55,10 @@ using OnlineExamSystem.User.Application.Tenants.Delete;
 using OnlineExamSystem.User.Application.Tenants.GetBySlug;
 using OnlineExamSystem.User.Application.Tenants.GetPermissionVersion;
 using OnlineExamSystem.User.Application.Tenants.GetLimits;
+using OnlineExamSystem.User.Application.Tenants.GetOrganizationAcademicConfig;
 using OnlineExamSystem.User.Application.Tenants.GetOrganizationSettings;
 using OnlineExamSystem.User.Application.Tenants.GetRolePermissions;
+using OnlineExamSystem.User.Application.Tenants.UpdateOrganizationAcademicConfig;
 using OnlineExamSystem.User.Application.Tenants.List;
 using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
 using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
@@ -108,6 +114,8 @@ public class Program
         builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
         builder.Services.AddScoped<ITenantRepository, TenantRepository>();
         builder.Services.AddScoped<IPlanRepository, PlanRepository>();
+        builder.Services.AddScoped<IOrganizationTypeRepository, OrganizationTypeRepository>();
+        builder.Services.AddScoped<IOrganizationAcademicConfigRepository, OrganizationAcademicConfigRepository>();
         builder.Services.AddScoped<IPlatformSettingsRepository, PlatformSettingsRepository>();
         builder.Services.AddScoped<IPasswordPolicyProvider, PasswordPolicyProvider>();
         builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
@@ -215,6 +223,9 @@ public class Program
         builder.Services.AddScoped<IValidator<UpdateOrganizationSettingsCommand>, UpdateOrganizationSettingsValidator>();
         builder.Services.AddScoped<UpdateOrganizationSettingsHandler>();
         builder.Services.AddScoped<UpdateOrganizationAssetHandler>();
+        builder.Services.AddScoped<GetOrganizationAcademicConfigHandler>();
+        builder.Services.AddScoped<IValidator<UpdateOrganizationAcademicConfigCommand>, UpdateOrganizationAcademicConfigValidator>();
+        builder.Services.AddScoped<UpdateOrganizationAcademicConfigHandler>();
         builder.Services.AddScoped<DeleteTenantHandler>();
         builder.Services.AddScoped<ResetTenantAdminPasswordHandler>();
         builder.Services.AddScoped<SetTenantTrialHandler>();
@@ -234,6 +245,13 @@ public class Program
         builder.Services.AddScoped<UpdatePlanHandler>();
         builder.Services.AddScoped<DeletePlanHandler>();
         builder.Services.AddScoped<ListPlansHandler>();
+
+        builder.Services.AddScoped<IValidator<CreateOrganizationTypeCommand>, CreateOrganizationTypeValidator>();
+        builder.Services.AddScoped<CreateOrganizationTypeHandler>();
+        builder.Services.AddScoped<IValidator<UpdateOrganizationTypeCommand>, UpdateOrganizationTypeValidator>();
+        builder.Services.AddScoped<UpdateOrganizationTypeHandler>();
+        builder.Services.AddScoped<DeleteOrganizationTypeHandler>();
+        builder.Services.AddScoped<ListOrganizationTypesHandler>();
 
         if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
         {

@@ -2,13 +2,15 @@ import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import { createUser } from '../../api/userApi';
+import { getOrganizationBranding } from '../../api/organizationSettingsApi';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import { UsersIcon } from '../../components/icons/ActionIcons';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
+import { getStudentFieldsForType, getRollNumberLabelForType } from '../../constants/organizationTypeFieldCatalog';
 import {
   COSMETIC_ROLES,
   ADMIN_PERMISSIONS,
@@ -24,6 +26,7 @@ const initialFormState: CreateUserFormState = {
   role: 'Student',
   phoneNumber: '',
   rollNumber: '',
+  academicFields: {},
 };
 
 const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
@@ -172,9 +175,13 @@ export default function CreateUser() {
   const [tab, setTab] = useState<TabKey>('User Information');
   const [form, setForm] = useState<CreateUserFormState>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateUserFormState, string>>>({});
+  const [academicFieldErrors, setAcademicFieldErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
   const { data: liveRolePermissions } = useRolePermissions();
+  const { data: branding } = useQuery({ queryKey: ['organization-branding'], queryFn: getOrganizationBranding });
+  const studentFields = getStudentFieldsForType(branding?.organizationType);
+  const rollNumberLabel = getRollNumberLabelForType(branding?.organizationType);
 
   // Admin/Student/Instructor are real, selectable roles (the rest are
   // disabled "not available" options) - same per-role permission sets
@@ -201,6 +208,38 @@ export default function CreateUser() {
     // Student) shouldn't stay checked, or even stay visible - reset to
     // that role's own current set.
     setCheckedPermissions(new Set(permissionsForRole(role)));
+    // Academic fields are Student-only - clear them if switching away so a
+    // stray Admin/Instructor submission never carries stale student data.
+    if (role !== 'Student') {
+      updateField('academicFields', {});
+    }
+  };
+
+  const updateAcademicField = (key: string, value: string) => {
+    setForm((prev) => ({ ...prev, academicFields: { ...prev.academicFields, [key]: value } }));
+    setAcademicFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  // Every field in the Student "Academic Details" section (the relabeled
+  // Roll No./ID plus every type-specific field) is mandatory - required so
+  // the data this org type actually needs is never silently left blank.
+  const validateAcademicFields = (): Record<string, string> => {
+    if (form.role !== 'Student') return {};
+    const errors: Record<string, string> = {};
+    if (!form.rollNumber?.trim()) {
+      errors.rollNumber = `${rollNumberLabel} is required.`;
+    }
+    studentFields.forEach((field) => {
+      if (!form.academicFields?.[field.key]?.trim()) {
+        errors[field.key] = `${field.label} is required.`;
+      }
+    });
+    return errors;
   };
 
   const togglePermission = (perm: string) => {
@@ -225,6 +264,14 @@ export default function CreateUser() {
       setTab('User Information');
       return;
     }
+    if (target === 'Additional Details') {
+      const academicErrors = validateAcademicFields();
+      setAcademicFieldErrors(academicErrors);
+      if (Object.keys(academicErrors).length > 0) {
+        setTab('Role & Access');
+        return;
+      }
+    }
     setTab(target);
   };
 
@@ -241,6 +288,13 @@ export default function CreateUser() {
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       setTab('User Information');
+      return;
+    }
+
+    const academicErrors = validateAcademicFields();
+    setAcademicFieldErrors(academicErrors);
+    if (Object.keys(academicErrors).length > 0) {
+      setTab('Role & Access');
       return;
     }
 
@@ -367,22 +421,6 @@ export default function CreateUser() {
                       </InputGroup>
                     </Form.Group>
                   </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-3" controlId="createUserRollNumber">
-                      <Form.Label className="fw-bold">Roll No.</Form.Label>
-                      <InputGroup>
-                        <InputGroup.Text>
-                          <IdCardIcon />
-                        </InputGroup.Text>
-                        <Form.Control
-                          type="text"
-                          placeholder="Enter roll number (optional)"
-                          value={form.rollNumber ?? ''}
-                          onChange={(e) => updateField('rollNumber', e.target.value)}
-                        />
-                      </InputGroup>
-                    </Form.Group>
-                  </Col>
                 </Row>
 
                 <Alert variant="info" className="py-2 small mb-4">
@@ -418,6 +456,56 @@ export default function CreateUser() {
                     </Form.Group>
                   </Col>
                 </Row>
+
+                {form.role === 'Student' && (
+                  <>
+                    <div className="fw-bold mb-2">
+                      Academic Details ({branding?.organizationType ?? 'Student'})
+                    </div>
+                    <Row className="mb-3">
+                      <Col xs={12} md={6} className="mb-3">
+                        <Form.Label className="small">
+                          {rollNumberLabel} <span className="text-danger">*</span>
+                        </Form.Label>
+                        <InputGroup hasValidation>
+                          <InputGroup.Text>
+                            <IdCardIcon />
+                          </InputGroup.Text>
+                          <Form.Control
+                            type="text"
+                            placeholder={`Enter ${rollNumberLabel.toLowerCase()}`}
+                            value={form.rollNumber ?? ''}
+                            onChange={(e) => {
+                              updateField('rollNumber', e.target.value);
+                              setAcademicFieldErrors((prev) => {
+                                if (!prev.rollNumber) return prev;
+                                const next = { ...prev };
+                                delete next.rollNumber;
+                                return next;
+                              });
+                            }}
+                            isInvalid={!!academicFieldErrors.rollNumber}
+                          />
+                          <Form.Control.Feedback type="invalid">{academicFieldErrors.rollNumber}</Form.Control.Feedback>
+                        </InputGroup>
+                      </Col>
+                      {studentFields.map((field) => (
+                        <Col xs={12} md={6} key={field.key} className="mb-3">
+                          <Form.Label className="small">
+                            {field.label} <span className="text-danger">*</span>
+                          </Form.Label>
+                          <Form.Control
+                            value={form.academicFields?.[field.key] ?? ''}
+                            placeholder={field.placeholder}
+                            onChange={(e) => updateAcademicField(field.key, e.target.value)}
+                            isInvalid={!!academicFieldErrors[field.key]}
+                          />
+                          <Form.Control.Feedback type="invalid">{academicFieldErrors[field.key]}</Form.Control.Feedback>
+                        </Col>
+                      ))}
+                    </Row>
+                  </>
+                )}
 
                 <Alert variant="info" className="py-2 small mb-4">
                   New accounts always start Inactive - they'll be flipped to Active automatically once this
@@ -479,7 +567,7 @@ export default function CreateUser() {
                     <Badge bg={form.role === 'Admin' ? 'primary' : 'secondary'}>{form.role}</Badge>
                   </Col>
                   <Col xs={6} md={4} className="mb-3">
-                    <div className="text-muted small mb-1">Roll No.</div>
+                    <div className="text-muted small mb-1">{rollNumberLabel}</div>
                     <div className="fw-medium">{form.rollNumber || '—'}</div>
                   </Col>
                 </Row>

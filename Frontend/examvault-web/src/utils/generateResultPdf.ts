@@ -134,7 +134,7 @@ function drawStudentReport(
     const logoW = branding.logo ? logoH * branding.logo.ratio : 20;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    setColor(doc, 'setTextColor', branding.headerColor);
+    setColor(doc, 'setTextColor', TEXT_DARK);
     doc.text(branding.name, MARGIN + logoW + 4, y + 6);
     if (branding.showMotto && branding.motto) {
       doc.setFont('helvetica', 'normal');

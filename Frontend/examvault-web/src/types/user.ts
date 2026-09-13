@@ -105,6 +105,11 @@ export interface UserListItem {
   lastLoginAtUtc: string | null;
   createdByUserId: string | null;
   createdByName: string | null;
+  // Organization-type-specific fields (eg. a College student's Enrollment
+  // No./Semester) - see constants/organizationTypeFieldCatalog.ts. Only
+  // meaningful for Student role; null for every other role and for users
+  // created before this existed.
+  academicFields: Record<string, string> | null;
 }
 
 // GET /api/users returns every role (including SuperAdmin) when called by
@@ -134,6 +139,7 @@ export interface CreateUserRequest {
   role: UserRole;
   phoneNumber: string;
   rollNumber?: string | null;
+  academicFields?: Record<string, string> | null;
 }
 
 export interface UpdateUserRequest {
@@ -142,6 +148,7 @@ export interface UpdateUserRequest {
   role: UserRole;
   phoneNumber: string;
   rollNumber?: string | null;
+  academicFields?: Record<string, string> | null;
 }
 
 export interface ResetPasswordRequest {

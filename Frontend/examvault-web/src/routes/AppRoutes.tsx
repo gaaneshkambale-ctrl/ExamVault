@@ -84,6 +84,7 @@ import NotificationBatchDetails from '../pages/admin/NotificationBatchDetails';
 import NotificationTemplates from '../pages/admin/NotificationTemplates';
 import ProtectedRoute from '../components/ProtectedRoute';
 import ManageTenants from '../pages/platform/ManageTenants';
+import OrganizationTypes from '../pages/platform/OrganizationTypes';
 import CreateOrganization from '../pages/platform/CreateOrganization';
 import OrganizationDetails from '../pages/platform/OrganizationDetails';
 import AllUsers from '../pages/platform/AllUsers';
@@ -840,6 +841,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={['SuperAdmin']}>
             <ManageTenants statusFilter="trial" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform/organizations/types"
+        element={
+          <ProtectedRoute roles={['SuperAdmin']}>
+            <OrganizationTypes />
           </ProtectedRoute>
         }
       />

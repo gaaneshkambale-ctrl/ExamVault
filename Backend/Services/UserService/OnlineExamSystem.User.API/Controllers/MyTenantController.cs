@@ -1,10 +1,13 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
 using OnlineExamSystem.User.Application.Interfaces;
+using OnlineExamSystem.User.Application.Tenants.GetOrganizationAcademicConfig;
 using OnlineExamSystem.User.Application.Tenants.GetOrganizationSettings;
+using OnlineExamSystem.User.Application.Tenants.UpdateOrganizationAcademicConfig;
 using OnlineExamSystem.User.Application.Tenants.UpdateOrganizationAsset;
 using OnlineExamSystem.User.Application.Tenants.UpdateOrganizationSettings;
 using OnlineExamSystem.User.Domain.Entities;
@@ -39,17 +42,23 @@ public class MyTenantController : ControllerBase
     private readonly GetOrganizationSettingsHandler _getOrganizationSettingsHandler;
     private readonly UpdateOrganizationSettingsHandler _updateOrganizationSettingsHandler;
     private readonly UpdateOrganizationAssetHandler _updateOrganizationAssetHandler;
+    private readonly GetOrganizationAcademicConfigHandler _getOrganizationAcademicConfigHandler;
+    private readonly UpdateOrganizationAcademicConfigHandler _updateOrganizationAcademicConfigHandler;
 
     public MyTenantController(
         ITenantRepository tenantRepository,
         GetOrganizationSettingsHandler getOrganizationSettingsHandler,
         UpdateOrganizationSettingsHandler updateOrganizationSettingsHandler,
-        UpdateOrganizationAssetHandler updateOrganizationAssetHandler)
+        UpdateOrganizationAssetHandler updateOrganizationAssetHandler,
+        GetOrganizationAcademicConfigHandler getOrganizationAcademicConfigHandler,
+        UpdateOrganizationAcademicConfigHandler updateOrganizationAcademicConfigHandler)
     {
         _tenantRepository = tenantRepository;
         _getOrganizationSettingsHandler = getOrganizationSettingsHandler;
         _updateOrganizationSettingsHandler = updateOrganizationSettingsHandler;
         _updateOrganizationAssetHandler = updateOrganizationAssetHandler;
+        _getOrganizationAcademicConfigHandler = getOrganizationAcademicConfigHandler;
+        _updateOrganizationAcademicConfigHandler = updateOrganizationAcademicConfigHandler;
     }
 
     [HttpGet]
@@ -184,6 +193,55 @@ public class MyTenantController : ControllerBase
         }
 
         return Ok(ToSettingsResponse(result.Tenant!));
+    }
+
+    // Organization-type-specific fields (eg. a College's University/
+    // Semester, a Coaching Institute's Batch/Rank) - separate from the core
+    // Settings above since these vary per OrganizationType and are purely
+    // storage for now (not yet read by any PDF/report generator).
+    [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = SettingsView)]
+    [HttpGet("academic-config")]
+    public async Task<IActionResult> GetAcademicConfig(CancellationToken cancellationToken)
+    {
+        var tenantId = GetOwnTenantId();
+        if (tenantId is null)
+        {
+            return NotFound(new { message = "No organization associated with this account." });
+        }
+
+        var (academicFields, resultFields, updatedAtUtc) = await _getOrganizationAcademicConfigHandler.HandleAsync(
+            new GetOrganizationAcademicConfigQuery(tenantId.Value), cancellationToken);
+
+        return Ok(new OrganizationAcademicConfigResponse(academicFields, resultFields, updatedAtUtc));
+    }
+
+    [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = SettingsEdit)]
+    [HttpPut("academic-config")]
+    public async Task<IActionResult> UpdateAcademicConfig(UpdateOrganizationAcademicConfigRequest request, CancellationToken cancellationToken)
+    {
+        var tenantId = GetOwnTenantId();
+        if (tenantId is null)
+        {
+            return NotFound(new { message = "No organization associated with this account." });
+        }
+
+        var updatedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _updateOrganizationAcademicConfigHandler.HandleAsync(
+            new UpdateOrganizationAcademicConfigCommand(tenantId.Value, request.AcademicFields, request.ResultFields, updatedByUserId),
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        return Ok(new OrganizationAcademicConfigResponse(result.AcademicFields, result.ResultFields, result.UpdatedAtUtc));
     }
 
     [HttpGet("logo")]

@@ -26,6 +26,8 @@ public class UserDbContext : DbContext
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
+    public DbSet<OrganizationType> OrganizationTypes => Set<OrganizationType>();
+    public DbSet<OrganizationAcademicConfig> OrganizationAcademicConfigs => Set<OrganizationAcademicConfig>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -106,6 +108,34 @@ public class UserDbContext : DbContext
                 UpdatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, DateTimeKind.Utc),
                 CreatedAtUtc = new DateTime(2026, 8, 23, 0, 0, 0, DateTimeKind.Utc),
             });
+        });
+
+        modelBuilder.Entity<OrganizationType>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).IsRequired().HasMaxLength(100);
+            entity.HasIndex(t => t.Name).IsUnique();
+
+            // Seeded with the initial 8 options so the "Institution Type"
+            // dropdown isn't empty on day one - Super Admin can add, rename,
+            // reorder or deactivate any of these afterwards.
+            entity.HasData(
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000001"), Name = "College", SortOrder = 0, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000002"), Name = "University", SortOrder = 1, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000003"), Name = "School", SortOrder = 2, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000004"), Name = "Coaching Institute", SortOrder = 3, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000005"), Name = "Training Institute", SortOrder = 4, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000006"), Name = "Corporate / L&D", SortOrder = 5, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000007"), Name = "Certification Institute", SortOrder = 6, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000008"), Name = "Recruitment / Hiring", SortOrder = 7, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) });
+        });
+
+        modelBuilder.Entity<OrganizationAcademicConfig>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.HasIndex(c => c.TenantId).IsUnique();
+            entity.Property(c => c.AcademicFieldsJson).IsRequired();
+            entity.Property(c => c.ResultFieldsJson).IsRequired();
         });
 
         modelBuilder.Entity<AppUser>(entity =>

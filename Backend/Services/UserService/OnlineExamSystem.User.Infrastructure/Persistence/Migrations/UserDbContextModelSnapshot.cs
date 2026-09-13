@@ -28,6 +28,9 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AcademicFieldsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("AlternateEmail")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -207,6 +210,151 @@ namespace OnlineExamSystem.User.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("GroupMembers");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.OrganizationAcademicConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AcademicFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ResultFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationAcademicConfigs");
+                });
+
+            modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.OrganizationType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationTypes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("9c1a1e10-0001-4a00-8000-000000000001"),
+                            CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "College",
+                            SortOrder = 0,
+                            UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("9c1a1e10-0001-4a00-8000-000000000002"),
+                            CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "University",
+                            SortOrder = 1,
+                            UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("9c1a1e10-0001-4a00-8000-000000000003"),
+                            CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "School",
+                            SortOrder = 2,
+                            UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("9c1a1e10-0001-4a00-8000-000000000004"),
+                            CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Coaching Institute",
+                            SortOrder = 3,
+                            UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("9c1a1e10-0001-4a00-8000-000000000005"),
+                            CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Training Institute",
+                            SortOrder = 4,
+                            UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("9c1a1e10-0001-4a00-8000-000000000006"),
+                            CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Corporate / L&D",
+                            SortOrder = 5,
+                            UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("9c1a1e10-0001-4a00-8000-000000000007"),
+                            CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Certification Institute",
+                            SortOrder = 6,
+                            UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("9c1a1e10-0001-4a00-8000-000000000008"),
+                            CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Recruitment / Hiring",
+                            SortOrder = 7,
+                            UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
                 });
 
             modelBuilder.Entity("OnlineExamSystem.User.Domain.Entities.PasswordResetToken", b =>

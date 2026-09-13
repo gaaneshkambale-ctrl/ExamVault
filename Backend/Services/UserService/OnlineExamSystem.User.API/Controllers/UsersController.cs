@@ -325,7 +325,8 @@ public class UsersController : ControllerBase
             request.Role,
             request.PhoneNumber,
             request.RollNumber,
-            createdByUserId);
+            createdByUserId,
+            request.AcademicFields);
         var result = await _createUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.EmailAlreadyExists)
@@ -374,7 +375,8 @@ public class UsersController : ControllerBase
             request.Email,
             request.Role,
             request.PhoneNumber,
-            request.RollNumber);
+            request.RollNumber,
+            request.AcademicFields);
         var result = await _updateUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
@@ -833,7 +835,10 @@ public class UsersController : ControllerBase
             user.TenantId,
             user.LastLoginAtUtc,
             user.CreatedByUserId,
-            createdByName);
+            createdByName,
+            string.IsNullOrEmpty(user.AcademicFieldsJson)
+                ? null
+                : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(user.AcademicFieldsJson));
 
     private static StudentSummaryResponse ToStudentResponse(AppUser user) =>
         new(user.Id, user.FullName, user.Email, user.RollNumber, user.PhotoData is not null);

@@ -1,13 +1,8 @@
 // Dropdown options for Tenant.organizationType - stored as plain text on
 // the backend (see Tenant.cs), this fixed list just keeps entry consistent.
-export const ORGANIZATION_TYPES = [
-  'University',
-  'School',
-  'Coaching Institute',
-  'Corporate Training',
-  'Government',
-  'Other',
-];
+// Dropdown options for this field are no longer a fixed frontend list - they
+// come from GET /api/organization-types (see api/organizationTypesApi.ts),
+// a Super Admin-managed table (Backend/.../Domain/Entities/OrganizationType.cs).
 
 export interface Tenant {
   id: string;

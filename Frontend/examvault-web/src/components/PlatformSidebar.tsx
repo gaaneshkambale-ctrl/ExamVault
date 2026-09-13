@@ -122,6 +122,7 @@ const navGroups: NavGroup[] = [
       { key: 'org-active', label: 'Active Organizations', path: '/platform/organizations/active' },
       { key: 'org-trial', label: 'Trial Organizations', path: '/platform/organizations/trial' },
       { key: 'org-suspended', label: 'Suspended Organizations', path: '/platform/organizations/suspended' },
+      { key: 'org-types', label: 'Organization Types', path: '/platform/organizations/types' },
     ],
   },
   {

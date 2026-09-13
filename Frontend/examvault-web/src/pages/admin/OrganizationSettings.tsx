@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { jsPDF } from 'jspdf';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
@@ -10,8 +11,14 @@ import {
   useRemoveOrganizationAsset,
 } from '../../hooks/useOrganizationSettings';
 import { fetchOrganizationAssetObjectUrl } from '../../api/organizationSettingsApi';
+import { listOrganizationTypes } from '../../api/organizationTypesApi';
+import { useOrganizationAcademicConfig, useUpdateOrganizationAcademicConfig } from '../../hooks/useOrganizationAcademicConfig';
+import {
+  getAcademicFieldsForType,
+  getResultFieldKeysForType,
+  RESULT_FIELD_CATALOG,
+} from '../../constants/organizationTypeFieldCatalog';
 import { extractServerError } from '../../utils/apiError';
-import { ORGANIZATION_TYPES } from '../../types/tenant';
 import {
   MARGIN,
   CONTENT_WIDTH,
@@ -36,7 +43,14 @@ import {
   type UpdateOrganizationSettingsRequest,
 } from '../../types/organizationSettings';
 
-const TABS = ['General', 'Branding & Assets', 'PDF Report Settings', 'Email Settings', 'Security & Compliance'] as const;
+const TABS = [
+  'General',
+  'Academic Configuration',
+  'Branding & Assets',
+  'PDF Report Settings',
+  'Email Settings',
+  'Security & Compliance',
+] as const;
 type Tab = (typeof TABS)[number];
 
 function BuildingIcon() {
@@ -605,11 +619,134 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
   );
 }
 
+// Organization-type-specific fields (a College's University/Semester, a
+// Coaching Institute's Batch/Rank, etc.) - a completely separate backend
+// resource from the rest of Organization Settings (its own GET/PUT, its own
+// save button here) since it lives on its own table
+// (OrganizationAcademicConfig), not on Tenant. Which fields appear is driven
+// entirely by the tenant's current (locked - see the General tab's
+// Institution Type field) Organization Type, via
+// constants/organizationTypeFieldCatalog.ts. Storage-only for now - no PDF
+// or report generator reads this data yet.
+function AcademicConfigurationTab({ organizationType }: { organizationType: string | null }) {
+  const { data: config, isLoading, isError } = useOrganizationAcademicConfig();
+  const updateMutation = useUpdateOrganizationAcademicConfig();
+
+  const [academicFields, setAcademicFields] = useState<Record<string, string>>({});
+  const [resultFields, setResultFields] = useState<string[]>([]);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (config) {
+      setAcademicFields(config.academicFields);
+      setResultFields(config.resultFields);
+    }
+  }, [config]);
+
+  const fieldDefs = getAcademicFieldsForType(organizationType);
+  const relevantResultKeys = getResultFieldKeysForType(organizationType);
+  const resultFieldDefs = RESULT_FIELD_CATALOG.filter((f) => relevantResultKeys.includes(f.key));
+
+  const toggleResultField = (key: string, checked: boolean) => {
+    setResultFields((prev) => (checked ? [...prev, key] : prev.filter((k) => k !== key)));
+  };
+
+  const save = async () => {
+    setSaved(false);
+    await updateMutation.mutateAsync({ academicFields, resultFields });
+    setSaved(true);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="d-flex justify-content-center py-5">
+        <Spinner animation="border" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return <div className="text-center text-danger py-5">Couldn't load academic configuration. Please try again.</div>;
+  }
+
+  return (
+    <>
+      <Card className="border-0 shadow-sm mb-3">
+        <Card.Body>
+          <CardHeader
+            icon={<BuildingIcon />}
+            title="Academic Configuration"
+            subtitle={`Fields specific to "${organizationType ?? 'your organization type'}" - shown on generated reports in a future update.`}
+          />
+          {fieldDefs.length === 0 ? (
+            <div className="text-muted small py-3">
+              No specific academic fields are defined yet for this organization type.
+            </div>
+          ) : (
+            <Row className="g-3">
+              {fieldDefs.map((field) => (
+                <Col xs={12} md={6} key={field.key}>
+                  <Form.Label className="small">{field.label}</Form.Label>
+                  <Form.Control
+                    value={academicFields[field.key] ?? ''}
+                    placeholder={field.placeholder}
+                    onChange={(e) => setAcademicFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  />
+                </Col>
+              ))}
+            </Row>
+          )}
+        </Card.Body>
+      </Card>
+
+      <Card className="border-0 shadow-sm mb-3">
+        <Card.Body>
+          <CardHeader
+            icon={<BuildingIcon />}
+            title="Result Fields"
+            subtitle="Choose which fields are relevant for this organization type's results."
+          />
+          <Row className="g-2">
+            {resultFieldDefs.map((field) => (
+              <Col xs={12} sm={6} md={4} key={field.key}>
+                <Form.Check
+                  type="checkbox"
+                  id={`result-field-${field.key}`}
+                  label={field.label}
+                  checked={resultFields.includes(field.key)}
+                  onChange={(e) => toggleResultField(field.key, e.target.checked)}
+                />
+              </Col>
+            ))}
+          </Row>
+        </Card.Body>
+      </Card>
+
+      {updateMutation.isError && <Alert variant="danger">{extractServerError(updateMutation.error)}</Alert>}
+      {saved && !updateMutation.isError && (
+        <Alert variant="success" dismissible onClose={() => setSaved(false)}>
+          Academic configuration saved.
+        </Alert>
+      )}
+      {config?.updatedAtUtc && (
+        <p className="text-muted small mb-3">Last updated {new Date(config.updatedAtUtc).toLocaleString()}</p>
+      )}
+
+      <div className="d-flex justify-content-end">
+        <Button variant="primary" onClick={save} disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+        </Button>
+      </div>
+    </>
+  );
+}
+
 export default function OrganizationSettingsPage() {
   const { data: settings, isLoading, isError } = useOrganizationSettings();
   const updateMutation = useUpdateOrganizationSettings();
   const uploadAssetMutation = useUploadOrganizationAsset();
   const removeAssetMutation = useRemoveOrganizationAsset();
+  const { data: organizationTypes } = useQuery({ queryKey: ['organization-types'], queryFn: listOrganizationTypes });
 
   const [activeTab, setActiveTab] = useState<Tab>('General');
   const [draft, setDraft] = useState<UpdateOrganizationSettingsRequest | null>(null);
@@ -776,6 +913,8 @@ export default function OrganizationSettingsPage() {
 
       {activeTab === 'PDF Report Settings' ? (
         <PdfReportSettingsTab draft={draft} set={set} logoUrl={logoUrl} signatureUrl={signatureUrl} />
+      ) : activeTab === 'Academic Configuration' ? (
+        <AcademicConfigurationTab organizationType={draft.organizationType} />
       ) : activeTab !== 'General' ? (
         <Card className="border-0 shadow-sm">
           <Card.Body className="text-center text-muted py-5">{activeTab}'s settings are coming soon.</Card.Body>
@@ -798,7 +937,10 @@ export default function OrganizationSettingsPage() {
                   <Row className="g-3">
                     <Col xs={12} md={6}>
                       <Form.Label className="small">Institution Name *</Form.Label>
-                      <Form.Control value={draft.name} onChange={(e) => set('name', e.target.value)} />
+                      <Form.Control value={draft.name} disabled readOnly />
+                      <div className="text-muted mt-1" style={{ fontSize: 12 }}>
+                        Set when the organization was created - contact Super Admin to change.
+                      </div>
                     </Col>
                     <Col xs={12} md={6}>
                       <Form.Label className="small">Short Name / Abbreviation</Form.Label>
@@ -806,17 +948,22 @@ export default function OrganizationSettingsPage() {
                     </Col>
                     <Col xs={12} md={6}>
                       <Form.Label className="small">Institution Type</Form.Label>
-                      <Form.Select
-                        value={draft.organizationType ?? ''}
-                        onChange={(e) => set('organizationType', e.target.value)}
-                      >
+                      <Form.Select value={draft.organizationType ?? ''} disabled>
                         <option value="">Select type</option>
-                        {ORGANIZATION_TYPES.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
+                        {draft.organizationType &&
+                          !organizationTypes?.some((t) => t.name === draft.organizationType) && (
+                            <option value={draft.organizationType}>{draft.organizationType}</option>
+                          )}
+                        {(organizationTypes ?? []).map((t) => (
+                          <option key={t.id} value={t.name}>
+                            {t.name}
                           </option>
                         ))}
                       </Form.Select>
+                      <div className="text-muted mt-1" style={{ fontSize: 12 }}>
+                        Set when the organization was created - contact Super Admin to change. See the Academic
+                        Configuration tab for type-specific details.
+                      </div>
                     </Col>
                     <Col xs={12} md={6}>
                       <Form.Label className="small">Established Year</Form.Label>
@@ -1116,57 +1263,41 @@ export default function OrganizationSettingsPage() {
                   />
                   <Card className="border-0">
                     <Card.Body>
-                      <div className="d-flex justify-content-between align-items-start mb-3">
-                        <div className="d-flex align-items-center gap-2">
-                          <div
-                            className="d-flex align-items-center justify-content-center rounded-2 overflow-hidden flex-shrink-0"
-                            style={{
-                              width: 52,
-                              height: 52,
-                              background: draft.primaryColor ?? DEFAULT_BRANDING_COLORS.primaryColor,
-                              color: 'white',
-                              fontWeight: 700,
-                              fontSize: 14,
-                            }}
-                          >
-                            {logoUrl ? (
-                              <img
-                                src={logoUrl}
-                                alt=""
-                                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                              />
-                            ) : (
-                              (draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase()
-                            )}
-                          </div>
-                          <div>
-                            <div className="fw-bold" style={{ color: draft.primaryColor ?? undefined }}>
-                              {draft.name || 'Institution Name'}
-                            </div>
-                            {draft.showMottoTagline && draft.mottoTagline && (
-                              <div className="text-muted small">{draft.mottoTagline}</div>
-                            )}
-                          </div>
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <div
+                          className="d-flex align-items-center justify-content-center rounded-2 overflow-hidden flex-shrink-0"
+                          style={{
+                            width: 52,
+                            height: 52,
+                            background: draft.primaryColor ?? DEFAULT_BRANDING_COLORS.primaryColor,
+                            color: 'white',
+                            fontWeight: 700,
+                            fontSize: 14,
+                          }}
+                        >
+                          {logoUrl ? (
+                            <img
+                              src={logoUrl}
+                              alt=""
+                              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                            />
+                          ) : (
+                            (draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase()
+                          )}
                         </div>
-                        <div className="text-end">
-                          <div className="fw-bold small">OFFICIAL REPORT</div>
-                          <div className="text-muted" style={{ fontSize: 11 }}>
-                            Assessment | Evaluation | Excellence
+                        <div>
+                          <div className="fw-bold">
+                            {draft.name || 'Institution Name'}
+                          </div>
+                          <div className="text-muted small">
+                            Academic Year: {draft.defaultAcademicYear || '—'}
                           </div>
                         </div>
                       </div>
-                      {draft.includeAddressInPdfFooter && (
-                        <div className="text-muted small border-top pt-2">
-                          {[draft.addressLine1, draft.city, draft.state, draft.postalCode, draft.country]
-                            .filter(Boolean)
-                            .join(', ') || 'Address will appear here'}
-                          {(draft.contactPhone || draft.contactEmail || draft.website) && (
-                            <div>
-                              {[draft.contactPhone, draft.contactEmail, draft.website].filter(Boolean).join(' · ')}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <div className="text-muted small border-top pt-2">
+                        {[draft.addressLine1, draft.city, draft.state, draft.country].filter(Boolean).join(', ') ||
+                          'Address will appear here'}
+                      </div>
                     </Card.Body>
                   </Card>
                 </Card.Body>

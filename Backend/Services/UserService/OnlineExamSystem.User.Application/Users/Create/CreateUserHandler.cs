@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -73,6 +74,7 @@ public class CreateUserHandler
             RollNumber = string.IsNullOrWhiteSpace(command.RollNumber) ? null : command.RollNumber.Trim(),
             MustChangePassword = true,
             CreatedByUserId = command.CreatedByUserId,
+            AcademicFieldsJson = command.AcademicFields is { Count: > 0 } ? JsonSerializer.Serialize(command.AcademicFields) : null,
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, temporaryPassword);
 

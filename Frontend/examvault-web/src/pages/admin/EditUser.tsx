@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../../layouts/AdminLayout';
 import SectionHeader from '../../components/SectionHeader';
 import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
 import { updateUser } from '../../api/userApi';
+import { getOrganizationBranding } from '../../api/organizationSettingsApi';
 import { useUser } from '../../hooks/useUsers';
 import type { UpdateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
+import { getStudentFieldsForType, getRollNumberLabelForType } from '../../constants/organizationTypeFieldCatalog';
 
 const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
 
@@ -67,9 +69,13 @@ export default function EditUser() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: user, isLoading, isError } = useUser(id);
+  const { data: branding } = useQuery({ queryKey: ['organization-branding'], queryFn: getOrganizationBranding });
+  const studentFields = getStudentFieldsForType(branding?.organizationType);
+  const rollNumberLabel = getRollNumberLabelForType(branding?.organizationType);
 
   const [form, setForm] = useState<UpdateUserRequest | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof UpdateUserRequest, string>>>({});
+  const [academicFieldErrors, setAcademicFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState('');
 
   useEffect(() => {
@@ -80,12 +86,47 @@ export default function EditUser() {
         role: user.role,
         phoneNumber: user.phoneNumber ?? '',
         rollNumber: user.rollNumber ?? '',
+        academicFields: user.academicFields ?? {},
       });
     }
   }, [user]);
 
   const updateField = <K extends keyof UpdateUserRequest>(field: K, value: UpdateUserRequest[K]) => {
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const updateAcademicField = (key: string, value: string) => {
+    setForm((prev) => (prev ? { ...prev, academicFields: { ...prev.academicFields, [key]: value } } : prev));
+    setAcademicFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const updateRole = (role: UserRole) => {
+    updateField('role', role);
+    if (role !== 'Student') {
+      updateField('academicFields', {});
+      setAcademicFieldErrors({});
+    }
+  };
+
+  // Every field in the Student "Academic Details" section (the relabeled
+  // Roll No./ID plus every type-specific field) is mandatory.
+  const validateAcademicFields = (currentForm: UpdateUserRequest): Record<string, string> => {
+    if (currentForm.role !== 'Student') return {};
+    const errors: Record<string, string> = {};
+    if (!currentForm.rollNumber?.trim()) {
+      errors.rollNumber = `${rollNumberLabel} is required.`;
+    }
+    studentFields.forEach((field) => {
+      if (!currentForm.academicFields?.[field.key]?.trim()) {
+        errors[field.key] = `${field.label} is required.`;
+      }
+    });
+    return errors;
   };
 
   const saveMutation = useMutation({
@@ -113,6 +154,12 @@ export default function EditUser() {
     }
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
+      return;
+    }
+
+    const academicErrors = validateAcademicFields(form);
+    setAcademicFieldErrors(academicErrors);
+    if (Object.keys(academicErrors).length > 0) {
       return;
     }
 
@@ -193,35 +240,19 @@ export default function EditUser() {
               </Row>
 
               <Row>
-                <Col md={4}>
+                <Col md={6}>
                   <Form.Group className="mb-4" controlId="editUserRole">
                     <Form.Label className="fw-bold">Role</Form.Label>
                     <Form.Select
                       value={form.role}
-                      onChange={(e) => updateField('role', e.target.value as UserRole)}
+                      onChange={(e) => updateRole(e.target.value as UserRole)}
                     >
                       <option value="Student">Student</option>
                       <option value="Admin">Admin</option>
                     </Form.Select>
                   </Form.Group>
                 </Col>
-                <Col md={4}>
-                  <Form.Group className="mb-4" controlId="editUserRollNumber">
-                    <Form.Label className="fw-bold">Roll No.</Form.Label>
-                    <InputGroup>
-                      <InputGroup.Text>
-                        <IdCardIcon />
-                      </InputGroup.Text>
-                      <Form.Control
-                        type="text"
-                        placeholder="Enter roll number (optional)"
-                        value={form.rollNumber ?? ''}
-                        onChange={(e) => updateField('rollNumber', e.target.value)}
-                      />
-                    </InputGroup>
-                  </Form.Group>
-                </Col>
-                <Col md={4}>
+                <Col md={6}>
                   <Form.Group className="mb-4" controlId="editUserPhoneNumber">
                     <Form.Label className="fw-bold">Phone Number</Form.Label>
                     <InputGroup>
@@ -238,6 +269,54 @@ export default function EditUser() {
                   </Form.Group>
                 </Col>
               </Row>
+
+              {form.role === 'Student' && (
+                <>
+                  <SectionHeader icon={<UserIcon />} title={`Academic Details (${branding?.organizationType ?? 'Student'})`} />
+                  <Row className="mb-4">
+                    <Col xs={12} md={6} className="mb-3">
+                      <Form.Label className="small">
+                        {rollNumberLabel} <span className="text-danger">*</span>
+                      </Form.Label>
+                      <InputGroup hasValidation>
+                        <InputGroup.Text>
+                          <IdCardIcon />
+                        </InputGroup.Text>
+                        <Form.Control
+                          type="text"
+                          placeholder={`Enter ${rollNumberLabel.toLowerCase()}`}
+                          value={form.rollNumber ?? ''}
+                          onChange={(e) => {
+                            updateField('rollNumber', e.target.value);
+                            setAcademicFieldErrors((prev) => {
+                              if (!prev.rollNumber) return prev;
+                              const next = { ...prev };
+                              delete next.rollNumber;
+                              return next;
+                            });
+                          }}
+                          isInvalid={!!academicFieldErrors.rollNumber}
+                        />
+                        <Form.Control.Feedback type="invalid">{academicFieldErrors.rollNumber}</Form.Control.Feedback>
+                      </InputGroup>
+                    </Col>
+                    {studentFields.map((field) => (
+                      <Col xs={12} md={6} key={field.key} className="mb-3">
+                        <Form.Label className="small">
+                          {field.label} <span className="text-danger">*</span>
+                        </Form.Label>
+                        <Form.Control
+                          value={form.academicFields?.[field.key] ?? ''}
+                          placeholder={field.placeholder}
+                          onChange={(e) => updateAcademicField(field.key, e.target.value)}
+                          isInvalid={!!academicFieldErrors[field.key]}
+                        />
+                        <Form.Control.Feedback type="invalid">{academicFieldErrors[field.key]}</Form.Control.Feedback>
+                      </Col>
+                    ))}
+                  </Row>
+                </>
+              )}
 
               <SectionHeader icon={<ShieldIcon />} title="Account Status" />
               <div className="d-flex align-items-center justify-content-between border rounded-3 p-3 mb-4">

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Enums;
@@ -43,6 +44,10 @@ public class UpdateUserHandler
         user.Role = Enum.Parse<UserRole>(command.Role, ignoreCase: true);
         user.PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim();
         user.RollNumber = string.IsNullOrWhiteSpace(command.RollNumber) ? null : command.RollNumber.Trim();
+        if (command.AcademicFields is not null)
+        {
+            user.AcademicFieldsJson = command.AcademicFields.Count > 0 ? JsonSerializer.Serialize(command.AcademicFields) : null;
+        }
 
         await _userRepository.SaveChangesAsync(cancellationToken);
 

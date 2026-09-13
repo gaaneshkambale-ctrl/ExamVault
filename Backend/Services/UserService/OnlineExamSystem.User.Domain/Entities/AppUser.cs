@@ -55,4 +55,15 @@ public class AppUser : BaseEntity
     // (RegisterUserHandler - there's no admin creator, the user created
     // themselves) and for pre-existing accounts that predate this field.
     public Guid? CreatedByUserId { get; set; }
+
+    // Organization-type-specific fields captured at Add/Edit User time -
+    // eg. a College student's Enrollment No./PRN/Semester, a Coaching
+    // Institute student's Batch/Test Series. JSON-serialized
+    // Dictionary<string,string>, same flexible-schema approach as
+    // OrganizationAcademicConfig.AcademicFieldsJson and for the same
+    // reason: which fields matter varies entirely by the tenant's
+    // Organization Type, so this deliberately isn't a fixed set of new
+    // columns. Null/empty for every user created before this existed, and
+    // for non-Student roles where these fields aren't shown.
+    public string? AcademicFieldsJson { get; set; }
 }

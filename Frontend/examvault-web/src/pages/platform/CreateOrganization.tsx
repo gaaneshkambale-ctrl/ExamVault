@@ -7,9 +7,9 @@ import OrgAvatar from '../../components/OrgAvatar';
 import { useTenants } from '../../hooks/useTenants';
 import { createTenant, createTenantAdmin } from '../../api/tenantsApi';
 import { listPlans } from '../../api/plansApi';
+import { listOrganizationTypes } from '../../api/organizationTypesApi';
 import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
-import { ORGANIZATION_TYPES } from '../../types/tenant';
 
 // Matches org_submenu.png's Create Organization page. Real fields: Name,
 // Subdomain, Organization Type, Address, and Admin Full Name/Email/Phone
@@ -27,6 +27,7 @@ export default function CreateOrganization() {
   const queryClient = useQueryClient();
   const { data: tenants } = useTenants();
   const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
+  const { data: organizationTypes } = useQuery({ queryKey: ['organization-types'], queryFn: listOrganizationTypes });
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -139,9 +140,9 @@ export default function CreateOrganization() {
                     <Form.Label>Organization Type</Form.Label>
                     <Form.Select value={orgType} onChange={(e) => setOrgType(e.target.value)}>
                       <option value="">Select type</option>
-                      {ORGANIZATION_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
+                      {(organizationTypes ?? []).map((type) => (
+                        <option key={type.id} value={type.name}>
+                          {type.name}
                         </option>
                       ))}
                     </Form.Select>

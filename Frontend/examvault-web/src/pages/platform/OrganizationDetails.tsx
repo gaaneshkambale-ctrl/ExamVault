@@ -28,7 +28,7 @@ import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
 import { timeAgo } from '../../utils/timeAgo';
 import { PLAN_FEATURE_LABELS } from '../../types/plan';
-import { ORGANIZATION_TYPES } from '../../types/tenant';
+import { listOrganizationTypes } from '../../api/organizationTypesApi';
 import {
   COSMETIC_PERMISSIONS,
   ADMIN_PERMISSIONS,
@@ -296,6 +296,7 @@ export default function OrganizationDetails() {
   const queryClient = useQueryClient();
 
   const { data: plans } = useQuery({ queryKey: ['plans'], queryFn: listPlans });
+  const { data: organizationTypes } = useQuery({ queryKey: ['organization-types'], queryFn: listOrganizationTypes });
   const currentPlan = plans?.find((p) => p.id === tenant?.planId);
 
   const [tab, setTab] = useState<DetailTab>('Overview');
@@ -1476,9 +1477,12 @@ export default function OrganizationDetails() {
             <Form.Label>Organization Type</Form.Label>
             <Form.Select value={editOrgType} onChange={(e) => setEditOrgType(e.target.value)}>
               <option value="">Select type</option>
-              {ORGANIZATION_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+              {editOrgType && !organizationTypes?.some((t) => t.name === editOrgType) && (
+                <option value={editOrgType}>{editOrgType}</option>
+              )}
+              {(organizationTypes ?? []).map((type) => (
+                <option key={type.id} value={type.name}>
+                  {type.name}
                 </option>
               ))}
             </Form.Select>

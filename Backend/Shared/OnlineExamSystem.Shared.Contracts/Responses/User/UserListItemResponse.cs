@@ -17,4 +17,5 @@ public record UserListItemResponse(
     Guid TenantId = default,
     DateTime? LastLoginAtUtc = null,
     Guid? CreatedByUserId = null,
-    string? CreatedByName = null);
+    string? CreatedByName = null,
+    Dictionary<string, string>? AcademicFields = null);
