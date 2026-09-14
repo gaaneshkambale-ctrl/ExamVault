@@ -33,7 +33,7 @@ import {
 } from './pdfReportKit';
 import type { TenantBranding } from './pdfReportKit';
 import { getResultPdfVariant, RESULT_PDF_VARIANT_COPY } from './resultPdfVariants';
-import { getResultFieldKeysForType } from '../constants/organizationTypeFieldCatalog';
+import { isResultFieldVisible } from '../constants/organizationTypeFieldCatalog';
 
 export interface ResultPdfSectionStat {
   name: string;
@@ -83,19 +83,8 @@ export interface ResultPdfContext {
   enabledResultFields?: string[];
 }
 
-// A key that isn't even offered as a checkbox for this tenant's
-// Organization Type (see RESULT_FIELD_KEYS_BY_TYPE) always shows, unchanged
-// from before Result Fields gating existed - an admin can only hide a field
-// they were actually given control over. Without this, a College tenant
-// (whose curated list never included eg. "Duration") would have Duration
-// silently vanish the moment they save ANY Result Fields selection, since
-// a saved selection is a non-empty array by definition and "Duration"
-// could never be in it.
 function isResultFieldEnabled(context: ResultPdfContext, branding: TenantBranding, key: string): boolean {
-  if (!getResultFieldKeysForType(branding.organizationType).includes(key)) {
-    return true;
-  }
-  return !context.enabledResultFields || context.enabledResultFields.length === 0 || context.enabledResultFields.includes(key);
+  return isResultFieldVisible(branding.organizationType, context.enabledResultFields, key);
 }
 
 const QUOTE_TEXT = 'Success is the sum of small efforts, repeated day in and day out.';

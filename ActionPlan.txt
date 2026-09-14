@@ -13178,3 +13178,85 @@ rendering (this tenant's Organization Type, University, has no
 comingSoon fields in its curated list to show) - both are straight
 reads of already-reviewed code, lower risk than what was verified live.
 Docker frontend rebuilt and redeployed. Not committed or pushed yet.
+
+--------------------------------------------------------------------
+User asked for a full 11-point test pass on the Result Fields feature.
+Ran it end-to-end against the real running app (Greenfield University
+tenant) rather than just re-reading code.
+
+Backend: dotnet build ExamVault.sln (full solution) - 0 errors. Full
+test suite across every service - 463/463 passed (Submission 107,
+Question 53, Exam 91, Ai 15, Result 35, Execution 14, Notification 30,
+User 118).
+Frontend: `tsc -b && vite build` clean; `npm run lint` - 4 pre-existing
+warnings, none in files touched this session.
+Tenant isolation: verified at the code level (not live, no second
+tenant login available) - every academic-config/academic-lists
+endpoint on MyTenantController derives tenantId exclusively from
+GetOwnTenantId() (the caller's own JWT claim), never a route/query
+param; OrganizationAcademicConfigRepository.GetByTenantIdAsync filters
+WHERE TenantId = tenantId. No code path lets a caller name another
+tenant's ID.
+
+Live UI + PDF round-trip (real student, real exam, real download, not
+mocked): unchecked "Student / Candidate ID" on Greenfield University's
+Result Fields -> Unsaved changes badge appeared, Save button went
+active -> Save Changes -> "Academic configuration saved", Unsaved
+badge cleared, Last Updated bumped. Downloaded Arjun Mehta's real
+result PDF before and after: BEFORE showed "Registration No.
+GU2026001"; AFTER showed "Registration No. —" with everything else
+(Exam Date, Duration, Percentage/Result/Grade) unchanged. Confirms the
+checkbox genuinely reaches the real generated PDF end to end, not just
+config storage. Reset to Recommended re-checked all 3 fields correctly
+(Unsaved badge reappeared). Navigated away WITHOUT saving after that
+reset, came back - the reset had NOT persisted (checkbox was back to
+unchecked, matching last real save, Unsaved badge gone) - confirms no
+accidental/implicit autosave and that the dirty-indicator tracks real
+server state, not just in-memory clicks. Re-checked and saved for real
+to leave the tenant in its recommended state afterward.
+
+Bug found via this test (would not have been caught without actually
+downloading and comparing PDFs): Reports & Documents' "Live PDF
+Preview" card (Preview PDF / Download Sample buttons) is a SEPARATE,
+hand-duplicated PDF-drawing function in OrganizationSettings.tsx
+(SAMPLE_REPORT constant + its own draw calls hand-mirroring
+drawAcademicReport's layout, per that code's own comment) that has
+zero connection to enabledResultFields/isResultFieldEnabled - it
+always renders every field regardless of the real Result Fields
+config. Downloaded a sample report with Student/Candidate ID
+unchecked - it still showed "Registration No. SXU2026001". This
+directly fails the "Preview must match the actual PDF" expectation
+the user's own test plan named as point 5. Reported to the user as a
+finding rather than fixed silently - fixing it means teaching the
+Reports & Documents tab's sample preview to also read the tenant's
+real resultFields config, a scoped but real follow-up, not something
+this test pass should silently do on its own initiative.
+
+--------------------------------------------------------------------
+Fixed the Sample Report preview bug found during the 11-point test
+pass. Root cause: two independently hand-maintained copies of the
+same "does this Result Field show" logic - generateResultPdf.ts's
+isResultFieldEnabled (real PDFs) and a completely separate SAMPLE_REPORT
+draw path in OrganizationSettings.tsx's PdfReportSettingsTab (the
+Reports & Documents "Live PDF Preview" card's Preview PDF/Download
+Sample buttons, plus its inline on-page HTML mirror) that never
+referenced Result Fields at all.
+
+Real fix, not a patch: extracted the org-type-aware gating rule into
+one shared function, isResultFieldVisible(organizationType,
+enabledResultFields, key), in organizationTypeFieldCatalog.ts.
+generateResultPdf.ts's isResultFieldEnabled now just delegates to it
+(same behavior, no duplicate logic left). PdfReportSettingsTab now
+calls useOrganizationAcademicConfig() to get the tenant's real
+resultFields and gates Registration No./Exam Date/Duration in BOTH the
+jsPDF sample draw function and the inline HTML preview panel through
+the same shared function - so the two draw paths can't independently
+drift out of sync again the way this bug happened in the first place.
+
+Frontend build clean. Docker frontend rebuilt and redeployed.
+Live-verified on Greenfield University: unchecked Student/Candidate ID
+and saved -> both the inline "Live PDF Preview" panel AND a freshly
+downloaded Sample Report PDF now correctly show "Registration No. —"
+instead of the hardcoded "SXU2026001", matching the real student
+result PDF's behavior exactly. Restored the tenant's Result Fields to
+checked/recommended afterward.

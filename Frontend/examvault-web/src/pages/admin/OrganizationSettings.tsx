@@ -24,6 +24,7 @@ import {
   getAcademicFieldsForType,
   getResultFieldKeysForType,
   getStudentFieldsForType,
+  isResultFieldVisible,
   RESULT_FIELD_CATALOG,
   RESULT_FIELD_GROUPS,
 } from '../../constants/organizationTypeFieldCatalog';
@@ -224,6 +225,19 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     ? draft.primaryColor ?? DEFAULT_BRANDING_COLORS.primaryColor
     : '#1F2937';
 
+  // This preview's whole reason to exist is showing what the real generated
+  // report will actually look like - it used to hardcode every
+  // SAMPLE_REPORT field regardless of the tenant's real Result Fields
+  // config, so unchecking eg. "Student / Candidate ID" there had zero
+  // effect here (a real bug: a Preview that doesn't match the actual PDF is
+  // worse than no preview). Gated with the same isResultFieldVisible the
+  // real generateResultPdf.ts uses, so the two can't drift apart again.
+  const { data: academicConfig } = useOrganizationAcademicConfig();
+  const isFieldVisible = (key: string) => isResultFieldVisible(draft.organizationType, academicConfig?.resultFields, key);
+  const sampleRegistrationNo = isFieldVisible('studentId') ? SAMPLE_REPORT.registrationNo : '—';
+  const sampleExamDate = isFieldVisible('examDate') ? SAMPLE_REPORT.examDate : '—';
+  const sampleDuration = isFieldVisible('duration') ? SAMPLE_REPORT.duration : '—';
+
   const buildSamplePdf = async () => {
     const doc = new jsPDF();
     const brand = draft.useBrandColorsInReportHeader ? hexToRgb(draft.primaryColor) : TEXT_DARK;
@@ -303,11 +317,11 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
 
     const fields: [string, string][] = [
       ['Student Name', SAMPLE_REPORT.studentName],
-      ['Registration No.', SAMPLE_REPORT.registrationNo],
+      ['Registration No.', sampleRegistrationNo],
       ['Program', SAMPLE_REPORT.program],
       ['Exam Name', SAMPLE_REPORT.examName],
-      ['Exam Date', SAMPLE_REPORT.examDate],
-      ['Duration', SAMPLE_REPORT.duration],
+      ['Exam Date', sampleExamDate],
+      ['Duration', sampleDuration],
     ];
     fields.forEach(([label, value]) => {
       fieldRow(doc, label, value, MARGIN, y, 38, CONTENT_WIDTH);
@@ -543,7 +557,7 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                       <strong>Student Name:</strong> {SAMPLE_REPORT.studentName}
                     </Col>
                     <Col xs={6}>
-                      <strong>Registration No.:</strong> {SAMPLE_REPORT.registrationNo}
+                      <strong>Registration No.:</strong> {sampleRegistrationNo}
                     </Col>
                     <Col xs={6}>
                       <strong>Program:</strong> {SAMPLE_REPORT.program}
@@ -552,10 +566,10 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                       <strong>Exam Name:</strong> {SAMPLE_REPORT.examName}
                     </Col>
                     <Col xs={6}>
-                      <strong>Exam Date:</strong> {SAMPLE_REPORT.examDate}
+                      <strong>Exam Date:</strong> {sampleExamDate}
                     </Col>
                     <Col xs={6}>
-                      <strong>Duration:</strong> {SAMPLE_REPORT.duration}
+                      <strong>Duration:</strong> {sampleDuration}
                     </Col>
                   </Row>
 

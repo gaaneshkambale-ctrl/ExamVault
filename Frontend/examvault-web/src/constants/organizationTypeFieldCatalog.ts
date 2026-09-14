@@ -196,6 +196,25 @@ export function getResultFieldKeysForType(organizationType: string | null | unde
   return RESULT_FIELD_KEYS_BY_TYPE[organizationType] ?? DEFAULT_RESULT_FIELD_KEYS;
 }
 
+// The single source of truth for "does this Result Fields key currently
+// show" - used by both the real generated PDF (generateResultPdf.ts) and
+// the Reports & Documents tab's sample preview (OrganizationSettings.tsx),
+// so the two can't independently drift out of sync the way the sample
+// preview did before this function existed (it hand-duplicated the same
+// logic and silently stopped matching real output). A key that isn't even
+// offered as a checkbox for this Organization Type always shows - an admin
+// can only hide a field they were actually given control over.
+export function isResultFieldVisible(
+  organizationType: string | null | undefined,
+  enabledResultFields: string[] | null | undefined,
+  key: string,
+): boolean {
+  if (!getResultFieldKeysForType(organizationType).includes(key)) {
+    return true;
+  }
+  return !enabledResultFields || enabledResultFields.length === 0 || enabledResultFields.includes(key);
+}
+
 // Which fields to capture on a STUDENT record at Add/Edit User time - eg. a
 // College student's Enrollment No./PRN/Semester, a Coaching Institute
 // student's Batch. Deliberately excludes fields that already exist as real,
