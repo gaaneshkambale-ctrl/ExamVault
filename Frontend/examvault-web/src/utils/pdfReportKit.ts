@@ -154,6 +154,16 @@ export interface TenantBranding {
   signatureImage: LogoImage | null;
   signatoryName: string | null;
   signatoryDesignation: string | null;
+  /** Organization Settings -> General "Registration / Accreditation No." - shown as a third centered line under the address in the compact "academic" variant's header. */
+  registrationNumber: string | null;
+  /** Organization Settings -> General "Established Year" - shown as "Est. <year>" next to the institution name in the compact "academic" variant's header. */
+  establishedYear: number | null;
+  /** Organization Settings -> Reports & Documents "Show institution logo on all PDF reports". false is a deliberate opt-out (see drawHeaderBrand/drawFooter) - distinct from a logo that's simply missing or failed to load. */
+  showLogoOnReports: boolean;
+  /** Organization Settings -> Reports & Documents "Show page numbers" - gates only the "Page X of Y" footer line; "Generated on" stays regardless. */
+  showPageNumbers: boolean;
+  /** Organization Settings -> Reports & Documents "Show QR code for verification" - gates a real scannable QR (linking to the student's own result page) drawn on the compact "academic" variant's single/booklet result PDF. */
+  showQrCodeForVerification: boolean;
 }
 
 /** Resolves everything a report needs to brand itself for the current tenant, with the same "never fail the report" fallback discipline as loadLogo(): any error (not authenticated in this context, network failure, tenant hasn't configured anything) falls back to ExamVault's own fixed branding rather than throwing. */
@@ -181,6 +191,11 @@ export async function loadTenantBranding(): Promise<TenantBranding> {
       signatureImage: settings.hasSignature ? await loadTenantSignature() : null,
       signatoryName: settings.signatoryName,
       signatoryDesignation: settings.signatoryDesignation,
+      registrationNumber: settings.registrationNumber,
+      establishedYear: settings.establishedYear,
+      showLogoOnReports: settings.showLogoOnPdfReports,
+      showPageNumbers: settings.showPageNumbers,
+      showQrCodeForVerification: settings.showQrCodeForVerification,
     };
   } catch {
     return {
@@ -199,12 +214,18 @@ export async function loadTenantBranding(): Promise<TenantBranding> {
       signatureImage: null,
       signatoryName: null,
       signatoryDesignation: null,
+      registrationNumber: null,
+      establishedYear: null,
+      showLogoOnReports: true,
+      showPageNumbers: true,
+      showQrCodeForVerification: false,
     };
   }
 }
 
-/** Draws the real ExamVault logo (image, wordmark and tagline all baked into the PNG); falls back to plain "ExamVault" text if the image couldn't be loaded. */
-export function drawHeaderBrand(doc: jsPDF, x: number, y: number, heightMm: number, logo: LogoImage | null) {
+/** Draws the real ExamVault logo (image, wordmark and tagline all baked into the PNG); falls back to plain "ExamVault" text if the image couldn't be loaded. `show=false` (Organization Settings -> "Show institution logo on all PDF reports" turned off) draws nothing at all - a deliberate opt-out, not a load failure, so it does NOT fall back to the "ExamVault" text the way a missing/failed logo does. */
+export function drawHeaderBrand(doc: jsPDF, x: number, y: number, heightMm: number, logo: LogoImage | null, show = true) {
+  if (!show) return;
   if (logo) {
     doc.addImage(logo.dataUrl, 'PNG', x, y, heightMm * logo.ratio, heightMm);
   } else {
@@ -225,11 +246,12 @@ export function drawPageHeader(
     tagline?: string;
     logoHeightMm?: number;
     headerColor?: RgbColor;
+    showLogo?: boolean;
   } = { logo: null },
 ): number {
   let y = MARGIN;
   const logoH = opts.logoHeightMm ?? 13;
-  drawHeaderBrand(doc, MARGIN, y, logoH, opts.logo);
+  drawHeaderBrand(doc, MARGIN, y, logoH, opts.logo, opts.showLogo ?? true);
   if (opts.generatedAt) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
@@ -253,32 +275,62 @@ export function drawPageHeader(
   return y;
 }
 
-export function drawFooter(doc: jsPDF, page: number, totalPages: number, generatedAt: Date, logo: LogoImage | null) {
+export function drawFooter(
+  doc: jsPDF,
+  page: number,
+  totalPages: number,
+  generatedAt: Date,
+  logo: LogoImage | null,
+  addressLine?: string | null,
+  showLogo = true,
+  showPageNumbers = true,
+) {
   setColor(doc, 'setDrawColor', BORDER);
   doc.setLineWidth(0.3);
   doc.line(MARGIN, FOOTER_Y - 4, PAGE_WIDTH - MARGIN, FOOTER_Y - 4);
-  if (logo) {
-    const h = 4.5;
-    doc.addImage(logo.dataUrl, 'PNG', MARGIN, FOOTER_Y - h + 0.5, h * logo.ratio, h);
-  } else {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    setColor(doc, 'setTextColor', TEXT_DARK);
-    doc.text('ExamVault', MARGIN, FOOTER_Y);
+  // showLogo=false is a deliberate opt-out (Organization Settings -> "Show
+  // institution logo on all PDF reports"), not a load failure, so it draws
+  // nothing rather than falling back to the "ExamVault" text a missing logo
+  // gets.
+  if (showLogo) {
+    if (logo) {
+      const h = 4.5;
+      doc.addImage(logo.dataUrl, 'PNG', MARGIN, FOOTER_Y - h + 0.5, h * logo.ratio, h);
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      setColor(doc, 'setTextColor', TEXT_DARK);
+      doc.text('ExamVault', MARGIN, FOOTER_Y);
+    }
+  }
+  if (addressLine) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(fitText(doc, addressLine, 110), MARGIN, FOOTER_Y + 3);
   }
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   setColor(doc, 'setTextColor', TEXT_MUTED);
   doc.text(`Generated on: ${generatedAt.toLocaleString()}`, PAGE_WIDTH - MARGIN, FOOTER_Y - 3, { align: 'right' });
-  doc.text(`Page ${page} of ${totalPages}`, PAGE_WIDTH - MARGIN, FOOTER_Y + 2, { align: 'right' });
+  if (showPageNumbers) {
+    doc.text(`Page ${page} of ${totalPages}`, PAGE_WIDTH - MARGIN, FOOTER_Y + 2, { align: 'right' });
+  }
 }
 
 /** Stamps drawFooter onto every page already in the document - call once, after all content is drawn, so the true final page count is known. */
-export function stampFooters(doc: jsPDF, generatedAt: Date, logo: LogoImage | null): void {
+export function stampFooters(
+  doc: jsPDF,
+  generatedAt: Date,
+  logo: LogoImage | null,
+  addressLine?: string | null,
+  showLogo = true,
+  showPageNumbers = true,
+): void {
   const totalPages = doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-    drawFooter(doc, p, totalPages, generatedAt, logo);
+    drawFooter(doc, p, totalPages, generatedAt, logo, addressLine, showLogo, showPageNumbers);
   }
 }
 

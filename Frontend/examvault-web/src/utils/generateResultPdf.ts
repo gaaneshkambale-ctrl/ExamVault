@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import QRCode from 'qrcode';
 import { getGrade } from '../types/result';
 import type { AdminAttemptResultResponse, ResultSummaryResponse } from '../types/result';
 import {
@@ -154,7 +155,7 @@ function drawStudentReport(
   // ---------- Page 1 ----------
   let y = MARGIN;
   const logoH = 13;
-  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo);
+  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo, branding.showLogoOnReports);
   // The ExamVault logo has its own wordmark baked into the image, so no
   // extra text is needed alongside it - a tenant's own uploaded logo is
   // typically just a mark/icon, so its institution name (and motto, if
@@ -507,7 +508,7 @@ function drawStudentReport(
   // ---------- Page 2 ----------
   doc.addPage();
   y = MARGIN;
-  drawHeaderBrand(doc, MARGIN, y, 9, branding.logo);
+  drawHeaderBrand(doc, MARGIN, y, 9, branding.logo, branding.showLogoOnReports);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   setColor(doc, 'setTextColor', TEXT_DARK);
@@ -618,6 +619,7 @@ function drawAcademicReport(
   branding: TenantBranding,
   generatedAt: Date,
   isFirstInDocument: boolean,
+  qrDataUrl: string | null = null,
 ): void {
   if (!isFirstInDocument) {
     doc.addPage();
@@ -648,39 +650,57 @@ function drawAcademicReport(
 
   let y = MARGIN;
 
-  // Header: logo + institution name/tagline (left), address/contact/website (right)
-  const logoH = 12;
-  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo);
-  if (branding.hasOwnLogo) {
-    const logoW = branding.logo ? logoH * branding.logo.ratio : 20;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    setColor(doc, 'setTextColor', TEXT_DARK);
-    doc.text(branding.name, MARGIN + logoW + 4, y + 5.5);
-    if (branding.showMotto && branding.motto) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      setColor(doc, 'setTextColor', TEXT_MUTED);
-      doc.text(branding.motto, MARGIN + logoW + 4, y + 10);
-    }
-  }
+  // Header: small logo top-left, "Generated On" top-right, and the
+  // institution name/tagline/address block CENTERED across the page -
+  // matching the reference "St. Xavier's University" mockup exactly,
+  // rather than the rich dashboard layout's left-aligned-next-to-logo
+  // convention. Shown regardless of hasOwnLogo (unlike that other layout) -
+  // a centered institution name never looks redundant next to a small
+  // corner logo the way it would sitting immediately beside it.
+  const logoH = 10;
+  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo, branding.showLogoOnReports);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   setColor(doc, 'setTextColor', TEXT_MUTED);
-  [
-    `Generated On: ${generatedAt.toLocaleDateString()}`,
-    branding.addressLine,
-    // Contact/website respect "Show contact details (phone, email, website)"
-    // (Organization Settings -> Reports & Documents) - a real, pre-existing
-    // tenant toggle that generateResultPdf.ts's other layout never actually
-    // read either (see ActionPlan.txt), but this new header is the one
-    // place in this file that prints contact info at all, so it's the one
-    // that needs to respect it.
-    ...(branding.showContactDetails ? [branding.contactLine, branding.website] : []),
-  ]
-    .filter((line): line is string => Boolean(line))
-    .forEach((line, i) => doc.text(line, PAGE_WIDTH - MARGIN, y + 3 + i * 4, { align: 'right' }));
-  y += logoH + 4;
+  doc.text(`Generated On: ${generatedAt.toLocaleDateString()}`, PAGE_WIDTH - MARGIN, y + 3, { align: 'right' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  setColor(doc, 'setTextColor', TEXT_DARK);
+  const nameLine = branding.establishedYear ? `${branding.name}  (Est. ${branding.establishedYear})` : branding.name;
+  doc.text(nameLine, PAGE_WIDTH / 2, y + 5, { align: 'center' });
+  let centerY = y + 10;
+  if (branding.showMotto && branding.motto) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(branding.motto, PAGE_WIDTH / 2, centerY, { align: 'center' });
+    centerY += 4.5;
+  }
+  // Contact/website respect "Show contact details (phone, email, website)"
+  // (Organization Settings -> Reports & Documents) - a real, pre-existing
+  // tenant toggle that generateResultPdf.ts's other layout never actually
+  // read either (see ActionPlan.txt), but this new header is the one
+  // place in this file that prints contact info at all, so it's the one
+  // that needs to respect it.
+  const addressParts = [branding.addressLine, ...(branding.showContactDetails ? [branding.contactLine, branding.website] : [])].filter(
+    (part): part is string => Boolean(part),
+  );
+  if (addressParts.length > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(addressParts.join('  |  '), PAGE_WIDTH / 2, centerY, { align: 'center' });
+    centerY += 4;
+  }
+  if (branding.registrationNumber) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(`Reg. No: ${branding.registrationNumber}`, PAGE_WIDTH / 2, centerY, { align: 'center' });
+    centerY += 4;
+  }
+  y = Math.max(y + logoH + 4, centerY + 2);
   setColor(doc, 'setDrawColor', branding.headerColor);
   doc.setLineWidth(0.6);
   doc.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
@@ -713,10 +733,16 @@ function drawAcademicReport(
   fieldRow(doc, 'Duration', context.durationMinutes ? `${context.durationMinutes} Minutes` : '—', infoRightX, ry, 26, infoColW - 8);
   y += infoPanelH + 8;
 
-  // Subject-wise marks table
+  // Subject-wise marks table - drawn with a full grid (outer border + row/
+  // column rules), matching the bordered-table look of the reference
+  // "Official Examination Report" mockup, rather than pdfReportKit's usual
+  // background-shading-only tables (drawTableHeader has no border lines by
+  // design - left untouched since other reports rely on that plain look).
   const tColW = [12, CONTENT_WIDTH - 12 - 30 - 30, 30, 30];
   const rowH = 7;
-  y = ensurePageSpace(doc, y, rowH * (sections.length + 2));
+  const tableStartY = ensurePageSpace(doc, y, rowH * (sections.length + 2));
+  y = tableStartY;
+  const tableW = tColW.reduce((a, b) => a + b, 0);
   drawTableHeader(doc, MARGIN, y, tColW, ['Q.No', 'Subject / Section', 'Marks', 'Obtained'], rowH);
   y += rowH;
   let totalMax = 0;
@@ -724,7 +750,7 @@ function drawAcademicReport(
   sections.forEach((s, i) => {
     if (i % 2 === 1) {
       setColor(doc, 'setFillColor', { r: 250, g: 250, b: 251 });
-      doc.rect(MARGIN, y, tColW.reduce((a, b) => a + b, 0), rowH, 'F');
+      doc.rect(MARGIN, y, tableW, rowH, 'F');
     }
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
@@ -742,13 +768,33 @@ function drawAcademicReport(
     y += rowH;
   });
   setColor(doc, 'setFillColor', { r: 241, g: 245, b: 249 });
-  doc.rect(MARGIN, y, tColW.reduce((a, b) => a + b, 0), rowH, 'F');
+  doc.rect(MARGIN, y, tableW, rowH, 'F');
   doc.setFont('helvetica', 'bold');
   setColor(doc, 'setTextColor', TEXT_DARK);
   doc.text('Total Marks', MARGIN + 2 + tColW[0], y + rowH - 2.5);
   doc.text(String(totalMax), MARGIN + 2 + tColW[0] + tColW[1], y + rowH - 2.5);
   doc.text(String(totalScore), MARGIN + 2 + tColW[0] + tColW[1] + tColW[2], y + rowH - 2.5);
-  y += rowH + 10;
+  y += rowH;
+
+  // Grid lines: outer border, a rule under every row, and a rule between
+  // every column - drawn last so they sit on top of the fills above.
+  const tableEndY = y;
+  setColor(doc, 'setDrawColor', BORDER);
+  doc.setLineWidth(0.25);
+  const rowCount = sections.length + 2;
+  for (let r = 0; r <= rowCount; r++) {
+    const ry = tableStartY + r * rowH;
+    doc.line(MARGIN, ry, MARGIN + tableW, ry);
+  }
+  let colX = MARGIN;
+  tColW.forEach((w) => {
+    doc.line(colX, tableStartY, colX, tableEndY);
+    colX += w;
+  });
+  doc.line(MARGIN + tableW, tableStartY, MARGIN + tableW, tableEndY);
+  doc.setLineWidth(0.4);
+  doc.rect(MARGIN, tableStartY, tableW, tableEndY - tableStartY);
+  y += 10;
 
   // Bottom summary row: Percentage / Result / Grade
   y = ensurePageSpace(doc, y, 22);
@@ -799,7 +845,17 @@ function drawAcademicReport(
     setColor(doc, 'setTextColor', TEXT_MUTED);
     doc.text(branding.signatoryDesignation, signX, y + 10);
   }
-  y += 18;
+  let signOffBottom = y + 18;
+  if (qrDataUrl) {
+    const qrSize = 16;
+    doc.addImage(qrDataUrl, 'PNG', MARGIN, y + 8, qrSize, qrSize);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text('Scan to verify this result', MARGIN + qrSize + 3, y + 14);
+    signOffBottom = Math.max(signOffBottom, y + 8 + qrSize + 4);
+  }
+  y = signOffBottom;
 
   // Closing tagline + disclaimer
   y = ensurePageSpace(doc, y, 14);
@@ -824,10 +880,11 @@ function drawReport(
   branding: TenantBranding,
   generatedAt: Date,
   isFirstInDocument: boolean,
+  qrDataUrl: string | null = null,
 ): void {
   const variant = getResultPdfVariant(branding.organizationType);
   if (variant === 'academic') {
-    drawAcademicReport(doc, result, context, branding, generatedAt, isFirstInDocument);
+    drawAcademicReport(doc, result, context, branding, generatedAt, isFirstInDocument, qrDataUrl);
   } else {
     drawStudentReport(doc, result, context, branding, generatedAt, isFirstInDocument);
   }
@@ -840,8 +897,18 @@ export async function generateResultPdf(
   const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
-  drawReport(doc, result, context, branding, generatedAt, true);
-  stampFooters(doc, generatedAt, branding.logo);
+  const qrDataUrl = branding.showQrCodeForVerification
+    ? await QRCode.toDataURL(`${window.location.origin}/results/${result.examId}`, { width: 160, margin: 1 }).catch(() => null)
+    : null;
+  drawReport(doc, result, context, branding, generatedAt, true, qrDataUrl);
+  stampFooters(
+    doc,
+    generatedAt,
+    branding.logo,
+    branding.includeAddressInFooter ? branding.addressLine : null,
+    branding.showLogoOnReports,
+    branding.showPageNumbers,
+  );
   doc.save(`${sanitizeFilename(result.examTitle)}-result.pdf`);
 }
 
@@ -856,9 +923,23 @@ export async function generateExamResultsBooklet(examTitle: string, entries: Exa
   const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
+  const qrDataUrls = await Promise.all(
+    entries.map(({ result }) =>
+      branding.showQrCodeForVerification
+        ? QRCode.toDataURL(`${window.location.origin}/results/${result.examId}`, { width: 160, margin: 1 }).catch(() => null)
+        : Promise.resolve(null),
+    ),
+  );
   entries.forEach(({ result, context }, i) => {
-    drawReport(doc, result, context, branding, generatedAt, i === 0);
+    drawReport(doc, result, context, branding, generatedAt, i === 0, qrDataUrls[i]);
   });
-  stampFooters(doc, generatedAt, branding.logo);
+  stampFooters(
+    doc,
+    generatedAt,
+    branding.logo,
+    branding.includeAddressInFooter ? branding.addressLine : null,
+    branding.showLogoOnReports,
+    branding.showPageNumbers,
+  );
   doc.save(`${sanitizeFilename(examTitle)}-all-results.pdf`);
 }

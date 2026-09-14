@@ -12580,4 +12580,234 @@ from the doc's most literal, most expensive reading to the version that
 was real, safe, and honest about what data actually exists to back it,
 confirmed with the user at every genuine fork rather than guessed.
 
-Not committed or pushed - holding per the user's standing rule.
+Committed and pushed as part of the combined commit below (Phase N).
+
+-----------------------------------------------------------------------
+PHASE N (DONE, 2026-09-13): Final verification audit across all 8
+Organization Types, then commit + push
+-----------------------------------------------------------------------
+User asked to verify everything implemented, offering to create test
+accounts for all 8 Organization Types (College, University, School,
+Coaching Institute, Training Institute, Corporate/L&D, Certification
+Institute, Recruitment/Hiring) if needed. Worked through what live
+end-to-end testing would actually require: creating a working tenant
+needs the real CreateTenantHandler business logic (plan assignment,
+default exam types, permission grants) - faking that via raw SQL risked
+producing broken, inconsistent test tenants rather than real ones, so
+that path was ruled out. Actually USING a new tenant (viewing Academic
+Configuration, generating a real result PDF) needs a login - and typing
+any password into a login field, even a documented seed credential like
+superadmin@examvault.local, even when explicitly authorized, is a hard
+rule with no exception, not a judgment call. Explained this plainly
+when the user pushed on it a second time, rather than searching for a
+technical workaround (already knew from Phase K/L that self-minting an
+API token to sidestep login gets blocked by the sandbox too). User
+chose the code-only verification path over live tenant creation.
+
+Re-verified fresh against the actual current code (not memory of
+writing it): confirmed all 8 Organization Types are present in every
+one of the four field catalogs (Academic/Result/Student/Exam fields in
+organizationTypeFieldCatalog.ts), all 8 map to a complete PDF variant
+with full copy in resultPdfVariants.ts, all 8 map to a report-type list
+in reportTypeCatalog.ts, isResultFieldEnabled/getResultPdfVariant/
+isReportTypeAvailable are actually CALLED at every real consumption
+point (not just defined and unused), grepped the whole backend and
+found zero per-Organization-Type controllers or tables, and confirmed
+CreateOrganization.tsx's Organization Type dropdown. Re-ran the full
+verification suite one final time: dotnet build (0 errors), ResultService
+35/35, UserService 118/118, frontend build clean. Reported a full 15 x 8
+coverage matrix back to the user, honestly caveated that only the
+College tenant has been LIVE-verified with a real screenshot/PDF this
+session - the other 7 types are code-verified-complete but not visually
+confirmed, for the login reason above.
+
+User then asked to commit and push. Staged everything except the five
+standing scratch files (Database_Create.txt, Database_CreateSuperAdmin.txt,
+Database_clean.txt, examvault-saas.txt, examvaults.docx) via
+git add -A with explicit pathspec exclusions, confirmed via git status
+that none of the five were staged, and made ONE combined commit for the
+whole Phases F-M architecture effort (54 files, +2853/-110) rather than
+splitting per phase - several files (generateResultPdf.ts especially)
+were touched by 4+ overlapping phases, and safely partial-staging line
+ranges across that much overlap carried real risk of breaking something
+for no real benefit over one well-described commit. Pushed clean to
+origin/dev at f48f279 (from ecbee84). Working tree confirmed clean
+afterward except the same five untouched scratch files.
+
+Not committed or pushed further - this log entry itself and anything
+after it holds per the user's standing rule.
+
+--------------------------------------------------------------------
+Live verification session: created a real "Greenfield University"
+(Organization Type: University) tenant end-to-end - user handled every
+login/password step themselves (Super Admin, Admin, Student), Claude
+drove everything else (org creation, Exam Type setup, exam/question
+creation, publishing, the student's actual exam attempt via browser
+clicks, and every admin-side report surface: Student Results, Exam
+Results booklet, Advance/Detailed Exam Report and its PDF export).
+Confirmed the academic-variant PDF pipeline genuinely works with real
+data flowing through every layer, not just code review. This is the
+first Organization Type beyond "College" to get a real, screenshot/PDF
+-verified pass this session; the other 6 remain code-verified only.
+
+Three rounds of user-screenshot-driven visual fixes to the compact
+"Official Examination Report" PDF (drawAcademicReport in
+generateResultPdf.ts) and the "Report Header Preview" widget in
+Organization Settings (General tab):
+1. Subject/Section table had no visible grid - added a full outer
+   border plus a rule under every row and between every column.
+2. Header was left-aligned next to the logo (and skipped the
+   institution name entirely when no logo was uploaded) - rewrote it
+   to a page-centered block (logo stays left) that always shows the
+   name, motto, address and now Registration No., matching real
+   letterhead convention.
+3. The "Report Header Preview" mockup on the General tab had drifted
+   into its own invented layout (left-aligned "GRE" avatar, a
+   fabricated "Academic Year: --" line that appears in NEITHER real
+   header style) - rewrote it to mirror the real centered header
+   exactly, including the trailing empty spacer matching the logo's
+   width so the center block is genuinely page-centered rather than
+   centered-within-remaining-space.
+
+Wired three previously-orphaned Organization Settings fields into the
+actual PDF output, none of which had ever reached a generated report
+before despite having input fields and (in one case) a toggle:
+- Registration/Accreditation No. -> new `registrationNumber` field on
+  TenantBranding, printed as a third centered header line.
+- Established Year -> new `establishedYear` field on TenantBranding,
+  printed as "(Est. <year>)" next to the institution name.
+- "Include address in PDF footer" toggle -> was loaded into
+  TenantBranding.includeAddressInFooter but never actually read by
+  drawFooter/stampFooters; wired it through so the toggle now really
+  does print the address in the footer, at all three stampFooters call
+  sites (generateResultPdf.ts x2, exportAdvanceExamReportPdf.ts).
+
+Fixed a real bug in OrganizationSettings.tsx, not just a cosmetic one:
+`useEffect(() => { if (settings) setDraft(toDraft(settings)) },
+[settings])` re-synced the whole draft from the server on EVERY
+settings refetch (tab switch, window focus, post-save invalidation),
+silently discarding whatever the admin was mid-typing. Worse than it
+looked - reproduced the failure mode where this reset a genuinely
+already-saved field (Contact Phone) back to blank, then a subsequent
+Save Changes persisted that clobbered draft and permanently wiped the
+saved value from the database. Fixed by guarding the sync with a
+`hasInitializedDraft` ref so it only ever seeds `draft` on first load;
+the explicit Reset button's `setDraft(toDraft(settings))` is untouched
+since that one is a deliberate user action.
+
+Also found and fixed the same "diff" in the separate "Live PDF
+Preview" widget under the Reports & Documents tab (PdfReportSettingsTab
+component, its own from-scratch jsPDF drawing + its own React mockup,
+built independently of drawAcademicReport/pdfReportKit and never kept
+in sync): both its downloadable sample PDF and its on-page mockup still
+had the old left-logo/right-contact-block header and no footer at all.
+Rewrote both to mirror the real centered header (with Est. year and
+Reg. No.) and the real drawFooter layout (logo + conditional address
+left, Generated-on/Page-number right) exactly, and removed a stray
+duplicate motto line that had been printing the tagline twice.
+
+Verified the whole loop live end-to-end for Greenfield University:
+filled in Website, Contact Email, Contact Phone, Established Year and
+Registration No., confirmed the "Report Header Preview" and new
+"Report Footer Preview" widgets matched, saved, did a genuine hard page
+reload to confirm the save actually persisted server-side (not just
+held in local state) - all five fields came back correctly, proving
+the draft-reset bug is fixed - then downloaded the real
+"University Semester Exam" results PDF and pdftotext'd it to confirm
+every field actually renders in the generated report: centered header
+reading "Greenfield University (Est. 1998)" / full address+phone+email
++website line / "Reg. No: UGC-REG-2026-0451", and a footer with the
+institution address on the left plus Generated-on/Page-number on the
+right.
+
+Frontend `npm run build` clean after every edit; Docker frontend image
+rebuilt and redeployed (docker compose build frontend && up -d
+frontend) after each round of fixes. Not committed or pushed - holds
+per the user's standing rule, same as the entry above.
+
+--------------------------------------------------------------------
+User asked "organization setting - additional settings workables?" -
+audited every toggle/field in the General tab's "Additional Settings"
+card and the Reports & Documents tab's "Additional PDF Options" card
+against the real report pipeline (generateResultPdf.ts, pdfReportKit.ts,
+exportAdvanceExamReportPdf.ts, generateCertificatePdf.ts). Found 6 of 10
+had zero effect on any real generated PDF - either read nowhere outside
+OrganizationSettings.tsx itself, or (QR/watermark) real-looking but
+fake:
+- Show institution logo on all PDF reports - logo was unconditional
+- Show page numbers - "Page X of Y" was unconditional
+- Show QR code for verification - only gated the SETTINGS PAGE's own
+  fake preview, which itself was a hardcoded 6x6 checkerboard pattern,
+  not a real QR (no encoding library used, drawQrPlaceholder())
+- Enable watermark - a watermark exists but only on Certificates
+  (generateCertificatePdf.ts), unconditional there too; Result PDFs
+  have no watermark code at all
+- Enable multi-campus - no campus concept exists anywhere in the
+  codebase
+- Default Academic Year / Default Language / Date Format - saved to
+  the database, never read back anywhere (no exam-form default, no
+  i18n, no date formatting hookup)
+
+User chose to wire the two easy ones (logo, page numbers) plus build a
+real QR code; left watermark/multi-campus/defaults as explicitly
+out of scope for now (would need real feature design, not just wiring
+an existing field through - flagged for a future ask).
+
+Implementation:
+- Added `showLogoOnReports`, `showPageNumbers`, `showQrCodeForVerification`
+  to TenantBranding (pdfReportKit.ts), loaded from the corresponding
+  settings fields.
+- `drawHeaderBrand(..., show = true)`: show=false draws nothing at all
+  - a deliberate opt-out is NOT the same as a missing/failed logo, so
+  it must not fall back to the "ExamVault" text a load failure gets.
+  Same distinction applied to `drawFooter`/`stampFooters`'s new
+  `showLogo` param. `showPageNumbers` param on the same two functions
+  gates only the "Page X of Y" line - "Generated on" always stays.
+  Threaded through every real call site: generateResultPdf.ts (3
+  header calls, 2 stampFooters calls), exportAdvanceExamReportPdf.ts
+  (2 drawPageHeader calls, 1 stampFooters call).
+- Real QR code: this app already had the `qrcode` npm package and an
+  existing working pattern for it (CertificateDetails.tsx generates
+  `QRCode.toDataURL(certificateUrl)` client-side, addImage's the
+  result into the PDF). Reused the exact same pattern for results -
+  QR encodes `${origin}/results/:examId` (the student's own "My
+  Result" page, the same kind of destination the certificate QR
+  already uses). Generated once per result in generateResultPdf()
+  and once per entry (Promise.all) in generateExamResultsBooklet(),
+  BEFORE the synchronous jsPDF drawing calls since QR generation is
+  async. Drawn in drawAcademicReport's sign-off block, left of "Date
+  of Result", with a "Scan to verify this result" caption - scoped to
+  the academic variant only, consistent with today's earlier
+  registrationNumber/establishedYear precedent (the non-academic
+  drawStudentReport variant and the Advance Exam Report were left
+  alone - QR verification is a per-student-result concept, not
+  something an admin analytics document needs).
+- Also brought the two "Live PDF Preview" mocks (General tab's Report
+  Header/Footer Preview, Reports & Documents tab's own separate
+  preview + its downloadable sample PDF) in line with the same
+  showLogoOnReports/showPageNumbers gating, continuing today's
+  established "preview must track the real layout" principle. Also
+  replaced that Reports & Documents sample PDF's fake QR checkerboard
+  with a real QRCode.toDataURL() one (falls back to the checkerboard
+  only if QR generation itself fails) - left the on-screen HTML mock's
+  QrPlaceholder as a decorative approximation (matching how that
+  mock already simplifies other things vs. the real jsPDF layout);
+  fixing that pixel-for-pixel wasn't asked for and doesn't affect any
+  exported document.
+
+Verified live end-to-end on Greenfield University: toggled logo off ->
+confirmed both preview widgets and the real downloaded result PDF
+showed genuinely no logo (not the "ExamVault" fallback); toggled page
+numbers off -> confirmed via pdftotext that "Page X of Y" disappeared
+from the real PDF's footer while "Generated on" stayed; QR code was
+already on -> confirmed via pdftotext the "Scan to verify this result"
+caption renders in the real PDF (QR is a raster image so pdftotext
+can't confirm its pixel content, but the surrounding text and
+unchanged code path give confidence it's the real QRCode.toDataURL()
+output, not the old placeholder). Restored both toggles back to ON
+afterward so the test tenant is left in its normal state, re-verified
+via a hard reload that the restore persisted.
+
+Frontend `npm run build` clean; Docker frontend image rebuilt and
+redeployed. Not committed or pushed - holds per the user's standing
+rule.

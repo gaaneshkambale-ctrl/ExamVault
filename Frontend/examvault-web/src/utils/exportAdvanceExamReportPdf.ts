@@ -114,6 +114,7 @@ export async function exportAdvanceExamReportPdf(
     headerColor: branding.headerColor,
     generatedAt,
     tagline: SUBTITLE,
+    showLogo: branding.showLogoOnReports,
   });
 
   // Organization info - only when the caller's tenant lookup actually
@@ -448,6 +449,7 @@ export async function exportAdvanceExamReportPdf(
     headerColor: branding.headerColor,
     generatedAt,
     tagline: SUBTITLE,
+    showLogo: branding.showLogoOnReports,
   });
 
   doc.setFont('helvetica', 'bold');
@@ -682,6 +684,13 @@ export async function exportAdvanceExamReportPdf(
     align: 'right',
   });
 
-  stampFooters(doc, generatedAt, branding.logo);
+  stampFooters(
+    doc,
+    generatedAt,
+    branding.logo,
+    branding.includeAddressInFooter ? branding.addressLine : null,
+    branding.showLogoOnReports,
+    branding.showPageNumbers,
+  );
   doc.save(`${sanitizeFilename(exam.title)}-advanced-report.pdf`);
 }

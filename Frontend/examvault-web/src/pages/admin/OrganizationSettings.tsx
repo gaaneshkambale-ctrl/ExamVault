@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { jsPDF } from 'jspdf';
+import QRCode from 'qrcode';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
 import {
@@ -23,6 +24,7 @@ import {
   MARGIN,
   CONTENT_WIDTH,
   PAGE_WIDTH,
+  FOOTER_Y,
   GREEN,
   TEXT_DARK,
   TEXT_MUTED,
@@ -222,55 +224,69 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
 
     const [logoImg, signatureImg] = await Promise.all([loadImageElement(logoUrl), loadImageElement(signatureUrl)]);
 
-    // Header: logo + name/motto on the left, contact block on the right.
-    // The logo box is now taller (24mm, up from a cramped 16mm) and, for a
-    // real uploaded logo, sized to its own aspect ratio rather than forced
-    // into a square - a wide wordmark-style logo was getting squashed
-    // before. Text after it shifts right by however wide the logo actually
-    // rendered, capped so a very wide logo can't run into the header rule.
-    const logoBoxH = 24;
-    let logoAreaW = 20;
-    if (logoImg) {
-      const ratio = logoImg.naturalWidth / logoImg.naturalHeight || 1;
-      logoAreaW = Math.min(logoBoxH * ratio, 60);
-      doc.addImage(logoImg, MARGIN, MARGIN, logoAreaW, logoBoxH);
-    } else {
-      setColor(doc, 'setFillColor', brand);
-      doc.roundedRect(MARGIN, MARGIN, logoAreaW, logoBoxH, 2, 2, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(13);
-      doc.setTextColor(255, 255, 255);
-      doc.text((draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase(), MARGIN + logoAreaW / 2, MARGIN + logoBoxH / 2 + 2, {
-        align: 'center',
-      });
+    // Header: mirrors drawAcademicReport's real header exactly (logo left,
+    // name/Est. year/motto/address/registration all centered, Generated On
+    // top-right) - this preview's whole reason to exist is showing what the
+    // real generated report will actually look like, so it must not drift
+    // into its own layout the way the old left-aligned version had.
+    const logoH = 10;
+    if (draft.showLogoOnPdfReports) {
+      if (logoImg) {
+        const ratio = logoImg.naturalWidth / logoImg.naturalHeight || 1;
+        doc.addImage(logoImg, MARGIN, MARGIN, logoH * ratio, logoH);
+      } else {
+        setColor(doc, 'setFillColor', brand);
+        doc.roundedRect(MARGIN, MARGIN, logoH, logoH, 2, 2, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(255, 255, 255);
+        doc.text((draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase(), MARGIN + logoH / 2, MARGIN + logoH / 2 + 1.5, {
+          align: 'center',
+        });
+      }
     }
-    const nameX = MARGIN + logoAreaW + 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(`Generated On: ${new Date().toLocaleDateString()}`, PAGE_WIDTH - MARGIN, MARGIN + 3, { align: 'right' });
+
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    setColor(doc, 'setTextColor', brand);
-    doc.text(draft.name || 'Institution Name', nameX, MARGIN + 9);
+    doc.setFontSize(13);
+    setColor(doc, 'setTextColor', TEXT_DARK);
+    const nameLine = draft.establishedYear ? `${draft.name || 'Institution Name'}  (Est. ${draft.establishedYear})` : draft.name || 'Institution Name';
+    doc.text(nameLine, PAGE_WIDTH / 2, MARGIN + 5, { align: 'center' });
+    let centerY = MARGIN + 10;
     if (draft.showMottoTagline && draft.mottoTagline) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      setColor(doc, 'setTextColor', TEXT_MUTED);
-      doc.text(draft.mottoTagline, nameX, MARGIN + 15);
-    }
-    if (draft.showContactDetails) {
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('helvetica', 'italic');
       doc.setFontSize(8);
       setColor(doc, 'setTextColor', TEXT_MUTED);
-      const address = [draft.addressLine1, draft.city, draft.state, draft.postalCode, draft.country]
-        .filter(Boolean)
-        .join(', ');
-      const contact = [draft.contactPhone, draft.website].filter(Boolean).join(' · ');
-      doc.text(fitText(doc, address, 90), PAGE_WIDTH - MARGIN, MARGIN + 4, { align: 'right' });
-      doc.text(fitText(doc, contact, 90), PAGE_WIDTH - MARGIN, MARGIN + 9, { align: 'right' });
+      doc.text(draft.mottoTagline, PAGE_WIDTH / 2, centerY, { align: 'center' });
+      centerY += 4.5;
     }
+    const addressParts = [
+      [draft.addressLine1, draft.city, draft.state, draft.postalCode, draft.country].filter(Boolean).join(', '),
+      ...(draft.showContactDetails ? [[draft.contactPhone, draft.contactEmail].filter(Boolean).join(' · '), draft.website] : []),
+    ].filter((part): part is string => Boolean(part));
+    if (addressParts.length > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      setColor(doc, 'setTextColor', TEXT_MUTED);
+      doc.text(fitText(doc, addressParts.join('  |  '), CONTENT_WIDTH), PAGE_WIDTH / 2, centerY, { align: 'center' });
+      centerY += 4;
+    }
+    if (draft.registrationNumber) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      setColor(doc, 'setTextColor', TEXT_MUTED);
+      doc.text(`Reg. No: ${draft.registrationNumber}`, PAGE_WIDTH / 2, centerY, { align: 'center' });
+      centerY += 4;
+    }
+    let y = Math.max(MARGIN + logoH + 4, centerY + 2);
     setColor(doc, 'setDrawColor', brand);
     doc.setLineWidth(0.6);
-    doc.line(MARGIN, MARGIN + logoBoxH + 4, PAGE_WIDTH - MARGIN, MARGIN + logoBoxH + 4);
+    doc.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
+    y += 10;
 
-    let y = MARGIN + logoBoxH + 14;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     setColor(doc, 'setTextColor', TEXT_DARK);
@@ -344,7 +360,14 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     y += 26 + 10;
 
     if (draft.showQrCodeForVerification) {
-      drawQrPlaceholder(doc, MARGIN, y, 22);
+      const qrDataUrl = await QRCode.toDataURL(`${window.location.origin}/results/sample`, { width: 160, margin: 1 }).catch(
+        () => null,
+      );
+      if (qrDataUrl) {
+        doc.addImage(qrDataUrl, 'PNG', MARGIN, y, 22, 22);
+      } else {
+        drawQrPlaceholder(doc, MARGIN, y, 22);
+      }
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       setColor(doc, 'setTextColor', TEXT_MUTED);
@@ -376,7 +399,42 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     doc.setFontSize(7.5);
     setColor(doc, 'setTextColor', TEXT_MUTED);
     doc.text('This is a computer generated report and does not require a physical signature.', MARGIN, y);
-    doc.text('(Sample)', PAGE_WIDTH - MARGIN, y, { align: 'right' });
+
+    // Footer: mirrors drawFooter's real footer exactly (logo/wordmark left,
+    // optional address line under it when "Include address in PDF footer"
+    // is on, generated-on/page-number right).
+    const generatedAt = new Date();
+    setColor(doc, 'setDrawColor', BORDER);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, FOOTER_Y - 4, PAGE_WIDTH - MARGIN, FOOTER_Y - 4);
+    if (draft.showLogoOnPdfReports) {
+      if (logoImg) {
+        const ratio = logoImg.naturalWidth / logoImg.naturalHeight || 1;
+        const h = 4.5;
+        doc.addImage(logoImg, MARGIN, FOOTER_Y - h + 0.5, h * ratio, h);
+      } else {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        setColor(doc, 'setTextColor', TEXT_DARK);
+        doc.text(draft.name || 'ExamVault', MARGIN, FOOTER_Y);
+      }
+    }
+    if (draft.includeAddressInPdfFooter) {
+      const footerAddress = [draft.addressLine1, draft.city, draft.state, draft.country].filter(Boolean).join(', ');
+      if (footerAddress) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        setColor(doc, 'setTextColor', TEXT_MUTED);
+        doc.text(fitText(doc, footerAddress, 110), MARGIN, FOOTER_Y + 3);
+      }
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(`Generated on: ${generatedAt.toLocaleString()}`, PAGE_WIDTH - MARGIN, FOOTER_Y - 3, { align: 'right' });
+    if (draft.showPageNumbers) {
+      doc.text('Page 1 of 1', PAGE_WIDTH - MARGIN, FOOTER_Y + 2, { align: 'right' });
+    }
 
     return doc;
   };
@@ -423,35 +481,51 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
               />
               <Card className="border">
                 <Card.Body>
-                  <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-                    <div className="d-flex align-items-center gap-2">
-                      <div
-                        className="d-flex align-items-center justify-content-center rounded-2 overflow-hidden flex-shrink-0"
-                        style={{ width: 56, height: 56, background: headerColor, color: 'white', fontWeight: 700 }}
-                      >
-                        {logoUrl ? (
+                  {/* Mirrors the real centered header exactly (logo left,
+                      name/Est. year/motto/address/registration centered) -
+                      must track drawAcademicReport's layout, not its own. */}
+                  <div className="d-flex align-items-start gap-2 mb-3">
+                    <div
+                      className="d-flex align-items-center justify-content-center rounded-2 overflow-hidden flex-shrink-0"
+                      style={{
+                        width: 40,
+                        height: 40,
+                        background: draft.showLogoOnPdfReports ? headerColor : 'transparent',
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: 12,
+                      }}
+                    >
+                      {draft.showLogoOnPdfReports &&
+                        (logoUrl ? (
                           <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                         ) : (
                           (draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase()
-                        )}
-                      </div>
-                      <div>
-                        <div className="fw-bold" style={{ color: headerColor }}>
-                          {draft.name || 'Institution Name'}
-                        </div>
-                        {draft.showMottoTagline && draft.mottoTagline && (
-                          <div className="text-muted small">{draft.mottoTagline}</div>
-                        )}
-                      </div>
+                        ))}
                     </div>
-                    {draft.showContactDetails && (
-                      <div className="text-end text-muted small">
-                        {[draft.addressLine1, draft.city, draft.state, draft.postalCode, draft.country]
-                          .filter(Boolean)
-                          .join(', ')}
-                        <div>{[draft.contactPhone, draft.contactEmail, draft.website].filter(Boolean).join(' · ')}</div>
+                    <div className="flex-grow-1 text-center">
+                      <div className="fw-bold">
+                        {draft.name || 'Institution Name'}
+                        {draft.establishedYear ? `  (Est. ${draft.establishedYear})` : ''}
                       </div>
-                    )}
+                      {draft.showMottoTagline && draft.mottoTagline && (
+                        <div className="text-muted small fst-italic">{draft.mottoTagline}</div>
+                      )}
+                      <div className="text-muted small">
+                        {[
+                          [draft.addressLine1, draft.city, draft.state, draft.postalCode, draft.country].filter(Boolean).join(', '),
+                          ...(draft.showContactDetails
+                            ? [[draft.contactPhone, draft.contactEmail].filter(Boolean).join(' · '), draft.website]
+                            : []),
+                        ]
+                          .filter(Boolean)
+                          .join('  |  ')}
+                      </div>
+                      {draft.registrationNumber && (
+                        <div className="text-muted small">Reg. No: {draft.registrationNumber}</div>
+                      )}
+                    </div>
+                    <div style={{ width: 40 }} />
                   </div>
 
                   <h6 className="text-center fw-bold mb-3">OFFICIAL EXAMINATION REPORT</h6>
@@ -545,9 +619,27 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                     </div>
                   </div>
 
-                  {draft.showMottoTagline && draft.mottoTagline && (
-                    <div className="text-muted small border-top pt-2 mt-2">{draft.mottoTagline}</div>
-                  )}
+                  {/* Mirrors drawFooter's real footer exactly - shown on
+                      every page of every generated report. */}
+                  <div className="border-top pt-2 mt-3 d-flex justify-content-between align-items-start">
+                    <div>
+                      {draft.showLogoOnPdfReports &&
+                        (logoUrl ? (
+                          <img src={logoUrl} alt="" style={{ height: 16, objectFit: 'contain' }} />
+                        ) : (
+                          <div className="fw-bold small">{draft.name || 'ExamVault'}</div>
+                        ))}
+                      {draft.includeAddressInPdfFooter && (
+                        <div className="text-muted" style={{ fontSize: 11 }}>
+                          {[draft.addressLine1, draft.city, draft.state, draft.country].filter(Boolean).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-muted text-end" style={{ fontSize: 11 }}>
+                      <div>Generated on: {new Date().toLocaleString()}</div>
+                      {draft.showPageNumbers && <div>Page 1 of 1</div>}
+                    </div>
+                  </div>
                 </Card.Body>
               </Card>
             </Card.Body>
@@ -756,9 +848,16 @@ export default function OrganizationSettingsPage() {
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
 
+  // Only seeds `draft` on the initial load - a background refetch of
+  // `settings` (tab switch, window focus, post-mutation invalidation) must
+  // never re-run this, or it silently discards whatever the admin is
+  // mid-typing (and a Save right after persists that clobbered draft,
+  // wiping out fields that were already saved - see ActionPlan.txt).
+  const hasInitializedDraft = useRef(false);
   useEffect(() => {
-    if (settings) {
+    if (settings && !hasInitializedDraft.current) {
       setDraft(toDraft(settings));
+      hasInitializedDraft.current = true;
     }
   }, [settings]);
 
@@ -1277,40 +1376,87 @@ export default function OrganizationSettingsPage() {
                   />
                   <Card className="border-0">
                     <Card.Body>
-                      <div className="d-flex align-items-center gap-2 mb-3">
+                      {/* Matches drawAcademicReport's real header exactly (logo
+                          left, name/tagline/address/registration centered) -
+                          this preview's whole reason to exist is showing what
+                          the real generated report will actually look like,
+                          so it must track that layout, not invent its own. */}
+                      <div className="d-flex align-items-start gap-2">
                         <div
                           className="d-flex align-items-center justify-content-center rounded-2 overflow-hidden flex-shrink-0"
                           style={{
-                            width: 52,
-                            height: 52,
-                            background: draft.primaryColor ?? DEFAULT_BRANDING_COLORS.primaryColor,
+                            width: 40,
+                            height: 40,
+                            background: draft.showLogoOnPdfReports
+                              ? draft.primaryColor ?? DEFAULT_BRANDING_COLORS.primaryColor
+                              : 'transparent',
                             color: 'white',
                             fontWeight: 700,
-                            fontSize: 14,
+                            fontSize: 12,
                           }}
                         >
-                          {logoUrl ? (
-                            <img
-                              src={logoUrl}
-                              alt=""
-                              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                            />
-                          ) : (
-                            (draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase()
-                          )}
+                          {draft.showLogoOnPdfReports &&
+                            (logoUrl ? (
+                              <img
+                                src={logoUrl}
+                                alt=""
+                                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                              />
+                            ) : (
+                              (draft.shortName || draft.name || 'EV').slice(0, 3).toUpperCase()
+                            ))}
                         </div>
-                        <div>
+                        <div className="flex-grow-1 text-center">
                           <div className="fw-bold">
                             {draft.name || 'Institution Name'}
+                            {draft.establishedYear ? `  (Est. ${draft.establishedYear})` : ''}
                           </div>
+                          {draft.showMottoTagline && draft.mottoTagline && (
+                            <div className="text-muted small fst-italic">{draft.mottoTagline}</div>
+                          )}
                           <div className="text-muted small">
-                            Academic Year: {draft.defaultAcademicYear || '—'}
+                            {[
+                              [draft.addressLine1, draft.city, draft.state, draft.country].filter(Boolean).join(', '),
+                              ...(draft.showContactDetails
+                                ? [[draft.contactPhone, draft.contactEmail].filter(Boolean).join(' · '), draft.website]
+                                : []),
+                            ]
+                              .filter(Boolean)
+                              .join('  |  ') || 'Address will appear here'}
                           </div>
+                          {draft.registrationNumber && (
+                            <div className="text-muted small">Reg. No: {draft.registrationNumber}</div>
+                          )}
                         </div>
+                        <div style={{ width: 40 }} />
                       </div>
-                      <div className="text-muted small border-top pt-2">
-                        {[draft.addressLine1, draft.city, draft.state, draft.country].filter(Boolean).join(', ') ||
-                          'Address will appear here'}
+                    </Card.Body>
+                  </Card>
+                  <Card className="border-0 mt-2">
+                    <Card.Body>
+                      {/* Matches drawFooter's real footer exactly (logo/wordmark
+                          left, optional address line under it when "Include
+                          address in PDF footer" is on, generated-on/page-number
+                          right) - shown on every generated report's pages. */}
+                      <div className="border-top pt-2 d-flex justify-content-between align-items-start">
+                        <div>
+                          {draft.showLogoOnPdfReports &&
+                            (logoUrl ? (
+                              <img src={logoUrl} alt="" style={{ height: 16, objectFit: 'contain' }} />
+                            ) : (
+                              <div className="fw-bold small">ExamVault</div>
+                            ))}
+                          {draft.includeAddressInPdfFooter && (
+                            <div className="text-muted" style={{ fontSize: 11 }}>
+                              {[draft.addressLine1, draft.city, draft.state, draft.country].filter(Boolean).join(', ') ||
+                                'Address will appear here'}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-muted text-end" style={{ fontSize: 11 }}>
+                          <div>Generated on: {new Date().toLocaleString()}</div>
+                          {draft.showPageNumbers && <div>Page 1 of 1</div>}
+                        </div>
                       </div>
                     </Card.Body>
                   </Card>
