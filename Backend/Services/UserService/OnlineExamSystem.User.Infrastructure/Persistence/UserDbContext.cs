@@ -28,6 +28,7 @@ public class UserDbContext : DbContext
     public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
     public DbSet<OrganizationType> OrganizationTypes => Set<OrganizationType>();
     public DbSet<OrganizationAcademicConfig> OrganizationAcademicConfigs => Set<OrganizationAcademicConfig>();
+    public DbSet<AcademicListItem> AcademicListItems => Set<AcademicListItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -229,6 +230,32 @@ public class UserDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(m => m.GroupId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // One row per Program/Department/Semester/Division value a tenant
+        // has defined (see AcademicListItem's own doc comment). Self-
+        // referencing ParentId kept Restrict, not Cascade - SQL Server
+        // rejects cascade delete on a self-referencing FK, so
+        // DeleteAcademicListItemHandler walks and removes descendants in
+        // application code instead. Same tenant guardrail as Group above -
+        // only ever touched by an authenticated Admin.
+        modelBuilder.Entity<AcademicListItem>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ListType).IsRequired().HasMaxLength(50);
+            entity.Property(x => x.Value).IsRequired().HasMaxLength(200);
+            entity.HasIndex(x => new { x.TenantId, x.ListType, x.ParentId });
+            entity.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AcademicListItem>()
+                .WithMany()
+                .HasForeignKey(x => x.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(x =>
+                _currentTenant.IsSuperAdmin || (_currentTenant.IsAuthenticated && x.TenantId == _currentTenant.TenantId));
         });
 
         // One row per (tenant, role, permission) granted - purely a

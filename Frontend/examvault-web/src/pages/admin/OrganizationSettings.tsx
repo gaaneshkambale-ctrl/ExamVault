@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
-import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
 import {
   useOrganizationSettings,
@@ -14,6 +14,12 @@ import {
 import { fetchOrganizationAssetObjectUrl } from '../../api/organizationSettingsApi';
 import { listOrganizationTypes } from '../../api/organizationTypesApi';
 import { useOrganizationAcademicConfig, useUpdateOrganizationAcademicConfig } from '../../hooks/useOrganizationAcademicConfig';
+import {
+  useAcademicListItems,
+  useCreateAcademicListItem,
+  useDeleteAcademicListItem,
+} from '../../hooks/useAcademicListItems';
+import type { AcademicListItem, AcademicListType } from '../../types/academicListItem';
 import {
   getAcademicFieldsForType,
   getResultFieldKeysForType,
@@ -720,7 +726,13 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
 // Institution Type field) Organization Type, via
 // constants/organizationTypeFieldCatalog.ts. Storage-only for now - no PDF
 // or report generator reads this data yet.
-function AcademicConfigurationTab({ organizationType }: { organizationType: string | null }) {
+function AcademicConfigurationTab({
+  organizationType,
+  organizationCode,
+}: {
+  organizationType: string | null;
+  organizationCode: string | null;
+}) {
   const { data: config, isLoading, isError } = useOrganizationAcademicConfig();
   const updateMutation = useUpdateOrganizationAcademicConfig();
 
@@ -736,6 +748,9 @@ function AcademicConfigurationTab({ organizationType }: { organizationType: stri
   }, [config]);
 
   const fieldDefs = getAcademicFieldsForType(organizationType);
+  const hasHierarchicalLists = ['program', 'department', 'semester', 'division'].some((key) =>
+    fieldDefs.some((f) => f.key === key),
+  );
   const relevantResultKeys = getResultFieldKeysForType(organizationType);
   const resultFieldDefs = RESULT_FIELD_CATALOG.filter((f) => relevantResultKeys.includes(f.key));
 
@@ -745,7 +760,12 @@ function AcademicConfigurationTab({ organizationType }: { organizationType: stri
 
   const save = async () => {
     setSaved(false);
-    await updateMutation.mutateAsync({ academicFields, resultFields });
+    // collegeCode isn't real academicFields data - it's the read-only Tenant
+    // OrganizationCode rendered inline below (see the fieldDefs.map special
+    // case) - drop it so a stale value from before this change doesn't keep
+    // round-tripping through the JSON blob.
+    const { collegeCode: _collegeCode, ...fieldsToSave } = academicFields;
+    await updateMutation.mutateAsync({ academicFields: fieldsToSave, resultFields });
     setSaved(true);
   };
 
@@ -776,20 +796,32 @@ function AcademicConfigurationTab({ organizationType }: { organizationType: stri
             </div>
           ) : (
             <Row className="g-3">
-              {fieldDefs.map((field) => (
-                <Col xs={12} md={6} key={field.key}>
-                  <Form.Label className="small">{field.label}</Form.Label>
-                  <Form.Control
-                    value={academicFields[field.key] ?? ''}
-                    placeholder={field.placeholder}
-                    onChange={(e) => setAcademicFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                  />
-                </Col>
-              ))}
+              {fieldDefs.map((field) =>
+                field.key === 'collegeCode' ? (
+                  <Col xs={12} md={6} key={field.key}>
+                    <Form.Label className="small">{field.label}</Form.Label>
+                    <Form.Control value={organizationCode ?? ''} disabled readOnly />
+                    <Form.Text className="text-muted">
+                      Auto-generated Organization ID - set when the tenant was created, not editable here.
+                    </Form.Text>
+                  </Col>
+                ) : (
+                  <Col xs={12} md={6} key={field.key}>
+                    <Form.Label className="small">{field.label}</Form.Label>
+                    <Form.Control
+                      value={academicFields[field.key] ?? ''}
+                      placeholder={field.placeholder}
+                      onChange={(e) => setAcademicFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    />
+                  </Col>
+                ),
+              )}
             </Row>
           )}
         </Card.Body>
       </Card>
+
+      {hasHierarchicalLists && <AcademicListsManager />}
 
       <Card className="border-0 shadow-sm mb-3">
         <Card.Body>
@@ -830,6 +862,287 @@ function AcademicConfigurationTab({ organizationType }: { organizationType: stri
         </Button>
       </div>
     </>
+  );
+}
+
+const LIST_LEVELS: { listType: AcademicListType; label: string }[] = [
+  { listType: 'Program', label: 'Programs' },
+  { listType: 'Department', label: 'Departments' },
+  { listType: 'Semester', label: 'Semesters' },
+  { listType: 'Division', label: 'Divisions / Classes' },
+];
+
+// Chips-plus-add-box editor for one level of the Program -> Department ->
+// Semester -> Division hierarchy. Purely presentational - the parent
+// (AcademicListsManager) owns which parent item's children this shows.
+function ListLevelEditor({
+  label,
+  singularLabel,
+  items,
+  isLoading,
+  newValue,
+  onNewValueChange,
+  onAdd,
+  onRemove,
+  adding,
+}: {
+  label: string;
+  singularLabel: string;
+  items: AcademicListItem[];
+  isLoading: boolean;
+  newValue: string;
+  onNewValueChange: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  adding: boolean;
+}) {
+  return (
+    <div>
+      <Form.Label className="small fw-bold">{label}</Form.Label>
+      {isLoading ? (
+        <div className="text-muted small mb-2">Loading...</div>
+      ) : items.length === 0 ? (
+        <div className="text-muted small mb-2">None added yet.</div>
+      ) : (
+        <div className="d-flex flex-wrap gap-2 mb-2">
+          {items.map((item) => (
+            <Badge
+              key={item.id}
+              bg="light"
+              text="dark"
+              className="border d-flex align-items-center gap-2 py-2 px-3 fw-normal"
+            >
+              {item.value}
+              <Button
+                variant="link"
+                className="p-0 text-danger text-decoration-none"
+                style={{ lineHeight: 1 }}
+                onClick={() => onRemove(item.id)}
+                aria-label={`Remove ${item.value}`}
+              >
+                &times;
+              </Button>
+            </Badge>
+          ))}
+        </div>
+      )}
+      <InputGroup size="sm" style={{ maxWidth: 420 }}>
+        <Form.Control
+          placeholder={`Add a new ${singularLabel}`}
+          value={newValue}
+          onChange={(e) => onNewValueChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onAdd();
+            }
+          }}
+        />
+        <Button variant="outline-primary" onClick={onAdd} disabled={!newValue.trim() || adding}>
+          Add
+        </Button>
+      </InputGroup>
+    </div>
+  );
+}
+
+// Lets the tenant Admin define the values Student Academic Details and Exam
+// academic fields pick from (see AcademicHierarchyFields) instead of typing
+// free text every time. Hierarchical: pick a Program to manage its
+// Departments, pick a Department to manage its Semesters, pick a Semester to
+// manage its Divisions/Classes - each level only shows once its parent is
+// selected, mirroring how the picker itself cascades.
+function AcademicListsManager() {
+  const [programId, setProgramId] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [semesterId, setSemesterId] = useState('');
+  const [newValues, setNewValues] = useState<Record<AcademicListType, string>>({
+    Program: '',
+    Department: '',
+    Semester: '',
+    Division: '',
+  });
+
+  const programs = useAcademicListItems('Program', null);
+  const departments = useAcademicListItems('Department', programId || null, !!programId);
+  const semesters = useAcademicListItems('Semester', departmentId || null, !!departmentId);
+  const divisions = useAcademicListItems('Division', semesterId || null, !!semesterId);
+
+  const createMutation = useCreateAcademicListItem();
+  const deleteMutation = useDeleteAcademicListItem();
+
+  useEffect(() => {
+    setDepartmentId('');
+  }, [programId]);
+  useEffect(() => {
+    setSemesterId('');
+  }, [departmentId]);
+
+  const setNewValue = (listType: AcademicListType, value: string) =>
+    setNewValues((prev) => ({ ...prev, [listType]: value }));
+
+  const add = async (listType: AcademicListType, parentId: string | null) => {
+    const value = newValues[listType].trim();
+    if (!value) return;
+    await createMutation.mutateAsync({ listType, value, parentId });
+    setNewValue(listType, '');
+  };
+
+  const remove = async (listType: AcademicListType, item: AcademicListItem) => {
+    const warnsAboutChildren = listType !== 'Division';
+    const message = warnsAboutChildren
+      ? `Remove "${item.value}"? This also removes every ${LIST_LEVELS[LIST_LEVELS.findIndex((l) => l.listType === listType) + 1]?.label ?? 'item'} defined under it.`
+      : `Remove "${item.value}"?`;
+    if (!window.confirm(message)) return;
+    await deleteMutation.mutateAsync(item.id);
+  };
+
+  const selectedProgram = programs.data?.find((p) => p.id === programId);
+  const selectedDepartment = departments.data?.find((d) => d.id === departmentId);
+  const selectedSemester = semesters.data?.find((s) => s.id === semesterId);
+
+  return (
+    <Card className="border-0 shadow-sm mb-3">
+      <Card.Body>
+        <CardHeader
+          icon={<BuildingIcon />}
+          title="Program / Department / Semester / Division Lists"
+          subtitle="Define the values Student Details and Exam fields pick from - each level narrows to the one picked above it."
+        />
+
+        <ListLevelEditor
+          label="Programs"
+          singularLabel="Program"
+          items={programs.data ?? []}
+          isLoading={programs.isLoading}
+          newValue={newValues.Program}
+          onNewValueChange={(v) => setNewValue('Program', v)}
+          onAdd={() => add('Program', null)}
+          onRemove={(id) => {
+            const item = programs.data?.find((p) => p.id === id);
+            if (item) void remove('Program', item);
+          }}
+          adding={createMutation.isPending}
+        />
+
+        {(programs.data?.length ?? 0) > 0 && (
+          <div className="mt-4 pt-3 border-top">
+            <Form.Label className="small fw-bold">Manage Departments for</Form.Label>
+            <Form.Select
+              size="sm"
+              style={{ maxWidth: 320 }}
+              value={programId}
+              onChange={(e) => setProgramId(e.target.value)}
+            >
+              <option value="">Choose a Program...</option>
+              {programs.data?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.value}
+                </option>
+              ))}
+            </Form.Select>
+            {selectedProgram && (
+              <div className="mt-2">
+                <ListLevelEditor
+                  label="Departments"
+                  singularLabel="Department"
+                  items={departments.data ?? []}
+                  isLoading={departments.isLoading}
+                  newValue={newValues.Department}
+                  onNewValueChange={(v) => setNewValue('Department', v)}
+                  onAdd={() => add('Department', programId)}
+                  onRemove={(id) => {
+                    const item = departments.data?.find((d) => d.id === id);
+                    if (item) void remove('Department', item);
+                  }}
+                  adding={createMutation.isPending}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {selectedProgram && (departments.data?.length ?? 0) > 0 && (
+          <div className="mt-4 pt-3 border-top">
+            <Form.Label className="small fw-bold">Manage Semesters for</Form.Label>
+            <Form.Select
+              size="sm"
+              style={{ maxWidth: 320 }}
+              value={departmentId}
+              onChange={(e) => setDepartmentId(e.target.value)}
+            >
+              <option value="">Choose a Department...</option>
+              {departments.data?.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.value}
+                </option>
+              ))}
+            </Form.Select>
+            {selectedDepartment && (
+              <div className="mt-2">
+                <ListLevelEditor
+                  label="Semesters"
+                  singularLabel="Semester"
+                  items={semesters.data ?? []}
+                  isLoading={semesters.isLoading}
+                  newValue={newValues.Semester}
+                  onNewValueChange={(v) => setNewValue('Semester', v)}
+                  onAdd={() => add('Semester', departmentId)}
+                  onRemove={(id) => {
+                    const item = semesters.data?.find((s) => s.id === id);
+                    if (item) void remove('Semester', item);
+                  }}
+                  adding={createMutation.isPending}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {selectedDepartment && (semesters.data?.length ?? 0) > 0 && (
+          <div className="mt-4 pt-3 border-top">
+            <Form.Label className="small fw-bold">Manage Divisions / Classes for</Form.Label>
+            <Form.Select
+              size="sm"
+              style={{ maxWidth: 320 }}
+              value={semesterId}
+              onChange={(e) => setSemesterId(e.target.value)}
+            >
+              <option value="">Choose a Semester...</option>
+              {semesters.data?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.value}
+                </option>
+              ))}
+            </Form.Select>
+            {selectedSemester && (
+              <div className="mt-2">
+                <ListLevelEditor
+                  label="Divisions / Classes"
+                  singularLabel="Division / Class"
+                  items={divisions.data ?? []}
+                  isLoading={divisions.isLoading}
+                  newValue={newValues.Division}
+                  onNewValueChange={(v) => setNewValue('Division', v)}
+                  onAdd={() => add('Division', semesterId)}
+                  onRemove={(id) => {
+                    const item = divisions.data?.find((d) => d.id === id);
+                    if (item) void remove('Division', item);
+                  }}
+                  adding={createMutation.isPending}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {createMutation.isError && (
+          <Alert variant="danger" className="mt-3 mb-0">
+            {extractServerError(createMutation.error)}
+          </Alert>
+        )}
+      </Card.Body>
+    </Card>
   );
 }
 
@@ -1027,7 +1340,7 @@ export default function OrganizationSettingsPage() {
       {activeTab === 'Reports & Documents' ? (
         <PdfReportSettingsTab draft={draft} set={set} logoUrl={logoUrl} signatureUrl={signatureUrl} />
       ) : activeTab === 'Academic Configuration' ? (
-        <AcademicConfigurationTab organizationType={draft.organizationType} />
+        <AcademicConfigurationTab organizationType={draft.organizationType} organizationCode={settings.organizationCode} />
       ) : activeTab !== 'General' ? (
         <Card className="border-0 shadow-sm">
           <Card.Body className="text-center text-muted py-5">{activeTab}'s settings are coming soon.</Card.Body>
@@ -1363,7 +1676,7 @@ export default function OrganizationSettingsPage() {
             </Col>
 
             <Col xs={12} lg={7}>
-              <Card className="border-0 shadow-sm h-100" style={{ background: '#eef2ff' }}>
+              <Card className="border-0 shadow-sm h-100 bg-primary-subtle">
                 <Card.Body>
                   <CardHeader
                     icon={

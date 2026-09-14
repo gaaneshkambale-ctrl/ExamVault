@@ -13,6 +13,9 @@ using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.User.API.Authorization;
 using OnlineExamSystem.User.API.Jobs;
+using OnlineExamSystem.User.Application.AcademicLists.Create;
+using OnlineExamSystem.User.Application.AcademicLists.Delete;
+using OnlineExamSystem.User.Application.AcademicLists.List;
 using OnlineExamSystem.User.Application.Plans.Create;
 using OnlineExamSystem.User.Application.Plans.Delete;
 using OnlineExamSystem.User.Application.Plans.List;
@@ -116,6 +119,7 @@ public class Program
         builder.Services.AddScoped<IPlanRepository, PlanRepository>();
         builder.Services.AddScoped<IOrganizationTypeRepository, OrganizationTypeRepository>();
         builder.Services.AddScoped<IOrganizationAcademicConfigRepository, OrganizationAcademicConfigRepository>();
+        builder.Services.AddScoped<IAcademicListItemRepository, AcademicListItemRepository>();
         builder.Services.AddScoped<IPlatformSettingsRepository, PlatformSettingsRepository>();
         builder.Services.AddScoped<IPasswordPolicyProvider, PasswordPolicyProvider>();
         builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
@@ -226,6 +230,10 @@ public class Program
         builder.Services.AddScoped<GetOrganizationAcademicConfigHandler>();
         builder.Services.AddScoped<IValidator<UpdateOrganizationAcademicConfigCommand>, UpdateOrganizationAcademicConfigValidator>();
         builder.Services.AddScoped<UpdateOrganizationAcademicConfigHandler>();
+        builder.Services.AddScoped<ListAcademicListItemsHandler>();
+        builder.Services.AddScoped<IValidator<CreateAcademicListItemCommand>, CreateAcademicListItemValidator>();
+        builder.Services.AddScoped<CreateAcademicListItemHandler>();
+        builder.Services.AddScoped<DeleteAcademicListItemHandler>();
         builder.Services.AddScoped<DeleteTenantHandler>();
         builder.Services.AddScoped<ResetTenantAdminPasswordHandler>();
         builder.Services.AddScoped<SetTenantTrialHandler>();

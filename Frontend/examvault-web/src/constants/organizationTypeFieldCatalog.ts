@@ -283,10 +283,14 @@ export function getRollNumberLabelForType(organizationType: string | null | unde
 // Organization/Student catalogs above.
 export const EXAM_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
   College: [
+    { key: 'program', label: 'Program' },
+    { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
     { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
   ],
   University: [
+    { key: 'program', label: 'Program' },
+    { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
     { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
   ],

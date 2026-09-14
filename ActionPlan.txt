@@ -12811,3 +12811,220 @@ via a hard reload that the restore persisted.
 Frontend `npm run build` clean; Docker frontend image rebuilt and
 redeployed. Not committed or pushed - holds per the user's standing
 rule.
+
+--------------------------------------------------------------------
+User then said "commit and push the code" for the above two entries -
+staged exactly the 5 files touched (ActionPlan.txt + the 4 source
+files), confirmed via git status the five untouched scratch files
+(Database_Create.txt, Database_CreateSuperAdmin.txt, Database_clean.txt,
+examvault-saas.txt, examvaults.docx) stayed untracked, committed, then
+caught that the commit was missing the required Co-Authored-By/
+Claude-Session attribution trailer - amended (not yet pushed at that
+point, so amend was safe) to add it, then pushed to origin/dev at
+9f61be3 (from f48f279).
+
+--------------------------------------------------------------------
+User reported "report header preview dark mode not proper check and
+fix". Root cause: the "Report Header Preview" card (General tab) used
+a hardcoded `style={{ background: '#eef2ff' }}` (light lavender) -
+Bootstrap's `data-bs-theme="dark"` attribute only affects Bootstrap's
+own CSS-variable-driven classes, never inline styles, so this card
+stayed light-lavender in dark mode while its own title text
+(CardHeader's plain `fw-bold`, no explicit color class) correctly
+turned near-white per the theme - white text on light-lavender was
+nearly invisible. Fixed by swapping the hardcoded hex for Bootstrap
+5.3's theme-aware `bg-primary-subtle` utility class, the same
+convention already used elsewhere in this exact file (the
+Percentage/Grade stat cards, the Reports & Documents "Live PDF
+Preview" mock) - `#eef2ff` was the only hardcoded-hex Card background
+left in the whole file (grepped to confirm). Verified live by forcing
+`data-bs-theme="dark"` via localStorage + the DOM attribute (rather
+than navigating through the profile preferences UI) and screenshotting
+both the header and the nested footer preview (which sits inside the
+same card, so one fix covers both) - both now render with the correct
+dark navy background and fully legible text. Reverted the tab back to
+light mode afterward. Frontend build clean, Docker frontend rebuilt
+and redeployed. Not committed or pushed yet.
+
+--------------------------------------------------------------------
+User asked: Organization Settings > Academic Configuration's
+Program/Department/Semester/Division fields (College/University org
+types) should stop being single free-text boxes and become
+per-college-managed, hierarchical select lists - Admin creates the
+values once (e.g. Programs, then Departments under a Program, then
+Semesters under a Department, then Divisions under a Semester), and
+those become dropdowns wherever these four concepts are captured.
+
+Clarified scope via questions:
+- Used in THREE surfaces: Academic Configuration tab (manage the
+  lists), Student Academic Details on Create/Edit User (cascading
+  selects instead of free text), and Exam academic fields on
+  Create/Edit Exam (also cascading - Program -> Department -> Semester
+  added to the College exam field set, which today only has a
+  freeform Semester box).
+- Structure: hierarchical, not independent flat lists. Program is
+  top-level; Department's parent is a Program; Semester's parent is a
+  Department; Division's parent is a Semester.
+- Confirmed go-ahead to implement now, including a new DB migration
+  applied to the live Docker dev database.
+
+Side-fix done first (small, unrelated): Academic Configuration's own
+"College / University Code" text field was a second, disconnected
+free-text duplicate of the real Tenant.OrganizationCode already shown
+read-only on the General tab ("Organization ID: ..."). Disabled it in
+AcademicConfigurationTab (OrganizationSettings.tsx) - now renders as a
+disabled input showing the real organizationCode prop instead of an
+editable academicFields entry, and the save payload strips the
+'collegeCode' key so a stale value doesn't keep round-tripping through
+the JSON blob. Frontend build clean, Docker frontend image rebuilt and
+redeployed.
+
+PLAN for the hierarchical academic-lists feature:
+
+Backend (UserService):
+- New entity AcademicListItem: TenantId, ListType (string:
+  Program/Department/Semester/Division), Value, ParentId (nullable,
+  self-referencing - null for Program).
+- New migration, repository (IAcademicListItemRepository +
+  implementation), CQRS Get/Create/Delete handlers under
+  Tenants/AcademicLists/, matching the existing
+  GetOrganizationAcademicConfig/UpdateOrganizationAcademicConfig
+  pattern already in this service.
+- New endpoints on MyTenantController: GET (by listType + optional
+  parentId), POST (create), DELETE (by id) - delete cascades to
+  children in application code inside a transaction (FK kept
+  Restrict, not DB-cascade, to sidestep SQL Server's self-referencing
+  cascade restrictions).
+- New Request/Response DTOs in Shared.Contracts following the User
+  service's existing folder convention.
+
+Frontend:
+- academicListsApi.ts + useAcademicListItems/useCreateAcademicListItem/
+  useDeleteAcademicListItem hooks (react-query), typed AcademicListItem.
+- Academic Configuration tab: new "Manage Lists" section - pick a
+  Program to manage its Departments, pick a Department to manage its
+  Semesters, pick a Semester to manage its Divisions; each level shows
+  existing values as removable chips plus an add box.
+- CreateUser.tsx/EditUser.tsx Student Academic Details: Program/
+  Department/Semester/Division become cascading Form.Select dropdowns
+  (each filtered by the level picked above it) instead of free text.
+- CreateExam.tsx/EditExam.tsx: College's exam academic fields gain
+  Program + Department (new) alongside Semester, all three as the same
+  cascading selects.
+
+Implementation in progress this session.
+
+--------------------------------------------------------------------
+Implementation of the hierarchical academic-lists feature (planned
+above) - DONE.
+
+Backend (UserService): AcademicListItem entity (TenantScopedEntity:
+TenantId/ListType/Value/ParentId), migration AddAcademicListItem
+(self-referencing FK kept Restrict - SQL Server rejects cascade delete
+on a self-referencing table - so DeleteAcademicListItemHandler walks
+and removes descendants in application code), IAcademicListItemRepository
++ impl, List/Create/Delete handlers under Application/AcademicLists/
+(modeled on Group, the closest existing same-service tenant-scoped CRUD
+template - found via a research subagent survey of CQRS/repository/
+DbContext/controller/gateway conventions before writing anything, since
+this is a new aggregate with no direct precedent). Three new endpoints
+on MyTenantController: GET api/tenants/mine/academic-lists (open to any
+authenticated role, same reasoning as the existing academic-config GET),
+POST/DELETE (Admin/SuperAdmin + SettingsEdit policy, same as the
+existing academic-config PUT). No Gateway change needed - already
+covered by the existing /api/tenants/{**catch-all} YARP route. Create
+validates the ParentId actually belongs to the expected parent ListType
+and the same tenant (via the entity's own query filter - a cross-tenant
+parentId comes back not-found automatically) and rejects duplicate
+values as siblings under the same parent.
+
+Frontend: new AcademicHierarchyFields component (cascading Program ->
+Department -> Semester -> Division Form.Selects, only rendering the
+levels present in whichever field list is passed in) replaces the old
+free-text loop in THREE places - Student Academic Details (CreateUser.tsx
++ EditUser.tsx) and Exam academic fields (CreateExam.tsx + EditExam.tsx,
+which also gained 'program'+'department' keys in
+organizationTypeFieldCatalog.ts's College/University EXAM_FIELDS_BY_TYPE
+so the same 3-level cascade applies there too, per the user's confirmed
+choice over a flat Semester dropdown). Values are still stored as plain
+strings in academicFields (not item ids) for backward compatibility with
+existing data and any PDF/report consumer - each level's selected id is
+best-effort resolved from the stored string once that level's options
+load. Organization Settings > Academic Configuration gained a new
+"Program / Department / Semester / Division Lists" card
+(AcademicListsManager) - only shown when the org type's field catalog
+actually has these keys - where the Admin manages each level's values as
+chips-plus-add-box, narrowing one level at a time (pick a Program to
+manage its Departments, etc.), with a confirm before deleting a
+non-leaf item since it cascades.
+
+Small side-fix from earlier in this session, bundled in: Academic
+Configuration's own free-text "College / University Code" field was a
+disconnected duplicate of the real Tenant.OrganizationCode already
+shown read-only on the General tab - now renders disabled with that
+real value instead, and the save payload strips the stale 'collegeCode'
+key.
+
+Verified: `dotnet build ExamVault.sln` (full solution, not just
+UserService) - 0 errors. UserService.Application.Tests 118/118 passed.
+Frontend `tsc -b && vite build` clean. New migration applied live via
+`docker compose build user-api` + restart - confirmed in container logs
+(CREATE TABLE AcademicListItems + both FKs + indexes + EFMigrationsHistory
+insert, then normal startup, no crash-loop). Frontend rebuilt/redeployed.
+Smoke-tested api/tenants/mine/academic-lists through the gateway
+(localhost:5000) unauthenticated - got 401 (correct: proves routing
+works end-to-end, not a 404 route-miss or 502 gateway error). Could NOT
+live-verify the actual UI (cascading selects rendering, chips add/remove,
+validation) - doing so needs a logged-in College-tenant Admin session,
+and typing any password into a login field is a hard rule with no
+exception (see Phase N's note above) - flagged this explicitly rather
+than claiming full verification. Not committed or pushed yet.
+
+--------------------------------------------------------------------
+Live UI verification - DONE (the gap flagged above). User logged into
+the real app themselves in Chrome (as Dr. Priya Sharma, Admin of
+"Greenfield University", org type University); a fresh tab opened by
+the browser tool picked up the same authenticated session via shared
+localStorage (same origin, no re-login, no password ever seen/typed)
+and was driven with in-app clicks/navigation from there.
+
+Confirmed live:
+- Academic Configuration's College/University Code field: shows
+  "GU2026" (the real OrganizationCode), disabled, with the "Auto-
+  generated... not editable here" helper text - the side-fix works.
+- Program / Department / Semester / Division Lists manager: created
+  "B.Tech Computer Engineering" (Program) -> "Computer Science"
+  (Department) -> "Semester 5" (Semester) -> "Division A" (Division) -
+  each level's chip appeared immediately, each "Manage X for" selector
+  appeared only once its parent existed, cascade held correctly at
+  every step.
+- Create User -> Role & Access -> Student: Academic Details
+  (University) rendered Program/Department/Semester/Division as
+  selects (not free text) in the right order, each disabled with
+  "Select X first" until its parent was picked, populated with the
+  values just created above, all four selections went through
+  correctly end-to-end. Did not submit this test user.
+- Create Exam: Academic Details (University) rendered Program ->
+  Department -> Semester (3 levels, no Division, per the confirmed
+  cascading-not-flat decision) alongside Exam Date; Program dropdown
+  correctly listed the created value. Did not submit this test exam.
+
+Bug found and fixed during this pass: the "Add a new X" placeholder
+text on the Division level read "Add a new Divisions / Classe" (a
+regex trying to singularize "Divisions / Classes" produced "Classe").
+Replaced the regex with an explicit `singularLabel` prop passed at
+each of the 4 ListLevelEditor call sites ("Program"/"Department"/
+"Semester"/"Division / Class") instead of trying to derive it from the
+plural label. Frontend rebuilt clean, Docker frontend rebuilt and
+redeployed with the fix.
+
+Left over from testing: the Program/Department/Semester/Division chain
+created above ("B.Tech Computer Engineering" / "Computer Science" /
+"Semester 5" / "Division A") is still live in Greenfield University's
+academic lists - didn't delete it via the UI's (x) buttons because that
+triggers a blocking window.confirm() which risks hanging the browser
+automation session; it's realistic-looking data the tenant may just
+want to keep anyway. Flagged to the user rather than silently removing
+or silently leaving it unmentioned.
+
+Committed and pushed to origin/dev after this entry.

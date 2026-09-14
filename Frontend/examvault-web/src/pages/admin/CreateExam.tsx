@@ -17,6 +17,7 @@ import { extractServerError } from '../../utils/apiError';
 import { iconForExamType } from '../../utils/examTypeIcons';
 import { getExamFieldsForType } from '../../constants/organizationTypeFieldCatalog';
 import ExamWizardStepper from '../../components/ExamWizardStepper';
+import AcademicHierarchyFields from '../../components/AcademicHierarchyFields';
 
 const TITLE_MAX = 200;
 const TAGS_MAX = 500;
@@ -442,20 +443,12 @@ export default function CreateExam() {
                       Academic Details ({branding?.organizationType ?? 'Exam'})
                     </div>
                     <Row className="mb-3">
-                      {examFields.map((field) => (
-                        <Col xs={12} md={6} key={field.key} className="mb-3">
-                          <Form.Label className="small">
-                            {field.label} <span className="text-danger">*</span>
-                          </Form.Label>
-                          <Form.Control
-                            value={form.academicFields?.[field.key] ?? ''}
-                            placeholder={field.placeholder}
-                            onChange={(e) => updateAcademicField(field.key, e.target.value)}
-                            isInvalid={!!academicFieldErrors[field.key]}
-                          />
-                          <Form.Control.Feedback type="invalid">{academicFieldErrors[field.key]}</Form.Control.Feedback>
-                        </Col>
-                      ))}
+                      <AcademicHierarchyFields
+                        fields={examFields}
+                        values={form.academicFields ?? {}}
+                        errors={academicFieldErrors}
+                        onChange={updateAcademicField}
+                      />
                     </Row>
                   </>
                 )}

@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
+using OnlineExamSystem.User.Application.AcademicLists.Create;
+using OnlineExamSystem.User.Application.AcademicLists.Delete;
+using OnlineExamSystem.User.Application.AcademicLists.List;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Tenants.GetOrganizationAcademicConfig;
 using OnlineExamSystem.User.Application.Tenants.GetOrganizationSettings;
@@ -44,6 +47,9 @@ public class MyTenantController : ControllerBase
     private readonly UpdateOrganizationAssetHandler _updateOrganizationAssetHandler;
     private readonly GetOrganizationAcademicConfigHandler _getOrganizationAcademicConfigHandler;
     private readonly UpdateOrganizationAcademicConfigHandler _updateOrganizationAcademicConfigHandler;
+    private readonly ListAcademicListItemsHandler _listAcademicListItemsHandler;
+    private readonly CreateAcademicListItemHandler _createAcademicListItemHandler;
+    private readonly DeleteAcademicListItemHandler _deleteAcademicListItemHandler;
 
     public MyTenantController(
         ITenantRepository tenantRepository,
@@ -51,7 +57,10 @@ public class MyTenantController : ControllerBase
         UpdateOrganizationSettingsHandler updateOrganizationSettingsHandler,
         UpdateOrganizationAssetHandler updateOrganizationAssetHandler,
         GetOrganizationAcademicConfigHandler getOrganizationAcademicConfigHandler,
-        UpdateOrganizationAcademicConfigHandler updateOrganizationAcademicConfigHandler)
+        UpdateOrganizationAcademicConfigHandler updateOrganizationAcademicConfigHandler,
+        ListAcademicListItemsHandler listAcademicListItemsHandler,
+        CreateAcademicListItemHandler createAcademicListItemHandler,
+        DeleteAcademicListItemHandler deleteAcademicListItemHandler)
     {
         _tenantRepository = tenantRepository;
         _getOrganizationSettingsHandler = getOrganizationSettingsHandler;
@@ -59,6 +68,9 @@ public class MyTenantController : ControllerBase
         _updateOrganizationAssetHandler = updateOrganizationAssetHandler;
         _getOrganizationAcademicConfigHandler = getOrganizationAcademicConfigHandler;
         _updateOrganizationAcademicConfigHandler = updateOrganizationAcademicConfigHandler;
+        _listAcademicListItemsHandler = listAcademicListItemsHandler;
+        _createAcademicListItemHandler = createAcademicListItemHandler;
+        _deleteAcademicListItemHandler = deleteAcademicListItemHandler;
     }
 
     [HttpGet]
@@ -246,6 +258,73 @@ public class MyTenantController : ControllerBase
         return Ok(new OrganizationAcademicConfigResponse(result.AcademicFields, result.ResultFields, result.UpdatedAtUtc));
     }
 
+    // Program/Department/Semester/Division values the tenant has defined -
+    // same "open to any authenticated role" reasoning as GetAcademicConfig
+    // above, since Student Academic Details and Exam academic fields both
+    // need these dropdowns populated for whichever role is creating/editing
+    // that record, not just Admin.
+    [HttpGet("academic-lists")]
+    public async Task<IActionResult> GetAcademicLists(
+        [FromQuery] string listType,
+        [FromQuery] Guid? parentId,
+        CancellationToken cancellationToken)
+    {
+        var items = await _listAcademicListItemsHandler.HandleAsync(
+            new ListAcademicListItemsQuery(listType, parentId), cancellationToken);
+
+        return Ok(items.Select(ToAcademicListItemResponse));
+    }
+
+    [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = SettingsEdit)]
+    [HttpPost("academic-lists")]
+    public async Task<IActionResult> CreateAcademicListItem(
+        CreateAcademicListItemRequest request,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = GetOwnTenantId();
+        if (tenantId is null)
+        {
+            return NotFound(new { message = "No organization associated with this account." });
+        }
+
+        var result = await _createAcademicListItemHandler.HandleAsync(
+            new CreateAcademicListItemCommand(tenantId.Value, request.ListType, request.Value, request.ParentId),
+            cancellationToken);
+
+        if (result.IsConflict)
+        {
+            return Conflict(new { message = "This value already exists in the list." });
+        }
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        return StatusCode(StatusCodes.Status201Created, ToAcademicListItemResponse(result.Item!));
+    }
+
+    [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Policy = SettingsEdit)]
+    [HttpDelete("academic-lists/{id:guid}")]
+    public async Task<IActionResult> DeleteAcademicListItem(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _deleteAcademicListItemHandler.HandleAsync(
+            new DeleteAcademicListItemCommand(id), cancellationToken);
+
+        if (result.IsNotFound)
+        {
+            return NotFound(new { message = "Not found." });
+        }
+
+        return NoContent();
+    }
+
     [HttpGet("logo")]
     public Task<IActionResult> GetLogo(CancellationToken cancellationToken) =>
         GetAssetAsync(t => (t.LogoData, t.LogoContentType), cancellationToken);
@@ -425,4 +504,7 @@ public class MyTenantController : ControllerBase
             tenant.FaviconData is not null,
             tenant.SignatureImageData is not null,
             tenant.OrganizationCode);
+
+    private static AcademicListItemResponse ToAcademicListItemResponse(AcademicListItem item) =>
+        new(item.Id, item.ListType, item.Value, item.ParentId, item.CreatedAtUtc);
 }

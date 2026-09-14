@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import SectionHeader from '../../components/SectionHeader';
+import AcademicHierarchyFields from '../../components/AcademicHierarchyFields';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/examApi';
@@ -502,20 +503,12 @@ export default function EditExam() {
                   <>
                     <SectionHeader icon={<GearIcon />} title={`Academic Details (${branding?.organizationType ?? 'Exam'})`} />
                     <Row className="mb-3">
-                      {examFields.map((field) => (
-                        <Col xs={12} md={6} key={field.key} className="mb-3">
-                          <Form.Label className="small fw-bold">
-                            {field.label} <span className="text-danger">*</span>
-                          </Form.Label>
-                          <Form.Control
-                            value={form.academicFields?.[field.key] ?? ''}
-                            placeholder={field.placeholder}
-                            onChange={(e) => updateAcademicField(field.key, e.target.value)}
-                            isInvalid={!!academicFieldErrors[field.key]}
-                          />
-                          <Form.Control.Feedback type="invalid">{academicFieldErrors[field.key]}</Form.Control.Feedback>
-                        </Col>
-                      ))}
+                      <AcademicHierarchyFields
+                        fields={examFields}
+                        values={form.academicFields ?? {}}
+                        errors={academicFieldErrors}
+                        onChange={updateAcademicField}
+                      />
                     </Row>
                   </>
                 )}
