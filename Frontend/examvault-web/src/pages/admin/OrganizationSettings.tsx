@@ -25,6 +25,7 @@ import {
   getResultFieldKeysForType,
   getStudentFieldsForType,
   RESULT_FIELD_CATALOG,
+  RESULT_FIELD_GROUPS,
 } from '../../constants/organizationTypeFieldCatalog';
 import { extractServerError } from '../../utils/apiError';
 import {
@@ -741,13 +742,6 @@ function AcademicConfigurationTab({
   const [resultFields, setResultFields] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (config) {
-      setAcademicFields(config.academicFields);
-      setResultFields(config.resultFields);
-    }
-  }, [config]);
-
   const fieldDefs = getAcademicFieldsForType(organizationType);
   // Gated on the Student field catalog, not this tab's own academicFields
   // catalog - Program/Department/Semester/Division were deliberately
@@ -759,21 +753,69 @@ function AcademicConfigurationTab({
   );
   const relevantResultKeys = getResultFieldKeysForType(organizationType);
   const resultFieldDefs = RESULT_FIELD_CATALOG.filter((f) => relevantResultKeys.includes(f.key));
+  const resultFieldGroups = RESULT_FIELD_GROUPS.map((group) => ({
+    group,
+    fields: resultFieldDefs.filter((f) => f.group === group),
+  })).filter((g) => g.fields.length > 0);
+  // "Coming soon" fields can never be recommended/checked - there's nothing
+  // yet for the PDF generator to read even if they were on (see each field's
+  // comingSoon comment in organizationTypeFieldCatalog.ts).
+  const recommendedResultFieldKeys = resultFieldDefs.filter((f) => !f.comingSoon).map((f) => f.key);
+
+  useEffect(() => {
+    if (config) {
+      setAcademicFields(config.academicFields);
+      // An empty saved list means "never configured" - the PDF generator's
+      // own fallback (isResultFieldEnabled) already treats that as "show
+      // everything", so seed the checklist with the recommended keys rather
+      // than leave every box unchecked while the PDF quietly shows them
+      // anyway. Saving without changing anything then persists the same
+      // real behavior, just made visible.
+      setResultFields(config.resultFields.length > 0 ? config.resultFields : recommendedResultFieldKeys);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config]);
 
   const toggleResultField = (key: string, checked: boolean) => {
     setResultFields((prev) => (checked ? [...prev, key] : prev.filter((k) => k !== key)));
   };
 
+  const resetToRecommended = () => setResultFields(recommendedResultFieldKeys);
+
+  // collegeCode isn't real academicFields data - it's the read-only Tenant
+  // OrganizationCode rendered inline below (see the fieldDefs.map special
+  // case). program/department/semester/division are no longer in this
+  // tab's field catalog at all - they're real managed lists now (see
+  // organizationTypeFieldCatalog.ts). Stripped from both the save payload
+  // and the dirty-check below so a stale value from before either change
+  // doesn't keep round-tripping through the JSON blob or falsely show as
+  // an unsaved change.
+  const STRIPPED_ACADEMIC_FIELD_KEYS = ['collegeCode', 'program', 'department', 'semester', 'division'];
+  const normalizeAcademicFields = (fields: Record<string, string> | undefined): string => {
+    const result: Record<string, string> = {};
+    Object.keys(fields ?? {})
+      .sort()
+      .forEach((key) => {
+        if (STRIPPED_ACADEMIC_FIELD_KEYS.includes(key)) return;
+        const value = fields?.[key];
+        if (value) result[key] = value;
+      });
+    return JSON.stringify(result);
+  };
+  const sameResultFieldSet = (a: string[], b: string[]): boolean => {
+    if (a.length !== b.length) return false;
+    const setB = new Set(b);
+    return a.every((key) => setB.has(key));
+  };
+  const isDirty =
+    !!config &&
+    (normalizeAcademicFields(academicFields) !== normalizeAcademicFields(config.academicFields) ||
+      !sameResultFieldSet(resultFields, config.resultFields.length > 0 ? config.resultFields : recommendedResultFieldKeys));
+
   const save = async () => {
     setSaved(false);
-    // collegeCode isn't real academicFields data - it's the read-only Tenant
-    // OrganizationCode rendered inline below (see the fieldDefs.map special
-    // case). program/department/semester/division are no longer in this
-    // tab's field catalog at all - they're real managed lists now (see
-    // organizationTypeFieldCatalog.ts). Drop all five so a stale value from
-    // before either change doesn't keep round-tripping through the JSON blob.
-    const { collegeCode: _collegeCode, program: _program, department: _department, semester: _semester, division: _division, ...fieldsToSave } =
-      academicFields;
+    const fieldsToSave = { ...academicFields };
+    STRIPPED_ACADEMIC_FIELD_KEYS.forEach((key) => delete fieldsToSave[key]);
     await updateMutation.mutateAsync({ academicFields: fieldsToSave, resultFields });
     setSaved(true);
   };
@@ -837,21 +879,45 @@ function AcademicConfigurationTab({
           <CardHeader
             icon={<BuildingIcon />}
             title="Result Fields"
-            subtitle="Choose which fields are relevant for this organization type's results."
+            subtitle="Configure which information appears in student results and exam reports for this organization type."
           />
-          <Row className="g-2">
-            {resultFieldDefs.map((field) => (
-              <Col xs={12} sm={6} md={4} key={field.key}>
-                <Form.Check
-                  type="checkbox"
-                  id={`result-field-${field.key}`}
-                  label={field.label}
-                  checked={resultFields.includes(field.key)}
-                  onChange={(e) => toggleResultField(field.key, e.target.checked)}
-                />
-              </Col>
-            ))}
-          </Row>
+          <p className="text-muted small mb-3">
+            Student Name, Exam Name, Marks, Percentage, Grade, and Result always appear on every generated report -
+            only the fields below can be turned on or off.
+          </p>
+          {resultFieldGroups.length === 0 ? (
+            <div className="text-muted small py-3">No specific result fields are defined yet for this organization type.</div>
+          ) : (
+            <>
+              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <span className="text-success small">
+                  ✓ Recommended fields loaded automatically for "{organizationType ?? 'your organization type'}"
+                </span>
+                <Button variant="outline-secondary" size="sm" onClick={resetToRecommended}>
+                  Reset to Recommended
+                </Button>
+              </div>
+              {resultFieldGroups.map(({ group, fields }) => (
+                <div key={group} className="mb-3">
+                  <div className="fw-bold small text-muted text-uppercase mb-2">{group}</div>
+                  <Row className="g-2">
+                    {fields.map((field) => (
+                      <Col xs={12} sm={6} md={4} key={field.key}>
+                        <Form.Check
+                          type="checkbox"
+                          id={`result-field-${field.key}`}
+                          label={field.comingSoon ? `${field.label} (Coming soon)` : field.label}
+                          checked={!field.comingSoon && resultFields.includes(field.key)}
+                          disabled={field.comingSoon}
+                          onChange={(e) => toggleResultField(field.key, e.target.checked)}
+                        />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))}
+            </>
+          )}
         </Card.Body>
       </Card>
 
@@ -865,8 +931,15 @@ function AcademicConfigurationTab({
         <p className="text-muted small mb-3">Last updated {new Date(config.updatedAtUtc).toLocaleString()}</p>
       )}
 
-      <div className="d-flex justify-content-end">
-        <Button variant="primary" onClick={save} disabled={updateMutation.isPending}>
+      <div className="d-flex justify-content-between align-items-center">
+        <span>
+          {isDirty && (
+            <Badge bg="warning-subtle" text="warning-emphasis" className="fw-normal">
+              Unsaved changes
+            </Badge>
+          )}
+        </span>
+        <Button variant="primary" onClick={save} disabled={updateMutation.isPending || !isDirty}>
           {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>

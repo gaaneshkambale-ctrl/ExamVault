@@ -13085,3 +13085,96 @@ list manager. The list manager card itself still renders and still has
 the "B.Tech Computer Engineering" Program from earlier testing.
 
 Committed and pushed to origin/dev after this entry.
+
+--------------------------------------------------------------------
+User pasted a large external proposal to redesign the "Result Fields"
+screen (Organization Type + Exam Type aware, ~30 fields grouped into
+Student/Exam/Result/Additional/Document sections, Reset to
+Recommended, unsaved-changes indicator, and "make the checklist
+actually reach the PDF"). Investigated with a research subagent before
+touching anything, since this is exactly the kind of large ask the
+"plan before code" rule exists for.
+
+Findings that reshaped scope:
+- The 30-field catalog and per-Organization-Type curation ALREADY
+  existed (RESULT_FIELD_CATALOG / RESULT_FIELD_KEYS_BY_TYPE) - not
+  8 fields as the proposal assumed.
+- Only 3 of those 30 checkboxes (remarks, accuracy, rank) actually
+  affected the generated PDF - the other 27 were checked into config
+  and silently ignored by the PDF generator. Confirmed with the user
+  this was worth fixing regardless of anything else.
+- Digging into generateResultPdf.ts surfaced a real blocker: 14 of the
+  30 fields (aptitude, coding, competency, module/practical/theory
+  score, trainer remarks, attendance, etc.) have NO per-attempt data
+  captured anywhere in the backend - "wiring" them is actually "build
+  a new scoring subsystem," not a checkbox change. Surfaced this
+  honestly rather than faking it or silently doing less than agreed;
+  user chose to keep them visible but disabled ("Coming soon") rather
+  than hide them or pretend they work.
+- "Institution Logo"/"QR Verification"/"Signature" in the proposal's
+  Document/Verification section duplicate already-working Tenant-level
+  toggles in Reports & Documents (qrVerification was in fact already
+  sitting in the catalog, unused, duplicating ShowQrCodeForVerification
+  - removed it). User chose to skip that whole section rather than
+  build genuinely-new Institution Seal/Student Photo/Result ID fields
+  this round.
+- Exam-Type-aware scoping (a College Internal Exam showing different
+  fields than a College Final Exam) would need a new per-(tenant,
+  examtype) config/migration, comparable in size to the Program/
+  Department/Semester/Division feature just shipped - deferred, not
+  built.
+
+What shipped:
+- organizationTypeFieldCatalog.ts: ResultFieldDef gained `group`
+  (Student/Exam/Result/Additional Information, for the UI's section
+  headers) and `comingSoon` (no backing data yet - rendered disabled).
+  studentName/examName/marks/percentage/grade/result removed from the
+  catalog entirely (see below); qrVerification removed as a duplicate
+  of the real Tenant toggle.
+- generateResultPdf.ts: newly gates studentId (Roll/Registration No.),
+  examDate, duration in both report layouts (drawStudentReport AND the
+  compact drawAcademicReport used for College/University/School);
+  decoupled percentile from rank (previously one bundled toggle);
+  correctAnswers/incorrectAnswers/unanswered gate the Section-wise
+  Performance table + Score Distribution donut + Accuracy bars TOGETHER
+  as one visual unit (not independently - they're one shared
+  visualization built from the same 3 counts, documented in code).
+  studentName/examName/marks/percentage/grade/result always render,
+  never gated - a result PDF missing its own score/pass-fail isn't a
+  smaller report, it's a broken one.
+- Caught and fixed a real regression before shipping: gating a field
+  unconditionally broke it for any Organization Type that never
+  offered that field as a checkbox in the first place (eg. College's
+  curated list has no "Duration" entry, so it could never be in a
+  saved selection - "Duration" would've silently vanished the moment a
+  College tenant saved ANY Result Fields choice). Fixed by making
+  isResultFieldEnabled org-type-aware: a key not in
+  getResultFieldKeysForType(orgType) always shows, matching pre-
+  existing behavior for fields the admin was never given control over.
+- OrganizationSettings.tsx Result Fields card: grouped into section
+  headers, "Coming soon" fields render disabled with that label suffix
+  and can never be checked, new wording
+  ("Configure which information appears in student results and exam
+  reports for this organization type."), a static note listing the
+  always-on fields, "✓ Recommended fields loaded automatically for
+  '{orgType}'" + a real "Reset to Recommended" button, and a genuine
+  "Unsaved changes" badge + Save-button-disabled-until-dirty (new UI
+  pattern for this app - no existing precedent, built from scratch).
+  Also: an unconfigured tenant's empty saved resultFields now seeds the
+  UI with the recommended set on load (previously showed all boxes
+  unchecked while the PDF's own fallback silently showed everything
+  anyway - now the checklist honestly reflects what the PDF does).
+
+Verified: frontend build clean (tsc + vite). Live-tested in the
+browser end-to-end on the real "Greenfield University" tenant -
+wording, grouping, the always-on-fields note, Reset to Recommended
+button present, and the dirty-tracking cycle confirmed working exactly
+right (uncheck Remarks -> "Unsaved changes" badge appears + Save
+button goes from disabled/faded to active; recheck it -> badge
+disappears + Save goes back to disabled). Did not live-verify an
+actual generated PDF's content (would need a real completed exam
+attempt to download against) or the "Coming soon" disabled-checkbox
+rendering (this tenant's Organization Type, University, has no
+comingSoon fields in its curated list to show) - both are straight
+reads of already-reviewed code, lower risk than what was verified live.
+Docker frontend rebuilt and redeployed. Not committed or pushed yet.

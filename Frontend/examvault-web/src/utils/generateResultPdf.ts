@@ -33,6 +33,7 @@ import {
 } from './pdfReportKit';
 import type { TenantBranding } from './pdfReportKit';
 import { getResultPdfVariant, RESULT_PDF_VARIANT_COPY } from './resultPdfVariants';
+import { getResultFieldKeysForType } from '../constants/organizationTypeFieldCatalog';
 
 export interface ResultPdfSectionStat {
   name: string;
@@ -70,16 +71,30 @@ export interface ResultPdfContext {
    * optional section below then falls back to always showing, exactly like
    * before this field existed, so an unconfigured tenant sees no change.
    * Only once an admin actively saves a selection does this start hiding
-   * sections. Only fields the backend already computes are gated here
-   * (rank/percentile, accuracy, correct/incorrect/skipped, remarks) - the
-   * org-type-specific fields added for points 4-8 of the architecture doc
-   * (module score, competency, aptitude breakdown, etc.) have nowhere yet
-   * to be captured per-attempt, so there's nothing for them to gate.
+   * sections. Gated fields: studentId (Roll/Registration No.), examDate,
+   * duration, rank, percentile, accuracy, remarks, and correctAnswers/
+   * incorrectAnswers/unanswered (as one bundle - see showAnswerBreakdown in
+   * drawStudentReport). studentName/examName/marks/percentage/grade/result
+   * always show (not in RESULT_FIELD_CATALOG at all - see its own comment).
+   * Every other catalog key is `comingSoon: true` - no per-attempt data
+   * exists to gate yet (module score, competency, aptitude breakdown,
+   * etc.), so there's nothing here for them to key off.
    */
   enabledResultFields?: string[];
 }
 
-function isResultFieldEnabled(context: ResultPdfContext, key: string): boolean {
+// A key that isn't even offered as a checkbox for this tenant's
+// Organization Type (see RESULT_FIELD_KEYS_BY_TYPE) always shows, unchanged
+// from before Result Fields gating existed - an admin can only hide a field
+// they were actually given control over. Without this, a College tenant
+// (whose curated list never included eg. "Duration") would have Duration
+// silently vanish the moment they save ANY Result Fields selection, since
+// a saved selection is a non-empty array by definition and "Duration"
+// could never be in it.
+function isResultFieldEnabled(context: ResultPdfContext, branding: TenantBranding, key: string): boolean {
+  if (!getResultFieldKeysForType(branding.organizationType).includes(key)) {
+    return true;
+  }
   return !context.enabledResultFields || context.enabledResultFields.length === 0 || context.enabledResultFields.includes(key);
 }
 
@@ -211,7 +226,7 @@ function drawStudentReport(
     doc.text(context.studentName ?? 'Unknown Student', avatarCx + avatarR + 5, avatarCy - 1);
 
     let fy = y + 32;
-    fieldRow(doc, 'Roll No.', context.rollNumber ?? '—', MARGIN + 4, fy, 22);
+    fieldRow(doc, 'Roll No.', isResultFieldEnabled(context, branding, 'studentId') ? (context.rollNumber ?? '—') : '—', MARGIN + 4, fy, 22);
     fy += 6;
     fieldRow(doc, 'Email', context.studentEmail ?? '—', MARGIN + 4, fy, 22);
 
@@ -227,7 +242,14 @@ function drawStudentReport(
     ey += 6;
     fieldRow(doc, 'Exam Type', context.examType ?? '—', examX + 2, ey, 26);
     ey += 6;
-    fieldRow(doc, 'Exam Date', startDate ? startDate.toLocaleDateString() : endDate.toLocaleDateString(), examX + 2, ey, 26);
+    fieldRow(
+      doc,
+      'Exam Date',
+      isResultFieldEnabled(context, branding, 'examDate') ? (startDate ? startDate.toLocaleDateString() : endDate.toLocaleDateString()) : '—',
+      examX + 2,
+      ey,
+      26,
+    );
     ey += 6;
     fieldRow(
       doc,
@@ -238,7 +260,14 @@ function drawStudentReport(
       26,
     );
     ey += 6;
-    fieldRow(doc, 'Duration', context.durationMinutes ? `${context.durationMinutes} Minutes` : '—', examX + 2, ey, 26);
+    fieldRow(
+      doc,
+      'Duration',
+      isResultFieldEnabled(context, branding, 'duration') && context.durationMinutes ? `${context.durationMinutes} Minutes` : '—',
+      examX + 2,
+      ey,
+      26,
+    );
     ey += 6;
     fieldRow(doc, 'Total Questions', String(totalQuestions), examX + 2, ey, 26);
   }
@@ -275,6 +304,21 @@ function drawStudentReport(
   drawStatCard(doc, MARGIN + (statW + statGap) * 3, y, statW, statCardH, AMBER, 'Grade', grade, AMBER);
   y += statCardH + 6;
 
+  // Used by the answer-breakdown block below when shown, and by the
+  // Performance Analysis / Remarks row further down regardless - hoisted
+  // out of the showAnswerBreakdown block so it's in scope for both.
+  const colW = (CONTENT_WIDTH - 6) / 2;
+
+  // The Section-wise Performance table, Score Distribution donut and
+  // Section-wise Accuracy bars are one shared visualization built from the
+  // same correct/incorrect/skipped counts - not independently gateable per
+  // field, so checking any one of the 3 keys shows the whole block below;
+  // unchecking all 3 skips it (and its y-space) entirely.
+  const showAnswerBreakdown =
+    isResultFieldEnabled(context, branding, 'correctAnswers') ||
+    isResultFieldEnabled(context, branding, 'incorrectAnswers') ||
+    isResultFieldEnabled(context, branding, 'unanswered');
+  if (showAnswerBreakdown) {
   // Section-wise Performance table
   const tableColW = [8, CONTENT_WIDTH - 8 - 24 * 5 - 12, 22, 18, 18, 18, 20, 18];
   const rowH = 5.5;
@@ -336,7 +380,6 @@ function drawStudentReport(
   const distPanelH = 50;
   const twoColH = Math.max(accuracyPanelH, distPanelH);
   y = ensurePageSpace(doc, y, twoColH);
-  const colW = (CONTENT_WIDTH - 6) / 2;
 
   panel(doc, MARGIN, y, colW, twoColH);
   panelTitle(doc, 'Score Distribution', MARGIN + 4, y + 7);
@@ -403,6 +446,7 @@ function drawStudentReport(
     });
   }
   y += twoColH + 6;
+  }
 
   // Performance Analysis mini-stats + Remarks
   const bottomRowH = 28;
@@ -410,7 +454,7 @@ function drawStudentReport(
   // Admin's "Result Fields" config (Organization Settings -> Academic
   // Configuration) can turn the Remarks box off entirely - when it does,
   // Performance Analysis takes the full row instead of leaving a gap.
-  const showRemarks = isResultFieldEnabled(context, 'remarks');
+  const showRemarks = isResultFieldEnabled(context, branding, 'remarks');
   const perfW = showRemarks ? colW : CONTENT_WIDTH;
   panel(doc, MARGIN, y, perfW, bottomRowH);
   panelTitle(doc, 'Performance Analysis', MARGIN + 4, y + 7);
@@ -423,7 +467,7 @@ function drawStudentReport(
         caption: timeTakenPercentOfAllotted !== null ? `${timeTakenPercentOfAllotted}% of time` : undefined,
       });
     }
-    if (isResultFieldEnabled(context, 'accuracy')) {
+    if (isResultFieldEnabled(context, branding, 'accuracy')) {
       let accuracyCaption: string | undefined;
       let accuracyCaptionColor: { r: number; g: number; b: number } | undefined;
       if (context.averageAccuracyPercent !== undefined) {
@@ -439,14 +483,14 @@ function drawStudentReport(
       }
       miniStats.push({ label: 'Accuracy', value: `${accuracy}%`, caption: accuracyCaption, captionColor: accuracyCaptionColor });
     }
-    if (
-      context.rank !== undefined &&
-      context.totalParticipants !== undefined &&
-      context.totalParticipants > 0 &&
-      isResultFieldEnabled(context, 'rank')
-    ) {
+    if (context.rank !== undefined && context.totalParticipants !== undefined && context.totalParticipants > 0) {
       const percentile = Math.max(1, Math.round((context.rank / context.totalParticipants) * 100));
-      miniStats.push({ label: 'Your Rank', value: `${context.rank} / ${context.totalParticipants}`, caption: `Top ${percentile}%` });
+      if (isResultFieldEnabled(context, branding, 'rank')) {
+        miniStats.push({ label: 'Your Rank', value: `${context.rank} / ${context.totalParticipants}` });
+      }
+      if (isResultFieldEnabled(context, branding, 'percentile')) {
+        miniStats.push({ label: 'Percentile', value: `Top ${percentile}%` });
+      }
     }
     if (integrity !== undefined) {
       miniStats.push({ label: 'Integrity Score', value: `${integrity}%` });
@@ -720,7 +764,15 @@ function drawAcademicReport(
   let ly = y + 7;
   fieldRow(doc, 'Student Name', context.studentName ?? 'Unknown Student', MARGIN + 4, ly, 32, infoColW - 8);
   ly += 7;
-  fieldRow(doc, 'Registration No.', context.rollNumber ?? '—', MARGIN + 4, ly, 32, infoColW - 8);
+  fieldRow(
+    doc,
+    'Registration No.',
+    isResultFieldEnabled(context, branding, 'studentId') ? (context.rollNumber ?? '—') : '—',
+    MARGIN + 4,
+    ly,
+    32,
+    infoColW - 8,
+  );
   ly += 7;
   fieldRow(doc, 'Program', context.program ?? '—', MARGIN + 4, ly, 32, infoColW - 8);
 
@@ -728,9 +780,25 @@ function drawAcademicReport(
   const infoRightX = MARGIN + infoColW + 4;
   fieldRow(doc, 'Exam Name', result.examTitle, infoRightX, ry, 26, infoColW - 8);
   ry += 7;
-  fieldRow(doc, 'Exam Date', new Date(result.submittedAtUtc).toLocaleDateString(), infoRightX, ry, 26, infoColW - 8);
+  fieldRow(
+    doc,
+    'Exam Date',
+    isResultFieldEnabled(context, branding, 'examDate') ? new Date(result.submittedAtUtc).toLocaleDateString() : '—',
+    infoRightX,
+    ry,
+    26,
+    infoColW - 8,
+  );
   ry += 7;
-  fieldRow(doc, 'Duration', context.durationMinutes ? `${context.durationMinutes} Minutes` : '—', infoRightX, ry, 26, infoColW - 8);
+  fieldRow(
+    doc,
+    'Duration',
+    isResultFieldEnabled(context, branding, 'duration') && context.durationMinutes ? `${context.durationMinutes} Minutes` : '—',
+    infoRightX,
+    ry,
+    26,
+    infoColW - 8,
+  );
   y += infoPanelH + 8;
 
   // Subject-wise marks table - drawn with a full grid (outer border + row/

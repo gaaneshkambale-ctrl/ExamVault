@@ -84,96 +84,107 @@ export const ACADEMIC_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
 
 export const DEFAULT_ACADEMIC_FIELDS: FieldDef[] = [];
 
-export const RESULT_FIELD_CATALOG: FieldDef[] = [
-  { key: 'studentName', label: 'Student / Candidate Name' },
-  { key: 'studentId', label: 'Student / Candidate ID' },
-  { key: 'examName', label: 'Exam / Assessment Name' },
-  { key: 'examDate', label: 'Exam / Assessment Date' },
-  { key: 'duration', label: 'Duration' },
-  { key: 'marks', label: 'Marks' },
-  { key: 'percentage', label: 'Percentage' },
-  { key: 'grade', label: 'Grade' },
-  { key: 'result', label: 'Result (Pass / Fail)' },
-  { key: 'rank', label: 'Rank' },
-  { key: 'percentile', label: 'Percentile' },
-  { key: 'accuracy', label: 'Accuracy' },
-  { key: 'correctAnswers', label: 'Correct Answers' },
-  { key: 'incorrectAnswers', label: 'Incorrect Answers' },
-  { key: 'unanswered', label: 'Unanswered' },
-  { key: 'remarks', label: 'Remarks' },
-  { key: 'qrVerification', label: 'QR Verification' },
-  { key: 'moduleWiseScore', label: 'Module-wise Score' },
-  { key: 'practicalScore', label: 'Practical Score' },
-  { key: 'theoryScore', label: 'Theory Score' },
-  { key: 'trainerRemarks', label: 'Trainer Remarks' },
-  { key: 'competency', label: 'Competency' },
-  { key: 'skills', label: 'Skills' },
-  { key: 'attendance', label: 'Attendance' },
-  { key: 'aptitude', label: 'Aptitude' },
-  { key: 'logicalReasoning', label: 'Logical Reasoning' },
-  { key: 'technical', label: 'Technical' },
-  { key: 'coding', label: 'Coding' },
-  { key: 'communication', label: 'Communication' },
-  { key: 'recommendation', label: 'Recommendation' },
-  { key: 'hiringStatus', label: 'Hiring Status' },
+// The 4 sections the Result Fields checklist is grouped into on screen -
+// purely a UI grouping, doesn't affect which keys are relevant for a given
+// Organization Type (that's still RESULT_FIELD_KEYS_BY_TYPE below).
+export const RESULT_FIELD_GROUPS = [
+  'Student Information',
+  'Exam Information',
+  'Result Information',
+  'Additional Information',
+] as const;
+export type ResultFieldGroup = (typeof RESULT_FIELD_GROUPS)[number];
+
+export interface ResultFieldDef extends FieldDef {
+  group: ResultFieldGroup;
+  // True for a field with no underlying per-attempt data captured ANYWHERE
+  // in the system yet (no aptitude/coding/competency score, no module-wise
+  // breakdown, no trainer remarks column - nothing for the PDF generator to
+  // read even if this were checked). Rendered as a disabled "Coming soon"
+  // checkbox rather than a live toggle, so the roadmap stays visible without
+  // pretending these currently do anything. Building any of these out is a
+  // real per-attempt scoring feature (comparable in size to the exam itself),
+  // not a checkbox-wiring task.
+  comingSoon?: boolean;
+}
+
+// Student / Candidate Name, Exam / Assessment Name, Marks, Percentage,
+// Grade, and Result (Pass/Fail) are deliberately NOT in this catalog - they
+// always appear on every generated report (a result PDF with no score or
+// pass/fail status isn't a meaningfully smaller report, it's a broken one),
+// so they're not offered as something to turn off. See the static note
+// rendered above the checklist in OrganizationSettings.tsx.
+//
+// No "QR Verification" here either - Tenant.ShowQrCodeForVerification (the
+// Reports & Documents tab's real, working QR toggle) already controls this;
+// a second checkbox here would just be a disconnected duplicate of that
+// control, same class of bug as the Program/Department free-text fields
+// this catalog used to also duplicate.
+export const RESULT_FIELD_CATALOG: ResultFieldDef[] = [
+  { key: 'studentId', label: 'Student / Candidate ID', group: 'Student Information' },
+  { key: 'examDate', label: 'Exam / Assessment Date', group: 'Exam Information' },
+  { key: 'duration', label: 'Duration', group: 'Exam Information' },
+  { key: 'rank', label: 'Rank', group: 'Result Information' },
+  { key: 'percentile', label: 'Percentile', group: 'Result Information' },
+  { key: 'accuracy', label: 'Accuracy', group: 'Result Information' },
+  // These 3 aren't independently gateable in the PDF - the Section-wise
+  // Performance table, Score Distribution donut and Accuracy bars are one
+  // shared visualization built from all three counts together, so checking
+  // any one of them shows that whole block; unchecking all three hides it.
+  // See generateResultPdf.ts's showAnswerBreakdown.
+  { key: 'correctAnswers', label: 'Correct Answers', group: 'Result Information' },
+  { key: 'incorrectAnswers', label: 'Incorrect Answers', group: 'Result Information' },
+  { key: 'unanswered', label: 'Unanswered', group: 'Result Information' },
+  { key: 'moduleWiseScore', label: 'Module-wise Score', group: 'Result Information', comingSoon: true },
+  { key: 'practicalScore', label: 'Practical Score', group: 'Result Information', comingSoon: true },
+  { key: 'theoryScore', label: 'Theory Score', group: 'Result Information', comingSoon: true },
+  { key: 'competency', label: 'Competency', group: 'Result Information', comingSoon: true },
+  { key: 'skills', label: 'Skills', group: 'Result Information', comingSoon: true },
+  { key: 'aptitude', label: 'Aptitude', group: 'Result Information', comingSoon: true },
+  { key: 'logicalReasoning', label: 'Logical Reasoning', group: 'Result Information', comingSoon: true },
+  { key: 'technical', label: 'Technical', group: 'Result Information', comingSoon: true },
+  { key: 'coding', label: 'Coding', group: 'Result Information', comingSoon: true },
+  { key: 'communication', label: 'Communication', group: 'Result Information', comingSoon: true },
+  { key: 'hiringStatus', label: 'Hiring Status', group: 'Result Information', comingSoon: true },
+  { key: 'remarks', label: 'Remarks', group: 'Additional Information' },
+  { key: 'attendance', label: 'Attendance', group: 'Additional Information', comingSoon: true },
+  { key: 'trainerRemarks', label: 'Trainer Remarks', group: 'Additional Information', comingSoon: true },
+  { key: 'recommendation', label: 'Recommendation', group: 'Additional Information', comingSoon: true },
 ];
 
 export const RESULT_FIELD_KEYS_BY_TYPE: Record<string, string[]> = {
-  College: ['studentName', 'studentId', 'examName', 'examDate', 'marks', 'percentage', 'grade', 'result', 'remarks'],
-  University: ['studentName', 'studentId', 'examName', 'examDate', 'marks', 'percentage', 'grade', 'result', 'remarks'],
-  School: ['studentName', 'studentId', 'examName', 'examDate', 'marks', 'percentage', 'grade', 'attendance', 'result', 'remarks'],
+  College: ['studentId', 'examDate', 'remarks'],
+  University: ['studentId', 'examDate', 'remarks'],
+  School: ['studentId', 'examDate', 'attendance', 'remarks'],
   'Coaching Institute': [
-    'studentName',
     'studentId',
-    'examName',
     'examDate',
     'duration',
-    'marks',
-    'percentage',
     'rank',
     'percentile',
     'accuracy',
     'correctAnswers',
     'incorrectAnswers',
     'unanswered',
-    'result',
   ],
-  'Training Institute': [
-    'studentName',
-    'studentId',
-    'examName',
-    'duration',
-    'marks',
-    'percentage',
-    'grade',
-    'result',
-    'moduleWiseScore',
-    'practicalScore',
-    'theoryScore',
-    'trainerRemarks',
-  ],
-  'Corporate / L&D': ['studentName', 'examName', 'percentage', 'grade', 'competency', 'skills', 'result', 'remarks'],
-  'Certification Institute': ['studentName', 'examName', 'marks', 'percentage', 'grade', 'competency', 'result', 'qrVerification'],
+  'Training Institute': ['studentId', 'duration', 'moduleWiseScore', 'practicalScore', 'theoryScore', 'trainerRemarks'],
+  'Corporate / L&D': ['competency', 'skills', 'remarks'],
+  'Certification Institute': ['competency'],
   'Recruitment / Hiring': [
-    'studentName',
-    'examName',
     'duration',
-    'marks',
     'aptitude',
     'logicalReasoning',
     'technical',
     'coding',
     'communication',
-    'percentage',
     'percentile',
     'rank',
-    'result',
     'recommendation',
     'hiringStatus',
   ],
 };
 
-export const DEFAULT_RESULT_FIELD_KEYS: string[] = ['studentName', 'examName', 'marks', 'percentage', 'grade', 'result'];
+export const DEFAULT_RESULT_FIELD_KEYS: string[] = [];
 
 export function getAcademicFieldsForType(organizationType: string | null | undefined): FieldDef[] {
   if (!organizationType) return DEFAULT_ACADEMIC_FIELDS;
