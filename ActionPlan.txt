@@ -13028,3 +13028,34 @@ want to keep anyway. Flagged to the user rather than silently removing
 or silently leaving it unmentioned.
 
 Committed and pushed to origin/dev after this entry.
+
+--------------------------------------------------------------------
+User asked what "Academic Configuration" is for (explained the tab's
+3 distinct pieces: storage-only descriptive fields, functional Result
+Fields checklist, and the new functional Program/Department/Semester/
+Division list manager - flagged the old free-text Program/Department/
+Semester/Division boxes as now redundant with the new list manager).
+Then asked whether adding ~10 Programs (each with a Department/
+Semester/Division tree) is feasible - confirmed yes, no hard limit,
+explained the one-at-a-time "drill into one branch, add, go back,
+pick the next Program" mechanic and that there's no bulk/CSV import.
+Then asked "not save in database?" - clarified each Program/Department/
+Semester/Division item saves to the DB instantly on Add, independent
+of the page's "Save Changes" button (which only covers the free-text
+fields + Result Fields checkboxes) - already proven by the earlier
+close-tab-reopen-tab persistence check.
+
+Then reported the delete confirmation as a "popup" - it's the
+window.confirm() added for cascading deletes (removing a Program also
+removes its Departments/Semesters/Divisions). Confirmed intentional,
+but replaced the native browser popup with a styled Bootstrap Modal
+matching the app's look (same cascade warning copy, Cancel/Remove
+buttons, disabled+"Removing..." state while the delete request is in
+flight) - AcademicListsManager now tracks `pendingDelete` state instead
+of calling window.confirm() directly. Frontend build clean, Docker
+frontend rebuilt and redeployed, live-verified in the browser (clicked
+the (x) on a test "ganesh" Program, saw the styled modal with correct
+cascade-warning text, confirmed, watched it go to "Removing..." then
+close with the chip gone).
+
+Committed and pushed to origin/dev after this entry.

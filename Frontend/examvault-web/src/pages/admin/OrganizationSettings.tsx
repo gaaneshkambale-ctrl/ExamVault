@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
-import { Alert, Badge, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, InputGroup, Modal, Row, Spinner } from 'react-bootstrap';
 import AdminLayout from '../../layouts/AdminLayout';
 import {
   useOrganizationSettings,
@@ -988,13 +988,24 @@ function AcademicListsManager() {
     setNewValue(listType, '');
   };
 
-  const remove = async (listType: AcademicListType, item: AcademicListItem) => {
-    const warnsAboutChildren = listType !== 'Division';
-    const message = warnsAboutChildren
-      ? `Remove "${item.value}"? This also removes every ${LIST_LEVELS[LIST_LEVELS.findIndex((l) => l.listType === listType) + 1]?.label ?? 'item'} defined under it.`
-      : `Remove "${item.value}"?`;
-    if (!window.confirm(message)) return;
-    await deleteMutation.mutateAsync(item.id);
+  const [pendingDelete, setPendingDelete] = useState<{ item: AcademicListItem; childWarning: string | null } | null>(
+    null,
+  );
+
+  // Deleting a Program/Department/Semester cascades to everything defined
+  // under it server-side (see DeleteAcademicListItemHandler), so this asks
+  // first via a styled in-app modal rather than a native window.confirm -
+  // consistent with the rest of the app's look, and avoids the browser
+  // automation risk a blocking native dialog carries.
+  const requestRemove = (listType: AcademicListType, item: AcademicListItem) => {
+    const childLevel = LIST_LEVELS[LIST_LEVELS.findIndex((l) => l.listType === listType) + 1];
+    setPendingDelete({ item, childWarning: childLevel ? `every ${childLevel.label} defined under it` : null });
+  };
+
+  const confirmRemove = async () => {
+    if (!pendingDelete) return;
+    await deleteMutation.mutateAsync(pendingDelete.item.id);
+    setPendingDelete(null);
   };
 
   const selectedProgram = programs.data?.find((p) => p.id === programId);
@@ -1020,7 +1031,7 @@ function AcademicListsManager() {
           onAdd={() => add('Program', null)}
           onRemove={(id) => {
             const item = programs.data?.find((p) => p.id === id);
-            if (item) void remove('Program', item);
+            if (item) requestRemove('Program', item);
           }}
           adding={createMutation.isPending}
         />
@@ -1053,7 +1064,7 @@ function AcademicListsManager() {
                   onAdd={() => add('Department', programId)}
                   onRemove={(id) => {
                     const item = departments.data?.find((d) => d.id === id);
-                    if (item) void remove('Department', item);
+                    if (item) requestRemove('Department', item);
                   }}
                   adding={createMutation.isPending}
                 />
@@ -1090,7 +1101,7 @@ function AcademicListsManager() {
                   onAdd={() => add('Semester', departmentId)}
                   onRemove={(id) => {
                     const item = semesters.data?.find((s) => s.id === id);
-                    if (item) void remove('Semester', item);
+                    if (item) requestRemove('Semester', item);
                   }}
                   adding={createMutation.isPending}
                 />
@@ -1127,7 +1138,7 @@ function AcademicListsManager() {
                   onAdd={() => add('Division', semesterId)}
                   onRemove={(id) => {
                     const item = divisions.data?.find((d) => d.id === id);
-                    if (item) void remove('Division', item);
+                    if (item) requestRemove('Division', item);
                   }}
                   adding={createMutation.isPending}
                 />
@@ -1142,6 +1153,32 @@ function AcademicListsManager() {
           </Alert>
         )}
       </Card.Body>
+
+      <Modal show={!!pendingDelete} onHide={() => setPendingDelete(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="h6 mb-0">Remove "{pendingDelete?.item.value}"?</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-0 text-muted">
+            {pendingDelete?.childWarning
+              ? `This also removes ${pendingDelete.childWarning}. This can't be undone.`
+              : "This can't be undone."}
+          </p>
+          {deleteMutation.isError && (
+            <Alert variant="danger" className="mt-3 mb-0">
+              {extractServerError(deleteMutation.error)}
+            </Alert>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setPendingDelete(null)} disabled={deleteMutation.isPending}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={confirmRemove} disabled={deleteMutation.isPending}>
+            {deleteMutation.isPending ? 'Removing...' : 'Remove'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Card>
   );
 }
