@@ -29,6 +29,7 @@ import {
   RESULT_FIELD_GROUPS,
 } from '../../constants/organizationTypeFieldCatalog';
 import { extractServerError } from '../../utils/apiError';
+import { isReportTypeAvailable, REPORT_TYPE_CATALOG, type ReportTypeKey } from '../../constants/reportTypeCatalog';
 import {
   MARGIN,
   CONTENT_WIDTH,
@@ -164,6 +165,29 @@ const SAMPLE_REPORT = {
   verificationCode: 'SXU2026001',
 };
 
+// Second sample student - only used for the "Exam Result" (booklet) sample
+// preview, to genuinely demonstrate that report type's real behavior
+// (every student's result combined into one PDF, one page per student)
+// rather than just relabeling the same single-student document.
+const SAMPLE_REPORT_2 = {
+  studentName: 'Priya Sharma',
+  registrationNo: 'SXU2026002',
+  program: 'Bachelor of Computer Science',
+  examName: 'C# Programming - Final Assessment',
+  examDate: '12 Apr 2026',
+  duration: '60 Minutes',
+  rows: [
+    { no: 1, subject: 'Basics', marks: 10, obtained: 10 },
+    { no: 2, subject: 'OOP Concepts', marks: 10, obtained: 9 },
+    { no: 3, subject: 'Exception Handling', marks: 10, obtained: 8 },
+    { no: 4, subject: 'LINQ & Collections', marks: 10, obtained: 10 },
+    { no: 5, subject: 'ASP.NET Core', marks: 10, obtained: 9 },
+  ],
+  verificationCode: 'SXU2026002',
+};
+
+type SampleReportType = Extract<ReportTypeKey, 'studentResult' | 'examResultBooklet'>;
+
 function QrPlaceholder() {
   return (
     <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
@@ -238,13 +262,36 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
   const sampleExamDate = isFieldVisible('examDate') ? SAMPLE_REPORT.examDate : '—';
   const sampleDuration = isFieldVisible('duration') ? SAMPLE_REPORT.duration : '—';
 
-  const buildSamplePdf = async () => {
-    const doc = new jsPDF();
-    const brand = draft.useBrandColorsInReportHeader ? hexToRgb(draft.primaryColor) : TEXT_DARK;
-    const passed = percentage >= 40;
-    const grade = percentage >= 80 ? 'A' : percentage >= 60 ? 'B' : 'C';
+  // Which report type the sample preview/download represents. "Exam Result"
+  // (the booklet - see reportTypeCatalog.ts) isn't offered for every
+  // Organization Type, so only show that toggle option when it actually is;
+  // fall back to the always-available "Student Result" otherwise.
+  const [sampleReportType, setSampleReportType] = useState<SampleReportType>('studentResult');
+  const examResultBookletAvailable = isReportTypeAvailable(draft.organizationType, 'examResultBooklet');
+  const sampleReportTypeOptions = (['studentResult', 'examResultBooklet'] as const).filter(
+    (key) => key === 'studentResult' || examResultBookletAvailable,
+  );
 
-    const [logoImg, signatureImg] = await Promise.all([loadImageElement(logoUrl), loadImageElement(signatureUrl)]);
+  // Draws one student's page into `doc` - shared by both sample report
+  // types. "Student Result" calls this once; "Exam Result" (booklet) calls
+  // it once per sample student with doc.addPage() between them, exactly
+  // like the real generateExamResultsBooklet does for real students - one
+  // draw function, so the two sample types can't independently drift the
+  // way the whole sample preview once drifted from the real PDF.
+  const drawSampleReportPage = async (
+    doc: jsPDF,
+    sample: typeof SAMPLE_REPORT,
+    logoImg: HTMLImageElement | null,
+    signatureImg: HTMLImageElement | null,
+    brand: { r: number; g: number; b: number },
+    pageNum: number,
+    totalPages: number,
+  ) => {
+    const rowsTotalMarks = sample.rows.reduce((sum, r) => sum + r.marks, 0);
+    const rowsTotalObtained = sample.rows.reduce((sum, r) => sum + r.obtained, 0);
+    const pct = Math.round((rowsTotalObtained / rowsTotalMarks) * 10000) / 100;
+    const passed = pct >= 40;
+    const grade = pct >= 80 ? 'A' : pct >= 60 ? 'B' : 'C';
 
     // Header: mirrors drawAcademicReport's real header exactly (logo left,
     // name/Est. year/motto/address/registration all centered, Generated On
@@ -316,12 +363,12 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     y += 10;
 
     const fields: [string, string][] = [
-      ['Student Name', SAMPLE_REPORT.studentName],
-      ['Registration No.', sampleRegistrationNo],
-      ['Program', SAMPLE_REPORT.program],
-      ['Exam Name', SAMPLE_REPORT.examName],
-      ['Exam Date', sampleExamDate],
-      ['Duration', sampleDuration],
+      ['Student Name', sample.studentName],
+      ['Registration No.', isFieldVisible('studentId') ? sample.registrationNo : '—'],
+      ['Program', sample.program],
+      ['Exam Name', sample.examName],
+      ['Exam Date', isFieldVisible('examDate') ? sample.examDate : '—'],
+      ['Duration', isFieldVisible('duration') ? sample.duration : '—'],
     ];
     fields.forEach(([label, value]) => {
       fieldRow(doc, label, value, MARGIN, y, 38, CONTENT_WIDTH);
@@ -336,7 +383,7 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     y += rowH;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    SAMPLE_REPORT.rows.forEach((r, i) => {
+    sample.rows.forEach((r, i) => {
       if (i % 2 === 1) {
         setColor(doc, 'setFillColor', { r: 248, g: 250, b: 252 });
         doc.rect(MARGIN, y, CONTENT_WIDTH, rowH, 'F');
@@ -357,8 +404,8 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     doc.setFont('helvetica', 'bold');
     setColor(doc, 'setTextColor', TEXT_DARK);
     doc.text('Total Marks', MARGIN + 2, y + rowH - 2.5);
-    doc.text(String(totalMarks), MARGIN + colWidths[0] + colWidths[1] + 2, y + rowH - 2.5);
-    doc.text(String(totalObtained), MARGIN + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + rowH - 2.5);
+    doc.text(String(rowsTotalMarks), MARGIN + colWidths[0] + colWidths[1] + 2, y + rowH - 2.5);
+    doc.text(String(rowsTotalObtained), MARGIN + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + rowH - 2.5);
     y += rowH;
     setColor(doc, 'setDrawColor', BORDER);
     doc.setLineWidth(0.3);
@@ -366,7 +413,7 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     y += 10;
 
     const cardW = (CONTENT_WIDTH - 12) / 3;
-    drawStatCard(doc, MARGIN, y, cardW, 26, TEXT_DARK, 'Percentage', `${percentage}%`, TEXT_DARK);
+    drawStatCard(doc, MARGIN, y, cardW, 26, TEXT_DARK, 'Percentage', `${pct}%`, TEXT_DARK);
     drawStatCard(
       doc,
       MARGIN + cardW + 6,
@@ -394,7 +441,7 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
       doc.setFontSize(8);
       setColor(doc, 'setTextColor', TEXT_MUTED);
       doc.text('Scan to verify this report', MARGIN + 26, y + 8);
-      doc.text(`Verification Code: ${SAMPLE_REPORT.verificationCode}`, MARGIN + 26, y + 13);
+      doc.text(`Verification Code: ${sample.verificationCode}`, MARGIN + 26, y + 13);
     }
 
     const sigX = PAGE_WIDTH - MARGIN - 50;
@@ -455,15 +502,29 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     setColor(doc, 'setTextColor', TEXT_MUTED);
     doc.text(`Generated on: ${generatedAt.toLocaleString()}`, PAGE_WIDTH - MARGIN, FOOTER_Y - 3, { align: 'right' });
     if (draft.showPageNumbers) {
-      doc.text('Page 1 of 1', PAGE_WIDTH - MARGIN, FOOTER_Y + 2, { align: 'right' });
+      doc.text(`Page ${pageNum} of ${totalPages}`, PAGE_WIDTH - MARGIN, FOOTER_Y + 2, { align: 'right' });
     }
+  };
 
+  const buildSamplePdf = async () => {
+    const doc = new jsPDF();
+    const brand = draft.useBrandColorsInReportHeader ? hexToRgb(draft.primaryColor) : TEXT_DARK;
+    const [logoImg, signatureImg] = await Promise.all([loadImageElement(logoUrl), loadImageElement(signatureUrl)]);
+    // "Exam Result" draws 2 sample students (with a real doc.addPage()
+    // between them) to genuinely demonstrate that report type's behavior -
+    // every student's result combined into one PDF - rather than just
+    // relabeling the single-student document.
+    const samples = sampleReportType === 'examResultBooklet' ? [SAMPLE_REPORT, SAMPLE_REPORT_2] : [SAMPLE_REPORT];
+    for (let i = 0; i < samples.length; i++) {
+      if (i > 0) doc.addPage();
+      await drawSampleReportPage(doc, samples[i], logoImg, signatureImg, brand, i + 1, samples.length);
+    }
     return doc;
   };
 
   const handleDownloadSample = async () => {
     const doc = await buildSamplePdf();
-    doc.save('sample-report.pdf');
+    doc.save(sampleReportType === 'examResultBooklet' ? 'sample-exam-result-booklet.pdf' : 'sample-report.pdf');
   };
 
   // Opens the same generated PDF inline in a new tab (jsPDF's blob-URL
@@ -489,7 +550,11 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                   </svg>
                 }
                 title="Live PDF Preview"
-                subtitle="See how your settings will appear in the generated report."
+                subtitle={
+                  sampleReportType === 'examResultBooklet'
+                    ? "Every student's result for one exam, combined into a single PDF - shown below is page 1 of a 2-student sample."
+                    : 'See how your settings will appear in the generated report.'
+                }
                 action={
                   <div className="d-flex gap-2">
                     <Button variant="outline-secondary" size="sm" onClick={handlePreviewSample}>
@@ -501,6 +566,20 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                   </div>
                 }
               />
+              {sampleReportTypeOptions.length > 1 && (
+                <div className="d-flex gap-2 mb-3">
+                  {sampleReportTypeOptions.map((key) => (
+                    <Button
+                      key={key}
+                      size="sm"
+                      variant={sampleReportType === key ? 'primary' : 'outline-secondary'}
+                      onClick={() => setSampleReportType(key)}
+                    >
+                      {REPORT_TYPE_CATALOG.find((r) => r.key === key)?.label ?? key}
+                    </Button>
+                  ))}
+                </div>
+              )}
               <Card className="border">
                 <Card.Body>
                   {/* Mirrors the real centered header exactly (logo left,

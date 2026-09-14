@@ -13260,3 +13260,45 @@ downloaded Sample Report PDF now correctly show "Registration No. —"
 instead of the hardcoded "SXU2026001", matching the real student
 result PDF's behavior exactly. Restored the tenant's Result Fields to
 checked/recommended afterward.
+
+--------------------------------------------------------------------
+User asked for the "Exam Result" report type as well in Organization
+Settings > Reports & Documents' "Live PDF Preview" card - it only ever
+showed a "Student Result"-shaped sample, never the "Exam Result"
+booklet type (every student's result for one exam combined into a
+single PDF) that reportTypeCatalog.ts already names as a distinct,
+Organization-Type-gated report type but which nothing in this tab
+previously surfaced.
+
+Implemented as a real second sample, not just a relabeled copy - which
+would have reintroduced the exact same-logic-in-two-places drift risk
+just fixed for Result Fields. Extracted the existing ~220-line
+hand-written sample PDF drawer into a single reusable
+drawSampleReportPage(doc, sample, ...) taking a sample student's data
+and a pageNum/totalPages pair; buildSamplePdf now calls it once for
+"Student Result" or twice (with a real doc.addPage() between them,
+exactly like the real generateExamResultsBooklet) for "Exam Result",
+using a new second sample student (Priya Sharma / SXU2026002). Added a
+"Student Result" / "Exam Result" toggle above the preview card, gated
+by the existing isReportTypeAvailable(organizationType,
+'examResultBooklet') so it only appears for Organization Types that
+actually offer that report type - reused, not reinvented, since
+DashboardSidebar.tsx and AdvanceExamReport.tsx already call the same
+function for their own gating. Subtitle and download filename
+(sample-exam-result-booklet.pdf vs sample-report.pdf) update with the
+selected type. Result Fields gating (isFieldVisible/
+isResultFieldVisible - the fix from two commits ago) carried straight
+through into the shared draw function, so both sample types stay
+correctly wired to the tenant's real config.
+
+Frontend build clean. Docker frontend rebuilt and redeployed.
+Live-verified: switching to "Exam Result" updates the subtitle and
+shows John Doe's page (labeled "page 1 of a 2-student sample");
+downloaded sample-exam-result-booklet.pdf and confirmed a genuine
+2-page PDF - page 1 John Doe/82%/SXU2026001, page 2 Priya Sharma/92%/
+SXU2026002, correct "Page 1 of 2"/"Page 2 of 2" footers, correct
+per-student QR verification codes. Switched back to "Student Result"
+and re-downloaded - confirmed "Page 1 of 1", zero regression to the
+original single-student sample.
+
+Committed and pushed to origin/dev after this entry.
