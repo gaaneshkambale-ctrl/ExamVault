@@ -13059,3 +13059,29 @@ cascade-warning text, confirmed, watched it go to "Removing..." then
 close with the chip gone).
 
 Committed and pushed to origin/dev after this entry.
+
+--------------------------------------------------------------------
+User asked to "remove unwanted academic config fields" - the redundant
+free-text Program/Department/Semester/Division boxes flagged earlier.
+Removed those 4 entries from COLLEGE_FIELDS in
+organizationTypeFieldCatalog.ts (left university/accreditation/
+collegeCode/gradingSystem/passingPercent/sgpaCgpa/credits alone - not
+duplicated anywhere). Fixed the "Manage Lists" card's visibility gate
+in AcademicConfigurationTab, which previously checked this same now-
+empty fieldDefs catalog for program/department/semester/division keys
+- switched it to check getStudentFieldsForType(organizationType)
+instead, since that catalog still has (and always will have) those
+keys for College/University. Also extended the save() handler's
+stale-key stripping (previously just collegeCode) to also drop
+program/department/semester/division, so old free-text values saved
+before this change stop round-tripping through the JSON blob.
+
+Frontend build clean, Docker frontend rebuilt and redeployed,
+live-verified: top card now shows only University/Affiliating Body,
+Accreditation, College/University Code (read-only), Grading System,
+Passing %, SGPA/CGPA Scale, Credits System - no more duplicate
+Program/Department/Semester/Division concept sitting above the real
+list manager. The list manager card itself still renders and still has
+the "B.Tech Computer Engineering" Program from earlier testing.
+
+Committed and pushed to origin/dev after this entry.

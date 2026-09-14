@@ -22,10 +22,13 @@ const COLLEGE_FIELDS: FieldDef[] = [
   { key: 'university', label: 'University / Affiliating Body' },
   { key: 'accreditation', label: 'Accreditation' },
   { key: 'collegeCode', label: 'College / University Code' },
-  { key: 'program', label: 'Program', placeholder: 'e.g. B.Tech Computer Engineering' },
-  { key: 'department', label: 'Department' },
-  { key: 'semester', label: 'Semester' },
-  { key: 'division', label: 'Division / Class' },
+  // Program/Department/Semester/Division intentionally NOT here - they used
+  // to be single free-text boxes on this tab, but are now real per-tenant
+  // managed lists (AcademicListItem) with their own "Program / Department /
+  // Semester / Division Lists" card below, and cascading pickers wherever
+  // they're actually captured (Student Academic Details, Exam academic
+  // fields - see STUDENT_FIELDS_BY_TYPE/EXAM_FIELDS_BY_TYPE below). Keeping
+  // both was confusing - two different "Program" concepts on one page.
   { key: 'gradingSystem', label: 'Grading System', placeholder: 'e.g. 10-point scale' },
   { key: 'passingPercent', label: 'Passing %' },
   { key: 'sgpaCgpa', label: 'SGPA / CGPA Scale' },

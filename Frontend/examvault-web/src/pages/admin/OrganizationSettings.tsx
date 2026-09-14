@@ -23,6 +23,7 @@ import type { AcademicListItem, AcademicListType } from '../../types/academicLis
 import {
   getAcademicFieldsForType,
   getResultFieldKeysForType,
+  getStudentFieldsForType,
   RESULT_FIELD_CATALOG,
 } from '../../constants/organizationTypeFieldCatalog';
 import { extractServerError } from '../../utils/apiError';
@@ -748,8 +749,13 @@ function AcademicConfigurationTab({
   }, [config]);
 
   const fieldDefs = getAcademicFieldsForType(organizationType);
+  // Gated on the Student field catalog, not this tab's own academicFields
+  // catalog - Program/Department/Semester/Division were deliberately
+  // removed from the latter (see organizationTypeFieldCatalog.ts) once they
+  // became real managed lists, so it's the Student catalog that still says
+  // which org types actually use this hierarchy.
   const hasHierarchicalLists = ['program', 'department', 'semester', 'division'].some((key) =>
-    fieldDefs.some((f) => f.key === key),
+    getStudentFieldsForType(organizationType).some((f) => f.key === key),
   );
   const relevantResultKeys = getResultFieldKeysForType(organizationType);
   const resultFieldDefs = RESULT_FIELD_CATALOG.filter((f) => relevantResultKeys.includes(f.key));
@@ -762,9 +768,12 @@ function AcademicConfigurationTab({
     setSaved(false);
     // collegeCode isn't real academicFields data - it's the read-only Tenant
     // OrganizationCode rendered inline below (see the fieldDefs.map special
-    // case) - drop it so a stale value from before this change doesn't keep
-    // round-tripping through the JSON blob.
-    const { collegeCode: _collegeCode, ...fieldsToSave } = academicFields;
+    // case). program/department/semester/division are no longer in this
+    // tab's field catalog at all - they're real managed lists now (see
+    // organizationTypeFieldCatalog.ts). Drop all five so a stale value from
+    // before either change doesn't keep round-tripping through the JSON blob.
+    const { collegeCode: _collegeCode, program: _program, department: _department, semester: _semester, division: _division, ...fieldsToSave } =
+      academicFields;
     await updateMutation.mutateAsync({ academicFields: fieldsToSave, resultFields });
     setSaved(true);
   };
