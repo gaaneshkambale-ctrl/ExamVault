@@ -14158,3 +14158,161 @@ the zero-submission-exam behavior could only be exercised via the unit
 tests, not live - documented here rather than left unverified.)
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Student Reports CSV export - expanded to include institutional student
+data (Registration No., academic hierarchy, Passed/Failed), matching
+the same request pattern as Result Analytics/Exam Reports before it.
+Old columns: Student, Email, Exams Attempted, Average %, Highest %,
+Lowest %, Pass %, Last Attempt. New columns: Student, Student ID/
+Registration No., Email, Program, Department, Semester, Division,
+Exams Submitted/Attempted, Exams Passed, Exams Failed, Average %,
+Highest %, Lowest %, Pass %, Last Attempt.
+
+First inspected the existing data source rather than assuming: this
+page already used AdminAttemptResultResponse (the same submitted-only
+reporting boundary as Exam Result/Result Analytics/Exam Reports) plus
+useStudents() -> GET /api/users/students -> StudentSummaryResponse.
+That DTO is deliberately narrower than UserListItemResponse (no "Users
+- View" permission needed, since Student Reports is on both the Admin
+and Instructor sidebars) and did NOT expose academicFields, even
+though AppUser.AcademicFieldsJson (existing column, no new model/
+migration) already stores it and UserListItemResponse already exposes
+it. Extended StudentSummaryResponse.cs with an optional, defaulted
+`academicFields` parameter (backward compatible) and updated
+ToStudentResponse in UsersController.cs to deserialize it - same "null
+when unset, never fabricated" convention UserListItemResponse already
+uses. Extended the frontend StudentSummary type to match.
+
+New pure `buildStudentSummaries()` in utils/studentSummary.ts (new
+file), kept separate from StudentReports.tsx's own on-screen StudentAgg/
+buildAggregates the same way buildExamSummaries is kept separate from
+AdminReports.tsx's on-screen perExamStats - export-only, on-screen
+dashboard completely untouched. Registration No. = the real
+AppUser.RollNumber column (not part of the JSON blob). Program/
+Department/Semester/Division = academicFields.program/department/
+semester/division, each independently null when that specific key is
+absent - covers both "never set" and "this Organization Type doesn't
+collect this field at all" (eg. a Coaching Institute's Batch/Course
+shape has no program/department/semester/division keys at all).
+Exams Passed/Failed from the existing per-attempt `.passed` flag, no
+new calculation invented. Row population matches this page's existing
+on-screen behavior exactly (only students with >=1 result in the
+filtered window get a row - no zero-attempt-student population
+conflict existed here the way it did for Exam Reports, so no extra
+options flag was needed).
+
+Verified: `dotnet build ExamVault.sln` - 0 errors, 0 warnings, full
+solution. `npm run build` - clean. `npm run test` - 126/126 passing (9
+new: real academic data passthrough; blank/null when a student has
+none set at all - never fabricated; partial academicFields, eg. a
+School-shape student with only `division` set and no program/
+department/semester keys; Exams Passed/Failed from real per-attempt
+results; Average/Highest/Lowest/Pass % across a mixed spread; a
+zero-result student correctly omitted, matching the on-screen table;
+Exams Submitted/Attempted as a raw count including a same-exam retake;
+Last Attempt picks the most recent submission; multi-student
+independence). Docker user-api + frontend rebuilt/redeployed.
+
+Live-verified against Greenfield University's real student Arjun
+Mehta, including a genuine "trust the data, not the other page's UI"
+moment: his exported row showed Program/Department/Semester/Division
+all populated ("B.Tech Computer Engineering"/"Computer Engineering"/
+"6"/"A"), which at first looked like it might contradict his own Edit
+Profile page - that page's cascading Program/Department/Semester/
+Division dropdowns showed only Program as selected, with Department/
+Semester/Division all sitting on "Select ... first" placeholders.
+Rather than trust either UI at face value, queried the raw
+AcademicFieldsJson column directly from the live ExamVault.UserDb
+database for this user's row, which returned exactly
+{"program":"B.Tech Computer Engineering","department":"Computer
+Engineering","semester":"6","division":"A",...} - confirming the CSV
+export is correct and the Edit Profile page has a pre-existing,
+separate bug: its dropdowns are keyed by IDs from the current
+academic-lists catalog, and can't reverse-map a legacy plain-text
+value ("Computer Engineering") to a selection when the catalog's
+options have since diverged (current Department options are "Computer
+Science"/"mahesh" - no "Computer Engineering" entry any more). That
+mismatch is a display bug in the pre-existing Edit User form, out of
+scope for this export task, and left untouched - noting it here in
+case it's worth a separate fix later. Full exported row: "Arjun Mehta,
+GU2026001,arjun.mehta@greenfield-univ-test.com,B.Tech Computer
+Engineering,Computer Engineering,6,A,1,1,0,100,100,100,100,9/13/2026" -
+Registration No., all four academic fields, and Exams Submitted/
+Passed/Failed (1/1/0) all match the real stored data and this
+student's real 100% result.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Performance Reports CSV export - expanded to include population/context
+columns, and fixed a real "fabricated 0%" bug in Improvement %. Old
+columns: Exam, Average %, Highest %, Lowest %, Pass %, Improvement %.
+New columns: Exam, Exam Code, Exam Type, Exam Date, Total Candidates,
+Submitted, Not Submitted, Passed, Failed, Average %, Highest %, Lowest
+%, Pass %, Improvement %.
+
+Investigated Improvement % first, as asked, before touching anything
+else. It is NOT a backend field - PerformanceReports.tsx computes it
+entirely client-side via the same "vs prior period" pattern every
+other KPI delta on this page already uses (dateRange.ts's
+getPriorPeriod + computeDelta): for a given exam, current-period
+average % vs. that SAME exam's average % in the immediately-preceding
+period of equal length. This is a real, already-established baseline
+(not invented for this task) - computeDelta already special-cases "no
+prior-period data at all" by returning `percent: null`, which the
+on-screen KPI card and table already render as the text "New" rather
+than a number (confirmed by reading the existing render code, lines
+201-204 and 266 of PerformanceReports.tsx - both already handled this
+correctly before today).
+
+The bug was isolated to the CSV export path only: `exportRows` did
+`p.improvement.percent ?? 0`, silently turning "no baseline exists"
+into a literal 0, which - unlike the on-screen "New" label - looks
+exactly like a real, meaningful "0% improvement" in a spreadsheet.
+Fixed by exporting `p.improvement.percent ?? ''` (blank) instead,
+matching the "leave blank rather than invent a value" convention
+already used for Student Reports' missing academic fields - the
+existing calculation itself was correct and untouched, only the
+export's null-handling was wrong.
+
+Added the population/context columns by reusing buildExamSummaries()
+(examSummary.ts) - the same authoritative computeExamAttendance()-based
+Total Candidates/Submitted/Not Submitted/Passed/Failed already used by
+Exam Result, Result Analytics and Exam Reports, no new formula. New
+`utils/performanceSummary.ts` -> `buildPerformanceSummaries()` wraps
+buildExamSummaries() and adds only the one thing specific to this
+page: the same current-vs-prior-period Improvement % calculation
+described above, computed independently per exam (a prior-period
+result for one exam never affects another exam's baseline). Kept
+separate from PerformanceReports.tsx's own on-screen `performanceByExam`
+memo (simple current/prior counts over filtered results only, not
+roster-based) - same export-only-memo pattern as every other report
+this session. Added useStudents() (Instructor-safe endpoint, no "Users
+- View" permission needed - Performance Reports is on both the Admin
+and Instructor sidebars, confirmed via InstructorSidebar.tsx) for the
+eligible-roster input buildExamSummaries needs.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 133/133 passing
+(7 new: reuses the same authoritative attendance numbers as the other
+exports; Exam Code/Type/Date passthrough; a real current-vs-prior
+average comparison producing a real percent+direction; `percent: null`
+- not a fabricated 0 - when the exam has zero prior-period results;
+a genuine 0%/flat improvement when both periods truly have the same
+average, kept distinct from the no-baseline case; per-exam
+independence of the Improvement % baseline; attendance computed from
+ALL results, not just the current-period ones). Docker frontend
+rebuilt/redeployed. Live-verified against Greenfield University's real
+"University Semester Exam" - this tenant has no prior-period data at
+all, so this was a genuine, non-contrived live test of the exact bug
+being fixed: the on-screen Improvement KPI card already showed "New",
+and the exported CSV row was "University Semester Exam,PRO-2026-
+7FE35C,Assessment Exam,9/13/2026,1,1,0,1,0,100,100,100,100," - note the
+trailing comma with nothing after it: Improvement % is genuinely blank
+in the CSV, not 0. Total Candidates/Submitted/Not Submitted/Passed/
+Failed (1/1/0/1/0) match the same real numbers already confirmed for
+this exam in Exam Result/Result Analytics/Exam Reports.
+
+Not yet committed - awaiting explicit user instruction to commit.

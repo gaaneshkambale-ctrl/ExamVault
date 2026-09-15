@@ -10,11 +10,13 @@ import ScoreDistributionChart from '../../components/ScoreDistributionChart';
 import { TargetIcon, ArrowUpIcon, ArrowDownIcon, CheckCircleIcon, TrendingUpIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
+import { useStudents } from '../../hooks/useUsers';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import { SCORE_BUCKETS } from '../../utils/scoreBuckets';
 import { bucketByDay, computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 import type { AdminAttemptResultResponse } from '../../types/result';
+import { buildPerformanceSummaries } from '../../utils/performanceSummary';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
@@ -25,6 +27,10 @@ function percentOf(r: AdminAttemptResultResponse): number {
 export default function PerformanceReports() {
   const { data: exams } = useExams();
   const { data: allResults, isLoading } = useAdminResultsForAllExams(exams);
+  // Instructor-safe endpoint (no "Users - View" permission needed) - same
+  // reason Result Analytics/Exam Reports/Student Reports use it, since
+  // Performance Reports is on both the Admin and Instructor sidebars.
+  const { data: students } = useStudents();
 
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [category, setCategory] = useState('All');
@@ -114,6 +120,17 @@ export default function PerformanceReports() {
       });
   }, [exams, current.results, prior.results, filteredExamIds]);
 
+  // Export-only: reuses the same authoritative computeExamAttendance()-based
+  // Total Candidates/Submitted/Not Submitted/Passed/Failed already used by
+  // Exam Result/Result Analytics/Exam Reports, kept separate from
+  // `performanceByExam` above (that on-screen table/KPI cards are untouched
+  // by this - simple current-vs-prior counts over filtered results only,
+  // not roster-based attendance).
+  const performanceSummaries = useMemo(
+    () => buildPerformanceSummaries(current.results, allResults ?? [], prior.results, exams ?? [], students ?? []),
+    [current.results, allResults, prior.results, exams, students],
+  );
+
   useEffect(() => {
     setPage(1);
   }, [category, examFilter, range]);
@@ -138,15 +155,41 @@ export default function PerformanceReports() {
           setExamFilter('All');
         }}
         exportFilename="performance-reports"
-        exportHeaders={['Exam', 'Average %', 'Highest %', 'Lowest %', 'Pass %', 'Improvement %']}
+        exportHeaders={[
+          'Exam',
+          'Exam Code',
+          'Exam Type',
+          'Exam Date',
+          'Total Candidates',
+          'Submitted',
+          'Not Submitted',
+          'Passed',
+          'Failed',
+          'Average %',
+          'Highest %',
+          'Lowest %',
+          'Pass %',
+          'Improvement %',
+        ]}
         exportRows={() =>
-          performanceByExam.map((p) => [
-            p.exam.title,
-            Math.round(p.averageScore),
-            Math.round(p.highestScore),
-            Math.round(p.lowestScore),
-            Math.round(p.passPercent),
-            p.improvement.percent ?? 0,
+          performanceSummaries.map((p) => [
+            p.examTitle,
+            p.examCode ?? '',
+            p.examType ?? '',
+            p.examDate ? new Date(p.examDate).toLocaleDateString() : '',
+            p.totalCandidates,
+            p.submitted,
+            p.notSubmitted,
+            p.passed,
+            p.failed,
+            p.averagePercent,
+            p.highestPercent,
+            p.lowestPercent,
+            p.passPercent,
+            // No real prior-period baseline for this exam -> leave blank
+            // rather than presenting 0% as a meaningful improvement (the
+            // on-screen card/table already show "New" for this same case).
+            p.improvement.percent ?? '',
           ])
         }
       >
