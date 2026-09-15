@@ -8,13 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUsers } from '../../hooks/useUsers';
 import { useRolePermissions, useUpdateRolePermissions } from '../../hooks/useRolePermissions';
 import { BarChartIcon, EditIcon, SendIcon, ShieldIcon, UsersIcon, ViewIcon } from '../../components/icons/ActionIcons';
-import {
-  COSMETIC_PERMISSIONS,
-  COSMETIC_ROLE_PERMISSIONS,
-  ADMIN_PERMISSIONS,
-  STUDENT_PERMISSIONS,
-  INSTRUCTOR_PERMISSIONS,
-} from '../../constants/cosmeticRolePermissions';
+import { COSMETIC_PERMISSIONS, STUDENT_PERMISSIONS, INSTRUCTOR_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
 import type { UserRole } from '../../types/user';
 
 function SearchIcon() {
@@ -156,14 +150,18 @@ interface RoleRow {
 // assignable or editable from a tenant's own screen, so showing a row that
 // can never be interacted with was just confusing. It's still mentioned in
 // the banner below for context.
+//
+// Admin is also deliberately not listed here, for the same "never actually
+// usable" reason: this page is Admin-only (not on InstructorSidebar's nav
+// at all), so whoever is viewing it is always the current Admin, and
+// `canEdit`'s `!isOwnRole` check means its Edit button would always be
+// disabled ("You can't edit the permissions of your own role") for every
+// real viewer - a row nobody could ever act on.
+//
+// Viewer was never a real, assignable UserRole to begin with (isReal:
+// false, "Not Available", 0 users - see cosmeticRolePermissions.ts) -
+// dead/decorative, not wired to anything.
 const roles: RoleRow[] = [
-  {
-    role: 'Admin',
-    description: 'Manage exams, questions, AI generation, and users.',
-    variant: 'primary',
-    isReal: true,
-    defaultPermissions: ADMIN_PERMISSIONS,
-  },
   {
     role: 'Instructor',
     description: 'Create exams, manage questions and view results.',
@@ -177,13 +175,6 @@ const roles: RoleRow[] = [
     variant: 'secondary',
     isReal: true,
     defaultPermissions: STUDENT_PERMISSIONS,
-  },
-  {
-    role: 'Viewer',
-    description: 'View-only access to reports and results.',
-    variant: 'info',
-    isReal: false,
-    defaultPermissions: COSMETIC_ROLE_PERMISSIONS.Viewer,
   },
 ];
 
@@ -281,10 +272,12 @@ export default function RolesPermissions() {
       <Alert variant="secondary" className="small mt-3">
         ExamVault currently supports four authorization roles - <strong>Admin</strong>, <strong>Student</strong>,{' '}
         <strong>Instructor</strong>, and <strong>Super Admin</strong> - enforced by the app's route protections.
-        Super Admin is used for platform and tenant management and isn't assignable from this screen. The
-        permission checklist below can be edited and is saved per role. Some permissions are now genuinely
-        enforced server-side - unchecking one, saving, and logging the affected role back in will actually
-        block that action. Others remain informational only until their own backend enforcement is wired up.
+        Only Instructor and Student are editable below: Super Admin is platform-level and never assignable from
+        a tenant screen, and Admin isn't shown either since this page is Admin-only, so you'd only ever see your
+        own role here, which can't be edited from this screen. The permission checklist below can be edited and
+        is saved per role. Some permissions are now genuinely enforced server-side - unchecking one, saving, and
+        logging the affected role back in will actually block that action. Others remain informational only
+        until their own backend enforcement is wired up.
       </Alert>
 
       <Row className="g-3 mt-1">

@@ -14247,6 +14247,87 @@ Not yet committed - awaiting explicit user instruction to commit.
 
 ---
 
+Organization Settings - removed the "Branding & Assets", "Email
+Settings" and "Security & Compliance" tabs. Before touching anything,
+traced what each tab actually rendered: none of the three had a real
+content branch - the tab-switch ternary in OrganizationSettings.tsx
+only special-cased 'Reports & Documents' and 'Academic Configuration',
+and every other non-'General' tab fell through to a generic "{tab}'s
+settings are coming soon" placeholder Card. The real Logo/Favicon
+upload and Default Branding Colors UI (despite what "Branding & Assets"
+implied) already lives under the General tab, not a separate one - so
+nothing with real functionality was removed, only three dead
+placeholder stubs and their now-unreachable fallback branch. (The
+Settings dashboard's separate "Security Settings" card/page -
+Fullscreen Enforcement, Tab Switching Detection, Session Timeout, etc.
+- is a different, real, already-fully-built feature at a different
+route; not touched, not related to this stub tab.)
+
+TABS narrowed from 6 entries to ['General', 'Academic Configuration',
+'Reports & Documents']; the dead `activeTab !== 'General'` "coming
+soon" fallback branch removed along with it, since it's now
+unreachable (every remaining Tab value is handled by one of the three
+explicit branches). No backend/type changes needed - the stub tabs
+never had settings fields wired to save/load.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 133/133 passing
+(unaffected - UI-only removal of dead placeholder content, no logic
+to test). Docker frontend rebuilt/redeployed. Live-verified on
+Greenfield University's real Organization Settings page: exactly
+General/Academic Configuration/Reports & Documents remain, the real
+Logo & Visual Identity and Institution Information cards on General
+are unaffected.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Roles & Permissions - removed the Admin and Viewer rows from the Roles
+table, per explicit request ("admin and viewer... there is no use").
+Since "remove Admin" is ambiguous and could mean several different
+things with very different blast radii (delete the whole Admin role
+from the app vs. just its row on this one screen), asked the user to
+confirm scope first rather than guess - they chose "both the Admin row
+and the Viewer row from this table" (the Admin role itself keeps
+working everywhere else: login, route protection, sidebar, creating
+Admin users).
+
+Investigated why each was actually "no use" before deleting:
+- Viewer was never a real, assignable UserRole (isReal: false, 0 users,
+  "Not Available" status) - dead/decorative, same pattern as the
+  Branding & Assets/Email Settings/Security & Compliance stub tabs
+  removed earlier this session.
+- Admin's row was unusable for a different, verifiable reason: this
+  page isn't on InstructorSidebar's nav at all (Admin-only), so
+  whoever views it is always the current Admin, and canEdit's
+  `!isOwnRole` check means Admin's own Edit button was ALWAYS disabled
+  ("You can't edit the permissions of your own role") for 100% of this
+  page's real audience - a row nobody could ever act on.
+
+`roles` array in RolesPermissions.tsx now only has Instructor/Student.
+Updated the top banner to explain why Admin isn't listed (mirroring
+the existing Super Admin explanation already there). Removed now-dead
+imports/exports this left behind: `ADMIN_PERMISSIONS`/
+`COSMETIC_ROLE_PERMISSIONS` imports from RolesPermissions.tsx, and
+`COSMETIC_ROLE_PERMISSIONS`/`CosmeticRole` (fully unused everywhere
+after this) from cosmeticRolePermissions.ts. `ADMIN_PERMISSIONS` itself
+stays in that file - still used by CreateUser.tsx/OrganizationDetails.
+tsx/UserDetails.tsx. `COSMETIC_ROLES` (drives Create User's disabled
+"(not available)" role dropdown options, including Viewer) is a
+separate, still-real feature - deliberately left untouched, out of
+scope for what was asked.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 133/133 passing
+(unaffected - UI-only row removal, no calculation logic touched).
+Docker frontend rebuilt/redeployed. Live-verified on Greenfield
+University: Roles & Permissions now lists only Instructor/Student (Total
+Roles: 2), banner text updated, and Instructor's Edit modal still opens
+and saves correctly - the remaining real functionality is unaffected.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
 Performance Reports CSV export - expanded to include population/context
 columns, and fixed a real "fabricated 0%" bug in Improvement %. Old
 columns: Exam, Average %, Highest %, Lowest %, Pass %, Improvement %.
