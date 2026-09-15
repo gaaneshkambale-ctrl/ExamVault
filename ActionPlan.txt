@@ -13364,3 +13364,98 @@ top-performers ranking, real tenant branding/address, and "Generated
 by: Dr. Priya Sharma" (the real logged-in user, not a fake name).
 
 Committed and pushed to origin/dev after this entry.
+
+--------------------------------------------------------------------
+User's critique went further than the sample preview: "Student Result
+and Exam Result should not be the same document" - and this was
+correct about the REAL, live production PDF generator too, not just
+my earlier sample-preview work. generateExamResultsBooklet() (the
+"Exam Result" download from the Exam Results page) just called
+drawReport (drawStudentReport/drawAcademicReport - the exact same
+per-student page real students already download individually) once
+per entry with page breaks between them - literally the individual
+Student Result template repeated N times, exactly the complaint.
+
+Also flagged before touching anything: the user's own "Exam Result"
+spec (Exam Summary KPIs, Result Distribution, Score Distribution,
+Student table, Performance Analysis with avg/high/low/pass%/rank,
+Insights/Recommendations) overlaps ~80% with the REAL, already-existing
+Detailed Exam Report (exportAdvanceExamReportPdf.ts) - building it as
+spec'd would just move the "two names, same document" problem up one
+level. Confirmed with the user: Exam Result stays a LIGHTWEIGHT roster
+(exam info + student table + basic pass/fail/absent counts only) -
+score distribution, rank/percentile and insights stay exclusive to
+Detailed Exam Report, keeping all three genuinely distinct. Also
+confirmed proceeding despite this touching the real, live-serving PDF
+generator (bigger blast radius than anything else this session).
+
+Change made (frontend only, generateResultPdf.ts): added a new
+drawExamResultRoster() function - exam info panel, Total Candidates/
+Passed/Failed/Pass Rate stat cards, a paginating Student Results table
+(#/Roll No/Student Name/Marks/%/Result, gated by Result Fields same as
+everywhere else) - and rewired generateExamResultsBooklet() to call it
+instead of looping drawReport per entry. drawStudentReport/
+drawAcademicReport (the real individual Student Result document, used
+by generateResultPdf for single-student downloads) were NOT touched -
+already correctly the per-student document, so "smallest clean
+architectural change" meant fixing only the one function that was
+actually wrong. Extracted the pass/fail/rate math into an exported
+pure function, computeExamResultSummary(), for direct unit testing.
+Detailed Exam Report (exportAdvanceExamReportPdf.ts) untouched, as
+agreed.
+
+Deferred (flagged, not silently dropped): adding Department/Semester/
+Division to the individual Student Result document, per the user's
+"Student Information" spec - genuinely buildable now (real data exists
+via the Program/Department/Semester/Division feature built earlier
+this session) but needs wiring through 3 separate call sites
+(ExamResults.tsx, StudentResults.tsx, ResultDetails.tsx already
+underpopulate even "Program" today - only the student's own self-
+download does). Kept out of this pass to keep the change surgical, per
+the user's own "smallest clean architectural change required"
+instruction; the core "same document" complaint didn't require it.
+
+Added generateResultPdf.test.ts - this frontend had a real vitest
+setup already (`npm run test`, jsdom environment, existing
+`*.test.ts(x)` files) that just hadn't been pointed at any PDF-
+generation code yet. 9 tests: 4 pure computeExamResultSummary cases
+(mixed pass/fail rounding, aggregate-not-single-student behavior,
+100%/0% edges, empty), plus 5 behavioral tests against the REAL
+generateExamResultsBooklet (only loadTenantBranding mocked - every
+drawing helper is genuinely exercised): asserts zero addPage() calls
+for a small class (the direct regression guard against the old
+N-pages-per-student behavior), the correct sanitized filename, that
+"EXAM RESULT"/all 3 student names/correct PASS-FAIL counts are drawn,
+that "OFFICIAL EXAMINATION REPORT" (the Student Result title) never
+appears in an Exam Result roster, and that Result Fields config
+(studentId) correctly hides/shows Roll No. Hit one real snag: jsPDF
+attaches every API method (addPage/text/save/...) as an own instance
+property via its plugin system, not on jsPDF.prototype - vi.spyOn(
+jsPDF.prototype, ...) silently can't see them (confirmed by directly
+inspecting a real instance in Node). Fixed by mocking the `jspdf`
+module itself with a thin subclass that wraps each real instance's
+own addPage/text in vi.fn() passthroughs (still calling the real
+implementation) and no-ops save() (jsdom has no real download
+mechanism to drive), rather than spying at the class level.
+
+Verified: full real build command (`npm run build`, not a narrower
+check) - 0 errors, caught one test-file-only type error tsc -b flagged
+that vitest's looser transform hadn't (a bad `as []` cast in the
+jsPDF-wrapping mock) - fixed and reverified. Full test suite
+(`npm run test`) - 94/94 passing across 10 files, confirmed stable
+across 4 consecutive full-suite runs after one transient/environmental
+single-run blip that didn't reproduce again (isolated single-file runs
+were consistently 9/9 clean throughout). Lint clean, same 4
+pre-existing warnings, none new. Docker frontend rebuilt/redeployed for
+the real generateResultPdf.ts change (not needed again for the test-
+only addition after - test files never ship in the production build).
+Live-verified against the real running app on Greenfield University: 
+downloaded the real single-student "Student Result" PDF (unchanged, 
+confirmed byte-for-byte-equivalent content/behavior to before this 
+change) and the real "Exam Result" booklet for the same exam - genuinely
+a roster now (21.8KB vs the old ~94KB repeated-page version), correct
+EXAM RESULT header, correct exam info, correct 1/1/0/100% Total/Passed/
+Failed/Pass Rate stat cards, correct student row (GU2026001, Arjun
+Mehta, 2/2, 100%, PASS).
+
+Committed and pushed to origin/dev after this entry.

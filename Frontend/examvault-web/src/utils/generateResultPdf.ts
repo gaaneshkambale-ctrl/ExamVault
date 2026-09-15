@@ -929,7 +929,159 @@ function drawAcademicReport(
   doc.text('This is a computer-generated report and does not require a physical signature.', PAGE_WIDTH / 2, y, { align: 'center' });
 }
 
-/** Picks the right per-Organization-Type drawing function - the compact single-page academic report, or the richer multi-panel dashboard for every other variant. Keeps generateResultPdf/generateExamResultsBooklet themselves variant-agnostic. */
+/** Pass/fail/rate aggregation for the Exam Result roster - exported (pure, no jsPDF dependency) so it's directly unit-testable without mocking a PDF document. */
+export function computeExamResultSummary(entries: { result: { passed: boolean } }[]): {
+  total: number;
+  passed: number;
+  failed: number;
+  passRate: number;
+} {
+  const total = entries.length;
+  const passed = entries.filter((e) => e.result.passed).length;
+  const failed = total - passed;
+  const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+  return { total, passed, failed, passRate };
+}
+
+/**
+ * "Exam Result" - an exam-level roster covering every candidate, answering
+ * "how did everyone perform" - NOT the per-student "what was this one
+ * student's result" document (that's drawStudentReport/drawAcademicReport,
+ * used by generateResultPdf and, previously, mistakenly repeated N times
+ * for this booklet too - see ActionPlan.txt). Deliberately lightweight:
+ * exam info + pass/fail/absent counts + one student table, nothing more -
+ * score distribution, rank/percentile, section/question analysis and
+ * insights stay exclusive to the Detailed Exam Report
+ * (exportAdvanceExamReportPdf.ts) so the two documents don't end up the
+ * same thing one level up from where Student Result/Exam Result used to
+ * collide.
+ */
+function drawExamResultRoster(doc: jsPDF, examTitle: string, entries: ExamResultBookletEntry[], branding: TenantBranding, generatedAt: Date): void {
+  let y = MARGIN;
+  const logoH = 13;
+  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo, branding.showLogoOnReports);
+  if (branding.hasOwnLogo) {
+    const logoW = branding.logo ? logoH * branding.logo.ratio : 20;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    setColor(doc, 'setTextColor', TEXT_DARK);
+    doc.text(branding.name, MARGIN + logoW + 4, y + 6);
+  }
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  setColor(doc, 'setTextColor', TEXT_MUTED);
+  doc.text(`Generated On: ${generatedAt.toLocaleString()}`, PAGE_WIDTH - MARGIN, y + 2, { align: 'right' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(17);
+  setColor(doc, 'setTextColor', TEXT_DARK);
+  doc.text('EXAM RESULT', PAGE_WIDTH - MARGIN, y + 10, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  setColor(doc, 'setTextColor', TEXT_MUTED);
+  doc.text('All Candidates - Combined Result Summary', PAGE_WIDTH - MARGIN, y + 15, { align: 'right' });
+  setColor(doc, 'setDrawColor', branding.headerColor);
+  doc.setLineWidth(0.6);
+  doc.line(MARGIN, y + 19, PAGE_WIDTH - MARGIN, y + 19);
+  y += 25;
+
+  // Exam info panel - totalMarks/passingMarks are exam-level facts, so any
+  // entry's `result` carries the same values; the first is as good as any.
+  const first = entries[0];
+  const totalMarks = first.result.totalMarks;
+  const passingMarks = first.result.passingMarks;
+  const passingPercent = totalMarks > 0 ? Math.round((passingMarks / totalMarks) * 100) : 0;
+  const infoPanelH = 26;
+  panel(doc, MARGIN, y, CONTENT_WIDTH, infoPanelH);
+  {
+    const colW2 = CONTENT_WIDTH / 2;
+    let ly = y + 7;
+    fieldRow(doc, 'Exam Name', examTitle, MARGIN + 4, ly, 28, colW2 - 8);
+    ly += 6.5;
+    fieldRow(doc, 'Exam Code', first.context.examCode ?? '—', MARGIN + 4, ly, 28, colW2 - 8);
+    ly += 6.5;
+    fieldRow(doc, 'Exam Type', first.context.examType ?? '—', MARGIN + 4, ly, 28, colW2 - 8);
+
+    let ry = y + 7;
+    const rightX = MARGIN + colW2 + 4;
+    fieldRow(
+      doc,
+      'Duration',
+      first.context.durationMinutes ? `${first.context.durationMinutes} Minutes` : '—',
+      rightX,
+      ry,
+      26,
+      colW2 - 8,
+    );
+    ry += 6.5;
+    fieldRow(doc, 'Total Marks', String(totalMarks), rightX, ry, 26, colW2 - 8);
+    ry += 6.5;
+    fieldRow(doc, 'Passing Marks', `${passingMarks} (${passingPercent}%)`, rightX, ry, 26, colW2 - 8);
+  }
+  y += infoPanelH + 6;
+
+  // Total Candidates / Passed / Failed / Pass Rate
+  const { total, passed, failed, passRate } = computeExamResultSummary(entries);
+  const statGap = 4;
+  const statCardH = 24;
+  const statW = (CONTENT_WIDTH - statGap * 3) / 4;
+  drawStatCard(doc, MARGIN, y, statW, statCardH, BRAND, 'Total Candidates', String(total), TEXT_DARK);
+  drawStatCard(doc, MARGIN + (statW + statGap), y, statW, statCardH, GREEN, 'Passed', String(passed), GREEN);
+  drawStatCard(doc, MARGIN + (statW + statGap) * 2, y, statW, statCardH, RED, 'Failed', String(failed), RED);
+  drawStatCard(doc, MARGIN + (statW + statGap) * 3, y, statW, statCardH, AMBER, 'Pass Rate', `${passRate}%`, AMBER);
+  y += statCardH + 8;
+
+  // Student Results table - paginates via ensurePageSpace, re-drawing the
+  // header on any page it jumps to so a long roster stays readable.
+  const tableColW = [10, 28, CONTENT_WIDTH - 10 - 28 - 24 - 20 - 24, 24, 20, 24];
+  const headers = ['#', 'Roll No', 'Student Name', 'Marks', '%', 'Result'];
+  const rowH = 6.5;
+  const drawHeader = () => {
+    drawTableHeader(doc, MARGIN, y, tableColW, headers, rowH);
+    y += rowH;
+  };
+  y = ensurePageSpace(doc, y, rowH * 2);
+  drawHeader();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  entries.forEach(({ result, context }, i) => {
+    const beforeY = y;
+    y = ensurePageSpace(doc, y, rowH);
+    if (y !== beforeY) {
+      drawHeader();
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+    }
+    if (i % 2 === 1) {
+      setColor(doc, 'setFillColor', { r: 250, g: 250, b: 251 });
+      doc.rect(MARGIN, y, CONTENT_WIDTH, rowH, 'F');
+    }
+    const percent = result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
+    const rollNo = isResultFieldEnabled(context, branding, 'studentId') ? (context.rollNumber ?? '—') : '—';
+    const cells = [
+      String(i + 1),
+      rollNo,
+      context.studentName ?? 'Unknown',
+      `${result.totalScore}/${result.totalMarks}`,
+      `${percent}%`,
+      result.passed ? 'PASS' : 'FAIL',
+    ];
+    let cx = MARGIN + 2;
+    cells.forEach((c, ci) => {
+      if (ci === 5) {
+        setColor(doc, 'setTextColor', result.passed ? GREEN : RED);
+        doc.setFont('helvetica', 'bold');
+      } else {
+        setColor(doc, 'setTextColor', TEXT_DARK);
+        doc.setFont('helvetica', 'normal');
+      }
+      doc.text(c, cx, y + rowH - 2);
+      cx += tableColW[ci];
+    });
+    y += rowH;
+  });
+}
+
+/** Picks the right per-Organization-Type drawing function - the compact single-page academic report, or the richer multi-panel dashboard for every other variant. Keeps generateResultPdf itself variant-agnostic. */
 function drawReport(
   doc: jsPDF,
   result: AdminAttemptResultResponse | ResultSummaryResponse,
@@ -974,22 +1126,18 @@ export interface ExamResultBookletEntry {
   context: ResultPdfContext;
 }
 
-/** One combined PDF for a whole exam - every student's full report (page 1 summary + page 2 question-wise detail), one after another, reusing the exact same per-student drawing as the single-student download so the two never disagree. Can run to many pages for a large class (2+ pages per student). */
+/**
+ * "Exam Result" - an exam-level roster of every candidate (see
+ * drawExamResultRoster's own comment for why this is deliberately NOT the
+ * per-student Student Result template repeated once per entry, which is
+ * what this function used to do).
+ */
 export async function generateExamResultsBooklet(examTitle: string, entries: ExamResultBookletEntry[]): Promise<void> {
   if (entries.length === 0) return;
   const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
-  const qrDataUrls = await Promise.all(
-    entries.map(({ result }) =>
-      branding.showQrCodeForVerification
-        ? QRCode.toDataURL(`${window.location.origin}/results/${result.examId}`, { width: 160, margin: 1 }).catch(() => null)
-        : Promise.resolve(null),
-    ),
-  );
-  entries.forEach(({ result, context }, i) => {
-    drawReport(doc, result, context, branding, generatedAt, i === 0, qrDataUrls[i]);
-  });
+  drawExamResultRoster(doc, examTitle, entries, branding, generatedAt);
   stampFooters(
     doc,
     generatedAt,
