@@ -13302,3 +13302,65 @@ and re-downloaded - confirmed "Page 1 of 1", zero regression to the
 original single-student sample.
 
 Committed and pushed to origin/dev after this entry.
+
+--------------------------------------------------------------------
+User asked for the "Advance Report" as well, same as Exam Result -
+explicitly "because student and exam result [would be] same
+otherwise" (both are the same per-student template, just repeated -
+adding this makes the sample preview feature genuinely show 3
+DIFFERENT report shapes, not one template twice).
+
+This one is a fundamentally different, much bigger document:
+Frontend/examvault-web/src/utils/exportAdvanceExamReportPdf.ts, a
+696-line class-wide analytics generator (exam overview, stat cards,
+donut chart, score distribution bars, student performance table, top
+performers, section stats, hardest questions, recommendations) -
+nothing like the single-student per-page template Student
+Result/Exam Result share. Building a third hand-drawn copy of this
+would have reintroduced the exact draw-path-drift risk already fixed
+twice this session, and would likely have been a lower-fidelity,
+simplified imitation of a genuinely complex real report.
+
+Decision: call the REAL exportAdvanceExamReportPdf() with constructed
+sample data instead of duplicating any drawing logic - zero drift
+risk since it's literally the real code. Required building valid
+sample data across 5 interconnected types (ExamResponse using its
+real CreateExamRequest+ExamSettings shape; ExamResultScheme via the
+existing getExamResultScheme('Assessment Exam') factory rather than
+hand-building one; AdvanceReportData with 3 sample student rows via
+new buildSampleAttempt/buildSampleUser helpers - Priya Sharma 92%
+pass, John Doe 82% pass, Arjun Mehta 36% fail, plus one absent
+student; AdvanceReportExtras with sample section-stats and
+question-difficulty entries, using the REAL current tenant/user via
+useMyTenant()/useAuth() for organization/generatedByName - consistent
+with how the other 2 samples already use live draft/logo/signature
+rather than fake branding).
+
+Since exportAdvanceExamReportPdf() calls doc.save() internally and
+returns void (no way to intercept for an in-tab blob preview without
+touching its signature), and modifying the real, working exporter
+just to support a settings-page sample carried more regression risk
+than it was worth: the "Preview PDF" button is hidden specifically
+for this report type (Download Sample only), and the inline HTML
+preview panel is replaced with a plain explanatory note for this type
+("this report is class-wide analytics, multiple pages - download the
+sample to see it") rather than a wrong/misleading mockup.
+
+Added "Detailed Exam Report" as a third sampleReportTypeOptions entry,
+gated by the same isReportTypeAvailable(orgType, 'detailedExamReport')
+already used elsewhere (DashboardSidebar.tsx, AdvanceExamReport.tsx
+itself) for this exact Organization Type rule - reused, not
+reinvented.
+
+Frontend build clean (the real function's strict types caught any
+sample-data shape mistakes immediately - a good sign the constructed
+data was correct). Docker frontend rebuilt/redeployed. Live-verified:
+selecting "Detailed Exam Report" hides Preview PDF, shows the
+explanatory placeholder, and "Download Sample" produces a genuine
+2-page PDF via the real generator - correct 4-candidate/3-attempted/
+2-pass/1-fail/1-absent breakdown, correct per-student rows and roll
+numbers, correct score distribution and section stats, correct
+top-performers ranking, real tenant branding/address, and "Generated
+by: Dr. Priya Sharma" (the real logged-in user, not a fake name).
+
+Committed and pushed to origin/dev after this entry.

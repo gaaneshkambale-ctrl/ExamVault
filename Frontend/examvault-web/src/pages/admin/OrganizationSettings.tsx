@@ -30,6 +30,15 @@ import {
 } from '../../constants/organizationTypeFieldCatalog';
 import { extractServerError } from '../../utils/apiError';
 import { isReportTypeAvailable, REPORT_TYPE_CATALOG, type ReportTypeKey } from '../../constants/reportTypeCatalog';
+import { useMyTenant } from '../../hooks/useTenants';
+import { useAuth } from '../../hooks/useAuth';
+import { getExamResultScheme } from '../../utils/examResultScheme';
+import { exportAdvanceExamReportPdf } from '../../utils/exportAdvanceExamReportPdf';
+import type { AdvanceReportData, AdvanceReportStudentRow, DistributionBucket } from '../../utils/advanceExamReport';
+import type { AdvanceReportExtras, SectionPerformanceStat, QuestionDifficultyStat } from '../../utils/advanceExamReportAnalysis';
+import type { ExamResponse } from '../../types/exam';
+import type { UserListItem } from '../../types/user';
+import type { AdminAttemptResultResponse } from '../../types/result';
 import {
   MARGIN,
   CONTENT_WIDTH,
@@ -186,7 +195,162 @@ const SAMPLE_REPORT_2 = {
   verificationCode: 'SXU2026002',
 };
 
-type SampleReportType = Extract<ReportTypeKey, 'studentResult' | 'examResultBooklet'>;
+type SampleReportType = Extract<ReportTypeKey, 'studentResult' | 'examResultBooklet' | 'detailedExamReport'>;
+
+// Sample data for the "Advance Report" (Detailed Exam Report) preview -
+// deliberately calls the REAL exportAdvanceExamReportPdf.ts (696 lines:
+// exam overview, score distribution donut, pass/fail summary, per-student
+// table, section stats, hardest questions, recommendations) with this
+// fake data instead of hand-drawing a third copy of that layout, which
+// would reintroduce the exact same draw-path drift the Result Fields fix
+// (and Exam Result's shared drawSampleReportPage) already closed off for
+// the other two sample types.
+const SAMPLE_ADVANCE_EXAM: ExamResponse = {
+  id: 'sample-exam-id',
+  title: 'C# Programming - Final Assessment',
+  examCode: 'SAMPLE-EXAM-01',
+  description: 'Sample exam used only for this settings-page preview.',
+  category: 'Programming',
+  containsSections: false,
+  creationMethod: 'Manual',
+  durationMinutes: 60,
+  totalMarks: 50,
+  passingMarks: 20,
+  instructions: '',
+  examTypeId: null,
+  tags: '',
+  academicFields: null,
+  shuffleQuestions: false,
+  shuffleOptions: false,
+  showResult: true,
+  showCorrectAnswers: true,
+  allowReview: true,
+  startAtUtc: null,
+  endAtUtc: null,
+  maxAttempts: 1,
+  negativeMarkingEnabled: false,
+  negativeMarks: 0,
+  showSectionSummaryToStudents: true,
+  allowCalculator: false,
+  allowNotes: false,
+  autoSubmitOnTimeEnd: true,
+  confirmBeforeSubmit: true,
+  status: 'Published',
+  totalQuestions: 5,
+  createdOn: new Date().toISOString(),
+  examTypeName: 'Assessment Exam',
+  tenantId: 'sample-tenant',
+  createdByUserId: 'sample-admin',
+  createdByName: 'Sample Admin',
+};
+
+function buildSampleAttempt(
+  overrides: Partial<AdminAttemptResultResponse> & Pick<AdminAttemptResultResponse, 'attemptId' | 'userId' | 'totalScore' | 'passed'>,
+): AdminAttemptResultResponse {
+  return {
+    examId: SAMPLE_ADVANCE_EXAM.id,
+    examTitle: SAMPLE_ADVANCE_EXAM.title,
+    totalMarks: 50,
+    passingMarks: 20,
+    submittedAtUtc: new Date().toISOString(),
+    questions: [],
+    hasPendingGrading: false,
+    fullscreenExitCount: 0,
+    noFaceDetectedCount: 0,
+    multipleFacesDetectedCount: 0,
+    tabSwitchCount: 0,
+    multipleTabsCount: 0,
+    copyPasteCount: 0,
+    rightClickCount: 0,
+    multipleMonitorsCount: 0,
+    correctCount: 4,
+    incorrectCount: 1,
+    skippedCount: 0,
+    accuracy: 80,
+    rank: null,
+    percentile: null,
+    totalParticipants: null,
+    ...overrides,
+  };
+}
+
+function buildSampleUser(overrides: Partial<UserListItem> & Pick<UserListItem, 'id' | 'fullName' | 'email' | 'rollNumber'>): UserListItem {
+  return {
+    role: 'Student',
+    createdAtUtc: new Date().toISOString(),
+    isActive: true,
+    phoneNumber: null,
+    hasPhoto: false,
+    tenantId: 'sample-tenant',
+    lastLoginAtUtc: null,
+    createdByUserId: null,
+    createdByName: null,
+    academicFields: null,
+    ...overrides,
+  };
+}
+
+const SAMPLE_STUDENT_PRIYA = buildSampleUser({ id: 'sample-2', fullName: 'Priya Sharma', email: 'priya.sharma@example.com', rollNumber: 'SXU2026002' });
+const SAMPLE_STUDENT_JOHN = buildSampleUser({ id: 'sample-1', fullName: 'John Doe', email: 'john.doe@example.com', rollNumber: 'SXU2026001' });
+const SAMPLE_STUDENT_ARJUN = buildSampleUser({ id: 'sample-3', fullName: 'Arjun Mehta', email: 'arjun.mehta@example.com', rollNumber: 'SXU2026003' });
+const SAMPLE_STUDENT_ABSENT = buildSampleUser({ id: 'sample-4', fullName: 'Rahul Verma', email: 'rahul.verma@example.com', rollNumber: 'SXU2026004' });
+
+const SAMPLE_ADVANCE_ROWS: AdvanceReportStudentRow[] = [
+  {
+    student: SAMPLE_STUDENT_PRIYA,
+    attempt: buildSampleAttempt({ attemptId: 'sample-a2', userId: SAMPLE_STUDENT_PRIYA.id, totalScore: 46, passed: true, correctCount: 5, incorrectCount: 0, accuracy: 100 }),
+    percent: 92,
+    rank: 1,
+    percentile: 33,
+  },
+  {
+    student: SAMPLE_STUDENT_JOHN,
+    attempt: buildSampleAttempt({ attemptId: 'sample-a1', userId: SAMPLE_STUDENT_JOHN.id, totalScore: 41, passed: true, correctCount: 4, incorrectCount: 1, accuracy: 80 }),
+    percent: 82,
+    rank: 2,
+    percentile: 67,
+  },
+  {
+    student: SAMPLE_STUDENT_ARJUN,
+    attempt: buildSampleAttempt({ attemptId: 'sample-a3', userId: SAMPLE_STUDENT_ARJUN.id, totalScore: 18, passed: false, correctCount: 2, incorrectCount: 3, accuracy: 40 }),
+    percent: 36,
+    rank: 3,
+    percentile: 100,
+  },
+];
+
+const SAMPLE_ADVANCE_DISTRIBUTION: DistributionBucket[] = [
+  { label: '0-20%', count: 0 },
+  { label: '21-40%', count: 1 },
+  { label: '41-60%', count: 0 },
+  { label: '61-80%', count: 0 },
+  { label: '81-100%', count: 2 },
+];
+
+const SAMPLE_ADVANCE_REPORT: AdvanceReportData = {
+  totalCandidates: 4,
+  presentCount: 3,
+  absentCount: 1,
+  absentStudents: [SAMPLE_STUDENT_ABSENT],
+  studentRows: SAMPLE_ADVANCE_ROWS,
+  averagePercentage: 70,
+  highest: SAMPLE_ADVANCE_ROWS[0],
+  lowest: SAMPLE_ADVANCE_ROWS[2],
+  passCount: 2,
+  passRate: 67,
+  distribution: SAMPLE_ADVANCE_DISTRIBUTION,
+  mostCommonBucket: SAMPLE_ADVANCE_DISTRIBUTION[4],
+};
+
+const SAMPLE_ADVANCE_SECTION_STATS: SectionPerformanceStat[] = [
+  { sectionId: 'sample-s1', sectionName: 'Basics', totalQuestions: 2, avgScore: 8.7, accuracy: 87 },
+  { sectionId: 'sample-s2', sectionName: 'Advanced Topics', totalQuestions: 3, avgScore: 7.3, accuracy: 73 },
+];
+
+const SAMPLE_ADVANCE_QUESTION_DIFFICULTY: QuestionDifficultyStat[] = [
+  { questionId: 'sample-q1', questionText: 'What is the output of the following LINQ query?', correct: 1, attempts: 3, percentCorrect: 33 },
+  { questionId: 'sample-q2', questionText: 'Which keyword is used for exception handling in C#?', correct: 3, attempts: 3, percentCorrect: 100 },
+];
 
 function QrPlaceholder() {
   return (
@@ -263,14 +427,36 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
   const sampleDuration = isFieldVisible('duration') ? SAMPLE_REPORT.duration : '—';
 
   // Which report type the sample preview/download represents. "Exam Result"
-  // (the booklet - see reportTypeCatalog.ts) isn't offered for every
-  // Organization Type, so only show that toggle option when it actually is;
-  // fall back to the always-available "Student Result" otherwise.
+  // and "Advance Report" (see reportTypeCatalog.ts) aren't offered for every
+  // Organization Type, so only show those toggle options when they actually
+  // are; fall back to the always-available "Student Result" otherwise.
   const [sampleReportType, setSampleReportType] = useState<SampleReportType>('studentResult');
   const examResultBookletAvailable = isReportTypeAvailable(draft.organizationType, 'examResultBooklet');
-  const sampleReportTypeOptions = (['studentResult', 'examResultBooklet'] as const).filter(
-    (key) => key === 'studentResult' || examResultBookletAvailable,
+  const detailedExamReportAvailable = isReportTypeAvailable(draft.organizationType, 'detailedExamReport');
+  const sampleReportTypeOptions = (['studentResult', 'examResultBooklet', 'detailedExamReport'] as const).filter(
+    (key) => key === 'studentResult' || (key === 'examResultBooklet' ? examResultBookletAvailable : detailedExamReportAvailable),
   );
+
+  // Advance Report's sample calls the REAL exportAdvanceExamReportPdf.ts
+  // with the fake data above - it reads the tenant's actual current
+  // organization/signatory info the same way the real Advance Report page
+  // does, exactly as the other two samples already use the live draft/logo/
+  // signature from this same editing form rather than fake branding.
+  const { data: myTenant } = useMyTenant();
+  const { user: currentUser } = useAuth();
+  const advanceReportExtras: AdvanceReportExtras = {
+    sectionStats: SAMPLE_ADVANCE_SECTION_STATS,
+    questionDifficulty: SAMPLE_ADVANCE_QUESTION_DIFFICULTY,
+    organization: myTenant,
+    generatedByName: currentUser?.fullName,
+  };
+  const handleDownloadAdvanceReportSample = () =>
+    exportAdvanceExamReportPdf(
+      SAMPLE_ADVANCE_EXAM,
+      getExamResultScheme(SAMPLE_ADVANCE_EXAM.examTypeName ?? undefined),
+      SAMPLE_ADVANCE_REPORT,
+      advanceReportExtras,
+    );
 
   // Draws one student's page into `doc` - shared by both sample report
   // types. "Student Result" calls this once; "Exam Result" (booklet) calls
@@ -523,6 +709,10 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
   };
 
   const handleDownloadSample = async () => {
+    if (sampleReportType === 'detailedExamReport') {
+      await handleDownloadAdvanceReportSample();
+      return;
+    }
     const doc = await buildSamplePdf();
     doc.save(sampleReportType === 'examResultBooklet' ? 'sample-exam-result-booklet.pdf' : 'sample-report.pdf');
   };
@@ -553,13 +743,17 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                 subtitle={
                   sampleReportType === 'examResultBooklet'
                     ? "Every student's result for one exam, combined into a single PDF - shown below is page 1 of a 2-student sample."
-                    : 'See how your settings will appear in the generated report.'
+                    : sampleReportType === 'detailedExamReport'
+                      ? 'Class-wide analytics for one exam - averages, score distribution, rank/percentile. No inline preview for this report type; download the sample to see the full multi-page document.'
+                      : 'See how your settings will appear in the generated report.'
                 }
                 action={
                   <div className="d-flex gap-2">
-                    <Button variant="outline-secondary" size="sm" onClick={handlePreviewSample}>
-                      Preview PDF
-                    </Button>
+                    {sampleReportType !== 'detailedExamReport' && (
+                      <Button variant="outline-secondary" size="sm" onClick={handlePreviewSample}>
+                        Preview PDF
+                      </Button>
+                    )}
                     <Button variant="outline-primary" size="sm" onClick={handleDownloadSample}>
                       Download Sample
                     </Button>
@@ -580,6 +774,12 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                   ))}
                 </div>
               )}
+              {sampleReportType === 'detailedExamReport' ? (
+                <div className="text-muted small text-center py-5 border rounded">
+                  This report is class-wide analytics (multiple pages), not a single-page template - click "Download
+                  Sample" above to see it.
+                </div>
+              ) : (
               <Card className="border">
                 <Card.Body>
                   {/* Mirrors the real centered header exactly (logo left,
@@ -743,6 +943,7 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                   </div>
                 </Card.Body>
               </Card>
+              )}
             </Card.Body>
           </Card>
         </Col>
