@@ -187,4 +187,70 @@ describe('buildExamSummaries', () => {
     expect(examTwoRow.passed).toBe(1);
     expect(examTwoRow.failed).toBe(1);
   });
+
+  it('passes through the exam category (for Exam Reports, which filters/exports by it)', () => {
+    const examWithCategory = makeExam({ id: 'exam-1', title: 'C# Programming', category: 'Programming' });
+    const attempts = [makeAttempt({ attemptId: 'a1', userId: 'u1', examId: 'exam-1', totalScore: 45, passed: true })];
+    const rows = buildExamSummaries(attempts, attempts, [examWithCategory], STUDENTS);
+    expect(rows[0].category).toBe('Programming');
+  });
+});
+
+describe('buildExamSummaries with includeExamsWithNoSubmissions (Exam Reports - lists every filtered exam, zero-submission ones included)', () => {
+  it('defaults to omitting an exam with no filtered results (Result Analytics behavior, unchanged)', () => {
+    const attempts = [makeAttempt({ attemptId: 'a1', userId: 'u1', examId: 'exam-1', totalScore: 45, passed: true })];
+    const examB = makeExam({ id: 'exam-2', title: 'SQL Basics' }); // never attempted
+    const rows = buildExamSummaries(attempts, attempts, [EXAM, examB], STUDENTS);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].examId).toBe('exam-1');
+  });
+
+  it('with includeExamsWithNoSubmissions, still emits a row for a zero-submission exam - Total Candidates/Not Submitted come from the real roster, not zeroed out along with everything else', () => {
+    const attempts = [makeAttempt({ attemptId: 'a1', userId: 'u1', examId: 'exam-1', totalScore: 45, passed: true })];
+    const examB = makeExam({ id: 'exam-2', title: 'SQL Basics' }); // never attempted, no results at all
+    const rows = buildExamSummaries(attempts, attempts, [EXAM, examB], STUDENTS, { includeExamsWithNoSubmissions: true });
+    expect(rows).toHaveLength(2);
+    const examTwoRow = rows.find((r) => r.examId === 'exam-2')!;
+    expect(examTwoRow.examTitle).toBe('SQL Basics');
+    expect(examTwoRow.totalCandidates).toBe(4); // the real eligible roster - not 0
+    expect(examTwoRow.submitted).toBe(0);
+    expect(examTwoRow.notSubmitted).toBe(4); // nobody in the roster submitted this one
+    expect(examTwoRow.submittedAttempts).toBe(0);
+    expect(examTwoRow.passed).toBe(0);
+    expect(examTwoRow.failed).toBe(0);
+    expect(examTwoRow.passPercent).toBe(0);
+    expect(examTwoRow.averagePercent).toBe(0);
+    expect(examTwoRow.highestPercent).toBe(0);
+    expect(examTwoRow.lowestPercent).toBe(0);
+    expect(examTwoRow.examDate).toBeNull();
+    // exam-1's row is unaffected by the option - still just its own real numbers.
+    const examOneRow = rows.find((r) => r.examId === 'exam-1')!;
+    expect(examOneRow.submitted).toBe(1);
+  });
+
+  it('still counts Submitted as unique candidates (not raw attempt rows) with the option on - a retake does not inflate it, and the zero-submission exam alongside it is unaffected', () => {
+    const attempts = [
+      makeAttempt({ attemptId: 'a1', userId: 'u1', examId: 'exam-1', totalScore: 20, passed: false }),
+      makeAttempt({ attemptId: 'a1-retake', userId: 'u1', examId: 'exam-1', totalScore: 45, passed: true }),
+      makeAttempt({ attemptId: 'a2', userId: 'u2', examId: 'exam-1', totalScore: 30, passed: true }),
+    ];
+    const examB = makeExam({ id: 'exam-2', title: 'SQL Basics' });
+    const rows = buildExamSummaries(attempts, attempts, [EXAM, examB], STUDENTS, { includeExamsWithNoSubmissions: true });
+    const examOneRow = rows.find((r) => r.examId === 'exam-1')!;
+    const examTwoRow = rows.find((r) => r.examId === 'exam-2')!;
+    // u1 submitted twice, u2 once - 2 unique candidates, not 3 attempt rows;
+    // 3 raw submitted-attempt records (Submitted Attempts, includes the retake).
+    expect(examOneRow.submitted).toBe(2);
+    expect(examOneRow.notSubmitted).toBe(2); // u3, u4
+    expect(examOneRow.submittedAttempts).toBe(3);
+    // a1 (failed), a1-retake (passed), a2 (passed) - 2 passed, 1 failed
+    // attempt row, no per-candidate dedup (see the RETAKE / PASS-FAIL
+    // ATTEMPT-SELECTION RULE note in advanceExamReport.ts).
+    expect(examOneRow.passed).toBe(2);
+    expect(examOneRow.failed).toBe(1);
+    // The zero-submission exam still gets its own correct, independent row.
+    expect(examTwoRow.submitted).toBe(0);
+    expect(examTwoRow.notSubmitted).toBe(4);
+    expect(examTwoRow.submittedAttempts).toBe(0);
+  });
 });

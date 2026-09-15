@@ -14090,3 +14090,71 @@ the donut ring, "Submitted 1 (100%)"/"Not Submitted 0 (0%)" remain clean
 on their own full-width rows below (unaffected by this radius change).
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Tenth follow-up (2026-09-15): expanded the "Exam Reports" (AdminReports.tsx,
+route /admin/reports/exams) CSV export from 6 columns (Exam, Category,
+Total Attempts, Average Score %, Pass %, Completion Rate %) to 15 -
+Exam, Exam Code, Exam Type, Exam Date, Category, Total Candidates,
+Submitted, Not Submitted, Submitted Attempts, Passed, Failed, Pass %,
+Average %, Highest %, Lowest % - reusing buildExamSummaries (examSummary
+.ts, already built for Result Analytics) for the same authoritative
+computeExamAttendance() calculation Exam Result uses. Third and final
+export in the "consistent terminology across Exam Result/Result
+Analytics/Exam Reports" set.
+
+Completion Rate % removed per explicit instruction, without any
+replacement metric - it was built from attemptsByExam's InProgress
+status (Live Monitoring's own data source, see ListAttemptsByExamHandler
+.cs's "Reports - Submitted/AutoSubmitted only" vs. the separate
+/by-exam/{id}/live comment from two turns ago), which this task
+explicitly says not to pull into these exports. Category kept - it's an
+existing, real filter/report dimension (EXAM_CATEGORIES), not something
+this data source lacks.
+
+New wrinkle handled: unlike Result Analytics' export (only exams with a
+result in the current filter get a row), Exam Reports' on-screen "Exam
+Summary" table already lists EVERY exam matching the category/creation-
+method filter, including ones with zero attempts (shown as 0s, not
+omitted) - swapping straight to buildExamSummaries as originally written
+would have silently dropped those rows from the export, a real
+regression from current on-screen behavior. Rather than duplicate the
+whole function for one behavioral difference, added an opt-in
+`includeExamsWithNoSubmissions` option to buildExamSummaries (default
+false, preserving Result Analytics' exact existing behavior unchanged) -
+when set, iterates over the full `exams` list instead of only exams
+present in `filteredResults`, defaulting an unattempted exam's row to
+real Total Candidates/Not Submitted (from the roster) and 0 everywhere
+else, rather than omitting the row. AdminReports.tsx passes
+`filteredExams` (its own category/creation-method-filtered list) with
+this option on, matching its on-screen table's population exactly.
+Also added `category` to ExamSummaryRow (exam.category, already
+resolvable via the existing examById lookup - free to add, no new
+fetch), needed by Exam Reports, unused (harmless) by Result Analytics.
+
+Deliberately left AdminReports.tsx's own on-screen stat cards/table
+(Total Attempts, Completion Rate, the "Exam Summary" table columns) and
+`perExamStats`/`allAttempts` completely untouched - same scope
+discipline as the Result Analytics work: only the CSV export path
+changed, not the live dashboard, which has its own separate,
+pre-existing (not asked-about) Completion Rate logic.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 117/117 passing
+(4 new tests: category passthrough; the default `includeExamsWithNo
+Submissions` OFF behavior explicitly confirmed unchanged/still omits a
+zero-result exam - protecting Result Analytics from a silent
+regression; the option ON behavior emitting a correct real-roster row
+for a zero-submission exam; and a retake scenario combined with the
+option, confirming Submitted/Submitted Attempts/Passed/Failed all stay
+correct - deduped vs. not, respectively - alongside an unaffected
+zero-submission exam in the same call). Docker frontend rebuilt/
+redeployed. Live-verified by exporting the real CSV from Greenfield
+University's Exam Reports page: "University Semester Exam,PRO-2026-
+7FE35C,Assessment Exam,9/13/2026,Programming,1,1,0,1,1,0,100,100,100,
+100" - matches the same real numbers Exam Result and Result Analytics
+already show for this exact exam. (This tenant only has one exam, so
+the zero-submission-exam behavior could only be exercised via the unit
+tests, not live - documented here rather than left unverified.)
+
+Not yet committed - awaiting explicit user instruction to commit.

@@ -1,10 +1,11 @@
-// Exam-level summary rows for the Result Analytics export (ResultAnalytics.tsx) -
-// kept separate from advanceExamReport.ts's single-exam, deep-analytics
-// AdvanceReportData (rank/percentile/distribution/absent-student list) since
-// Result Analytics is deliberately a flat, multi-exam SUMMARY, not per-exam
-// analytics. Pulled out of the page component into a pure function so it can
-// be unit-tested the same way every other PDF/export data-shaping function in
-// this codebase already is.
+// Exam-level summary rows for the Result Analytics and Exam Reports exports
+// (ResultAnalytics.tsx, AdminReports.tsx) - kept separate from
+// advanceExamReport.ts's single-exam, deep-analytics AdvanceReportData
+// (rank/percentile/distribution/absent-student list) since these are
+// deliberately flat, multi-exam SUMMARIES, not per-exam analytics. Pulled
+// out of the page components into a pure function so it can be unit-tested
+// the same way every other PDF/export data-shaping function in this
+// codebase already is.
 import { computeExamAttendance } from './advanceExamReport';
 import type { AdminAttemptResultResponse } from '../types/result';
 import type { ExamResponse } from '../types/exam';
@@ -23,6 +24,8 @@ export interface ExamSummaryRow {
   examTitle: string;
   examCode: string | null;
   examType: string | null;
+  /** Free-text category tag (EXAM_CATEGORIES) - null only when the exam record itself couldn't be found. */
+  category: string | null;
   /** Raw ISO string (exam.startAtUtc) - left unformatted so callers can render it however they need; null when the exam was never scheduled. */
   examDate: string | null;
   /** Eligible/assigned candidates for this exam (see computeExamAttendance). */
@@ -42,9 +45,20 @@ export interface ExamSummaryRow {
 }
 
 /**
- * Builds one summary row per exam that has at least one result in
- * `filteredResults` (the same population the Result Analytics dashboard's
- * date/exam/category filters already scope everything else to).
+ * Builds one summary row per exam.
+ *
+ * By default, only exams with at least one result in `filteredResults` get
+ * a row (the population Result Analytics' "Top Performing Exams" widget
+ * already scopes itself to, so its export matches what's on screen).
+ * Pass `includeExamsWithNoSubmissions: true` (Exam Reports' "Exam Summary"
+ * table already lists every exam matching its category/creation-method
+ * filters, zero-submission ones included, showing 0s rather than omitting
+ * the row - its export needs the same population) to instead emit one row
+ * per exam in `exams`, defaulting every count to 0/empty for an exam with
+ * no filtered results. This only changes which exam IDs get a row, not how
+ * any individual row is computed - both callers still get Total
+ * Candidates/Submitted/Not Submitted from the same computeExamAttendance()
+ * call, and the same Passed/Failed-per-submitted-attempt rule.
  *
  * Two different result sets feed each row, deliberately:
  * - `filteredResults` (scoped to the dashboard's current filters) drives
@@ -70,6 +84,7 @@ export function buildExamSummaries(
   allResults: AdminAttemptResultResponse[],
   exams: ExamResponse[],
   eligibleStudents: { id: string }[],
+  options: { includeExamsWithNoSubmissions?: boolean } = {},
 ): ExamSummaryRow[] {
   const examById = new Map(exams.map((e) => [e.id, e]));
 
@@ -87,7 +102,10 @@ export function buildExamSummaries(
     allByExam.set(r.examId, list);
   }
 
-  return Array.from(filteredByExam.entries()).map(([examId, rows]) => {
+  const examIds = options.includeExamsWithNoSubmissions ? exams.map((e) => e.id) : Array.from(filteredByExam.keys());
+
+  return examIds.map((examId) => {
+    const rows = filteredByExam.get(examId) ?? [];
     const exam = examById.get(examId);
     const pcts = rows.map(percentOf);
     const passedCount = rows.filter((r) => r.passed).length;
@@ -99,6 +117,7 @@ export function buildExamSummaries(
       examTitle: exam?.title ?? 'Unknown exam',
       examCode: exam?.examCode ?? null,
       examType: exam?.examTypeName ?? null,
+      category: exam?.category ?? null,
       // exam.startAtUtc is frequently null - this app enforces scheduling
       // per-assignment, not per-exam (see AdvanceExamReport.tsx's own
       // effectiveExam fallback, which pulls the earliest assignment window

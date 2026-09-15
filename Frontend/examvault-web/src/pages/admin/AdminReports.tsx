@@ -10,12 +10,14 @@ import LineTrendChart from '../../components/charts/LineTrendChart';
 import { ViewIcon } from '../../components/icons/ActionIcons';
 import { BookIcon, PulseIcon, TargetIcon, CheckCircleIcon, FlagIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
+import { useStudents } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreationMethod } from '../../types/exam';
 import { bucketByDay, computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
+import { buildExamSummaries } from '../../utils/examSummary';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
@@ -30,6 +32,11 @@ export default function AdminReports() {
   const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(exams);
   const examIds = useMemo(() => (exams ?? []).map((e) => e.id), [exams]);
   const { attemptsByExam, isLoading: isLoadingAttempts } = useAttemptsByExam(examIds);
+  // Instructor-safe endpoint (no "Users - View" permission needed) - same
+  // reason ExamResults.tsx/ResultAnalytics.tsx use it for their own
+  // Attempted/Absent, since Exam Reports is on both the Admin and
+  // Instructor sidebars.
+  const { data: students } = useStudents();
 
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [category, setCategory] = useState('All');
@@ -111,6 +118,17 @@ export default function AdminReports() {
     [perExamStats],
   );
 
+  // Export-only - the on-screen "Exam Summary" table above keeps its own
+  // perExamStats/Completion Rate (built from attemptsByExam's InProgress
+  // status, the same Live Monitoring-style data this export deliberately
+  // doesn't use). includeExamsWithNoSubmissions matches perExamStats' own
+  // behavior of listing every exam matching the category/creation-method
+  // filters, not just ones with a submission in the current window.
+  const examSummaries = useMemo(
+    () => buildExamSummaries(current.results, allResults, filteredExams, students ?? [], { includeExamsWithNoSubmissions: true }),
+    [current.results, allResults, filteredExams, students],
+  );
+
   useEffect(() => {
     setPage(1);
   }, [category, creationMethod, range]);
@@ -135,15 +153,40 @@ export default function AdminReports() {
           setCreationMethod('All');
         }}
         exportFilename="exam-reports"
-        exportHeaders={['Exam', 'Category', 'Total Attempts', 'Average Score %', 'Pass %', 'Completion Rate %']}
+        exportHeaders={[
+          'Exam',
+          'Exam Code',
+          'Exam Type',
+          'Exam Date',
+          'Category',
+          'Total Candidates',
+          'Submitted',
+          'Not Submitted',
+          'Submitted Attempts',
+          'Passed',
+          'Failed',
+          'Pass %',
+          'Average %',
+          'Highest %',
+          'Lowest %',
+        ]}
         exportRows={() =>
-          perExamStats.map((s) => [
-            s.exam.title,
-            s.exam.category,
-            s.attempts,
-            Math.round(s.averageScore),
-            Math.round(s.passPercent),
-            Math.round(s.completionRate),
+          examSummaries.map((s) => [
+            s.examTitle,
+            s.examCode ?? '',
+            s.examType ?? '',
+            s.examDate ? new Date(s.examDate).toLocaleDateString() : '',
+            s.category ?? '',
+            s.totalCandidates,
+            s.submitted,
+            s.notSubmitted,
+            s.submittedAttempts,
+            s.passed,
+            s.failed,
+            s.passPercent,
+            s.averagePercent,
+            s.highestPercent,
+            s.lowestPercent,
           ])
         }
       >
