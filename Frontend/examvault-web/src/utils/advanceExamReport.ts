@@ -52,34 +52,103 @@ function isEligibleStudent(u: UserListItem): boolean {
 
 export interface ExamAttendance {
   totalCandidates: number;
-  absentCount: number;
+  /**
+   * Unique candidates with at least one SUBMITTED/auto-submitted attempt.
+   * Renamed from `attemptedCount` - "Attempted" implied a start/finish
+   * lifecycle (started vs. finished) this data doesn't actually have. The
+   * Result Service's reporting endpoint (see this function's own doc
+   * comment) only ever returns Submitted/AutoSubmitted attempts - a
+   * candidate who opened the exam and never submitted (or is still
+   * mid-attempt) is invisible to this whole computation, not counted as
+   * "not submitted" either. So `submittedCount` claims only what the data
+   * actually shows: this many candidates have at least one submitted
+   * result. It does NOT claim they "started" (that's a stronger claim this
+   * data can't support).
+   */
+  submittedCount: number;
+  /** Eligible candidates with NO submitted attempt - the complement of submittedCount within totalCandidates. Renamed from `absentCount` for the same reason. */
+  notSubmittedCount: number;
 }
 
 /**
- * Just the attendance counts (not the full score/rank/distribution
- * analytics below) - used by the Exam Result roster (generateResultPdf.ts's
- * drawExamResultRoster, called from ExamResults.tsx) so its "Total
- * Candidates"/"Absent" stat cards use the same "diff attempts against the
- * eligible roster" idea as Detailed Exam Report's totalCandidates/
- * absentCount, without pulling in rank/percentile/distribution computation
- * Exam Result deliberately doesn't show.
+ * Just the submission-attendance counts (not the full score/rank/
+ * distribution analytics below) - the one authoritative place this app
+ * computes "who has submitted this exam", used by the Exam Result roster
+ * (generateResultPdf.ts's drawExamResultRoster, via ExamResults.tsx) and
+ * the Result Analytics export (ResultAnalytics.tsx, via buildExamSummaries
+ * in examSummary.ts) so neither has to (or can accidentally) recompute its
+ * own version of "Total Candidates"/"Submitted"/"Not Submitted" and drift
+ * from Detailed Exam Report's totalCandidates/presentCount/absentCount,
+ * which use this same "diff attempts against the eligible roster" idea
+ * (just also carrying the rank/percentile/distribution analytics those two
+ * lighter-weight consumers don't show, and its own pre-existing
+ * presentCount/absentCount/absentStudents field names, left as-is rather
+ * than renamed to match - see exportAdvanceExamReportPdf.ts/
+ * exportAdvanceExamReportExcel.ts, which relabel what those fields render
+ * as "Submitted"/"Not Submitted" without renaming the fields themselves,
+ * to avoid a wider, unrequested refactor of AdvanceExamReport.tsx's own
+ * on-screen dashboard, which reads those same field names directly).
+ *
+ * `submittedCount` is a unique-candidate headcount, not `attempts.length` -
+ * GetExamReportHandler.cs (Backend/Services/ResultService) returns one row
+ * per ATTEMPT, not per student, so a candidate who retook the exam would
+ * otherwise be counted twice. This function does not, and cannot, tell a
+ * candidate who never opened the exam apart from one who opened it and
+ * never submitted - see this file's SUBMITTED-ONLY REPORTING BOUNDARY note
+ * below for why, and why that's being left as-is for now.
  *
  * Takes an already-eligible roster (just `{ id }`) rather than filtering
  * `role`/`isActive` itself like buildAdvanceExamReport's `students` does -
- * ExamResults.tsx (where Instructors, who have no "Users - View" permission,
- * can land) only ever has the narrower StudentSummary[] from the students-
- * only endpoint, which the backend already scopes to role=Student but does
- * not expose IsActive on at all (see ListStudentsHandler.cs/UsersController
- * .cs's ListStudents). So Exam Result's "Total Candidates" can include an
- * inactive student that Detailed Exam Report's (Admin-only, full
- * UserListItem[]-backed) count would exclude - a real, pre-existing gap
- * in what data this permission level can see, not something to fake around.
+ * ExamResults.tsx/ResultAnalytics.tsx (where Instructors, who have no
+ * "Users - View" permission, can land) only ever have the narrower
+ * StudentSummary[] from the students-only endpoint, which the backend
+ * already scopes to role=Student but does not expose IsActive on at all
+ * (see ListStudentsHandler.cs/UsersController.cs's ListStudents). So these
+ * two consumers' "Total Candidates" can include an inactive student that
+ * Detailed Exam Report's (Admin-only, full UserListItem[]-backed) count
+ * would exclude - a real, pre-existing gap in what data this permission
+ * level can see, not something to fake around.
  */
 export function computeExamAttendance(attempts: AdminAttemptResultResponse[], eligibleStudents: { id: string }[]): ExamAttendance {
-  const attemptedIds = new Set(attempts.map((a) => a.userId));
-  const absentCount = eligibleStudents.filter((s) => !attemptedIds.has(s.id)).length;
-  return { totalCandidates: eligibleStudents.length, absentCount };
+  const submittedIds = new Set(attempts.map((a) => a.userId));
+  const notSubmittedCount = eligibleStudents.filter((s) => !submittedIds.has(s.id)).length;
+  return { totalCandidates: eligibleStudents.length, submittedCount: submittedIds.size, notSubmittedCount };
 }
+
+// SUBMITTED-ONLY REPORTING BOUNDARY: `attempts` above (and everywhere else
+// in this file) only ever contains Submitted/AutoSubmitted attempts -
+// ListAttemptsByExamHandler.cs (Backend/Services/SubmissionService) calls
+// GetSubmittedAttemptsByExamIdAsync specifically (its own controller
+// comment: "Reports - Submitted/AutoSubmitted only", as opposed to the
+// separate /by-exam/{id}/live endpoint, which does include InProgress
+// attempts, for Live Monitoring's Active Exams screen). So nothing in this
+// file - or Exam Result, Detailed Exam Report, or Result Analytics, which
+// all read from this same reporting data - can distinguish "candidate
+// never opened the exam" from "candidate opened it and never submitted".
+// Both look identical: absent from `attempts`. Deliberately not pulling in
+// the live/InProgress data source to close that gap in this task - see
+// ActionPlan.txt for the explicit decision to leave this reporting
+// boundary as-is for now.
+//
+// RETAKE / PASS-FAIL ATTEMPT-SELECTION RULE: this codebase does NOT have
+// one single rule for how a retake (a candidate with more than one
+// submitted attempt on the same exam) counts toward Passed/Failed - two
+// different, both pre-existing, rules are in use:
+//   - buildAdvanceExamReport below (Detailed Exam Report, its Excel
+//     export, and the AdvanceExamReport.tsx page) dedupes to ONE row per
+//     student - their most recently submitted attempt (`presentBase`'s
+//     "last attempt represents the student" convention, already used
+//     elsewhere per its own comment) - so passCount/passRate reflect each
+//     candidate's latest outcome only.
+//   - computeExamResultSummary (generateResultPdf.ts, Exam Result) and
+//     buildExamSummaries (examSummary.ts, Result Analytics) do NOT dedupe
+//     - every submitted attempt is counted separately, so a candidate who
+//     failed once and passed on a retake appears as both one Passed and
+//     one Failed across their two attempts.
+// This is pre-existing behavior in both cases, not something introduced
+// by the Submitted/Not Submitted terminology fix - documented here per
+// explicit instruction, not changed (no new retake rule invented, no
+// unification of the two attempted in this task).
 
 export function buildAdvanceExamReport(
   attempts: AdminAttemptResultResponse[],

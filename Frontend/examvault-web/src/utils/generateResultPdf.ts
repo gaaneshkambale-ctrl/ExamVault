@@ -33,6 +33,7 @@ import {
   stampFooters,
 } from './pdfReportKit';
 import type { TenantBranding } from './pdfReportKit';
+import type { ExamAttendance } from './advanceExamReport';
 import { getResultPdfVariant, RESULT_PDF_VARIANT_COPY } from './resultPdfVariants';
 import { isResultFieldVisible } from '../constants/organizationTypeFieldCatalog';
 
@@ -963,7 +964,7 @@ function drawExamResultRoster(
   entries: ExamResultBookletEntry[],
   branding: TenantBranding,
   generatedAt: Date,
-  attendance: ExamResultAttendance,
+  attendance: ExamAttendance,
 ): void {
   // Same letterhead header component Student Result (drawAcademicReport,
   // below) and Detailed Exam Report (exportAdvanceExamReportPdf.ts) use -
@@ -1015,28 +1016,30 @@ function drawExamResultRoster(
   }
   y += infoPanelH + 6;
 
-  // Total Candidates / Attempted / Passed / Failed / Absent / Pass Rate -
-  // `totalCandidates`/`absentCount` come from the caller's own eligible-
-  // roster diff (see computeExamAttendance in advanceExamReport.ts - the
-  // same one Detailed Exam Report uses, so the two report types can't
-  // disagree about who counts as absent). `attempted` is a unique-candidate
-  // headcount, NOT entries.length - GetExamReportHandler.cs returns one row
-  // per ATTEMPT, not per student (a candidate who retook the exam has one
-  // entry per attempt, same userId), so entries.length would overcount
-  // "how many people attempted" for any exam allowing more than one
-  // attempt. Passed/Failed intentionally stay per-entry (every real
-  // attempt's own actual pass/fail), matching what the table below lists.
+  // Total Candidates / Submitted / Passed / Failed / Not Submitted / Pass
+  // Rate - totalCandidates/submittedCount/notSubmittedCount all come from
+  // the caller's own computeExamAttendance() call (advanceExamReport.ts) -
+  // the same authoritative attendance calculation Detailed Exam Report and
+  // the Result Analytics export use, so none of the three can disagree
+  // about who counts as submitted/not submitted. "Submitted" (not
+  // "Attempted") deliberately - the Result Service's reporting data only
+  // ever contains Submitted/AutoSubmitted attempts (see
+  // computeExamAttendance's own doc comment), so this can't actually claim
+  // anyone "started"/"attempted" in the stronger sense that word implies;
+  // it only knows who has a submitted result. Passed/Failed intentionally
+  // stay per-entry (every real attempt's own actual pass/fail, no dedup
+  // for retakes - see advanceExamReport.ts's RETAKE / PASS-FAIL
+  // ATTEMPT-SELECTION RULE note), matching what the table below lists.
   const { passed, failed, passRate } = computeExamResultSummary(entries);
-  const attempted = new Set(entries.map((e) => e.result.userId)).size;
   const statGap = 3;
   const statCardH = 24;
   const statW = (CONTENT_WIDTH - statGap * 5) / 6;
   const cardX = (i: number) => MARGIN + (statW + statGap) * i;
   drawStatCard(doc, cardX(0), y, statW, statCardH, BRAND, 'Total Candidates', String(attendance.totalCandidates), TEXT_DARK);
-  drawStatCard(doc, cardX(1), y, statW, statCardH, BRAND, 'Attempted', String(attempted), TEXT_DARK);
+  drawStatCard(doc, cardX(1), y, statW, statCardH, BRAND, 'Submitted', String(attendance.submittedCount), TEXT_DARK);
   drawStatCard(doc, cardX(2), y, statW, statCardH, GREEN, 'Passed', String(passed), GREEN);
   drawStatCard(doc, cardX(3), y, statW, statCardH, RED, 'Failed', String(failed), RED);
-  drawStatCard(doc, cardX(4), y, statW, statCardH, GRAY, 'Absent', String(attendance.absentCount), TEXT_DARK);
+  drawStatCard(doc, cardX(4), y, statW, statCardH, GRAY, 'Not Submitted', String(attendance.notSubmittedCount), TEXT_DARK);
   drawStatCard(doc, cardX(5), y, statW, statCardH, AMBER, 'Pass Rate', `${passRate}%`, AMBER);
   y += statCardH + 8;
 
@@ -1137,26 +1140,10 @@ export async function generateResultPdf(
 // getExamResultsForAdmin's AdminAttemptResultResponse[]), and drawing it
 // needs userId (ResultSummaryResponse has none - it's implicitly "me") to
 // tell apart unique candidates from repeat attempts by the same one for
-// the "Attempted" count below.
+// the "Submitted" count below.
 export interface ExamResultBookletEntry {
   result: AdminAttemptResultResponse;
   context: ResultPdfContext;
-}
-
-/**
- * The eligible-candidate roster count and how many of them never attempted,
- * for the "Total Candidates"/"Absent" stat cards - deliberately NOT derived
- * from `entries` (every entry here is, by construction, someone who
- * attempted), so it has to come from the caller's own broader roster the
- * same way Detailed Exam Report's `AdvanceReportData` does (see
- * computeExamAttendance in advanceExamReport.ts, which both this and that
- * report call). Optional and defaulting to "everyone who attempted, nobody
- * absent" so a caller with no roster data (the Organization Settings sample
- * preview) still renders correctly rather than showing a wrong absent count.
- */
-export interface ExamResultAttendance {
-  totalCandidates: number;
-  absentCount: number;
 }
 
 /**
@@ -1164,17 +1151,31 @@ export interface ExamResultAttendance {
  * drawExamResultRoster's own comment for why this is deliberately NOT the
  * per-student Student Result template repeated once per entry, which is
  * what this function used to do).
+ *
+ * `attendance` is optional and defaults to "everyone submitted, nobody
+ * missing" (deduped by userId, same as the real computeExamAttendance would
+ * give for a roster with no non-submitters) so a caller with no real roster
+ * data (the Organization Settings sample preview) still renders correctly
+ * rather than showing a wrong Not Submitted count.
  */
 export async function generateExamResultsBooklet(
   examTitle: string,
   entries: ExamResultBookletEntry[],
-  attendance?: ExamResultAttendance,
+  attendance?: ExamAttendance,
 ): Promise<void> {
   if (entries.length === 0) return;
   const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
-  drawExamResultRoster(doc, examTitle, entries, branding, generatedAt, attendance ?? { totalCandidates: entries.length, absentCount: 0 });
+  const submittedCount = new Set(entries.map((e) => e.result.userId)).size;
+  drawExamResultRoster(
+    doc,
+    examTitle,
+    entries,
+    branding,
+    generatedAt,
+    attendance ?? { totalCandidates: submittedCount, submittedCount, notSubmittedCount: 0 },
+  );
   stampFooters(
     doc,
     generatedAt,

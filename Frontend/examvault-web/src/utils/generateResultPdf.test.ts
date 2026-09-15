@@ -213,48 +213,58 @@ describe('generateExamResultsBooklet (Exam Result is a roster, not a repeated St
   /**
    * The stat card's label and its value are two separate, immediately-
    * adjacent doc.text() calls (see drawStatCard) - finds the label and
-   * returns what was drawn right after it. A narrow 6-up card wraps a
-   * multi-word label like "Total Candidates" onto its own lines (each
-   * becoming a separate array entry once flattened), so this searches for
-   * the label's last word - unaffected by wrapping, since a wrap only ever
-   * breaks at a word boundary and the last word is always on the final line.
+   * returns what was drawn right after it, plus the index to resume
+   * searching from. A narrow 6-up card wraps a multi-word label like
+   * "Total Candidates" or "Not Submitted" onto its own lines (each becoming
+   * a separate array entry once flattened), so this searches for the
+   * label's last word - unaffected by wrapping, since a wrap only ever
+   * breaks at a word boundary and the last word is always on the final
+   * line. Takes a `fromIndex` (and returns the next one) rather than always
+   * searching from the start, since "Submitted" and "Not Submitted" share
+   * the same last word - searching strictly forward through the known draw
+   * order (Total Candidates, Submitted, Passed, Failed, Not Submitted, Pass
+   * Rate) is what keeps those two from colliding.
    */
-  function statCardValue(drawn: string[], label: string): string {
+  function statCardValue(drawn: string[], label: string, fromIndex = 0): { value: string; nextIndex: number } {
     const lastWord = label.split(' ').pop()!;
-    return drawn[drawn.indexOf(lastWord) + 1];
+    const labelIndex = drawn.indexOf(lastWord, fromIndex);
+    return { value: drawn[labelIndex + 1], nextIndex: labelIndex + 2 };
   }
 
-  it('shows Attempted/Absent/Total Candidates using the caller-supplied roster attendance, not just the attempted entries', async () => {
-    await generateExamResultsBooklet('Sample Exam', makeEntries(), { totalCandidates: 5, absentCount: 2 });
+  it('shows Submitted/Not Submitted/Total Candidates exactly as given by the caller-supplied roster attendance (trusts it verbatim, does not recompute)', async () => {
+    // submittedCount deliberately doesn't match entries.length (3) - proves
+    // the stat card reads attendance.submittedCount, not its own count of
+    // `entries`, now that computeExamAttendance (advanceExamReport.ts) is
+    // the sole place this app computes it.
+    await generateExamResultsBooklet('Sample Exam', makeEntries(), { totalCandidates: 5, submittedCount: 3, notSubmittedCount: 2 });
     const drawn = allDrawnText(lastJsPdfInstance.text);
-    expect(statCardValue(drawn, 'Total Candidates')).toBe('5');
-    expect(statCardValue(drawn, 'Attempted')).toBe('3');
-    expect(statCardValue(drawn, 'Absent')).toBe('2');
+    let r = statCardValue(drawn, 'Total Candidates');
+    expect(r.value).toBe('5');
+    r = statCardValue(drawn, 'Submitted', r.nextIndex);
+    expect(r.value).toBe('3');
+    r = statCardValue(drawn, 'Not Submitted', r.nextIndex);
+    expect(r.value).toBe('2');
   });
 
-  it('falls back to "everyone who attempted, nobody absent" when the caller has no roster data (eg. the settings-page sample)', async () => {
-    await generateExamResultsBooklet('Sample Exam', makeEntries());
-    const drawn = allDrawnText(lastJsPdfInstance.text);
-    // 3 entries in makeEntries() and nobody marked absent - total/attempted both read 3.
-    expect(statCardValue(drawn, 'Total Candidates')).toBe('3');
-    expect(statCardValue(drawn, 'Attempted')).toBe('3');
-    expect(statCardValue(drawn, 'Absent')).toBe('0');
-  });
-
-  it('counts Attempted as unique candidates, not raw attempt rows - a retake produces two entries for the same userId', async () => {
+  it('falls back to a unique-candidate count for Submitted (not raw attempt rows) when the caller has no roster data (eg. the settings-page sample) - a retake produces two entries for the same userId', async () => {
     const entries = makeEntries();
     // A 4th entry that's a second attempt by the same student as entries[0]
     // (same userId, different attemptId/score) - GetExamReportHandler.cs
-    // returns one row per attempt, so this is a real shape the booklet has
-    // to handle, not a contrived one.
+    // returns one row per attempt, so this is a real shape the fallback
+    // default has to handle, not a contrived one.
     entries.push({
       result: makeAttempt({ userId: entries[0].result.userId, attemptId: 'attempt-u1-retake', totalScore: 30, passed: false }),
       context: entries[0].context,
     });
-    await generateExamResultsBooklet('Sample Exam', entries, { totalCandidates: 3, absentCount: 0 });
+    await generateExamResultsBooklet('Sample Exam', entries); // no attendance -> fallback default
     const drawn = allDrawnText(lastJsPdfInstance.text);
-    // 3 unique students attempted (u1 twice, u2, u3) - not 4 entries.
-    expect(statCardValue(drawn, 'Attempted')).toBe('3');
+    // 3 unique students submitted (u1 twice, u2, u3) - not 4 entries.
+    let r = statCardValue(drawn, 'Total Candidates');
+    expect(r.value).toBe('3');
+    r = statCardValue(drawn, 'Submitted', r.nextIndex);
+    expect(r.value).toBe('3');
+    r = statCardValue(drawn, 'Not Submitted', r.nextIndex);
+    expect(r.value).toBe('0');
   });
 
   it('shows the exam date, gated by Result Fields the same way Roll No is', async () => {

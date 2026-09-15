@@ -84,8 +84,8 @@ export async function exportAdvanceExamReportExcel(
     [],
     [{ value: 'Summary', ...LABEL_STYLE }, { value: 'Count', ...LABEL_STYLE }, { value: 'Percentage', ...LABEL_STYLE }],
     ['Total Candidates', report.totalCandidates, '100%'],
-    ['Attempted (Present)', report.presentCount, `${pct(report.presentCount, report.totalCandidates)}%`],
-    ['Absent', report.absentCount, `${pct(report.absentCount, report.totalCandidates)}%`],
+    ['Submitted', report.presentCount, `${pct(report.presentCount, report.totalCandidates)}%`],
+    ['Not Submitted', report.absentCount, `${pct(report.absentCount, report.totalCandidates)}%`],
     ...(scheme.hasPassFailConcept
       ? [
           [scheme.outcomeLabels.pass, report.passCount, `${pct(report.passCount, report.presentCount)}%`],
@@ -137,7 +137,7 @@ export async function exportAdvanceExamReportExcel(
     ...report.studentRows.map((r) => [
       r.student.rollNumber ?? '—',
       r.student.fullName,
-      'Present',
+      'Submitted',
       r.attempt.totalScore,
       r.attempt.totalMarks,
       `${round1(r.percent)}%`,
@@ -145,16 +145,17 @@ export async function exportAdvanceExamReportExcel(
       ...(scheme.showRankPercentile ? [r.rank ?? '—', r.percentile !== null ? `${r.percentile}%` : '—'] : []),
       new Date(r.attempt.submittedAtUtc).toLocaleString(),
     ]),
-    // Every absent student, unlike the PDF's capped list - a spreadsheet has
-    // no page budget to protect, so there's no reason to summarize this away.
+    // Every non-submitting student, unlike the PDF's capped list - a
+    // spreadsheet has no page budget to protect, so there's no reason to
+    // summarize this away.
     ...report.absentStudents.map((s) => [
       s.rollNumber ?? '—',
       s.fullName,
-      'Absent',
+      'Not Submitted',
       '—',
       '—',
       '—',
-      'Absent',
+      'Not Submitted',
       ...(scheme.showRankPercentile ? ['—', '—'] : []),
       '—',
     ]),

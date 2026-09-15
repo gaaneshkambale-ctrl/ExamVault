@@ -13788,3 +13788,305 @@ All three report types (Student Result, Exam Result, Detailed Exam
 Report) now show "Generated on" exactly once per page, in the footer only.
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Fifth follow-up (2026-09-15): expanded the Result Analytics CSV export
+from 5 columns (Exam, Average %, Highest %, Pass %, Completed) to 14
+(Exam, Exam Code, Exam Type, Exam Date, Total Candidates, Attempted,
+Absent, Completed, Passed, Failed, Pass %, Average %, Highest %,
+Lowest %), per explicit user request, using the same authoritative
+attendance calculation as Exam Result.
+
+Architecture (per user's own diagram): Result Analytics -> exam-level
+summary export; Exam Result -> all-student roster; Detailed Exam Report
+-> advanced analytics; Student Result -> individual official result.
+Kept strictly to exam-level summary columns - no question difficulty,
+recommendations, charts, insights, or section-level analysis added.
+
+Implementation:
+- Extended computeExamAttendance()/ExamAttendance (advanceExamReport.ts)
+  to also return `attemptedCount` (unique-candidate headcount, already
+  deduped internally via the same attemptedIds Set the function already
+  built for absentCount - free to add). This is now the ONE authoritative
+  place this app computes Total Candidates/Attempted/Absent, used by
+  Exam Result, Detailed Exam Report, and now Result Analytics.
+- Consolidated a duplicate formula this surfaced: drawExamResultRoster
+  (generateResultPdf.ts) had its own separate `new Set(entries.map(...
+  userId)).size` for "Attempted" instead of using the caller's
+  attendance object at all. Now reads attendance.attemptedCount directly
+  - the roster trusts its caller's authoritative attendance, it doesn't
+  recompute its own. Removed the now-redundant local ExamResultAttendance
+  interface in favor of importing advanceExamReport.ts's ExamAttendance
+  directly (no circular import - advanceExamReport.ts has no dependency
+  on generateResultPdf.ts).
+- New Frontend/examvault-web/src/utils/examSummary.ts: buildExamSummaries()
+  builds one row per exam that has a result in the CURRENT dashboard
+  filter (date range/exam/category - same population the existing "Top
+  Performing Exams" widget already uses), but deliberately draws Total
+  Candidates/Attempted/Absent from the exam's FULL, unfiltered attempt
+  history (via computeExamAttendance) rather than the filtered subset -
+  attendance is a structural fact about the exam, not a date-stamped
+  event, so a candidate whose attempt falls outside the selected window
+  must still count as attempted, not be miscounted absent just because
+  the dashboard's date filter excluded their timestamp. Completed/Passed
+  /Failed/Pass %/Average %/Highest %/Lowest % correctly DO respect the
+  current filter, matching the pre-existing "Top Performing Exams"
+  behavior/intent.
+  - "Completed" is the pre-existing metric (filtered attempt-row count,
+    can exceed Attempted if someone retook the exam) kept as-is, not
+    redefined - answers "how much grading activity happened", a
+    different question than Attempted's "how many people showed up".
+  - Exam Date: exam.startAtUtc is frequently null in this app (scheduling
+    is enforced per-assignment, not per-exam - see AdvanceExamReport.tsx's
+    own effectiveExam fallback). Rather than fetching assignment data for
+    a multi-exam summary (new API surface, bigger scope than asked),
+    reused the lighter fallback Exam Result's own "Exam Date" already
+    uses: the earliest real submission for that exam. Caught live - the
+    first real CSV download had a blank Exam Date column until this
+    fallback was added.
+  - Reused `percentOf` (moved out of ResultAnalytics.tsx into this file
+    and imported back) rather than keeping a second copy.
+- ResultAnalytics.tsx: added useStudents() (the Instructor-safe endpoint -
+  Result Analytics is on both the Admin and Instructor sidebars, same
+  permission constraint ExamResults.tsx already works around), wired the
+  new 14-column exportHeaders/exportRows through buildExamSummaries().
+  Deliberately did NOT touch the existing "Top Performing Exams" on-screen
+  widget (still its own 5-column, top-5-only topPerformingExams) or any
+  other dashboard UI - purely additive to the export path, preserving
+  existing on-screen behavior untouched.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 111/111 passing
+(added 9 new tests: 8 in a new examSummary.test.ts covering Total
+Candidates/Attempted/Absent from the eligible roster, retake dedup,
+Passed/Failed/Pass %/Average %/Highest %/Lowest % calculations, the
+attendance-uses-unfiltered-results behavior, the Exam Date fallback, an
+exam with zero filtered results producing no row, and multi-exam
+isolation; 1 more in generateResultPdf.test.ts's updated attendance
+tests). Docker frontend rebuilt/redeployed. Live-verified by exporting
+the real CSV from Greenfield University's Result Analytics page twice
+(once catching the blank Exam Date bug, once confirming the fix) - final
+real export: "University Semester Exam,PRO-2026-7FE35C,Assessment
+Exam,9/13/2026,1,1,0,1,1,0,100,100,100,100", matching the same real
+numbers Exam Result/Detailed Exam Report already show for this exam.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Sixth follow-up (2026-09-15): terminology correction across all three
+report surfaces, per user's own follow-up observation on the previous
+Result Analytics CSV work - "Attempted"/"Completed" implied a start/
+finish lifecycle the underlying data can't actually support.
+
+**Root cause confirmed by tracing the backend**: ListAttemptsByExamHandler
+.cs (Backend/Services/SubmissionService) calls
+_repository.GetSubmittedAttemptsByExamIdAsync(...) - its own controller
+comment says "Reports - Submitted/AutoSubmitted only" (as opposed to the
+separate /by-exam/{id}/live endpoint, which does include InProgress
+attempts, for Live Monitoring's Active Exams screen). So the entire
+reporting data source Exam Result, Detailed Exam Report, and Result
+Analytics all read from is submitted-only at the repository level - a
+candidate who opened an exam and never submitted (or is still mid-
+attempt) is invisible to all of it, indistinguishable from someone who
+never opened it at all. "Attempted" was therefore a claim this data
+could never support.
+
+**Explicit decision, not changed**: kept the submitted-only reporting
+boundary exactly as-is - did NOT pull in the /by-exam/{id}/live data
+source to add real "in-progress"/"started" tracking to these reports.
+That would be real new scope (a new data fetch across three report
+paths, backend semantics for what counts as "started"); this task was
+terminology-only.
+
+**New terminology (all three surfaces)**:
+  - Total Candidates = eligible/assigned candidates (unchanged meaning)
+  - "Attempted" -> "Submitted" = unique candidates with >=1 submitted/
+    auto-submitted attempt
+  - "Absent"/"Present" -> "Not Submitted"/"Submitted" = eligible
+    candidates with no submitted attempt / with one
+  - Result Analytics' old "Completed" -> "Submitted Attempts" = total
+    submitted attempt records including retakes (unchanged formula -
+    this is exactly what "Completed" already was; only the label was
+    wrong, not claiming a "completed lifecycle" either, since this data
+    can't tell a merely-submitted attempt from a graded one)
+
+**Where applied**:
+  - advanceExamReport.ts: ExamAttendance's attemptedCount/absentCount
+    renamed to submittedCount/notSubmittedCount (code-level fields, not
+    just display text, since this is code introduced this session).
+  - generateResultPdf.ts (Exam Result): stat card labels + comments.
+  - exportAdvanceExamReportPdf.ts (Detailed Exam Report): stat cards
+    (both 6-up and 4-up layouts), "Attendance Split"/"Attendance
+    Overview" panel titles -> "Submission Split"/"Submission Overview",
+    Result Split's Present/Absent labels, student table's per-row
+    STATUS/RESULT badges (Present/Absent -> Submitted/Not Submitted),
+    Key Highlights bullets, Recommendations text ("attended"/"were
+    absent" -> "submitted"/"did not submit"), the limited-sample banner,
+    "No candidate attempted this exam" empty-state text, and every
+    related code comment.
+  - exportAdvanceExamReportExcel.ts: Summary sheet rows and per-student
+    Status column, for the same reason a PDF/Excel pair sitting behind
+    adjacent "Export PDF"/"Export Excel" buttons can't use different
+    words for the same thing.
+  - examSummary.ts/ResultAnalytics.tsx: ExamSummaryRow fields renamed
+    (attempted/absent/completed -> submitted/notSubmitted/
+    submittedAttempts) and CSV headers updated to match.
+  - Deliberately did NOT rename: AdvanceReportData's own pre-existing
+    presentCount/absentCount/absentStudents field names (used directly
+    by AdvanceExamReport.tsx's on-screen dashboard, which this task
+    didn't touch - only its PDF/Excel export functions' DISPLAY TEXT
+    were changed, not the underlying data field names or the live
+    webpage). Explicit, documented scope boundary - see
+    advanceExamReport.ts's own comment on this.
+
+**Retake / Pass-Fail attempt-selection rule - inspected and documented,
+not changed** (per explicit instruction): this codebase does NOT have
+one single rule. Two different, both pre-existing, rules are in use:
+  - buildAdvanceExamReport (Detailed Exam Report/its Excel export/its
+    on-screen page) dedupes to the student's single most-recently-
+    submitted attempt ("last attempt represents the student").
+  - computeExamResultSummary (Exam Result) and buildExamSummaries
+    (Result Analytics) do NOT dedupe - every submitted attempt counts
+    separately, so a candidate who failed once and passed on a retake
+    shows as one Passed + one Failed across their two attempts.
+Documented in advanceExamReport.ts's RETAKE / PASS-FAIL ATTEMPT-
+SELECTION RULE comment block. No unification attempted in this task.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 113/113 passing
+(2 new tests added specifically asserting "Submitted"/"Not Submitted"
+appear and "Attempted"/"Present"/"Absent"/"Attendance" never do, in both
+the 6-up and 4-up Detailed Exam Report stat card layouts; existing
+Exam Result/Result Analytics tests updated for the renamed fields/
+labels). Docker frontend rebuilt/redeployed. Live-verified all four real
+output files for Greenfield University/University Semester Exam:
+  - Exam Result PDF: "Submitted"/"Not Submitted" stat cards.
+  - Detailed Exam Report PDF: "Submitted"/"Not Submitted" stat cards,
+    "Submission Overview" donut, "Submitted" status badge in the
+    student table, "1 candidate(s) submitted (100%)" highlight, "Only 1
+    candidate(s) submitted this exam..." recommendation.
+  - Detailed Exam Report Excel: extracted sharedStrings.xml directly -
+    "Submitted"/"Not Submitted" present, zero "Present"/"Absent"/
+    "Attempted" (the one unrelated "Attempts" match is a per-question
+    "how many answers were recorded" column, a different, legitimate
+    concept, left alone).
+  - Result Analytics CSV: "University Semester Exam,PRO-2026-7FE35C,
+    Assessment Exam,9/13/2026,1,1,0,1,1,0,100,100,100,100" against the
+    new header row (Total Candidates, Submitted, Not Submitted,
+    Submitted Attempts, Passed, Failed, Pass %, Average %, Highest %,
+    Lowest %).
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Seventh follow-up (2026-09-15): Detailed Exam Report's "Submission
+Overview" donut panel had a real layout bug, reported by the user with a
+screenshot - the label and value text in the legend visually overlapped
+("Sub(100%)mitted" / "Not S(0%)ubmitted" jammed together).
+
+Root cause: the legend's label (left-aligned) and value (right-aligned,
+same line) were crammed into the narrow strip of the panel not occupied
+by the donut chart itself - a different, much tighter space than
+"Result Split" (the page 1 panel using the same general label+value
+legend style), which uses the panel's FULL width below its stacked bar
+instead of sharing space with a chart. This bug pre-existed with the
+old "Present"/"Absent" labels too (confirmed via an earlier PDF render
+in this session) but was easy to miss at 6-7 characters; "Not
+Submitted" (13 characters, from the terminology fix two turns ago) made
+it obvious enough to report.
+
+First fix attempt (insufficient - user caught it with a follow-up
+screenshot showing "Not Submi…"): stacked the label above the value
+instead of side-by-side, with fitText as an ellipsis backstop - this
+removed the overlap but the available column was still only ~14.9mm
+wide, and "Not Submitted" needs 16.67mm at the font size used (verified
+directly with jsPDF's own getTextWidth via a throwaway Node script, not
+estimated) - so it silently truncated to "Not Submi…" instead.
+
+Real fix: shrunk the donut chart's radius (15mm -> 11mm) and moved it
+left, freeing the legend column to ~20.7mm wide (verified via the same
+getTextWidth script, with margin to spare even for a realistic 3-digit
+count like "999 (100%)"). Label and value stay stacked (not
+side-by-side) from the first attempt - genuinely necessary given how
+narrow this 3-up panel's non-chart space is.
+
+Caught a real testing-environment limitation along the way: the vitest/
+jsdom test suite's jsPDF instance measured "Not Submitted" as fitting in
+the first (truncating) fix's width and passed 113/113 including the
+existing `toContain('Not Submitted')` assertion, but the real Chrome
+extension's jsPDF rendered it truncated. jsPDF's text-width measurement
+is not guaranteed identical between the two environments - this file's
+tests are a useful regression net for drawn TEXT CONTENT (labels,
+values, gating) but cannot be fully trusted for PIXEL-level layout/
+overlap/truncation correctness; live browser verification (which caught
+both this bug and the first fix's shortfall) remains the real source of
+truth for that class of bug, not something to skip based on a clean
+test run alone.
+
+Verified: `npm run build` - 0 errors both times. `npm run test` -
+113/113 both times (unchanged - existing text-content assertions still
+correct, this was purely a positioning/layout fix, not a text-content
+change). Docker frontend rebuilt/redeployed twice. Live-verified via a
+real downloaded PDF, opened in a real Chrome tab (not just text
+extraction) after each fix attempt - first attempt visually confirmed
+still broken (truncated), second attempt visually confirmed clean:
+"Submitted 1 (100%)" and "Not Submitted 0 (0%)" both fully legible on
+their own lines, donut chart un-obscured, no overlap with either label.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Eighth follow-up (2026-09-15): user pushed back on the previous "shrink
+the donut, widen the side legend" fix - "still looking same better to
+submitted and not submitted on bottom". Agreed and restructured instead
+of continuing to tune the side-by-side layout.
+
+Fix: moved the donut to the top-center of the "Submission Overview"
+panel and the Submitted/Not Submitted legend to its own full-width rows
+below the donut - the exact layout "Result Split" (the page-1 panel
+right next to this one's counterpart) already uses successfully, rather
+than sharing a narrow column with a chart. This sidesteps the narrow-
+column width problem entirely instead of continuing to fight it by
+resizing the donut or splitting the column differently (both tried and
+rejected across the two previous attempts today).
+
+Verified: `npm run build` - 0 errors. `npm run test` - 113/113 passing
+(no assertions changed - still the same drawn text, just repositioned).
+Docker frontend rebuilt/redeployed. Live-verified via a fresh real PDF
+download opened in a real Chrome tab: donut centered at the top of the
+panel, "Submitted 1 (100%)" and "Not Submitted 0 (0%)" both fully
+legible on their own rows below it, no overlap, no truncation - visually
+matches Result Split's proven layout style.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Ninth follow-up (2026-09-15): user flagged the donut's center "Total
+Candidates" text now looked cramped against the ring, with a screenshot.
+
+Root cause: drawDonutChart (pdfReportKit.ts) draws its center value/
+label at a FIXED 15pt/7pt regardless of the radius `r` passed in - not
+scaled to it. The previous two fixes today had shrunk this donut's
+radius (15 -> 11 -> 13) to free up room for the old side-by-side legend.
+That legend moved below the donut (previous fix), so the smaller radius
+was no longer buying anything - it was just making the fixed-size
+"Total Candidates" text (17 characters, longer than the other
+drawDonutChart caller's "Score") cramped against a smaller ring for no
+remaining reason.
+
+Fix: radius back to 15 - the original size, and the same one
+generateResultPdf.ts's own drawDonutChart call already uses successfully
+elsewhere. Adjusted donutCy (y+26 -> y+28) to keep the legend spacing
+proportional to the now-larger donut.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 113/113 passing
+(no assertions changed - purely a size/position adjustment, not a text
+content change). Docker frontend rebuilt/redeployed. Live-verified via a
+fresh real PDF download: "Total Candidates" now sits comfortably inside
+the donut ring, "Submitted 1 (100%)"/"Not Submitted 0 (0%)" remain clean
+on their own full-width rows below (unaffected by this radius change).
+
+Not yet committed - awaiting explicit user instruction to commit.

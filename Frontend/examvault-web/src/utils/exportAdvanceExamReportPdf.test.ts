@@ -269,8 +269,8 @@ describe('exportAdvanceExamReportPdf - small-sample honesty', () => {
   it('shows a limited-sample banner and a softened recommendation for a single-candidate exam, not a strong difficulty claim', async () => {
     await exportAdvanceExamReportPdf(EXAM, SCHEME, makeSingleCandidateReport(), makeExtras([]));
     const drawn = allDrawnText(lastJsPdfInstance.text).join(' ');
-    expect(drawn).toContain('Limited sample - only 1 candidate(s) attempted');
-    expect(drawn).toContain('Only 1 candidate(s) attempted this exam - treat the pass rate and difficulty as indicative only');
+    expect(drawn).toContain('Limited sample - only 1 candidate(s) submitted');
+    expect(drawn).toContain('Only 1 candidate(s) submitted this exam - treat the pass rate and difficulty as indicative only');
     // The old branch this replaces for a 100% pass rate - must not appear
     // when the "100%" is really just one person's result.
     expect(drawn).not.toContain('Strong pass rate (100%) - consider raising difficulty for future assessments.');
@@ -300,5 +300,34 @@ describe('exportAdvanceExamReportPdf - header', () => {
     expect(drawn).toContain('Sample Institution');
     expect(drawn.filter((t) => typeof t === 'string' && t.startsWith('Generated on:')).length).toBe(2); // once per page, footer only
     expect(drawn.filter((t) => typeof t === 'string' && t.startsWith('Generated On:')).length).toBe(0); // header's copy is off
+  });
+});
+
+describe('exportAdvanceExamReportPdf - Submitted/Not Submitted terminology', () => {
+  beforeEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    lastJsPdfInstance = undefined as any;
+  });
+
+  it('uses "Submitted"/"Not Submitted" throughout (stat cards, Submission Split, Submission Overview, student table), never "Attempted"/"Present"/"Absent"/"Attendance" - the reporting data is submitted-only and cannot support those stronger claims', async () => {
+    await exportAdvanceExamReportPdf(EXAM, SCHEME, makeFiveCandidateReport(), makeExtras([]));
+    const drawn = allDrawnText(lastJsPdfInstance.text);
+    expect(drawn).toContain('Submitted');
+    expect(drawn).toContain('Not Submitted');
+    expect(drawn).not.toContain('Attempted');
+    expect(drawn).not.toContain('Present');
+    expect(drawn).not.toContain('Absent');
+    expect(drawn.join(' ')).not.toContain('Attendance');
+  });
+
+  it('also uses "Submitted"/"Not Submitted" for the no-pass-fail-concept (4-up) stat card layout', async () => {
+    const noPassFailScheme = { ...SCHEME, hasPassFailConcept: false };
+    await exportAdvanceExamReportPdf(EXAM, noPassFailScheme, makeFiveCandidateReport(), makeExtras([]));
+    const drawn = allDrawnText(lastJsPdfInstance.text);
+    expect(drawn).toContain('Submitted');
+    expect(drawn).toContain('Not Submitted');
+    expect(drawn).not.toContain('Attempted');
+    expect(drawn).not.toContain('Present');
+    expect(drawn).not.toContain('Absent');
   });
 });

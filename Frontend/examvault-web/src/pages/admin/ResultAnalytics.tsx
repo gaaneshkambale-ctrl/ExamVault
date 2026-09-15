@@ -9,22 +9,24 @@ import DonutChart from '../../components/charts/DonutChart';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
 import { TargetIcon, CheckCircleIcon, UserCheckIcon, ArrowUpIcon, ArrowDownIcon, ActivityIcon, BookIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
+import { useStudents } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import { SCORE_BUCKETS } from '../../utils/scoreBuckets';
 import { bucketByDay, getDefaultRange, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
+import { buildExamSummaries, percentOf } from '../../utils/examSummary';
 import type { AdminAttemptResultResponse } from '../../types/result';
 
 const CATEGORY_COLORS = ['#4f46e5', '#f59e0b', '#22c55e', '#ef4444', '#06b6d4', '#8b5cf6'];
 
-function percentOf(r: AdminAttemptResultResponse): number {
-  return r.totalMarks > 0 ? (r.totalScore / r.totalMarks) * 100 : 0;
-}
-
 export default function ResultAnalytics() {
   const { data: exams } = useExams();
   const { data: allResults, isLoading } = useAdminResultsForAllExams(exams);
+  // Instructor-safe endpoint (no "Users - View" permission needed) - same
+  // reason ExamResults.tsx uses it for Exam Result's own Attempted/Absent,
+  // since Result Analytics is on both the Admin and Instructor sidebars.
+  const { data: students } = useStudents();
 
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [examFilter, setExamFilter] = useState('All');
@@ -114,6 +116,18 @@ export default function ResultAnalytics() {
       .sort((a, b) => b.value - a.value);
   }, [filteredResults, examById]);
 
+  // Export-only - the on-screen "Top Performing Exams" widget above keeps
+  // its own topPerformingExams (top 5 by average, 5 columns); this is the
+  // full exam-level summary (every exam with a result in the current
+  // filters, 14 columns including the authoritative Total Candidates/
+  // Attempted/Absent) the CSV export actually needs, per architecture:
+  // Result Analytics -> exam-level summary export, kept distinct from Exam
+  // Result's per-student roster and Detailed Exam Report's deep analytics.
+  const examSummaries = useMemo(
+    () => buildExamSummaries(filteredResults, allResults, exams ?? [], students ?? []),
+    [filteredResults, allResults, exams, students],
+  );
+
   return (
     <RoleAwareLayout active="Result Analytics">
       <h1 className="h4 fw-bold mb-1 text-primary">Result Analytics</h1>
@@ -128,14 +142,38 @@ export default function ResultAnalytics() {
           setCategoryFilter('All');
         }}
         exportFilename="result-analytics"
-        exportHeaders={['Exam', 'Average %', 'Highest %', 'Pass %', 'Completed']}
+        exportHeaders={[
+          'Exam',
+          'Exam Code',
+          'Exam Type',
+          'Exam Date',
+          'Total Candidates',
+          'Submitted',
+          'Not Submitted',
+          'Submitted Attempts',
+          'Passed',
+          'Failed',
+          'Pass %',
+          'Average %',
+          'Highest %',
+          'Lowest %',
+        ]}
         exportRows={() =>
-          topPerformingExams.map((p) => [
-            p.exam?.title ?? p.examId,
-            Math.round(p.averageScore),
-            Math.round(p.highestScore),
-            Math.round(p.passPercent),
-            p.completed,
+          examSummaries.map((s) => [
+            s.examTitle,
+            s.examCode ?? '',
+            s.examType ?? '',
+            s.examDate ? new Date(s.examDate).toLocaleDateString() : '',
+            s.totalCandidates,
+            s.submitted,
+            s.notSubmitted,
+            s.submittedAttempts,
+            s.passed,
+            s.failed,
+            s.passPercent,
+            s.averagePercent,
+            s.highestPercent,
+            s.lowestPercent,
           ])
         }
       >

@@ -39,13 +39,14 @@ import {
   stampFooters,
 } from './pdfReportKit';
 
-// Absent rows are capped so a large roster with few real attempts doesn't
-// turn page 1 into a wall of "Absent" - present/attempted rows (the actual
-// substance of the report) are never capped or dropped.
+// "Not Submitted" rows are capped so a large roster with few real
+// submissions doesn't turn page 1 into a wall of "Not Submitted" -
+// Submitted rows (the actual substance of the report) are never capped or
+// dropped.
 const MAX_ABSENT_ROWS = 15;
 const TOP_PERFORMERS_LIMIT = 5;
 const HARDEST_QUESTIONS_LIMIT = 5;
-// Below this many attempted candidates, pass-rate/difficulty conclusions
+// Below this many submitted candidates, pass-rate/difficulty conclusions
 // ("raise difficulty", "review content coverage") are one or two people's
 // results dressed up as a class-wide finding - not a statistical threshold,
 // just a floor under which those specific claims stop being drawn (see
@@ -74,10 +75,15 @@ function bulletLine(doc: jsPDF, x: number, y: number, text: string, color: { r: 
 
 function buildRecommendations(report: AdvanceReportData, scheme: ExamResultScheme, hasLowPerformingQuestions: boolean): string[] {
   const recommendations: string[] = [];
-  const attendancePct = pct(report.presentCount, report.totalCandidates);
+  // report.presentCount/absentCount are candidates with/without a
+  // SUBMITTED result (see computeExamAttendance's SUBMITTED-ONLY REPORTING
+  // BOUNDARY note in advanceExamReport.ts) - "submissionPct", not
+  // "attendancePct", since this data can't actually tell who showed up/
+  // started vs. who never opened the exam at all.
+  const submissionPct = pct(report.presentCount, report.totalCandidates);
 
-  if (attendancePct < 50) {
-    recommendations.push(`Attendance is low (${attendancePct}%) - review communication and reminders sent to candidates.`);
+  if (submissionPct < 50) {
+    recommendations.push(`Submission rate is low (${submissionPct}%) - review communication and reminders sent to candidates.`);
   }
   // Pass-rate/difficulty conclusions only below MIN_SAMPLE_SIZE - "raise the
   // difficulty" or "review content coverage" off a single candidate's result
@@ -88,7 +94,7 @@ function buildRecommendations(report: AdvanceReportData, scheme: ExamResultSchem
   if (scheme.hasPassFailConcept && report.presentCount > 0) {
     if (report.presentCount < MIN_SAMPLE_SIZE) {
       recommendations.push(
-        `Only ${report.presentCount} candidate(s) attempted this exam - treat the pass rate and difficulty as indicative only until more attempts are recorded.`,
+        `Only ${report.presentCount} candidate(s) submitted this exam - treat the pass rate and difficulty as indicative only until more submissions are recorded.`,
       );
     } else if (report.passRate === 0) {
       recommendations.push('No candidate passed - review exam difficulty and content coverage before the next attempt.');
@@ -99,7 +105,7 @@ function buildRecommendations(report: AdvanceReportData, scheme: ExamResultSchem
     }
   }
   if (report.absentCount > 0) {
-    recommendations.push(`${report.absentCount} candidate(s) were absent - consider a re-scheduled attempt for them.`);
+    recommendations.push(`${report.absentCount} candidate(s) did not submit - consider a re-scheduled attempt for them.`);
   }
   if (hasLowPerformingQuestions) {
     recommendations.push('Review the lowest performing questions below to identify weak topics for future coaching.');
@@ -191,8 +197,8 @@ export async function exportAdvanceExamReportPdf(
     const statW = (CONTENT_WIDTH - statGap * 5) / 6;
     const cardX = (i: number) => MARGIN + (statW + statGap) * i;
     drawStatCard(doc, cardX(0), y, statW, statCardH, BRAND, 'Total Candidates', String(report.totalCandidates), TEXT_DARK);
-    drawStatCard(doc, cardX(1), y, statW, statCardH, BRAND, 'Attempted', String(report.presentCount), TEXT_DARK, `${pct(report.presentCount, report.totalCandidates)}%`);
-    drawStatCard(doc, cardX(2), y, statW, statCardH, GREEN, scheme.outcomeLabels.pass, String(report.passCount), GREEN, `${pct(report.passCount, report.presentCount)}% of attempted`);
+    drawStatCard(doc, cardX(1), y, statW, statCardH, BRAND, 'Submitted', String(report.presentCount), TEXT_DARK, `${pct(report.presentCount, report.totalCandidates)}%`);
+    drawStatCard(doc, cardX(2), y, statW, statCardH, GREEN, scheme.outcomeLabels.pass, String(report.passCount), GREEN, `${pct(report.passCount, report.presentCount)}% of submitted`);
     drawStatCard(
       doc,
       cardX(3),
@@ -203,16 +209,16 @@ export async function exportAdvanceExamReportPdf(
       scheme.outcomeLabels.fail,
       String(report.presentCount - report.passCount),
       RED,
-      `${pct(report.presentCount - report.passCount, report.presentCount)}% of attempted`,
+      `${pct(report.presentCount - report.passCount, report.presentCount)}% of submitted`,
     );
-    drawStatCard(doc, cardX(4), y, statW, statCardH, GRAY, 'Absent', String(report.absentCount), TEXT_DARK, `${pct(report.absentCount, report.totalCandidates)}% of total`);
+    drawStatCard(doc, cardX(4), y, statW, statCardH, GRAY, 'Not Submitted', String(report.absentCount), TEXT_DARK, `${pct(report.absentCount, report.totalCandidates)}% of total`);
     drawStatCard(doc, cardX(5), y, statW, statCardH, AMBER, 'Pass Rate', `${report.passRate}%`, AMBER, 'Overall pass rate');
   } else {
     const statW = (CONTENT_WIDTH - statGap * 3) / 4;
     const cardX = (i: number) => MARGIN + (statW + statGap) * i;
     drawStatCard(doc, cardX(0), y, statW, statCardH, BRAND, 'Total Candidates', String(report.totalCandidates), TEXT_DARK);
-    drawStatCard(doc, cardX(1), y, statW, statCardH, GREEN, 'Attempted', String(report.presentCount), TEXT_DARK, `${pct(report.presentCount, report.totalCandidates)}%`);
-    drawStatCard(doc, cardX(2), y, statW, statCardH, GRAY, 'Absent', String(report.absentCount), TEXT_DARK, `${pct(report.absentCount, report.totalCandidates)}%`);
+    drawStatCard(doc, cardX(1), y, statW, statCardH, GREEN, 'Submitted', String(report.presentCount), TEXT_DARK, `${pct(report.presentCount, report.totalCandidates)}%`);
+    drawStatCard(doc, cardX(2), y, statW, statCardH, GRAY, 'Not Submitted', String(report.absentCount), TEXT_DARK, `${pct(report.absentCount, report.totalCandidates)}%`);
     drawStatCard(doc, cardX(3), y, statW, statCardH, AMBER, 'Average Score', `${report.averagePercentage}%`, AMBER);
   }
   y += statCardH + 6;
@@ -220,7 +226,7 @@ export async function exportAdvanceExamReportPdf(
   // Small-sample caveat - shown once here rather than repeated in every
   // panel below. Score Distribution, Section-wise Performance, Lowest
   // Performing Questions, Exam Insights and Recommendations all read
-  // differently once the reader knows the attempted count is this low;
+  // differently once the reader knows the submitted count is this low;
   // buildRecommendations separately softens its own pass-rate claims below
   // this same MIN_SAMPLE_SIZE threshold.
   if (report.presentCount > 0 && report.presentCount < MIN_SAMPLE_SIZE) {
@@ -231,7 +237,7 @@ export async function exportAdvanceExamReportPdf(
     doc.setFontSize(8);
     setColor(doc, 'setTextColor', AMBER);
     doc.text(
-      `Limited sample - only ${report.presentCount} candidate(s) attempted. Analytics below may not be statistically meaningful.`,
+      `Limited sample - only ${report.presentCount} candidate(s) submitted. Analytics below may not be statistically meaningful.`,
       MARGIN + 4,
       y + bannerH / 2 + 1.3,
     );
@@ -246,7 +252,7 @@ export async function exportAdvanceExamReportPdf(
 
   const resultX = MARGIN;
   panel(doc, resultX, y, col3W, col3H);
-  panelTitle(doc, scheme.hasPassFailConcept ? 'Result Split' : 'Attendance Split', resultX + 4, y + 7);
+  panelTitle(doc, scheme.hasPassFailConcept ? 'Result Split' : 'Submission Split', resultX + 4, y + 7);
   {
     const barW = col3W - 8;
     const barY = y + 16;
@@ -255,11 +261,11 @@ export async function exportAdvanceExamReportPdf(
       ? [
           { label: scheme.outcomeLabels.pass, value: report.passCount, color: GREEN },
           { label: scheme.outcomeLabels.fail, value: report.presentCount - report.passCount, color: RED },
-          { label: 'Absent', value: report.absentCount, color: GRAY },
+          { label: 'Not Submitted', value: report.absentCount, color: GRAY },
         ]
       : [
-          { label: 'Present', value: report.presentCount, color: GREEN },
-          { label: 'Absent', value: report.absentCount, color: GRAY },
+          { label: 'Submitted', value: report.presentCount, color: GREEN },
+          { label: 'Not Submitted', value: report.absentCount, color: GRAY },
         ];
     drawStackedBar(doc, resultX + 4, barY, barW, barH, slices);
     let ly = barY + barH + 6;
@@ -308,10 +314,10 @@ export async function exportAdvanceExamReportPdf(
   {
     const highlightLines = [
       `${report.totalCandidates} candidate(s) registered for this exam.`,
-      `${report.presentCount} candidate(s) attempted (${pct(report.presentCount, report.totalCandidates)}%).`,
+      `${report.presentCount} candidate(s) submitted (${pct(report.presentCount, report.totalCandidates)}%).`,
       scheme.hasPassFailConcept ? `${report.passCount} candidate(s) ${scheme.outcomeLabels.pass.toLowerCase()}.` : null,
       scheme.hasPassFailConcept ? `${scheme.outcomeLabels.pass} rate is ${report.passRate}%.` : null,
-      report.absentCount > 0 ? `${report.absentCount} candidate(s) were absent (${pct(report.absentCount, report.totalCandidates)}%).` : null,
+      report.absentCount > 0 ? `${report.absentCount} candidate(s) did not submit (${pct(report.absentCount, report.totalCandidates)}%).` : null,
     ].filter((l): l is string => l !== null);
     let hy = y + 14;
     highlightLines.forEach((line) => {
@@ -404,14 +410,14 @@ export async function exportAdvanceExamReportPdf(
     const cells = [
       r.student.rollNumber ?? '—',
       r.student.fullName,
-      'Present',
+      'Submitted',
       `${r.attempt.totalScore}/${r.attempt.totalMarks}`,
       `${round1(r.percent)}%`,
       scheme.hasPassFailConcept ? (r.attempt.passed ? scheme.outcomeLabels.pass : scheme.outcomeLabels.fail) : '—',
       ...(scheme.showRankPercentile ? [r.rank !== null ? String(r.rank) : '—', r.percentile !== null ? `${r.percentile}%` : '—'] : []),
       new Date(r.attempt.submittedAtUtc).toLocaleDateString(),
     ];
-    const badges = [{ colIndex: statusColIndex, text: 'Present', bg: STATUS_BG, fg: STATUS_FG, icon: 'check' as BadgeIcon }];
+    const badges = [{ colIndex: statusColIndex, text: 'Submitted', bg: STATUS_BG, fg: STATUS_FG, icon: 'check' as BadgeIcon }];
     if (scheme.hasPassFailConcept) {
       badges.push({
         colIndex: resultColIndex,
@@ -431,16 +437,16 @@ export async function exportAdvanceExamReportPdf(
     const cells = [
       s.rollNumber ?? '—',
       s.fullName,
-      'Absent',
+      'Not Submitted',
       '—',
       '—',
-      'Absent',
+      'Not Submitted',
       ...(scheme.showRankPercentile ? ['—', '—'] : []),
       '—',
     ];
     const badges = [
-      { colIndex: statusColIndex, text: 'Absent', bg: ABSENT_BG, fg: ABSENT_FG, icon: 'dot' as BadgeIcon },
-      { colIndex: resultColIndex, text: 'Absent', bg: ABSENT_BG, fg: ABSENT_FG, icon: 'dot' as BadgeIcon },
+      { colIndex: statusColIndex, text: 'Not Submitted', bg: ABSENT_BG, fg: ABSENT_FG, icon: 'dot' as BadgeIcon },
+      { colIndex: resultColIndex, text: 'Not Submitted', bg: ABSENT_BG, fg: ABSENT_FG, icon: 'dot' as BadgeIcon },
     ];
     drawRow(cells, badges, report.studentRows.length + i);
   });
@@ -474,7 +480,7 @@ export async function exportAdvanceExamReportPdf(
       ? 0
       : round1(report.studentRows.reduce((sum, r) => sum + r.attempt.totalScore, 0) / report.studentRows.length);
 
-  // Performance Summary / Top Performers / Attendance Overview.
+  // Performance Summary / Top Performers / Submission Overview.
   const row2Gap = 5;
   const row2W = (CONTENT_WIDTH - row2Gap * 2) / 3;
   const row2H = 66;
@@ -509,7 +515,7 @@ export async function exportAdvanceExamReportPdf(
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       setColor(doc, 'setTextColor', TEXT_MUTED);
-      doc.text('No candidate attempted this exam.', topX + 4, y + 16);
+      doc.text('No candidate has submitted this exam.', topX + 4, y + 16);
     } else {
       const tCols = [{ label: '#', width: 8 }, { label: 'Student', width: row2W - 8 - 18 - 8 }, { label: 'Score', width: 18 }];
       drawTableHeader(doc, topX + 4, y + 10, tCols.map((c) => c.width), tCols.map((c) => c.label), 5.5);
@@ -532,10 +538,34 @@ export async function exportAdvanceExamReportPdf(
 
   const attendanceX = MARGIN + (row2W + row2Gap) * 2;
   panel(doc, attendanceX, y, row2W, row2H);
-  panelTitle(doc, 'Attendance Overview', attendanceX + 4, y + 7);
+  panelTitle(doc, 'Submission Overview', attendanceX + 4, y + 7);
   {
-    const donutCx = attendanceX + row2W * 0.32;
-    const donutCy = y + row2H / 2 + 4;
+    // Donut centered at the top of the panel, legend below it spanning the
+    // panel's FULL width - not beside the donut, sharing a narrow leftover
+    // strip of it, the way this used to be laid out. That side-by-side
+    // approach kept being too cramped for "Not Submitted" (13 characters)
+    // regardless of how the donut/legend column split was tuned - it
+    // collided with the value on one line, or the column still wasn't wide
+    // enough and it silently ellipsis-truncated to "Not Submi…" even once
+    // stacked onto its own line (see git history - both were tried and
+    // rejected). Putting the legend on its own full-width rows below the
+    // donut instead - exactly the layout "Result Split" (this same
+    // Performance Summary/Top Performers/Submission Overview row's page-1
+    // counterpart) already uses successfully for the same label length -
+    // sidesteps the narrow-column problem entirely instead of continuing
+    // to fight it.
+    //
+    // Radius back to 15 (the original size, and the same one
+    // generateResultPdf.ts's own drawDonutChart call uses) - it was only
+    // ever shrunk to 11/13 to free up room for the old side-by-side
+    // legend, which doesn't exist anymore now the legend moved below.
+    // drawDonutChart's center text is a fixed 15pt/7pt regardless of `r`
+    // (not scaled to the radius), so at the smaller radius "Total
+    // Candidates" (17 characters - longer than the other caller's "Score")
+    // rendered cramped against the ring; 15 is the size this text was
+    // already proven to fit at.
+    const donutCx = attendanceX + row2W / 2;
+    const donutCy = y + 28;
     drawDonutChart(
       doc,
       donutCx,
@@ -548,27 +578,26 @@ export async function exportAdvanceExamReportPdf(
       String(report.totalCandidates),
       'Total Candidates',
     );
-    const legendX = attendanceX + row2W * 0.62;
-    let ly = donutCy - 6;
+    let ly = donutCy + 20;
     ([
-      ['Present', GREEN, report.presentCount],
-      ['Absent', GRAY, report.absentCount],
+      ['Submitted', GREEN, report.presentCount],
+      ['Not Submitted', GRAY, report.absentCount],
     ] as [string, { r: number; g: number; b: number }, number][]).forEach(([label, color, count]) => {
       setColor(doc, 'setFillColor', color);
-      doc.circle(legendX, ly, 1.4, 'F');
+      doc.circle(attendanceX + 6, ly - 1, 1.4, 'F');
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
+      doc.setFontSize(7.8);
       setColor(doc, 'setTextColor', TEXT_DARK);
-      doc.text(label, legendX + 4, ly + 1);
+      doc.text(label, attendanceX + 9, ly);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${count} (${pct(count, report.totalCandidates)}%)`, attendanceX + row2W - 4, ly + 1, { align: 'right' });
-      ly += 8;
+      doc.text(`${count} (${pct(count, report.totalCandidates)}%)`, attendanceX + row2W - 4, ly, { align: 'right' });
+      ly += 7;
     });
   }
   y += row2H + 6;
 
-  // Section-wise Performance / Question Analysis. A question every attempted
-  // candidate got right (100% correct) isn't "difficult" and doesn't belong
+  // Section-wise Performance / Question Analysis. A question every
+  // submitting candidate got right (100% correct) isn't "difficult" and doesn't belong
   // in a lowest-performing-questions panel just to fill a slot - excluded
   // outright rather than shown with a misleadingly high percentage next to
   // a title implying it's a weak spot.

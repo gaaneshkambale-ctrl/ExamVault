@@ -745,10 +745,11 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
         ...entry,
         context: { ...entry.context, enabledResultFields: academicConfig?.resultFields },
       })),
-      // Same 4 total / 1 absent as SAMPLE_ADVANCE_REPORT below, so the two
-      // sample previews agree with each other instead of showing different
-      // fake candidate counts for what's presented as "the same sample exam".
-      { totalCandidates: 4, absentCount: 1 },
+      // Same 4 total / 3 attempted / 1 absent as SAMPLE_ADVANCE_REPORT
+      // below, so the two sample previews agree with each other instead of
+      // showing different fake candidate counts for what's presented as
+      // "the same sample exam".
+      { totalCandidates: 4, submittedCount: 3, notSubmittedCount: 1 },
     );
 
   const handleDownloadSample = async () => {
