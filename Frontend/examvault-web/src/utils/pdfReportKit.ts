@@ -275,6 +275,93 @@ export function drawPageHeader(
   return y;
 }
 
+/**
+ * Draws the other branded page header style this app uses: small logo
+ * top-left, "Generated On" top-right, and the institution name/motto/
+ * address/registration block CENTERED across the page - matching the
+ * per-student result report's header (generateResultPdf.ts's
+ * drawAcademicReport, built to match the reference "St. Xavier's
+ * University" mockup exactly) - then a centered title/subtitle below the
+ * divider rule. Use this (not drawPageHeader) for any report meant to look
+ * like the same institutional letterhead as the per-student result PDF;
+ * drawPageHeader's logo-left/title-right layout is for reports that don't
+ * need that letterhead treatment.
+ *
+ * `showGeneratedAt` (default true) can turn off the top-right "Generated
+ * On" line for a report whose footer (stampFooters/drawFooter) already
+ * prints "Generated on" - full date+time plus page numbers - on every page,
+ * so the same timestamp doesn't appear twice on one page.
+ */
+export function drawCenteredBrandHeader(
+  doc: jsPDF,
+  branding: TenantBranding,
+  generatedAt: Date,
+  title: string,
+  subtitle?: string,
+  showGeneratedAt = true,
+): number {
+  let y = MARGIN;
+  const logoH = 10;
+  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo, branding.showLogoOnReports);
+  if (showGeneratedAt) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(`Generated On: ${generatedAt.toLocaleString()}`, PAGE_WIDTH - MARGIN, y + 3, { align: 'right' });
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  setColor(doc, 'setTextColor', TEXT_DARK);
+  const nameLine = branding.establishedYear ? `${branding.name}  (Est. ${branding.establishedYear})` : branding.name;
+  doc.text(nameLine, PAGE_WIDTH / 2, y + 5, { align: 'center' });
+  let centerY = y + 10;
+  if (branding.showMotto && branding.motto) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(branding.motto, PAGE_WIDTH / 2, centerY, { align: 'center' });
+    centerY += 4.5;
+  }
+  const addressParts = [branding.addressLine, ...(branding.showContactDetails ? [branding.contactLine, branding.website] : [])].filter(
+    (part): part is string => Boolean(part),
+  );
+  if (addressParts.length > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(addressParts.join('  |  '), PAGE_WIDTH / 2, centerY, { align: 'center' });
+    centerY += 4;
+  }
+  if (branding.registrationNumber) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(`Reg. No: ${branding.registrationNumber}`, PAGE_WIDTH / 2, centerY, { align: 'center' });
+    centerY += 4;
+  }
+  y = Math.max(y + logoH + 4, centerY + 2);
+  setColor(doc, 'setDrawColor', branding.headerColor);
+  doc.setLineWidth(0.6);
+  doc.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
+  y += 9;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  setColor(doc, 'setTextColor', TEXT_DARK);
+  doc.text(title.toUpperCase(), PAGE_WIDTH / 2, y, { align: 'center' });
+
+  if (subtitle) {
+    y += 5.5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    setColor(doc, 'setTextColor', TEXT_MUTED);
+    doc.text(subtitle, PAGE_WIDTH / 2, y, { align: 'center' });
+  }
+  y += 8;
+  return y;
+}
+
 export function drawFooter(
   doc: jsPDF,
   page: number,

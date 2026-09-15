@@ -34,6 +34,7 @@ import { useMyTenant } from '../../hooks/useTenants';
 import { useAuth } from '../../hooks/useAuth';
 import { getExamResultScheme } from '../../utils/examResultScheme';
 import { exportAdvanceExamReportPdf } from '../../utils/exportAdvanceExamReportPdf';
+import { generateExamResultsBooklet, type ExamResultBookletEntry } from '../../utils/generateResultPdf';
 import type { AdvanceReportData, AdvanceReportStudentRow, DistributionBucket } from '../../utils/advanceExamReport';
 import type { AdvanceReportExtras, SectionPerformanceStat, QuestionDifficultyStat } from '../../utils/advanceExamReportAnalysis';
 import type { ExamResponse } from '../../types/exam';
@@ -174,26 +175,57 @@ const SAMPLE_REPORT = {
   verificationCode: 'SXU2026001',
 };
 
-// Second sample student - only used for the "Exam Result" (booklet) sample
-// preview, to genuinely demonstrate that report type's real behavior
-// (every student's result combined into one PDF, one page per student)
-// rather than just relabeling the same single-student document.
-const SAMPLE_REPORT_2 = {
-  studentName: 'Priya Sharma',
-  registrationNo: 'SXU2026002',
-  program: 'Bachelor of Computer Science',
-  examName: 'C# Programming - Final Assessment',
-  examDate: '12 Apr 2026',
-  duration: '60 Minutes',
-  rows: [
-    { no: 1, subject: 'Basics', marks: 10, obtained: 10 },
-    { no: 2, subject: 'OOP Concepts', marks: 10, obtained: 9 },
-    { no: 3, subject: 'Exception Handling', marks: 10, obtained: 8 },
-    { no: 4, subject: 'LINQ & Collections', marks: 10, obtained: 10 },
-    { no: 5, subject: 'ASP.NET Core', marks: 10, obtained: 9 },
-  ],
-  verificationCode: 'SXU2026002',
-};
+// Sample roster for the "Exam Result" (booklet) sample - fed straight into
+// the REAL generateExamResultsBooklet/drawExamResultRoster (same pattern as
+// SAMPLE_ADVANCE_EXAM below for Detailed Exam Report), instead of hand-
+// drawing a second copy of that layout here. That earlier hand-drawn
+// approach (repeating the single-student template with doc.addPage()) is
+// exactly what drawExamResultRoster replaced in the real generator - a
+// second, undrawn-from-source copy of it here would just reopen the same
+// preview/real-PDF drift the Result Fields fix closed off.
+function makeSampleAttempt(overrides: Pick<AdminAttemptResultResponse, 'userId' | 'totalScore' | 'passed'>): AdminAttemptResultResponse {
+  return {
+    attemptId: `sample-attempt-${overrides.userId}`,
+    examId: 'sample-exam-id',
+    examTitle: 'C# Programming - Final Assessment',
+    totalMarks: 50,
+    passingMarks: 20,
+    submittedAtUtc: new Date().toISOString(),
+    questions: [],
+    hasPendingGrading: false,
+    fullscreenExitCount: 0,
+    noFaceDetectedCount: 0,
+    multipleFacesDetectedCount: 0,
+    tabSwitchCount: 0,
+    multipleTabsCount: 0,
+    copyPasteCount: 0,
+    rightClickCount: 0,
+    multipleMonitorsCount: 0,
+    correctCount: 0,
+    incorrectCount: 0,
+    skippedCount: 0,
+    accuracy: 0,
+    rank: null,
+    percentile: null,
+    totalParticipants: null,
+    ...overrides,
+  };
+}
+
+const SAMPLE_EXAM_RESULT_ENTRIES: ExamResultBookletEntry[] = [
+  {
+    result: makeSampleAttempt({ userId: 'sample-1', totalScore: 46, passed: true }),
+    context: { studentName: 'Priya Sharma', rollNumber: 'SXU2026002', examCode: 'EX-SAMPLE', examType: 'Final Assessment', durationMinutes: 60 },
+  },
+  {
+    result: makeSampleAttempt({ userId: 'sample-2', totalScore: 41, passed: true }),
+    context: { studentName: 'John Doe', rollNumber: 'SXU2026001', examCode: 'EX-SAMPLE', examType: 'Final Assessment', durationMinutes: 60 },
+  },
+  {
+    result: makeSampleAttempt({ userId: 'sample-3', totalScore: 18, passed: false }),
+    context: { studentName: 'Arjun Mehta', rollNumber: 'SXU2026003', examCode: 'EX-SAMPLE', examType: 'Final Assessment', durationMinutes: 60 },
+  },
+];
 
 type SampleReportType = Extract<ReportTypeKey, 'studentResult' | 'examResultBooklet' | 'detailedExamReport'>;
 
@@ -696,31 +728,49 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
     const doc = new jsPDF();
     const brand = draft.useBrandColorsInReportHeader ? hexToRgb(draft.primaryColor) : TEXT_DARK;
     const [logoImg, signatureImg] = await Promise.all([loadImageElement(logoUrl), loadImageElement(signatureUrl)]);
-    // "Exam Result" draws 2 sample students (with a real doc.addPage()
-    // between them) to genuinely demonstrate that report type's behavior -
-    // every student's result combined into one PDF - rather than just
-    // relabeling the single-student document.
-    const samples = sampleReportType === 'examResultBooklet' ? [SAMPLE_REPORT, SAMPLE_REPORT_2] : [SAMPLE_REPORT];
-    for (let i = 0; i < samples.length; i++) {
-      if (i > 0) doc.addPage();
-      await drawSampleReportPage(doc, samples[i], logoImg, signatureImg, brand, i + 1, samples.length);
-    }
+    await drawSampleReportPage(doc, SAMPLE_REPORT, logoImg, signatureImg, brand, 1, 1);
     return doc;
   };
+
+  // "Exam Result" calls the REAL generateExamResultsBooklet with sample
+  // entries, same as Advance Report below calls the real
+  // exportAdvanceExamReportPdf - it saves the file itself (no blob to
+  // preview inline with), and it reads the tenant's actual saved branding
+  // via loadTenantBranding(), not this form's unsaved draft edits, exactly
+  // like Advance Report already does.
+  const handleDownloadExamResultSample = () =>
+    generateExamResultsBooklet(
+      'Sample Exam',
+      SAMPLE_EXAM_RESULT_ENTRIES.map((entry) => ({
+        ...entry,
+        context: { ...entry.context, enabledResultFields: academicConfig?.resultFields },
+      })),
+      // Same 4 total / 1 absent as SAMPLE_ADVANCE_REPORT below, so the two
+      // sample previews agree with each other instead of showing different
+      // fake candidate counts for what's presented as "the same sample exam".
+      { totalCandidates: 4, absentCount: 1 },
+    );
 
   const handleDownloadSample = async () => {
     if (sampleReportType === 'detailedExamReport') {
       await handleDownloadAdvanceReportSample();
       return;
     }
+    if (sampleReportType === 'examResultBooklet') {
+      await handleDownloadExamResultSample();
+      return;
+    }
     const doc = await buildSamplePdf();
-    doc.save(sampleReportType === 'examResultBooklet' ? 'sample-exam-result-booklet.pdf' : 'sample-report.pdf');
+    doc.save('sample-report.pdf');
   };
 
   // Opens the same generated PDF inline in a new tab (jsPDF's blob-URL
   // output) instead of forcing a download - lets the admin quickly check
   // how a setting change looks without cluttering their Downloads folder
-  // every time.
+  // every time. Only "Student Result" supports this (see the "Preview PDF"
+  // button being hidden for the other two types) - both Exam Result and
+  // Detailed Exam Report call their real production generator, which saves
+  // the file itself rather than returning a doc to open a blob URL from.
   const handlePreviewSample = async () => {
     const doc = await buildSamplePdf();
     window.open(doc.output('bloburl'), '_blank', 'noopener,noreferrer');
@@ -742,14 +792,14 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                 title="Live PDF Preview"
                 subtitle={
                   sampleReportType === 'examResultBooklet'
-                    ? "Every student's result for one exam, combined into a single PDF - shown below is page 1 of a 2-student sample."
+                    ? 'Every candidate for one exam on a single roster page - name, marks, %, and pass/fail. No inline preview for this report type; download the sample to see the real generated document.'
                     : sampleReportType === 'detailedExamReport'
                       ? 'Class-wide analytics for one exam - averages, score distribution, rank/percentile. No inline preview for this report type; download the sample to see the full multi-page document.'
                       : 'See how your settings will appear in the generated report.'
                 }
                 action={
                   <div className="d-flex gap-2">
-                    {sampleReportType !== 'detailedExamReport' && (
+                    {sampleReportType === 'studentResult' && (
                       <Button variant="outline-secondary" size="sm" onClick={handlePreviewSample}>
                         Preview PDF
                       </Button>
@@ -778,6 +828,11 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                 <div className="text-muted small text-center py-5 border rounded">
                   This report is class-wide analytics (multiple pages), not a single-page template - click "Download
                   Sample" above to see it.
+                </div>
+              ) : sampleReportType === 'examResultBooklet' ? (
+                <div className="text-muted small text-center py-5 border rounded">
+                  This report is a single exam-wide roster of every candidate, not the per-student template above -
+                  click "Download Sample" to see it.
                 </div>
               ) : (
               <Card className="border">

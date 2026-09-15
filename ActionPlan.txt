@@ -13459,3 +13459,332 @@ Failed/Pass Rate stat cards, correct student row (GU2026001, Arjun
 Mehta, 2/2, 100%, PASS).
 
 Committed and pushed to origin/dev after this entry.
+
+---
+
+Follow-up fix (2026-09-15): Reports & Documents "Live PDF Preview" for
+"Exam Result" was still stale after the roster redesign above.
+
+Bug (user-reported via screenshot): selecting "Exam Result" in
+Organization Settings > Reports & Documents showed the correct new
+subtitle text ("Every student's result for one exam, combined into a
+single PDF...") but the inline mock card AND the "Download Sample"/
+"Preview PDF" buttons still rendered the OLD pre-redesign shape - two
+single-student "OFFICIAL EXAMINATION REPORT" pages glued together via
+doc.addPage(), via a hand-written SAMPLE_REPORT_2 + drawSampleReportPage
+loop that was never updated when generateExamResultsBooklet was
+rewritten to call the real drawExamResultRoster. Root cause: this
+settings-page preview was never wired to the real production function -
+exactly the same "preview drifts from real generator" bug class as the
+earlier Result Fields sample-preview fix, just reopened for this one
+report type by the roster redesign.
+
+Fix: removed SAMPLE_REPORT_2 and the addPage-loop in buildSamplePdf.
+Added SAMPLE_EXAM_RESULT_ENTRIES (3 sample students: Priya Sharma
+46/50 pass, John Doe 41/50 pass, Arjun Mehta 18/50 fail - same fixture
+shape as the unit tests) and handleDownloadExamResultSample(), which
+calls the REAL generateExamResultsBooklet() from generateResultPdf.ts
+with this sample data - same pattern already established for Detailed
+Exam Report's sample (calls the real exportAdvanceExamReportPdf()
+instead of a second hand-drawn copy). Since generateExamResultsBooklet
+calls doc.save() internally with no blob to open inline, "Preview PDF"
+is now hidden for Exam Result too (same treatment as Detailed Exam
+Report) and the inline mock card is replaced with an honest "click
+Download Sample to see it" placeholder instead of a second, driftable
+HTML re-implementation of the roster layout. enabledResultFields is
+threaded from the real academicConfig at call time so Result Fields
+gating still applies to the sample exactly like the real document.
+
+Verified: full real build (`npm run build`) - 0 errors. Full test
+suite (`npm run test`) - 94/94 passing, no changes needed to the
+existing generateResultPdf.test.ts (this fix only touched the settings-
+page sample/preview wiring, not the production PDF-generation code
+paths those tests exercise). Docker frontend rebuilt and redeployed
+(this app's frontend container serves a pre-built `dist` via nginx, not
+a dev server with HMR, so source edits need a rebuild to take effect).
+Live-verified on Greenfield University: "Exam Result" tab now shows the
+correct subtitle, no "Preview PDF" button, and the new placeholder;
+"Download Sample" produced a real Sample-Exam-all-results.pdf matching
+generateExamResultsBooklet's real filename/content exactly - EXAM
+RESULT title, exam info panel, 3/2/1/67% stat cards, and all 3 sample
+students with correct PASS/PASS/FAIL rows. "Student Result" tab
+(unaffected code path) re-verified unchanged - inline mock, Preview PDF
+blob-tab open, and Download Sample all still work.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Second follow-up fix (2026-09-15): Detailed Exam Report (Advance Report)
+header/exam-info-panel bugs, reported by user with screenshots.
+
+Bug 1 (fields not visible): Exam Information panel used a 3-column x
+4-row layout (CONTENT_WIDTH/3 per column). A real exam title/code still
+didn't fit that width even with the ellipsis backstop - e.g. "C#
+Programming - Final Assessment" rendered as "C# Programming …" in the
+real generated PDF (confirmed by downloading and reading it). Fixed by
+switching to 2 columns x 6 rows (CONTENT_WIDTH/2 per column - roughly
+double the width per field), same 12 fields, same reading order, just
+split 6/6 instead of 4/4/4. infoPanelH is now computed from the row
+count instead of hardcoded, so the panel always sizes itself correctly.
+
+Bug 2 (header "not exact position"): asked the user to clarify since
+the header looked internally well-positioned in my own render (verified
+by rendering the actual PDF through a temporary local static file
+server + zoomed screenshot of the header region, since this Windows
+machine has no pdftoppm/poppler for direct PDF-to-image rendering).
+Clarified answer: the complaint was that this header's layout (small
+logo top-left, title/tagline right-aligned, institution name in a
+separate left-aligned block below the rule) looks inconsistent sitting
+next to the per-student Student Result report's header (logo top-left,
+institution name/motto/address/registration CENTERED, title centered
+below the rule - the "St. Xavier's University" reference mockup style).
+
+Fix: added a new shared `drawCenteredBrandHeader(doc, branding,
+generatedAt, title, subtitle?)` to pdfReportKit.ts - the same
+"institution name/motto/address/registration centered" drawing logic
+generateResultPdf.ts's drawAcademicReport already has, but extracted as
+a reusable primitive (parameterized on the existing TenantBranding
+shape both files already fetch via loadTenantBranding(), so no new
+data-fetching needed). exportAdvanceExamReportPdf.ts's page 1 AND page
+2 headers now both call this instead of the old drawPageHeader() +
+a hand-drawn left-aligned org-name block. Removed the now-dead
+formatAddress() helper and the unused MyTenant import (extras.organization
+was only ever used for that removed header block - exportAdvanceExamReportExcel.ts,
+which still needs it, is untouched).
+
+Deliberately did NOT touch generateResultPdf.ts's own drawAcademicReport
+(still hand-draws its centered header inline, not migrated to call the
+new shared function) - it's real, already-verified production code for
+Student Result, and migrating it wasn't necessary to fix the two
+reported bugs; smallest clean change per [[feedback_plan_before_code]]
+discipline. Also deliberately left Exam Result's roster header
+(drawExamResultRoster) on its existing right-aligned style, since the
+user's complaint was specifically about Detailed Exam Report/Advance
+Report, not Exam Result.
+
+Verified: full real build (`npm run build`) - 0 errors. Full test suite
+(`npm run test`) - 94/94 passing (no test changes needed - this only
+touched PDF drawing code, not the tested generateResultPdf.ts booklet/
+summary logic). Docker frontend rebuilt and redeployed. Live-verified
+both bugs fixed on two different real downloads: the Reports & Documents
+sample (Download Sample -> "Detailed Exam Report") and the REAL Export
+PDF button on an actual exam's live Advanced Report page (University
+Semester Exam, real single-student data, different totalMarks/exam
+shape than the sample) - both now show the full un-truncated "Exam
+Title"/"Exam Code" in a clean 2-column panel, and a header identical in
+layout to Student Result's (centered institution name/address/reg-no,
+centered title below the rule), on both page 1 and page 2.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Third follow-up fix (2026-09-15): user reviewed all three real production
+PDFs side by side (attached University-Semester-Exam-result.pdf,
+-all-results.pdf, -advanced-report.pdf) and requested a specific, scoped
+list of corrections - NOT the Exam Type axis, NOT new document fields.
+
+**Exam Result** (drawExamResultRoster, generateResultPdf.ts):
+- Added Attempted/Absent (and kept Total Candidates, now genuinely
+  distinct from Attempted) as two new stat cards, 4-up -> 6-up row:
+  Total Candidates / Attempted / Passed / Failed / Absent / Pass Rate.
+  Previously "Total Candidates" was mislabeled - it was actually just
+  entries.length (everyone who attempted), since the roster's `entries`
+  only ever contains attempted students; there was no way to know who was
+  absent. Added `computeExamAttendance(attempts, eligibleStudents)` to
+  advanceExamReport.ts (shared with Detailed Exam Report's own
+  totalCandidates/absentCount, same "diff attempts against the eligible
+  roster" idea) and wired it into ExamResults.tsx's handleDownloadExamPdf.
+  Real caveat documented in code: ExamResults.tsx only has the Instructor-
+  safe StudentSummary[] (no IsActive field at the API level at all), so
+  Exam Result's "Total Candidates" can include an inactive student that
+  Detailed Exam Report's Admin-only, fully-filtered count would exclude -
+  a genuine, pre-existing permission-boundary gap, not something faked
+  around.
+- Added Exam Date to the exam info panel (was Exam Name/Code/Type only) -
+  gated by the tenant's Result Fields config exactly like Roll No already
+  is (isResultFieldEnabled(..., 'examDate')), using the first entry's
+  result.submittedAtUtc (an "exam-level fact", same convention already
+  used for totalMarks/passingMarks in this function).
+- Explicitly did NOT add analytics, ranking, percentile, score
+  distribution, or insights - stayed a lightweight roster.
+
+**Detailed Exam Report** (exportAdvanceExamReportPdf.ts):
+- Renamed "Most Difficult Questions" -> "Lowest Performing Questions" and
+  excluded any question at 100% correct from that list outright (was
+  showing a 100%-correct question under a "difficult" title just because
+  the exam only had 2 questions and the panel always filled its slots) -
+  when every question turns out 100% correct, shows "Every question was
+  answered correctly by every candidate." instead of an empty/misleading
+  panel.
+- Added a `MIN_SAMPLE_SIZE = 5` soft threshold: below it, a "Limited
+  sample - only N candidate(s) attempted..." amber banner is shown once
+  near the top of the analytics (not repeated per-panel), and
+  buildRecommendations() swaps its pass-rate/difficulty conclusions
+  ("raise the difficulty", "review content coverage") for a single
+  neutral caveat instead of asserting them off 1-2 people's results. The
+  low-attendance recommendation (a factual count, not an inference) and
+  the absent-candidates one are unaffected by this threshold.
+- Deduplicated "Generated On": both page headers now pass
+  `showGeneratedAt: false` to drawCenteredBrandHeader (new optional param,
+  defaults true) since the footer on every page already prints "Generated
+  on" with full date+time and a page number - was showing the exact same
+  timestamp twice per page.
+- Explicitly did NOT touch the existing score distribution, section-wise
+  performance, top performers, attendance donut, or any other existing
+  analytics - only the two specific issues above and the header.
+
+**Common Header** (all three report types):
+- Exam Result's roster now calls the same `drawCenteredBrandHeader`
+  (pdfReportKit.ts) Detailed Exam Report already adopted in the prior
+  fix - replacing its own former right-aligned-title/left-aligned-org-name
+  layout. All three report types (Student Result via drawAcademicReport,
+  Exam Result, Detailed Exam Report) now share the same letterhead visual
+  identity: logo top-left, institution name/motto/address/registration
+  CENTERED, title centered below the rule.
+- Deliberately did NOT touch Student Result's own drawAcademicReport
+  header implementation (the one genuinely-shared, most-tested,
+  highest-traffic path) - it already independently matches this same
+  visual style byte-for-byte (it's the original reference this whole
+  style was extracted from), so migrating it to the new shared function
+  wasn't necessary to achieve visual consistency, only extra risk to
+  already-verified code.
+- The three reports still show different content/layout beyond the
+  header (single-student vs roster vs multi-page analytics) per explicit
+  instruction not to make them the same document.
+
+Verified: full real build (`npm run build`) - 0 errors. Full test suite
+(`npm run test`) - 102/102 passing (94 previous + 3 new
+generateExamResultsBooklet tests for Attempted/Absent/Exam Date + 5 new
+exportAdvanceExamReportPdf.test.ts tests - a new file, covering the
+renamed/filtered Lowest Performing Questions panel, the limited-sample
+banner + softened recommendation, and the deduplicated/unified header).
+Docker frontend rebuilt and redeployed. Live-verified by downloading all
+three real production PDFs for the real Greenfield University tenant
+(University Semester Exam, Arjun Mehta, the same real single-student
+data used throughout this session):
+- Student Result: unchanged, byte-identical in structure to before this
+  session's changes.
+- Exam Result: now shows Exam Date (9/13/2026), and the 6-card row
+  Total/Attempted/Passed/Failed/Absent/Pass Rate (1/1/1/0/0/100%),
+  correct centered header, single "Generated on" (footer only).
+- Detailed Exam Report: "Limited sample - only 1 candidate(s) attempted"
+  banner shown, "Lowest Performing Questions" panel correctly shows
+  "Every question was answered correctly by every candidate." (the
+  exam's one real question is 100% correct), Recommendations shows the
+  softened caveat instead of "Strong pass rate (100%) - consider raising
+  difficulty", single "Generated on" (footer only), correct centered
+  header, exam info panel still fully visible (2-column, no truncation).
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Final pre-commit verification pass (2026-09-15) - verification only, no
+new feature work, per explicit user instruction.
+
+Found and fixed one real correctness bug while verifying computeExamAttendance():
+GetExamReportHandler.cs (Backend/Services/ResultService) returns one row
+per ATTEMPT, not per student - a candidate who retook an exam has multiple
+rows with the same UserId. Exam Result's new "Attempted" stat card was
+computed as `entries.length` (raw row count), which would overcount for
+any exam allowing more than one attempt. Fixed to
+`new Set(entries.map(e => e.result.userId)).size` (unique candidates).
+This also required narrowing ExamResultBookletEntry.result's type from
+`AdminAttemptResultResponse | ResultSummaryResponse` to just
+AdminAttemptResultResponse (ResultSummaryResponse has no userId at all -
+it's a single student's own "my result" view; both real callers of this
+interface, ExamResults.tsx and the Organization Settings sample, only
+ever passed AdminAttemptResultResponse anyway, so this is a type-accuracy
+fix, not a behavior change for any real caller). Added a regression test
+(a same-userId retake entry) confirming Attempted still reads the unique
+count, not the row count. computeExamAttendance()'s own totalCandidates/
+absentCount were already correct (already deduped attempts via a Set
+internally) - only the separate `attempted` value in drawExamResultRoster
+had the bug.
+
+Verified against the checklist:
+- "Every question was answered correctly by every candidate." - present,
+  exact, non-garbled text in a freshly re-downloaded real PDF.
+- computeExamAttendance(): Total Candidates = eligible roster
+  (role=Student, active - the same "no per-exam assignment concept"
+  definition Detailed Exam Report already used, documented limitation);
+  Attempted = unique candidates who attempted (bug above, now fixed);
+  Absent = eligible minus attempted; Passed/Failed = each entry's own real
+  result.passed, unchanged/pre-existing/not fabricated.
+- Exam Result's Exam Date: gated by isResultFieldEnabled(..., 'examDate'),
+  same Result Fields config as every other gated field, confirmed via
+  test and live PDF.
+- Student Result: git diff confirms zero hunks touch drawStudentReport/
+  drawAcademicReport; fresh live download is structurally identical to
+  the one from before this session's changes.
+- Detailed Exam Report: git diff hunks reviewed line-by-line - only the
+  exam info panel (2-column, prior task), header (prior task + this
+  task's dedup), small-sample banner, Lowest Performing Questions
+  filter/rename, and buildRecommendations call changed; score
+  distribution, section-wise performance computation, top performers,
+  attendance donut, and footer logic are untouched.
+- Common header: all three real PDFs re-downloaded fresh and confirmed
+  showing the same centered "Greenfield University (Est. 1998)" block,
+  address, and Reg. No. styling.
+- `npm run build`: 0 errors. `npm run test`: 103/103 passing (all prior
+  102 plus the new retake-dedup regression test).
+
+git diff --stat (tracked files) + 1 new untracked test file, all
+PDF-related for this task - unrelated pre-existing untracked files
+(Database_Create.txt, Database_CreateSuperAdmin.txt, Database_clean.txt,
+examvault-saas.txt, examvaults.docx) excluded:
+  ActionPlan.txt                                              | +219
+  Frontend/.../pages/admin/ExamResults.tsx                    | +3/-1
+  Frontend/.../pages/admin/OrganizationSettings.tsx           | +80/-41
+  Frontend/.../utils/advanceExamReport.ts                     | +32/-5
+  Frontend/.../utils/exportAdvanceExamReportExcel.ts          | +5/-3
+  Frontend/.../utils/exportAdvanceExamReportPdf.test.ts       | new file, 304 lines
+  Frontend/.../utils/exportAdvanceExamReportPdf.ts            | +99/-72
+  Frontend/.../utils/generateResultPdf.test.ts                | +60
+  Frontend/.../utils/generateResultPdf.ts                     | +58/-48
+  Frontend/.../utils/pdfReportKit.ts                          | +87
+
+Ready to commit, pending explicit user go-ahead.
+
+---
+
+Fourth follow-up fix (2026-09-15): user pointed out Student Result also
+had the duplicate "Generated On" (header, date-only) / "Generated on"
+(footer, date+time) - the same class of redundancy already fixed for
+Exam Result and Detailed Exam Report, just not yet applied to Student
+Result's own two variant header functions.
+
+Fix: removed the header's "Generated On" doc.text call from both
+drawStudentReport (the richer multi-panel "dashboard" layout) and
+drawAcademicReport (the compact centered layout, the one Greenfield
+University's "University" organizationType actually renders) in
+generateResultPdf.ts - the footer (stampFooters/drawFooter) already
+prints "Generated on" with full date+time and a page number on every
+page. Fixed both variants, not just the one in the user's own screenshots,
+since both are real production code paths for other Organization Types
+and would otherwise be left inconsistent.
+
+Removing the line left `generatedAt` an unused parameter on
+drawStudentReport, drawAcademicReport, and the drawReport dispatcher that
+only forwards it to them (TS6133 build errors) - removed the parameter
+from all three signatures and their 3 call sites (drawReport's two
+branches, generateResultPdf's own call to drawReport) rather than
+suppressing the error, since it's genuinely dead. generateResultPdf's own
+local `generatedAt` variable is untouched and still used for its
+stampFooters call right after.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 103/103 passing
+(no test changes needed - no test asserted on the removed header text).
+Docker frontend rebuilt/redeployed. Live-verified: re-downloaded the real
+Student Result PDF for Greenfield University/Arjun Mehta - header no
+longer shows "Generated On: 9/15/2026"; only the footer's "Generated on:
+9/15/2026, 1:06:41 PM" remains. File size dropped slightly (96630 ->
+96497 bytes), consistent with one fewer text run. All other content
+(fields, table, percentage/result/grade, QR, signature) unchanged.
+
+All three report types (Student Result, Exam Result, Detailed Exam
+Report) now show "Generated on" exactly once per page, in the footer only.
+
+Not yet committed - awaiting explicit user instruction to commit.

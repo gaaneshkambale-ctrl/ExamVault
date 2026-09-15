@@ -17,6 +17,7 @@ import {
   TEXT_MUTED,
   WEBSITE,
   drawBadge,
+  drawCenteredBrandHeader,
   drawDonutChart,
   drawHeaderBrand,
   drawStatCard,
@@ -111,7 +112,6 @@ function drawStudentReport(
   result: AdminAttemptResultResponse | ResultSummaryResponse,
   context: ResultPdfContext,
   branding: TenantBranding,
-  generatedAt: Date,
   isFirstInDocument: boolean,
 ): void {
   if (!isFirstInDocument) {
@@ -177,10 +177,11 @@ function drawStudentReport(
       doc.text(branding.motto, MARGIN + logoW + 4, y + 11);
     }
   }
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text(`Generated On: ${generatedAt.toLocaleString()}`, PAGE_WIDTH - MARGIN, y + 2, { align: 'right' });
+  // No separate "Generated On" here - the footer (stampFooters/drawFooter)
+  // already prints "Generated on" with full date+time and a page number on
+  // every page, so the header doesn't repeat the same timestamp (same
+  // dedup already applied to Exam Result's and Detailed Exam Report's
+  // headers).
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(17);
   setColor(doc, 'setTextColor', TEXT_DARK);
@@ -650,7 +651,6 @@ function drawAcademicReport(
   result: AdminAttemptResultResponse | ResultSummaryResponse,
   context: ResultPdfContext,
   branding: TenantBranding,
-  generatedAt: Date,
   isFirstInDocument: boolean,
   qrDataUrl: string | null = null,
 ): void {
@@ -692,10 +692,11 @@ function drawAcademicReport(
   // corner logo the way it would sitting immediately beside it.
   const logoH = 10;
   drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo, branding.showLogoOnReports);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text(`Generated On: ${generatedAt.toLocaleDateString()}`, PAGE_WIDTH - MARGIN, y + 3, { align: 'right' });
+  // No separate "Generated On" here - the footer (stampFooters/drawFooter)
+  // already prints "Generated on" with full date+time and a page number on
+  // every page, so the header doesn't repeat the same timestamp (same
+  // dedup already applied to Exam Result's and Detailed Exam Report's
+  // headers).
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
@@ -956,41 +957,34 @@ export function computeExamResultSummary(entries: { result: { passed: boolean } 
  * same thing one level up from where Student Result/Exam Result used to
  * collide.
  */
-function drawExamResultRoster(doc: jsPDF, examTitle: string, entries: ExamResultBookletEntry[], branding: TenantBranding, generatedAt: Date): void {
-  let y = MARGIN;
-  const logoH = 13;
-  drawHeaderBrand(doc, MARGIN, y, logoH, branding.logo, branding.showLogoOnReports);
-  if (branding.hasOwnLogo) {
-    const logoW = branding.logo ? logoH * branding.logo.ratio : 20;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    setColor(doc, 'setTextColor', TEXT_DARK);
-    doc.text(branding.name, MARGIN + logoW + 4, y + 6);
-  }
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text(`Generated On: ${generatedAt.toLocaleString()}`, PAGE_WIDTH - MARGIN, y + 2, { align: 'right' });
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(17);
-  setColor(doc, 'setTextColor', TEXT_DARK);
-  doc.text('EXAM RESULT', PAGE_WIDTH - MARGIN, y + 10, { align: 'right' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  setColor(doc, 'setTextColor', TEXT_MUTED);
-  doc.text('All Candidates - Combined Result Summary', PAGE_WIDTH - MARGIN, y + 15, { align: 'right' });
-  setColor(doc, 'setDrawColor', branding.headerColor);
-  doc.setLineWidth(0.6);
-  doc.line(MARGIN, y + 19, PAGE_WIDTH - MARGIN, y + 19);
-  y += 25;
+function drawExamResultRoster(
+  doc: jsPDF,
+  examTitle: string,
+  entries: ExamResultBookletEntry[],
+  branding: TenantBranding,
+  generatedAt: Date,
+  attendance: ExamResultAttendance,
+): void {
+  // Same letterhead header component Student Result (drawAcademicReport,
+  // below) and Detailed Exam Report (exportAdvanceExamReportPdf.ts) use -
+  // logo top-left, institution name/motto/address/registration CENTERED,
+  // title centered below the rule - replacing this roster's own former
+  // right-aligned-title layout so all three report types share one visual
+  // identity. showGeneratedAt is off: the footer on every page already
+  // prints "Generated on" with full date+time and a page number.
+  let y = drawCenteredBrandHeader(doc, branding, generatedAt, 'EXAM RESULT', 'All Candidates - Combined Result Summary', false);
 
-  // Exam info panel - totalMarks/passingMarks are exam-level facts, so any
-  // entry's `result` carries the same values; the first is as good as any.
+  // Exam info panel - totalMarks/passingMarks/submittedAtUtc are exam-level
+  // facts, so any entry's `result`/`context` carries the same values; the
+  // first is as good as any.
   const first = entries[0];
   const totalMarks = first.result.totalMarks;
   const passingMarks = first.result.passingMarks;
   const passingPercent = totalMarks > 0 ? Math.round((passingMarks / totalMarks) * 100) : 0;
-  const infoPanelH = 26;
+  const examDateValue = isResultFieldEnabled(first.context, branding, 'examDate')
+    ? new Date(first.result.submittedAtUtc).toLocaleDateString()
+    : '—';
+  const infoPanelH = 32;
   panel(doc, MARGIN, y, CONTENT_WIDTH, infoPanelH);
   {
     const colW2 = CONTENT_WIDTH / 2;
@@ -1000,6 +994,8 @@ function drawExamResultRoster(doc: jsPDF, examTitle: string, entries: ExamResult
     fieldRow(doc, 'Exam Code', first.context.examCode ?? '—', MARGIN + 4, ly, 28, colW2 - 8);
     ly += 6.5;
     fieldRow(doc, 'Exam Type', first.context.examType ?? '—', MARGIN + 4, ly, 28, colW2 - 8);
+    ly += 6.5;
+    fieldRow(doc, 'Exam Date', examDateValue, MARGIN + 4, ly, 28, colW2 - 8);
 
     let ry = y + 7;
     const rightX = MARGIN + colW2 + 4;
@@ -1019,15 +1015,29 @@ function drawExamResultRoster(doc: jsPDF, examTitle: string, entries: ExamResult
   }
   y += infoPanelH + 6;
 
-  // Total Candidates / Passed / Failed / Pass Rate
-  const { total, passed, failed, passRate } = computeExamResultSummary(entries);
-  const statGap = 4;
+  // Total Candidates / Attempted / Passed / Failed / Absent / Pass Rate -
+  // `totalCandidates`/`absentCount` come from the caller's own eligible-
+  // roster diff (see computeExamAttendance in advanceExamReport.ts - the
+  // same one Detailed Exam Report uses, so the two report types can't
+  // disagree about who counts as absent). `attempted` is a unique-candidate
+  // headcount, NOT entries.length - GetExamReportHandler.cs returns one row
+  // per ATTEMPT, not per student (a candidate who retook the exam has one
+  // entry per attempt, same userId), so entries.length would overcount
+  // "how many people attempted" for any exam allowing more than one
+  // attempt. Passed/Failed intentionally stay per-entry (every real
+  // attempt's own actual pass/fail), matching what the table below lists.
+  const { passed, failed, passRate } = computeExamResultSummary(entries);
+  const attempted = new Set(entries.map((e) => e.result.userId)).size;
+  const statGap = 3;
   const statCardH = 24;
-  const statW = (CONTENT_WIDTH - statGap * 3) / 4;
-  drawStatCard(doc, MARGIN, y, statW, statCardH, BRAND, 'Total Candidates', String(total), TEXT_DARK);
-  drawStatCard(doc, MARGIN + (statW + statGap), y, statW, statCardH, GREEN, 'Passed', String(passed), GREEN);
-  drawStatCard(doc, MARGIN + (statW + statGap) * 2, y, statW, statCardH, RED, 'Failed', String(failed), RED);
-  drawStatCard(doc, MARGIN + (statW + statGap) * 3, y, statW, statCardH, AMBER, 'Pass Rate', `${passRate}%`, AMBER);
+  const statW = (CONTENT_WIDTH - statGap * 5) / 6;
+  const cardX = (i: number) => MARGIN + (statW + statGap) * i;
+  drawStatCard(doc, cardX(0), y, statW, statCardH, BRAND, 'Total Candidates', String(attendance.totalCandidates), TEXT_DARK);
+  drawStatCard(doc, cardX(1), y, statW, statCardH, BRAND, 'Attempted', String(attempted), TEXT_DARK);
+  drawStatCard(doc, cardX(2), y, statW, statCardH, GREEN, 'Passed', String(passed), GREEN);
+  drawStatCard(doc, cardX(3), y, statW, statCardH, RED, 'Failed', String(failed), RED);
+  drawStatCard(doc, cardX(4), y, statW, statCardH, GRAY, 'Absent', String(attendance.absentCount), TEXT_DARK);
+  drawStatCard(doc, cardX(5), y, statW, statCardH, AMBER, 'Pass Rate', `${passRate}%`, AMBER);
   y += statCardH + 8;
 
   // Student Results table - paginates via ensurePageSpace, re-drawing the
@@ -1087,15 +1097,14 @@ function drawReport(
   result: AdminAttemptResultResponse | ResultSummaryResponse,
   context: ResultPdfContext,
   branding: TenantBranding,
-  generatedAt: Date,
   isFirstInDocument: boolean,
   qrDataUrl: string | null = null,
 ): void {
   const variant = getResultPdfVariant(branding.organizationType);
   if (variant === 'academic') {
-    drawAcademicReport(doc, result, context, branding, generatedAt, isFirstInDocument, qrDataUrl);
+    drawAcademicReport(doc, result, context, branding, isFirstInDocument, qrDataUrl);
   } else {
-    drawStudentReport(doc, result, context, branding, generatedAt, isFirstInDocument);
+    drawStudentReport(doc, result, context, branding, isFirstInDocument);
   }
 }
 
@@ -1109,7 +1118,7 @@ export async function generateResultPdf(
   const qrDataUrl = branding.showQrCodeForVerification
     ? await QRCode.toDataURL(`${window.location.origin}/results/${result.examId}`, { width: 160, margin: 1 }).catch(() => null)
     : null;
-  drawReport(doc, result, context, branding, generatedAt, true, qrDataUrl);
+  drawReport(doc, result, context, branding, true, qrDataUrl);
   stampFooters(
     doc,
     generatedAt,
@@ -1121,9 +1130,33 @@ export async function generateResultPdf(
   doc.save(`${sanitizeFilename(result.examTitle)}-result.pdf`);
 }
 
+// AdminAttemptResultResponse only, not the ResultSummaryResponse a single
+// student's own "my result" view uses - a whole-exam roster is an
+// Admin/Instructor document (both real callers, ExamResults.tsx and the
+// Organization Settings sample, only ever build this from
+// getExamResultsForAdmin's AdminAttemptResultResponse[]), and drawing it
+// needs userId (ResultSummaryResponse has none - it's implicitly "me") to
+// tell apart unique candidates from repeat attempts by the same one for
+// the "Attempted" count below.
 export interface ExamResultBookletEntry {
-  result: AdminAttemptResultResponse | ResultSummaryResponse;
+  result: AdminAttemptResultResponse;
   context: ResultPdfContext;
+}
+
+/**
+ * The eligible-candidate roster count and how many of them never attempted,
+ * for the "Total Candidates"/"Absent" stat cards - deliberately NOT derived
+ * from `entries` (every entry here is, by construction, someone who
+ * attempted), so it has to come from the caller's own broader roster the
+ * same way Detailed Exam Report's `AdvanceReportData` does (see
+ * computeExamAttendance in advanceExamReport.ts, which both this and that
+ * report call). Optional and defaulting to "everyone who attempted, nobody
+ * absent" so a caller with no roster data (the Organization Settings sample
+ * preview) still renders correctly rather than showing a wrong absent count.
+ */
+export interface ExamResultAttendance {
+  totalCandidates: number;
+  absentCount: number;
 }
 
 /**
@@ -1132,12 +1165,16 @@ export interface ExamResultBookletEntry {
  * per-student Student Result template repeated once per entry, which is
  * what this function used to do).
  */
-export async function generateExamResultsBooklet(examTitle: string, entries: ExamResultBookletEntry[]): Promise<void> {
+export async function generateExamResultsBooklet(
+  examTitle: string,
+  entries: ExamResultBookletEntry[],
+  attendance?: ExamResultAttendance,
+): Promise<void> {
   if (entries.length === 0) return;
   const branding = await loadTenantBranding();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt = new Date();
-  drawExamResultRoster(doc, examTitle, entries, branding, generatedAt);
+  drawExamResultRoster(doc, examTitle, entries, branding, generatedAt, attendance ?? { totalCandidates: entries.length, absentCount: 0 });
   stampFooters(
     doc,
     generatedAt,

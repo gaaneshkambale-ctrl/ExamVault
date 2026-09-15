@@ -8,9 +8,9 @@ import type { ExamResponse } from '../types/exam';
 import type { ExamResultScheme } from './examResultScheme';
 import type { AdvanceReportData } from './advanceExamReport';
 import type { AdvanceReportExtras } from './advanceExamReportAnalysis';
-import type { MyTenant } from '../types/tenant';
 import {
   AMBER,
+  AMBER_BG,
   BORDER,
   BRAND,
   CONTENT_WIDTH,
@@ -24,7 +24,7 @@ import {
   drawBadge,
   drawDonutChart,
   type BadgeIcon,
-  drawPageHeader,
+  drawCenteredBrandHeader,
   drawStackedBar,
   drawStatCard,
   drawTableHeader,
@@ -45,6 +45,12 @@ import {
 const MAX_ABSENT_ROWS = 15;
 const TOP_PERFORMERS_LIMIT = 5;
 const HARDEST_QUESTIONS_LIMIT = 5;
+// Below this many attempted candidates, pass-rate/difficulty conclusions
+// ("raise difficulty", "review content coverage") are one or two people's
+// results dressed up as a class-wide finding - not a statistical threshold,
+// just a floor under which those specific claims stop being drawn (see
+// buildRecommendations and the "limited sample" banner below).
+const MIN_SAMPLE_SIZE = 5;
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
@@ -52,13 +58,6 @@ function round1(n: number): number {
 
 function pct(part: number, total: number): number {
   return total === 0 ? 0 : Math.round((part / total) * 100);
-}
-
-function formatAddress(org: MyTenant | undefined): string {
-  if (!org) return '';
-  return [org.addressLine1, org.addressLine2, org.city, org.state, org.postalCode, org.country]
-    .filter((part): part is string => Boolean(part && part.trim()))
-    .join(', ');
 }
 
 /** A colored-dot bullet line, wrapped to maxWidth. Returns the y position after the line(s). */
@@ -73,15 +72,25 @@ function bulletLine(doc: jsPDF, x: number, y: number, text: string, color: { r: 
   return y + lines.length * 4 + 2;
 }
 
-function buildRecommendations(report: AdvanceReportData, scheme: ExamResultScheme): string[] {
+function buildRecommendations(report: AdvanceReportData, scheme: ExamResultScheme, hasLowPerformingQuestions: boolean): string[] {
   const recommendations: string[] = [];
   const attendancePct = pct(report.presentCount, report.totalCandidates);
 
   if (attendancePct < 50) {
     recommendations.push(`Attendance is low (${attendancePct}%) - review communication and reminders sent to candidates.`);
   }
+  // Pass-rate/difficulty conclusions only below MIN_SAMPLE_SIZE - "raise the
+  // difficulty" or "review content coverage" off a single candidate's result
+  // is a strong claim resting on noise, not signal (see MIN_SAMPLE_SIZE's
+  // own comment). A plain, non-judgmental caveat replaces them instead of
+  // just silently omitting the recommendation, so the reader knows *why*
+  // nothing's being said about pass rate rather than assuming it was missed.
   if (scheme.hasPassFailConcept && report.presentCount > 0) {
-    if (report.passRate === 0) {
+    if (report.presentCount < MIN_SAMPLE_SIZE) {
+      recommendations.push(
+        `Only ${report.presentCount} candidate(s) attempted this exam - treat the pass rate and difficulty as indicative only until more attempts are recorded.`,
+      );
+    } else if (report.passRate === 0) {
       recommendations.push('No candidate passed - review exam difficulty and content coverage before the next attempt.');
     } else if (report.passRate < 50) {
       recommendations.push(`${scheme.outcomeLabels.pass} rate is below half (${report.passRate}%) - consider providing additional practice material.`);
@@ -92,7 +101,9 @@ function buildRecommendations(report: AdvanceReportData, scheme: ExamResultSchem
   if (report.absentCount > 0) {
     recommendations.push(`${report.absentCount} candidate(s) were absent - consider a re-scheduled attempt for them.`);
   }
-  recommendations.push('Review the most difficult questions below to identify weak topics for future coaching.');
+  if (hasLowPerformingQuestions) {
+    recommendations.push('Review the lowest performing questions below to identify weak topics for future coaching.');
+  }
 
   return recommendations.slice(0, 4);
 }
@@ -109,41 +120,29 @@ export async function exportAdvanceExamReportPdf(
   const TITLE = 'EXAM PERFORMANCE REPORT';
   const SUBTITLE = 'Detailed Examination Performance & Outcome Analysis';
 
-  let y = drawPageHeader(doc, TITLE, {
-    logo: branding.logo,
-    headerColor: branding.headerColor,
-    generatedAt,
-    tagline: SUBTITLE,
-    showLogo: branding.showLogoOnReports,
-  });
+  // Letterhead-style header matching the per-student result report's own
+  // header exactly (logo top-left, institution name/motto/address/
+  // registration CENTERED, title centered below the rule) - was previously
+  // drawPageHeader's different logo-left/title-right layout with the
+  // institution name in its own separate left-aligned block, which looked
+  // inconsistent sitting next to the other report types. showGeneratedAt is
+  // off here - the footer on every page already prints "Generated on" with
+  // full date+time and a page number, so the header doesn't need its own
+  // copy of the same timestamp.
+  let y = drawCenteredBrandHeader(doc, branding, generatedAt, TITLE, SUBTITLE, false);
 
-  // Organization info - only when the caller's tenant lookup actually
-  // resolved (see MyTenantController.cs); skipped rather than showing a
-  // placeholder name for an org with none on file.
-  if (extras.organization?.name) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    setColor(doc, 'setTextColor', TEXT_DARK);
-    doc.text(extras.organization.name, MARGIN, y + 4);
-    const address = formatAddress(extras.organization);
-    if (address) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      setColor(doc, 'setTextColor', TEXT_MUTED);
-      doc.text(address, MARGIN, y + 9);
-    }
-    y += address ? 14 : 9;
-  }
-
-  // Exam Information panel - 3 columns x 4 rows (was 4x3 - a real exam code
-  // or a longer exam type name still needed more width per field than 4
-  // narrow columns could give even with truncation; wider columns is the
-  // actual fix, ellipsis-truncation is just the backstop for whatever's
-  // still too long).
-  const infoPanelH = 34;
+  // Exam Information panel - 2 columns x 6 rows (was 3x4, before that 4x3 -
+  // each narrowing attempt just moved the truncation point: a real exam
+  // title/code still didn't fit the ~1/3-width column even with ellipsis
+  // backstop, e.g. "C# Programming - Final Assessment" rendering as
+  // "C# Programming …". Halving the column count roughly doubles the width
+  // available to every field, which is the actual fix - ellipsis-truncation
+  // in fieldRow is still there as the backstop for whatever's still too long.
+  const infoPanelRows = 6;
+  const infoPanelH = 8 + (infoPanelRows - 1) * 6.5 + 5;
   panel(doc, MARGIN, y, CONTENT_WIDTH, infoPanelH);
   {
-    const colW = CONTENT_WIDTH / 3;
+    const colW = CONTENT_WIDTH / 2;
     // Available width from a field's x to its column's own right edge (just
     // shy of the divider line) - passed as fieldRow's maxWidth so a value
     // longer than even this wider column gets ellipsis-truncated instead of
@@ -161,30 +160,27 @@ export async function exportAdvanceExamReportPdf(
     fieldRow(doc, 'Exam Type', exam.examTypeName ?? '—', MARGIN + 4, c1y, 24, fieldMaxW);
     c1y += 6.5;
     fieldRow(doc, 'Status', exam.status, MARGIN + 4, c1y, 24, fieldMaxW);
+    c1y += 6.5;
+    fieldRow(doc, 'Exam Date', startDate ? startDate.toLocaleDateString() : '—', MARGIN + 4, c1y, 24, fieldMaxW);
+    c1y += 6.5;
+    fieldRow(doc, 'Start Time', startDate ? startDate.toLocaleTimeString() : '—', MARGIN + 4, c1y, 24, fieldMaxW);
 
     const c2x = MARGIN + colW + 2;
     setColor(doc, 'setDrawColor', BORDER);
     doc.setLineWidth(0.3);
     doc.line(c2x - 2, y + 5, c2x - 2, y + infoPanelH - 5);
     let c2y = y + 8;
-    fieldRow(doc, 'Exam Date', startDate ? startDate.toLocaleDateString() : '—', c2x + 2, c2y, 24, fieldMaxW);
-    c2y += 6.5;
-    fieldRow(doc, 'Start Time', startDate ? startDate.toLocaleTimeString() : '—', c2x + 2, c2y, 24, fieldMaxW);
-    c2y += 6.5;
     fieldRow(doc, 'End Time', endDate ? endDate.toLocaleTimeString() : '—', c2x + 2, c2y, 24, fieldMaxW);
     c2y += 6.5;
     fieldRow(doc, 'Mode', 'Online Exam', c2x + 2, c2y, 24, fieldMaxW);
-
-    const c3x = MARGIN + colW * 2 + 2;
-    doc.line(c3x - 2, y + 5, c3x - 2, y + infoPanelH - 5);
-    let c3y = y + 8;
-    fieldRow(doc, 'Duration', `${exam.durationMinutes} min`, c3x + 2, c3y, 24, fieldMaxW);
-    c3y += 6.5;
-    fieldRow(doc, 'Total Marks', String(exam.totalMarks), c3x + 2, c3y, 24, fieldMaxW);
-    c3y += 6.5;
-    fieldRow(doc, scheme.passingLabel, `${exam.passingMarks} (${passPct}%)`, c3x + 2, c3y, 24, fieldMaxW);
-    c3y += 6.5;
-    fieldRow(doc, 'Academic Year', startDate ? String(startDate.getFullYear()) : '—', c3x + 2, c3y, 24, fieldMaxW);
+    c2y += 6.5;
+    fieldRow(doc, 'Duration', `${exam.durationMinutes} min`, c2x + 2, c2y, 24, fieldMaxW);
+    c2y += 6.5;
+    fieldRow(doc, 'Total Marks', String(exam.totalMarks), c2x + 2, c2y, 24, fieldMaxW);
+    c2y += 6.5;
+    fieldRow(doc, scheme.passingLabel, `${exam.passingMarks} (${passPct}%)`, c2x + 2, c2y, 24, fieldMaxW);
+    c2y += 6.5;
+    fieldRow(doc, 'Academic Year', startDate ? String(startDate.getFullYear()) : '—', c2x + 2, c2y, 24, fieldMaxW);
   }
   y += infoPanelH + 6;
 
@@ -220,6 +216,27 @@ export async function exportAdvanceExamReportPdf(
     drawStatCard(doc, cardX(3), y, statW, statCardH, AMBER, 'Average Score', `${report.averagePercentage}%`, AMBER);
   }
   y += statCardH + 6;
+
+  // Small-sample caveat - shown once here rather than repeated in every
+  // panel below. Score Distribution, Section-wise Performance, Lowest
+  // Performing Questions, Exam Insights and Recommendations all read
+  // differently once the reader knows the attempted count is this low;
+  // buildRecommendations separately softens its own pass-rate claims below
+  // this same MIN_SAMPLE_SIZE threshold.
+  if (report.presentCount > 0 && report.presentCount < MIN_SAMPLE_SIZE) {
+    const bannerH = 9;
+    setColor(doc, 'setFillColor', AMBER_BG);
+    doc.roundedRect(MARGIN, y, CONTENT_WIDTH, bannerH, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    setColor(doc, 'setTextColor', AMBER);
+    doc.text(
+      `Limited sample - only ${report.presentCount} candidate(s) attempted. Analytics below may not be statistically meaningful.`,
+      MARGIN + 4,
+      y + bannerH / 2 + 1.3,
+    );
+    y += bannerH + 5;
+  }
 
   // Result Split (stacked bar) / Score Distribution (bars) / Key Highlights (bullets).
   const col3Gap = 5;
@@ -444,13 +461,7 @@ export async function exportAdvanceExamReportPdf(
 
   // ---------- Page 2 ----------
   doc.addPage();
-  y = drawPageHeader(doc, TITLE, {
-    logo: branding.logo,
-    headerColor: branding.headerColor,
-    generatedAt,
-    tagline: SUBTITLE,
-    showLogo: branding.showLogoOnReports,
-  });
+  y = drawCenteredBrandHeader(doc, branding, generatedAt, TITLE, SUBTITLE, false);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
@@ -556,11 +567,16 @@ export async function exportAdvanceExamReportPdf(
   }
   y += row2H + 6;
 
-  // Section-wise Performance / Question Analysis.
+  // Section-wise Performance / Question Analysis. A question every attempted
+  // candidate got right (100% correct) isn't "difficult" and doesn't belong
+  // in a lowest-performing-questions panel just to fill a slot - excluded
+  // outright rather than shown with a misleadingly high percentage next to
+  // a title implying it's a weak spot.
   const row3Gap = 5;
   const row3W = (CONTENT_WIDTH - row3Gap) / 2;
   const sectionRows = Math.max(1, extras.sectionStats.length);
-  const questionRows = Math.min(HARDEST_QUESTIONS_LIMIT, Math.max(1, extras.questionDifficulty.length));
+  const lowPerforming = extras.questionDifficulty.filter((q) => q.percentCorrect < 100).slice(0, HARDEST_QUESTIONS_LIMIT);
+  const questionRows = Math.min(HARDEST_QUESTIONS_LIMIT, Math.max(1, lowPerforming.length));
   const row3H = Math.max(24 + sectionRows * 6, 24 + questionRows * 10);
   y = ensurePageSpace(doc, y, row3H);
 
@@ -604,17 +620,22 @@ export async function exportAdvanceExamReportPdf(
 
   const questionX = MARGIN + row3W + row3Gap;
   panel(doc, questionX, y, row3W, row3H);
-  panelTitle(doc, 'Most Difficult Questions', questionX + 4, y + 7);
+  panelTitle(doc, 'Lowest Performing Questions', questionX + 4, y + 7);
   {
-    const hardest = extras.questionDifficulty.slice(0, HARDEST_QUESTIONS_LIMIT);
-    if (hardest.length === 0) {
+    if (lowPerforming.length === 0) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       setColor(doc, 'setTextColor', TEXT_MUTED);
-      doc.text('No question data available for this exam.', questionX + 4, y + 16);
+      doc.text(
+        extras.questionDifficulty.length === 0
+          ? 'No question data available for this exam.'
+          : 'Every question was answered correctly by every candidate.',
+        questionX + 4,
+        y + 16,
+      );
     } else {
       let qy = y + 14;
-      hardest.forEach((q) => {
+      lowPerforming.forEach((q) => {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.8);
         setColor(doc, 'setTextColor', TEXT_DARK);
@@ -638,7 +659,7 @@ export async function exportAdvanceExamReportPdf(
       ? `Most Common Score Range: ${report.mostCommonBucket.label} (${report.mostCommonBucket.count} student(s))`
       : null,
   ].filter((l): l is string => l !== null);
-  const recommendations = buildRecommendations(report, scheme);
+  const recommendations = buildRecommendations(report, scheme, lowPerforming.length > 0);
 
   const row4Gap = 5;
   const row4W = (CONTENT_WIDTH - row4Gap) / 2;

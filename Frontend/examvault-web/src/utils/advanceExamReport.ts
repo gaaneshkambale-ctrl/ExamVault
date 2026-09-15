@@ -46,12 +46,47 @@ function percentOf(r: AdminAttemptResultResponse): number {
 
 // Eligibility = every active Student in the tenant, since this codebase has
 // no per-exam assignment/audience concept to diff attempts against instead.
+function isEligibleStudent(u: UserListItem): boolean {
+  return u.role === 'Student' && u.isActive;
+}
+
+export interface ExamAttendance {
+  totalCandidates: number;
+  absentCount: number;
+}
+
+/**
+ * Just the attendance counts (not the full score/rank/distribution
+ * analytics below) - used by the Exam Result roster (generateResultPdf.ts's
+ * drawExamResultRoster, called from ExamResults.tsx) so its "Total
+ * Candidates"/"Absent" stat cards use the same "diff attempts against the
+ * eligible roster" idea as Detailed Exam Report's totalCandidates/
+ * absentCount, without pulling in rank/percentile/distribution computation
+ * Exam Result deliberately doesn't show.
+ *
+ * Takes an already-eligible roster (just `{ id }`) rather than filtering
+ * `role`/`isActive` itself like buildAdvanceExamReport's `students` does -
+ * ExamResults.tsx (where Instructors, who have no "Users - View" permission,
+ * can land) only ever has the narrower StudentSummary[] from the students-
+ * only endpoint, which the backend already scopes to role=Student but does
+ * not expose IsActive on at all (see ListStudentsHandler.cs/UsersController
+ * .cs's ListStudents). So Exam Result's "Total Candidates" can include an
+ * inactive student that Detailed Exam Report's (Admin-only, full
+ * UserListItem[]-backed) count would exclude - a real, pre-existing gap
+ * in what data this permission level can see, not something to fake around.
+ */
+export function computeExamAttendance(attempts: AdminAttemptResultResponse[], eligibleStudents: { id: string }[]): ExamAttendance {
+  const attemptedIds = new Set(attempts.map((a) => a.userId));
+  const absentCount = eligibleStudents.filter((s) => !attemptedIds.has(s.id)).length;
+  return { totalCandidates: eligibleStudents.length, absentCount };
+}
+
 export function buildAdvanceExamReport(
   attempts: AdminAttemptResultResponse[],
   users: UserListItem[],
   scheme: ExamResultScheme,
 ): AdvanceReportData {
-  const students = users.filter((u) => u.role === 'Student' && u.isActive);
+  const students = users.filter(isEligibleStudent);
 
   const byStudent = new Map<string, AdminAttemptResultResponse[]>();
   for (const attempt of attempts) {

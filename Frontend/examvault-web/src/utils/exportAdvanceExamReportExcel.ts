@@ -191,9 +191,11 @@ export async function exportAdvanceExamReportExcel(
       { value: 'Attempts', ...HEADER_STYLE },
       { value: '% Correct', ...HEADER_STYLE },
     ],
-    // Hardest first, same order the PDF's "Most Difficult Questions" panel
-    // shows (buildQuestionDifficulty already sorts ascending by %correct) -
-    // the full list, not just the PDF's top-5 slice.
+    // Lowest %correct first, same order the PDF's "Lowest Performing
+    // Questions" panel shows (buildQuestionDifficulty already sorts
+    // ascending by %correct) - the full list here, not just the PDF's
+    // top-5/no-100%-correct slice, since this sheet is raw data, not a
+    // "these need attention" callout.
     ...extras.questionDifficulty.map((q) => [q.questionText, q.correct, q.attempts, `${q.percentCorrect}%`]),
   ];
 

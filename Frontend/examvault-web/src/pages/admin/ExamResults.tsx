@@ -24,6 +24,7 @@ import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { computeDelta, getCalendarMonthWindows, getDefaultRange, bucketByDay, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
 import { generateExamResultsBooklet, isQuestionCorrect, isSkipped } from '../../utils/generateResultPdf';
+import { computeExamAttendance } from '../../utils/advanceExamReport';
 import { computeSectionStats } from '../../utils/sectionStats';
 import { listSections } from '../../api/sectionApi';
 import { listQuestions } from '../../api/questionApi';
@@ -314,7 +315,8 @@ export default function ExamResults() {
       };
     });
 
-    await generateExamResultsBooklet(examTitle, entries);
+    const attendance = computeExamAttendance(results, users ?? []);
+    await generateExamResultsBooklet(examTitle, entries, attendance);
   };
 
   const totalPages = Math.max(1, Math.ceil(filteredExamStats.length / pageSize));
