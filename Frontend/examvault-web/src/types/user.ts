@@ -133,6 +133,12 @@ export interface StudentSummary {
   email: string;
   rollNumber: string | null;
   hasPhoto: boolean;
+  // Organization-type-specific fields (eg. a College student's Program/
+  // Department/Semester/Division) - see constants/organizationTypeFieldCatalog
+  // .ts. Null for a student with none set, or for an Organization Type that
+  // doesn't collect them at all (eg. a Coaching Institute uses Batch/Course
+  // instead) - never fabricated.
+  academicFields: Record<string, string> | null;
 }
 
 export interface CreateUserRequest {

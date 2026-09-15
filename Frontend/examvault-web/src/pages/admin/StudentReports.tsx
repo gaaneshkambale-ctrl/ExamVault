@@ -15,6 +15,7 @@ import { computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '..
 import type { DateRange } from '../../utils/dateRange';
 import type { AdminAttemptResultResponse } from '../../types/result';
 import { SCORE_BUCKETS } from '../../utils/scoreBuckets';
+import { buildStudentSummaries } from '../../utils/studentSummary';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
@@ -124,6 +125,25 @@ export default function StudentReports() {
     [activeStudents],
   );
 
+  // Export-only - the on-screen "Student Performance Overview" table above
+  // keeps its own activeStudents/StudentAgg (built by buildAggregates,
+  // unchanged); this is the same "at least one result in the current
+  // filters" population, re-derived independently so Registration No./
+  // Program/Department/Semester/Division/Passed/Failed can be added without
+  // touching that already-working aggregation.
+  const filteredResultsForExport = useMemo(
+    () => (allResults ?? []).filter((row) => isWithinRange(row.submittedAtUtc, range) && (examFilter === 'All' || row.examId === examFilter)),
+    [allResults, range, examFilter],
+  );
+  const filteredStudentsForExport = useMemo(
+    () => (studentFilter === 'All' ? students : students.filter((s) => s.id === studentFilter)),
+    [students, studentFilter],
+  );
+  const studentSummaries = useMemo(
+    () => buildStudentSummaries(filteredResultsForExport, filteredStudentsForExport),
+    [filteredResultsForExport, filteredStudentsForExport],
+  );
+
   useEffect(() => {
     setPage(1);
   }, [studentFilter, examFilter, range]);
@@ -148,16 +168,39 @@ export default function StudentReports() {
           setExamFilter('All');
         }}
         exportFilename="student-reports"
-        exportHeaders={['Student', 'Email', 'Exams Attempted', 'Average %', 'Highest %', 'Lowest %', 'Pass %', 'Last Attempt']}
+        exportHeaders={[
+          'Student',
+          'Student ID/Registration No.',
+          'Email',
+          'Program',
+          'Department',
+          'Semester',
+          'Division',
+          'Exams Submitted/Attempted',
+          'Exams Passed',
+          'Exams Failed',
+          'Average %',
+          'Highest %',
+          'Lowest %',
+          'Pass %',
+          'Last Attempt',
+        ]}
         exportRows={() =>
-          activeStudents.map((s) => [
+          studentSummaries.map((s) => [
             s.fullName,
+            s.registrationNo ?? '',
             s.email,
-            s.attempts.length,
-            Math.round(s.averagePercent),
-            Math.round(s.highestPercent),
-            Math.round(s.lowestPercent),
-            Math.round(s.passPercent),
+            s.program ?? '',
+            s.department ?? '',
+            s.semester ?? '',
+            s.division ?? '',
+            s.examsSubmitted,
+            s.examsPassed,
+            s.examsFailed,
+            s.averagePercent,
+            s.highestPercent,
+            s.lowestPercent,
+            s.passPercent,
             new Date(s.lastAttemptUtc).toLocaleDateString(),
           ])
         }

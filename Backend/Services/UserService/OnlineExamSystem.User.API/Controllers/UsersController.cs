@@ -841,7 +841,15 @@ public class UsersController : ControllerBase
                 : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(user.AcademicFieldsJson));
 
     private static StudentSummaryResponse ToStudentResponse(AppUser user) =>
-        new(user.Id, user.FullName, user.Email, user.RollNumber, user.PhotoData is not null);
+        new(
+            user.Id,
+            user.FullName,
+            user.Email,
+            user.RollNumber,
+            user.PhotoData is not null,
+            string.IsNullOrEmpty(user.AcademicFieldsJson)
+                ? null
+                : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(user.AcademicFieldsJson));
 
     private static UserSessionResponse ToResponse(RefreshToken token)
     {
