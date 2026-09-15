@@ -65,14 +65,7 @@ import {
   type UpdateOrganizationSettingsRequest,
 } from '../../types/organizationSettings';
 
-const TABS = [
-  'General',
-  'Academic Configuration',
-  'Branding & Assets',
-  'Reports & Documents',
-  'Email Settings',
-  'Security & Compliance',
-] as const;
+const TABS = ['General', 'Academic Configuration', 'Reports & Documents'] as const;
 type Tab = (typeof TABS)[number];
 
 function BuildingIcon() {
@@ -1810,10 +1803,6 @@ export default function OrganizationSettingsPage() {
         <PdfReportSettingsTab draft={draft} set={set} logoUrl={logoUrl} signatureUrl={signatureUrl} />
       ) : activeTab === 'Academic Configuration' ? (
         <AcademicConfigurationTab organizationType={draft.organizationType} organizationCode={settings.organizationCode} />
-      ) : activeTab !== 'General' ? (
-        <Card className="border-0 shadow-sm">
-          <Card.Body className="text-center text-muted py-5">{activeTab}'s settings are coming soon.</Card.Body>
-        </Card>
       ) : (
         <>
           <Row className="g-3 mb-3">
