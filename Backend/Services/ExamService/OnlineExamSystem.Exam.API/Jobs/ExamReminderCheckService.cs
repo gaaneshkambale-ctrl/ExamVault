@@ -1,4 +1,6 @@
+using System.Net.Http.Json;
 using OnlineExamSystem.Exam.Application.Interfaces;
+using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Events.Exam;
 using OnlineExamSystem.Shared.Events.Publishing;
 using DomainReminderWindow = OnlineExamSystem.Exam.Domain.Enums.ReminderWindow;
@@ -21,15 +23,18 @@ public class ExamReminderCheckService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IEventPublisher _eventPublisher;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ExamReminderCheckService> _logger;
 
     public ExamReminderCheckService(
         IServiceScopeFactory scopeFactory,
         IEventPublisher eventPublisher,
+        IHttpClientFactory httpClientFactory,
         ILogger<ExamReminderCheckService> logger)
     {
         _scopeFactory = scopeFactory;
         _eventPublisher = eventPublisher;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -45,8 +50,35 @@ public class ExamReminderCheckService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Exam reminder check failed.");
+                await ReportSystemErrorAsync(ex, stoppingToken);
             }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    // Same "never let a down/unreachable Notification Service mask the real
+    // failure" fire-and-forget shape as Program.cs's request-path exception
+    // handler - this is the background-job equivalent, since a crash here
+    // never passes through that middleware at all.
+    private async Task ReportSystemErrorAsync(Exception exception, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = new RecordSystemErrorLogRequest(
+                "Exam Service",
+                "Error",
+                exception.Message,
+                exception.GetType().FullName,
+                exception.StackTrace,
+                null,
+                null,
+                null);
+            var client = _httpClientFactory.CreateClient("system-logs");
+            await client.PostAsJsonAsync("api/system-logs", request, cancellationToken);
+        }
+        catch
+        {
+            // Best-effort only.
+        }
     }
 
     private async Task CheckOnceAsync(CancellationToken cancellationToken)

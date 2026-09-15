@@ -19,15 +19,26 @@ public class JwtTokenService : IJwtTokenService
         _settings = settings.Value;
     }
 
-    public string GenerateAccessToken(AppUser user, IReadOnlyList<PlanFeature> enabledFeatures)
+    public string GenerateAccessToken(
+        AppUser user,
+        IReadOnlyList<PlanFeature> enabledFeatures,
+        IReadOnlyList<string> grantedPermissions,
+        int permissionVersion,
+        int? accessTokenMinutesOverride = null)
     {
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Email, user.Email),
+            // Lets every downstream service's audit-log calls show the
+            // actor's actual name instead of falling back to their email -
+            // previously the only identity claim in the token besides
+            // Email/NameIdentifier, so most controllers used email there.
+            new(ClaimTypes.Name, user.FullName),
             new(ClaimTypes.Role, user.Role.ToString()),
             new(TenantClaimTypes.TenantId, user.TenantId.ToString()),
+            new(PermissionClaimTypes.PermissionVersion, permissionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
         // One claim per enabled Feature (not a single delimited value) - lets
@@ -36,14 +47,24 @@ public class JwtTokenService : IJwtTokenService
         // current Plan - this class stays a pure token-crafter, no DB access.
         claims.AddRange(enabledFeatures.Distinct().Select(f => new Claim(FeatureClaimTypes.Feature, f.ToString())));
 
+        // Same shape, different axis - one claim per granted RolePermission
+        // key (Phase 1: only a couple of these are actually checked by any
+        // policy yet, see PermissionPolicies).
+        claims.AddRange(grantedPermissions.Distinct().Select(p => new Claim(PermissionClaimTypes.Permission, p)));
+
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SigningKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+        // Real Security Settings > Session Management "Session Timeout" when
+        // the caller resolved one from PlatformSettings - falls back to the
+        // static appsettings.json value (JwtTokenService itself stays a pure
+        // token-crafter with no DB access of its own, per its original design).
+        var accessTokenMinutes = accessTokenMinutesOverride ?? _settings.AccessTokenMinutes;
         var token = new JwtSecurityToken(
             issuer: _settings.Issuer,
             audience: _settings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenMinutes),
+            expires: DateTime.UtcNow.AddMinutes(accessTokenMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

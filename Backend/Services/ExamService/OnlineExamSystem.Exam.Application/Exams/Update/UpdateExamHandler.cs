@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Domain.Enums;
@@ -38,6 +39,11 @@ public class UpdateExamHandler
             return UpdateExamResult.NotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return UpdateExamResult.Forbidden();
+        }
+
         exam.Title = command.Title;
         exam.ExamCode = string.IsNullOrWhiteSpace(command.ExamCode) ? null : command.ExamCode.Trim();
         exam.Description = command.Description;
@@ -62,6 +68,10 @@ public class UpdateExamHandler
         exam.AllowNotes = command.AllowNotes;
         exam.AutoSubmitOnTimeEnd = command.AutoSubmitOnTimeEnd;
         exam.ConfirmBeforeSubmit = command.ConfirmBeforeSubmit;
+        if (command.AcademicFields is not null)
+        {
+            exam.AcademicFieldsJson = command.AcademicFields.Count > 0 ? JsonSerializer.Serialize(command.AcademicFields) : null;
+        }
 
         await _examRepository.SaveChangesAsync(cancellationToken);
 

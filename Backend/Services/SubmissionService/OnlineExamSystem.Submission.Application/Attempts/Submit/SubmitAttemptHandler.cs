@@ -48,7 +48,14 @@ public class SubmitAttemptHandler
             return SubmitAttemptResult.AlreadySubmitted();
         }
 
-        attempt.Status = command.IsAutoSubmitted ? AttemptStatus.AutoSubmitted : AttemptStatus.Submitted;
+        // Submit is never blocked by expiry - a late request still captures real,
+        // already-in-progress work, and hard-blocking it would just lose that work.
+        // Instead, the server overrides the client-reported IsAutoSubmitted once
+        // time is actually up, rather than trusting the client's own claim - this
+        // is what makes "auto-submit when time expires" true even if the client's
+        // own countdown never fired (closed tab, clock tampering, JS disabled).
+        var isPastExpiry = attempt.ExpiresAtUtc is { } expiresAtUtc && DateTime.UtcNow > expiresAtUtc;
+        attempt.Status = command.IsAutoSubmitted || isPastExpiry ? AttemptStatus.AutoSubmitted : AttemptStatus.Submitted;
         attempt.SubmittedAtUtc = DateTime.UtcNow;
         await _repository.SaveChangesAsync(cancellationToken);
 

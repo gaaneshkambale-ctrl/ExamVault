@@ -40,7 +40,8 @@ public class CreateAssignmentHandlerTests
         AutoSubmitOnTimeOver: true,
         EnableProctoring: false,
         EnableLiveVideo: false,
-        BearerToken: "test-token");
+        BearerToken: "test-token",
+        CreatedByUserId: Guid.NewGuid());
 
     [Fact]
     public async Task Valid_students_request_assigns_every_selected_student()

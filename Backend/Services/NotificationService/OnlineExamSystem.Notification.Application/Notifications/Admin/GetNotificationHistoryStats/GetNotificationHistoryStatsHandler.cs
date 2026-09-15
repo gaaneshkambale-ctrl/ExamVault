@@ -5,14 +5,24 @@ namespace OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotif
 public class GetNotificationHistoryStatsHandler
 {
     private readonly INotificationRepository _repository;
+    private readonly IExamLookupClient _examLookupClient;
 
-    public GetNotificationHistoryStatsHandler(INotificationRepository repository)
+    public GetNotificationHistoryStatsHandler(INotificationRepository repository, IExamLookupClient examLookupClient)
     {
         _repository = repository;
+        _examLookupClient = examLookupClient;
     }
 
-    public Task<NotificationHistoryStats> HandleAsync(
+    public async Task<NotificationHistoryStats> HandleAsync(
         GetNotificationHistoryStatsQuery query,
-        CancellationToken cancellationToken = default) =>
-        _repository.GetHistoryStatsAsync(cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<Guid>? ownedExamIds = null;
+        if (query.OwnerUserId is not null)
+        {
+            ownedExamIds = await _examLookupClient.GetOwnedExamIdsAsync(query.BearerToken, cancellationToken);
+        }
+
+        return await _repository.GetHistoryStatsAsync(ownedExamIds, cancellationToken);
+    }
 }

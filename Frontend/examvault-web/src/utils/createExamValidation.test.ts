@@ -12,6 +12,8 @@ const validForm: CreateExamRequest = {
   totalMarks: 50,
   passingMarks: 25,
   instructions: 'Answer all questions.',
+  examTypeId: 'exam-type-1',
+  tags: '',
 };
 
 describe('validateCreateExam', () => {
@@ -47,5 +49,10 @@ describe('validateCreateExam', () => {
   it('rejects passing marks above total marks', () => {
     const errors = validateCreateExam({ ...validForm, totalMarks: 50, passingMarks: 60 });
     expect(errors.passingMarks).toBe('Passing marks cannot exceed total marks.');
+  });
+
+  it('requires an exam type', () => {
+    const errors = validateCreateExam({ ...validForm, examTypeId: null });
+    expect(errors.examTypeId).toBe('Exam type is required.');
   });
 });

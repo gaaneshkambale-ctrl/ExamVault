@@ -3,6 +3,12 @@
   <ItemGroup>
     <ProjectReference Include="..\OnlineExamSystem.Result.Application\OnlineExamSystem.Result.Application.csproj" />
     <ProjectReference Include="..\OnlineExamSystem.Result.Domain\OnlineExamSystem.Result.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Common\OnlineExamSystem.Shared.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
   </ItemGroup>
 
   <PropertyGroup>

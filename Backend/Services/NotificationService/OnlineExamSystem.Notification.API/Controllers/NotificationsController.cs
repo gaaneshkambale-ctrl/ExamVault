@@ -25,6 +25,7 @@ using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Contracts.Responses.Notification;
 using NotificationEntity = OnlineExamSystem.Notification.Domain.Entities.Notification;
 using static OnlineExamSystem.Notification.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Notification.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Notification.API.Controllers;
 
@@ -227,10 +228,13 @@ public class NotificationsController : ControllerBase
     // console's Platform Announcement page keeps its Create action
     // disabled instead of pretending this reaches every organization.
     [HttpPost("admin")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Notifications)]
+    [Authorize(Policy = NotificationsCreate)]
     public async Task<IActionResult> Create(CreateNotificationRequest request, CancellationToken cancellationToken)
     {
+        var ownerUserId = User.IsInRole("Instructor") ? CallerId : (Guid?)null;
+
         var command = new CreateNotificationCommand(
             CallerTenantId,
             request.Title,
@@ -244,7 +248,8 @@ public class NotificationsController : ControllerBase
             CallerId,
             BearerToken,
             request.SendEmail,
-            request.SendInApp);
+            request.SendInApp,
+            ownerUserId);
 
         var result = await _createNotificationHandler.HandleAsync(command, cancellationToken);
 
@@ -255,6 +260,11 @@ public class NotificationsController : ControllerBase
                     .Select((error, index) => (error, index))
                     .GroupBy(_ => "request")
                     .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (result.IsNoRecipients)
@@ -269,9 +279,14 @@ public class NotificationsController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, new CreateNotificationResponse(result.BatchId, result.RecipientCount));
     }
 
+    // Instructor reuses the same "Notifications - Create" permission for
+    // viewing history rather than a separate catalog entry - the spec's
+    // "Notifications ✅ Own Exam notifications" is one checkbox covering
+    // both send and view, not two.
     [HttpGet("admin/history")]
-    [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Roles = "Admin,SuperAdmin,Instructor")]
     [Authorize(Policy = Notifications)]
+    [Authorize(Policy = NotificationsCreate)]
     public async Task<IActionResult> GetHistory(
         [FromQuery] string? type,
         [FromQuery] string? search,
@@ -282,9 +297,11 @@ public class NotificationsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         NotificationType? parsedType = type is null ? null : Enum.Parse<NotificationType>(type, ignoreCase: true);
+        var ownerUserId = User.IsInRole("Instructor") ? CallerId : (Guid?)null;
 
         var (items, totalCount) = await _getNotificationHistoryHandler.HandleAsync(
-            new GetNotificationHistoryQuery(parsedType, page, pageSize, search, channel, status), cancellationToken);
+            new GetNotificationHistoryQuery(parsedType, page, pageSize, search, channel, status, ownerUserId, BearerToken),
+            cancellationToken);
 
         var responses = items.Select(i =>
         {
@@ -319,24 +336,28 @@ public class NotificationsController : ControllerBase
     }
 
     [HttpGet("admin/history/stats")]
-    [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Roles = "Admin,SuperAdmin,Instructor")]
     [Authorize(Policy = Notifications)]
+    [Authorize(Policy = NotificationsCreate)]
     public async Task<IActionResult> GetHistoryStats(CancellationToken cancellationToken)
     {
+        var ownerUserId = User.IsInRole("Instructor") ? CallerId : (Guid?)null;
         var stats = await _getNotificationHistoryStatsHandler.HandleAsync(
-            new GetNotificationHistoryStatsQuery(), cancellationToken);
+            new GetNotificationHistoryStatsQuery(ownerUserId, BearerToken), cancellationToken);
 
         return Ok(new NotificationHistoryStatsResponse(
             stats.SentToday, stats.Delivered, stats.Failed, stats.Scheduled, stats.Total, stats.Pending));
     }
 
     [HttpGet("admin/history/{batchId:guid}")]
-    [Authorize(Roles = "Admin,SuperAdmin")]
+    [Authorize(Roles = "Admin,SuperAdmin,Instructor")]
     [Authorize(Policy = Notifications)]
+    [Authorize(Policy = NotificationsCreate)]
     public async Task<IActionResult> GetBatchDetails(Guid batchId, CancellationToken cancellationToken)
     {
+        var ownerUserId = User.IsInRole("Instructor") ? CallerId : (Guid?)null;
         var result = await _getNotificationBatchDetailsHandler.HandleAsync(
-            new GetNotificationBatchDetailsQuery(batchId), cancellationToken);
+            new GetNotificationBatchDetailsQuery(batchId, ownerUserId, BearerToken), cancellationToken);
 
         if (result.IsNotFound)
         {

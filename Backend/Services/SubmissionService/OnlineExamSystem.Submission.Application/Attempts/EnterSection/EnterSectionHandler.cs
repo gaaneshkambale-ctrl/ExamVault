@@ -72,7 +72,7 @@ public class EnterSectionHandler
             var isGated = !string.Equals(targetSection.NavigationType, "Free", StringComparison.OrdinalIgnoreCase);
             if (existingState.IsCompleted && isGated)
             {
-                return EnterSectionResult.SectionLocked();
+                return EnterSectionResult.SectionAlreadyCompleted();
             }
 
             return EnterSectionResult.Ok(existingState);

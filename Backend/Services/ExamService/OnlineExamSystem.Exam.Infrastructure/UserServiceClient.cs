@@ -43,12 +43,22 @@ public class UserServiceClient : IUserLookupClient
         string bearerToken,
         CancellationToken cancellationToken = default)
     {
-        var users = await GetAllUsersAsync(bearerToken, cancellationToken);
+        // GET /api/users/students rather than /api/users (which GetAllUsersAsync
+        // below calls) - this runs with the caller's own forwarded bearer token,
+        // and an Instructor caller (AllStudents assignment on an exam they own)
+        // has no "Users - View" permission for the full list, only for this
+        // students-only slice.
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/users/students");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 
-        return users
-            .Where(u => string.Equals(u.Role, "Student", StringComparison.OrdinalIgnoreCase))
-            .Select(u => u.Id)
-            .ToList();
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var students = await response.Content.ReadFromJsonAsync<List<StudentSummaryApiResponse>>(
+            JsonOptions,
+            cancellationToken) ?? [];
+
+        return students.Select(s => s.Id).ToList();
     }
 
     public async Task<IReadOnlyList<UserLookupInfo>> GetUsersByIdsAsync(
@@ -94,5 +104,10 @@ public class UserServiceClient : IUserLookupClient
         public string FullName { get; init; } = string.Empty;
         public string Email { get; init; } = string.Empty;
         public string Role { get; init; } = string.Empty;
+    }
+
+    private sealed class StudentSummaryApiResponse
+    {
+        public Guid Id { get; init; }
     }
 }

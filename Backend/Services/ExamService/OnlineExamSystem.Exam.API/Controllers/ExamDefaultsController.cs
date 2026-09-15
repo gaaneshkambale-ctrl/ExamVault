@@ -6,6 +6,7 @@ using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using ExamDefaultsEntity = OnlineExamSystem.Exam.Domain.Entities.ExamDefaults;
 using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Exam.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -31,6 +32,7 @@ public class ExamDefaultsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = SettingsView)]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
         var settings = await _getExamDefaultsHandler.HandleAsync(new GetExamDefaultsQuery(), cancellationToken);
@@ -38,6 +40,7 @@ public class ExamDefaultsController : ControllerBase
     }
 
     [HttpPut]
+    [Authorize(Policy = SettingsEdit)]
     public async Task<IActionResult> Update(UpdateExamDefaultsRequest request, CancellationToken cancellationToken)
     {
         var settings = await _updateExamDefaultsHandler.HandleAsync(

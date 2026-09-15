@@ -10,6 +10,12 @@ public class ExamAttempt : TenantScopedEntity
     public int AttemptNumber { get; set; }
     public DateTime StartedAtUtc { get; set; }
     public DateTime? SubmittedAtUtc { get; set; }
+    // Computed once at Start from the exam's own DurationMinutes (which for a
+    // sectioned exam is enforced at publish time to equal the sum of every
+    // section's own duration - see ChangeExamStatusHandler.ValidatePublishTotals -
+    // so this single field is always the right deadline regardless of sections).
+    // Null only for attempts started before this field existed.
+    public DateTime? ExpiresAtUtc { get; set; }
     public AttemptStatus Status { get; set; } = AttemptStatus.InProgress;
     public int FullscreenExitCount { get; set; }
     public int NoFaceDetectedCount { get; set; }

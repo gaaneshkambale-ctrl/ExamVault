@@ -49,6 +49,11 @@ public class CreateAssignmentHandler
             return CreateAssignmentResult.ExamNotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return CreateAssignmentResult.Forbidden();
+        }
+
         if (exam.Status != ExamStatus.Published)
         {
             return CreateAssignmentResult.ExamNotPublished();
@@ -103,6 +108,7 @@ public class CreateAssignmentHandler
             AutoSubmitOnTimeOver = command.AutoSubmitOnTimeOver,
             EnableProctoring = command.EnableProctoring,
             EnableLiveVideo = command.EnableLiveVideo,
+            CreatedByUserId = command.CreatedByUserId,
         };
 
         await _examRepository.AddAssignmentAsync(assignment, targetUserIds, cancellationToken);
@@ -136,6 +142,6 @@ public class CreateAssignmentHandler
             _logger.LogWarning(ex, "Failed to publish ExamAssignedEvent for assignment {AssignmentId}.", assignment.Id);
         }
 
-        return CreateAssignmentResult.Ok(assignment, targetUserIds);
+        return CreateAssignmentResult.Ok(assignment, targetUserIds, exam.Title);
     }
 }

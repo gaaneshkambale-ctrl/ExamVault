@@ -9,6 +9,13 @@ public class ExamPaper : TenantScopedEntity
     public string? ExamCode { get; set; }
     public string Description { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+
+    // Genuinely free-text (unlike Category, which is UI-constrained to
+    // EXAM_CATEGORIES) - comma-separated, single string column rather than
+    // a normalized many-to-many table, matching this codebase's own stated
+    // intent for Tags ("a simple string field... matching how Category is
+    // handled" per ActionPlan.txt) rather than building a full tagging system.
+    public string Tags { get; set; } = string.Empty;
     public bool ContainsSections { get; set; }
     public CreationMethod CreationMethod { get; set; } = CreationMethod.Manual;
     public Guid? ExamTypeId { get; set; }
@@ -44,4 +51,13 @@ public class ExamPaper : TenantScopedEntity
     public bool AllowNotes { get; set; }
     public bool AutoSubmitOnTimeEnd { get; set; } = true;
     public bool ConfirmBeforeSubmit { get; set; } = true;
+
+    // Organization-type-specific exam fields captured at Create/Edit Exam
+    // time - eg. a College's Semester, a Coaching Institute's Test Series.
+    // JSON-serialized Dictionary<string,string>, same flexible-schema
+    // approach as AppUser.AcademicFieldsJson and
+    // OrganizationAcademicConfig.AcademicFieldsJson in UserService: which
+    // fields matter varies entirely by the tenant's Organization Type, so
+    // this deliberately isn't a fixed set of new columns.
+    public string? AcademicFieldsJson { get; set; }
 }

@@ -1,7 +1,9 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 using OnlineExamSystem.User.Infrastructure.Persistence;
 
 namespace OnlineExamSystem.User.Infrastructure.Repositories;
@@ -66,6 +68,21 @@ public class UserRepository : IUserRepository
             .OrderByDescending(u => u.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    // Explicit tenantId, not ICurrentTenant - CreateUserHandler's quota check
+    // runs for the tenant the new user is being created in, which may differ
+    // from the caller's own ambient tenant context (or have none at all).
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        _dbContext.Users.CountAsync(u => u.TenantId == tenantId, cancellationToken);
+
+    public Task<int> CountByTenantAndRoleAsync(Guid tenantId, UserRole role, CancellationToken cancellationToken = default) =>
+        _dbContext.Users.CountAsync(u => u.TenantId == tenantId && u.Role == role, cancellationToken);
+
+    public async Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        return new EfUnitOfWorkTransaction(transaction);
+    }
+
     public async Task<IReadOnlyList<AppUser>> GetByIdsAsync(
         IReadOnlyList<Guid> ids,
         CancellationToken cancellationToken = default) =>
@@ -117,6 +134,14 @@ public class UserRepository : IUserRepository
             .Where(t => t.UserId == userId)
             .OrderByDescending(t => t.CreatedAtUtc)
             .ToListAsync(cancellationToken);
+
+    public Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken = default) =>
+        _dbContext.PasswordResetTokens.AddAsync(token, cancellationToken).AsTask();
+
+    public Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.PasswordResetTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
 
     public async Task<UserPreferences> GetOrCreateUserPreferencesAsync(
         Guid userId,

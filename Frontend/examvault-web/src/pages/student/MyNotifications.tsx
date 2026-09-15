@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Badge, Button, Card, Col, Dropdown, Form, Pagination, Row, Spinner } from 'react-bootstrap';
+import { Badge, Button, Card, Col, Dropdown, Form, Row, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import StudentLayout from '../../layouts/StudentLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import { CheckIcon } from '../../components/icons/ActionIcons';
 import NotificationTypeIcon from '../../components/notifications/NotificationTypeIcon';
 import NotificationPreferencesPreview from '../../components/notifications/NotificationPreferencesPreview';
@@ -10,13 +11,14 @@ import { useMyNotifications } from '../../hooks/useNotifications';
 import { deleteMyNotification, markAllNotificationsAsRead, markNotificationAsRead } from '../../api/notificationApi';
 import type { NotificationResponse, NotificationType } from '../../types/notification';
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE_OPTIONS = [6, 25, 50];
 
 export default function MyNotifications() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'All' | 'Unread'>('All');
   const [typeFilter, setTypeFilter] = useState<'All' | NotificationType>('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data, isLoading, isError } = useMyNotifications(false, 1, 100);
@@ -34,11 +36,11 @@ export default function MyNotifications() {
     setSelected(new Set());
   }, [tab, typeFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pageItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredItems.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredItems.length);
+  const pageItems = filteredItems.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredItems.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredItems.length);
 
   const allPageSelected = pageItems.length > 0 && pageItems.every((n) => selected.has(n.id));
 
@@ -270,23 +272,17 @@ export default function MyNotifications() {
           </Card>
 
           {!isLoading && !isError && filteredItems.length > 0 && (
-            <div className="d-flex justify-content-between align-items-center mt-3">
-              <div className="text-muted small">
-                Showing {rangeStart} to {rangeEnd} of {filteredItems.length} notifications
-              </div>
-              <Pagination className="mb-0">
-                <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                    {p}
-                  </Pagination.Item>
-                ))}
-                <Pagination.Next
-                  disabled={currentPage === totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                />
-              </Pagination>
-            </div>
+            <TablePagination
+              page={currentPage}
+              totalPages={totalPages}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              totalCount={filteredItems.length}
+              onPageChange={setPage}
+              pageSize={pageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </Col>
 

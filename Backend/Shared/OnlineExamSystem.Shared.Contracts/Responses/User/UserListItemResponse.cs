@@ -15,4 +15,7 @@ public record UserListItemResponse(
     // "Manage Users" list is always their own tenant already, so the
     // frontend there has no reason to render it.
     Guid TenantId = default,
-    DateTime? LastLoginAtUtc = null);
+    DateTime? LastLoginAtUtc = null,
+    Guid? CreatedByUserId = null,
+    string? CreatedByName = null,
+    Dictionary<string, string>? AcademicFields = null);

@@ -36,6 +36,15 @@ public class UpdateAssignmentHandler
             return UpdateAssignmentResult.NotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId)
+        {
+            var exam = await _examRepository.GetByIdAsync(assignment.ExamId, cancellationToken);
+            if (exam is null || exam.CreatedByUserId != ownerUserId)
+            {
+                return UpdateAssignmentResult.Forbidden();
+            }
+        }
+
         var targetType = Enum.Parse<AssignmentTargetType>(command.TargetType, ignoreCase: true);
         IReadOnlyList<Guid> targetUserIds;
         Guid? groupId = null;

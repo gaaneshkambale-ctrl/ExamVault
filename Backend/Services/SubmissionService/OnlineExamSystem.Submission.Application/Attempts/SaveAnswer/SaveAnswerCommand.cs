@@ -6,5 +6,6 @@ public record SaveAnswerCommand(
     Guid? SelectedOptionId,
     bool IsMarkedForReview,
     Guid UserId,
+    string BearerToken,
     string? AnswerText = null,
     IReadOnlyList<Guid>? SelectedOptionIds = null);

@@ -8,6 +8,7 @@ public class GradeAnswerResult
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
     public bool IsNotFound { get; init; }
     public bool IsNotAnswered { get; init; }
+    public bool IsForbidden { get; init; }
     public AttemptAnswer? Answer { get; init; }
 
     public static GradeAnswerResult Ok(AttemptAnswer answer) => new() { Success = true, Answer = answer };
@@ -18,4 +19,6 @@ public class GradeAnswerResult
     public static GradeAnswerResult NotFound() => new() { IsNotFound = true };
 
     public static GradeAnswerResult NotAnswered() => new() { IsNotAnswered = true };
+
+    public static GradeAnswerResult Forbidden() => new() { IsForbidden = true };
 }

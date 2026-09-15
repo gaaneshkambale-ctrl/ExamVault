@@ -11,4 +11,6 @@ public record CreateExamRequest(
     int PassingMarks,
     string Instructions,
     string? ExamCode = null,
-    Guid? ExamTypeId = null);
+    Guid? ExamTypeId = null,
+    string Tags = "",
+    Dictionary<string, string>? AcademicFields = null);

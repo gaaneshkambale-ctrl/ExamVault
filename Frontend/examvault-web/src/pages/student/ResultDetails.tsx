@@ -1,8 +1,11 @@
-import { Badge, Button, Card, Col, ProgressBar, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, ProgressBar, Row, Spinner } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useMyResult } from '../../hooks/useResults';
+import { useOrganizationAcademicConfig } from '../../hooks/useOrganizationAcademicConfig';
+import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth } from '../../hooks/useAuth';
 import { getGrade } from '../../types/result';
 import type { CreationMethod } from '../../types/exam';
 import { generateResultPdf } from '../../utils/generateResultPdf';
@@ -35,8 +38,11 @@ function AnalysisRow({ label, count, total, variant }: { label: string; count: n
 
 export default function ResultDetails() {
   const { examId } = useParams<{ examId: string }>();
+  const { hasPermission } = usePermissions();
   const { data: result, isLoading, isError } = useMyResult(examId);
   const { data: exam } = useExam(examId);
+  const { user } = useAuth();
+  const { data: academicConfig } = useOrganizationAcademicConfig();
 
   const percentage =
     result && result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
@@ -50,6 +56,17 @@ export default function ResultDetails() {
   const incorrectCount =
     questions?.filter((q) => q.questionType !== 'CodeProgram' && isAttempted(q) && !q.isCorrect).length ?? 0;
   const unattemptedCount = questions?.filter((q) => !isAttempted(q)).length ?? 0;
+
+  if (!hasPermission('Results - View')) {
+    return (
+      <StudentLayout active="My Results">
+        <Alert variant="warning" className="mb-0">
+          You don't currently have access to view results. Contact your organization's admin if you believe
+          this is a mistake.
+        </Alert>
+      </StudentLayout>
+    );
+  }
 
   return (
     <StudentLayout active="My Results">
@@ -161,7 +178,24 @@ export default function ResultDetails() {
           )}
 
           <div className="d-flex justify-content-end mt-3">
-            <Button variant="primary" onClick={() => generateResultPdf(result)}>
+            <Button
+              variant="primary"
+              onClick={() =>
+                generateResultPdf(result, {
+                  studentName: user?.fullName,
+                  studentEmail: user?.email,
+                  rollNumber: user?.rollNumber,
+                  program: user?.academicFields?.program,
+                  examCode: exam?.examCode ?? null,
+                  examType: exam?.examTypeName ?? exam?.category ?? null,
+                  durationMinutes: exam?.durationMinutes,
+                  rank: result.rank ?? undefined,
+                  totalParticipants: result.totalParticipants ?? undefined,
+                  averageAccuracyPercent: result.averageAccuracy ?? undefined,
+                  enabledResultFields: academicConfig?.resultFields,
+                })
+              }
+            >
               Download Result
             </Button>
           </div>

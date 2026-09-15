@@ -3,8 +3,10 @@ import type { FormEvent } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import { updateQuestion } from '../../api/questionApi';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useQuestion } from '../../hooks/useQuestions';
 import { validateCreateQuestion } from '../../utils/createQuestionValidation';
 import { extractServerError } from '../../utils/apiError';
@@ -98,7 +100,10 @@ export default function EditQuestion() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: question, isLoading, isError } = useQuestion(id);
+  const { data: question, isLoading, isFetching, isError } = useQuestion(id);
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Edit');
 
   const [questionType, setQuestionType] = useState<QuestionType>('MultipleChoice');
   const [questionText, setQuestionText] = useState('');
@@ -110,6 +115,9 @@ export default function EditQuestion() {
   const [programmingLanguage, setProgrammingLanguage] = useState<ProgrammingLanguage | ''>('');
   const [allowLanguageChange, setAllowLanguageChange] = useState(false);
   const [sampleAnswer, setSampleAnswer] = useState('');
+  const [sampleInput, setSampleInput] = useState('');
+  const [sampleOutput, setSampleOutput] = useState('');
+  const [constraints, setConstraints] = useState('');
   const [signature, setSignature] = useState<FunctionSignatureValue>(EMPTY_SIGNATURE);
   const [sqlTestCases, setSqlTestCases] = useState<SqlTestCaseRow[]>([]);
   const isSql = programmingLanguage === 'Sql';
@@ -129,10 +137,19 @@ export default function EditQuestion() {
       setProgrammingLanguage(question.programmingLanguage ?? '');
       setAllowLanguageChange(question.allowLanguageChange ?? false);
       setSampleAnswer(question.sampleAnswer ?? '');
+      setSampleInput(question.sampleInput ?? '');
+      setSampleOutput(question.sampleOutput ?? '');
+      setConstraints(question.constraints ?? '');
       setSignature(toSignatureFormState(question));
       setSqlTestCases(toSqlTestCaseFormState(question));
     }
-  }, [question]);
+    // Deliberately keyed on question?.id, not the question object itself: a
+    // background refetch of the same question (eg. React Query revalidating
+    // a cached entry from an earlier visit) yields a new object reference
+    // with the same id, and re-running this would silently discard whatever
+    // the admin has typed since the form loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question?.id]);
 
   const changeQuestionType = (type: QuestionType) => {
     setQuestionType(type);
@@ -188,6 +205,9 @@ export default function EditQuestion() {
                   expectedOutput: parseTypedValue(tc.expectedOutputText, signature.returnType || 'String'),
                 })),
             sqlTestCases: isSql ? sqlTestCases.map(({ setupSql }) => ({ setupSql })) : [],
+            sampleInput: sampleInput || null,
+            sampleOutput: sampleOutput || null,
+            constraints: constraints || null,
           }
         : {
             questionType,
@@ -224,12 +244,12 @@ export default function EditQuestion() {
     : '/admin/exams';
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Edit Question</h1>
       </div>
 
-      {isLoading && (
+      {(isLoading || isFetching) && (
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
@@ -241,7 +261,7 @@ export default function EditQuestion() {
 
       {status === 'error' && <Alert variant="danger">{serverError}</Alert>}
 
-      {question && (
+      {question && !isFetching && (
         <Card className="border-0 shadow-sm">
           <Card.Body className="p-4">
             <Form noValidate onSubmit={handleSubmit}>
@@ -379,6 +399,53 @@ export default function EditQuestion() {
                     </Form.Text>
                   </Form.Group>
 
+                  <Row>
+                    <Col md={6}>
+                      <Form.Group className="mb-3" controlId="editSampleInput">
+                        <Form.Label className="fw-bold">Sample Input (optional)</Form.Label>
+                        <Form.Control
+                          as="textarea"
+                          rows={2}
+                          className="font-monospace"
+                          placeholder="e.g. 1, 2, 3, 4, 5, 6, 7, 8"
+                          value={sampleInput}
+                          onChange={(e) => setSampleInput(e.target.value)}
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                      <Form.Group className="mb-3" controlId="editSampleOutput">
+                        <Form.Label className="fw-bold">Sample Output (optional)</Form.Label>
+                        <Form.Control
+                          as="textarea"
+                          rows={2}
+                          className="font-monospace"
+                          placeholder="e.g. Sum of even numbers is: 20"
+                          value={sampleOutput}
+                          onChange={(e) => setSampleOutput(e.target.value)}
+                        />
+                      </Form.Group>
+                    </Col>
+                  </Row>
+
+                  <Form.Group className="mb-4" controlId="editConstraints">
+                    <Form.Label className="fw-bold">{isSql ? 'Notes (optional)' : 'Constraints (optional)'}</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={3}
+                      placeholder={
+                        isSql
+                          ? 'Write only the SQL query.\nDo not include any explanation.'
+                          : 'Use plain JavaScript (no external libraries).\nImplement the logic using a loop.'
+                      }
+                      value={constraints}
+                      onChange={(e) => setConstraints(e.target.value)}
+                    />
+                    <Form.Text className="text-muted">
+                      One per line - shown as bullet points to students.
+                    </Form.Text>
+                  </Form.Group>
+
                   <hr />
                   {isSql ? (
                     <SqlTestCaseEditor value={sqlTestCases} onChange={setSqlTestCases} />
@@ -393,7 +460,7 @@ export default function EditQuestion() {
                   {options.map((option, index) => (
                     <div key={option.key} className="d-flex align-items-center gap-2 mb-2">
                       <span
-                        className="d-inline-flex align-items-center justify-content-center rounded-circle bg-light border fw-bold flex-shrink-0"
+                        className="d-inline-flex align-items-center justify-content-center rounded-circle bg-body-tertiary border fw-bold flex-shrink-0"
                         style={{ width: 32, height: 32 }}
                       >
                         {optionLetter(index)}
@@ -465,21 +532,23 @@ export default function EditQuestion() {
                 <Link to={backLink} className="btn btn-outline-secondary">
                   Cancel
                 </Link>
-                <Button type="submit" variant="primary" disabled={status === 'loading'}>
-                  {status === 'loading' ? (
-                    <>
-                      <Spinner animation="border" size="sm" className="me-2" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
-                </Button>
+                {canEditQuestions && (
+                  <Button type="submit" variant="primary" disabled={status === 'loading'}>
+                    {status === 'loading' ? (
+                      <>
+                        <Spinner animation="border" size="sm" className="me-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                )}
               </div>
             </Form>
           </Card.Body>
         </Card>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }
