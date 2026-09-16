@@ -186,6 +186,7 @@ export default function ResultDetails() {
                   studentEmail: user?.email,
                   rollNumber: user?.rollNumber,
                   program: user?.academicFields?.program,
+                  academicFields: user?.academicFields,
                   examCode: exam?.examCode ?? null,
                   examType: exam?.examTypeName ?? exam?.category ?? null,
                   durationMinutes: exam?.durationMinutes,

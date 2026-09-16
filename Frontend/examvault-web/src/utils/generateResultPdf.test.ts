@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { computeExamResultSummary, generateExamResultsBooklet } from './generateResultPdf';
+import { computeExamResultSummary, generateExamResultsBooklet, generateResultPdf } from './generateResultPdf';
 import type { ExamResultBookletEntry } from './generateResultPdf';
 import type { AdminAttemptResultResponse } from '../types/result';
+import { loadTenantBranding } from './pdfReportKit';
 import type { TenantBranding } from './pdfReportKit';
 
 // Only loadTenantBranding is overridden - every drawing helper (panel,
@@ -279,5 +280,60 @@ describe('generateExamResultsBooklet (Exam Result is a roster, not a repeated St
     const hiddenDrawn = allDrawnText(lastJsPdfInstance.text);
     const hiddenLabelIndex = hiddenDrawn.indexOf('Exam Date');
     expect(hiddenDrawn[hiddenLabelIndex + 1]).toBe('—');
+  });
+});
+
+describe('Student Result - Academic Details panel (Department, Semester, Enrollment No., etc.)', () => {
+  it('draws nothing when the student has no academicFields at all', async () => {
+    await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
+      studentName: 'Priya Sharma',
+      rollNumber: 'ROLL-001',
+    });
+    const drawn = allDrawnText(lastJsPdfInstance.text);
+    expect(drawn).not.toContain('Academic Details');
+  });
+
+  it('draws every populated academic field with its real value, excluding Program (already shown separately)', async () => {
+    // College/University's own catalog (Department/Semester/Division/etc.) -
+    // Coaching Institute's fixed FAKE_BRANDING only recognizes batch/course/
+    // academicYear, so this test needs a realistic College/University tenant.
+    vi.mocked(loadTenantBranding).mockResolvedValueOnce({ ...FAKE_BRANDING, organizationType: 'University' });
+    await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
+      studentName: 'Priya Sharma',
+      rollNumber: 'ROLL-001',
+      program: 'B.Tech Computer Engineering',
+      academicFields: { program: 'B.Tech Computer Engineering', department: 'Computer Engineering', semester: '6', division: 'A' },
+    });
+    const drawn = allDrawnText(lastJsPdfInstance.text);
+    expect(drawn).toContain('Academic Details');
+    expect(drawn).toContain('Department');
+    expect(drawn).toContain('Computer Engineering');
+    expect(drawn).toContain('Semester');
+    expect(drawn).toContain('Division / Class');
+    // Program already has its own dedicated field elsewhere on the report -
+    // the panel itself must not draw a second "Program" row.
+    const programCount = drawn.filter((t) => t === 'Program').length;
+    expect(programCount).toBeLessThanOrEqual(1);
+  });
+
+  it('respects Result Fields - hidden when the tenant has turned off "academicDetails", shown when unset', async () => {
+    const context = {
+      studentName: 'Priya Sharma',
+      rollNumber: 'ROLL-001',
+      academicFields: { department: 'Computer Engineering' },
+    };
+    vi.mocked(loadTenantBranding).mockResolvedValueOnce({ ...FAKE_BRANDING, organizationType: 'University' });
+    await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
+      ...context,
+      enabledResultFields: ['studentId'], // academicDetails left out -> gated off
+    });
+    expect(allDrawnText(lastJsPdfInstance.text)).not.toContain('Academic Details');
+
+    vi.mocked(loadTenantBranding).mockResolvedValueOnce({ ...FAKE_BRANDING, organizationType: 'University' });
+    await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
+      ...context,
+      enabledResultFields: ['studentId', 'academicDetails'],
+    });
+    expect(allDrawnText(lastJsPdfInstance.text)).toContain('Academic Details');
   });
 });

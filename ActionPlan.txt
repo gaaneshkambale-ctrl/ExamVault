@@ -14397,3 +14397,77 @@ Failed (1/1/0/1/0) match the same real numbers already confirmed for
 this exam in Exam Result/Result Analytics/Exam Reports.
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Student Result PDF - added the missing student academic-identity fields
+the user flagged directly: "Department, Semester, Division/Class,
+Enrollment No., Course, Year of Study, Academic Year, and Roll No."
+Roll No. was already shown (as "Registration No.") - the other seven
+were genuinely never wired up anywhere on the actual result document,
+even though they're captured on every student's profile and already
+exported on Student Reports.
+
+Investigated before writing anything: RESULT_FIELD_CATALOG (Organization
+Settings -> Academic Configuration -> Result Fields) only ever covered
+exam/result metadata (studentId, examDate, duration, rank, ...) - it
+had no concept of the student's own academicFields at all, so no
+existing config surface could have shown these regardless of what an
+Admin toggled. Also found the same "program" field already had a
+precedent for this exact idea (ResultPdfContext.program, added
+previously for the compact 'academic' variant) - generalized that
+pattern rather than reinventing one.
+
+Added `academicDetails` to RESULT_FIELD_CATALOG/RESULT_FIELD_KEYS_BY_TYPE
+(every org type, toggleable, same "empty saved list = show everything"
+convention as every other key) and a new getPopulatedStudentAcademicFields()
+in organizationTypeFieldCatalog.ts - reuses the existing
+STUDENT_FIELDS_BY_TYPE catalog per Organization Type (so a School sees
+Class/Division/Admission No., a College/University sees Department/
+Semester/Division/Enrollment No./Course/Year/Academic Year, etc.),
+returning only fields the student genuinely has a value for (never
+fabricated) and excluding Program (already its own field). New shared
+`drawAcademicDetailsPanel()` in generateResultPdf.ts - a 2-column panel
+sized to however many fields actually exist, drawing nothing at all
+when there's no data - called from BOTH drawStudentReport and
+drawAcademicReport (the two Student Result layouts) so they can't
+independently drift, same reasoning this file already uses for its
+other shared drawing functions. Threaded `academicFields` through all
+3 real call sites (student's own "My Result" page, admin's Student
+Result Details, admin's Student Results list export button).
+
+Deliberately NOT updated: OrganizationSettings.tsx's on-screen/PDF
+"Student Result" SAMPLE preview (PdfReportSettingsTab) - that's a
+hand-drawn clone of the real layout for preview purposes only, and
+extending it to mirror this new panel is a legitimate follow-up, not
+done here to keep this change scoped to the real document users
+actually download. Flagging this explicitly since this file's own
+history calls out "a Preview that doesn't match the actual PDF" as a
+real bug class - this is a known omission, not an oversight.
+
+Verified: `npm run build` - 0 errors. `npm run test` - 141/141 passing
+(8 new: 5 for getPopulatedStudentAcademicFields - real data passthrough,
+never fabricates a missing key, empty/null handling, unknown org type,
+and School using its own different key set than College; 3 for the PDF
+panel itself - draws nothing with no data, draws every populated field
+excluding Program, and respects the Result Fields on/off toggle).
+Docker frontend rebuilt/redeployed.
+
+Live-verified against Greenfield University's real student Arjun Mehta
+end to end, including hitting the exact "opt-in config" edge case this
+change was always going to hit: the tenant already had a SAVED, non-
+empty Result Fields list from earlier testing (predating this key), so
+the panel correctly did NOT appear on the first real download - not a
+bug, the same pre-existing "an old saved list doesn't retroactively
+gain a brand-new key" behavior every other key in this catalog already
+has. Confirmed by querying OrganizationAcademicConfigs.ResultFieldsJson
+directly, then fixed the real way - checked the new "Academic Details"
+checkbox (grouped correctly under Student Information) on the Academic
+Configuration tab and saved. Re-downloaded the PDF and confirmed the
+Academic Details panel now renders all 8 fields with the exact real
+values: Enrollment No. ENR2026001, PRN / Registration No. PRN2026001,
+Course/Program B.Tech Computer Engineering, Department Computer
+Engineering, Semester 6, Year 3, Academic Year 2026-27, Division /
+Class A - matching the raw AcademicFieldsJson column exactly.
+
+Not yet committed - awaiting explicit user instruction to commit.

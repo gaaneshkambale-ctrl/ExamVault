@@ -99,9 +99,9 @@ export default function StudentResults() {
   );
 
   const studentById = useMemo(() => {
-    const map = new Map<string, { fullName: string; email: string; rollNumber: string | null }>();
+    const map = new Map<string, { fullName: string; email: string; rollNumber: string | null; academicFields: Record<string, string> | null }>();
     for (const user of users ?? []) {
-      map.set(user.id, { fullName: user.fullName, email: user.email, rollNumber: user.rollNumber });
+      map.set(user.id, { fullName: user.fullName, email: user.email, rollNumber: user.rollNumber, academicFields: user.academicFields });
     }
     return map;
   }, [users]);
@@ -230,6 +230,8 @@ export default function StudentResults() {
       studentName: student?.fullName,
       studentEmail: student?.email,
       rollNumber: student?.rollNumber,
+      program: student?.academicFields?.program,
+      academicFields: student?.academicFields,
       examCode: examCodeById.get(result.examId) ?? null,
       examType: examMeta?.examType ?? null,
       durationMinutes: examMeta?.durationMinutes,

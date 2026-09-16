@@ -35,7 +35,7 @@ import {
 import type { TenantBranding } from './pdfReportKit';
 import type { ExamAttendance } from './advanceExamReport';
 import { getResultPdfVariant, RESULT_PDF_VARIANT_COPY } from './resultPdfVariants';
-import { isResultFieldVisible } from '../constants/organizationTypeFieldCatalog';
+import { getPopulatedStudentAcademicFields, isResultFieldVisible } from '../constants/organizationTypeFieldCatalog';
 
 export interface ResultPdfSectionStat {
   name: string;
@@ -53,6 +53,17 @@ export interface ResultPdfContext {
   rollNumber?: string | null;
   /** Student's academic-field "Program" (eg. "B.Tech Computer Engineering") - only used by the compact 'academic' variant's Registration/Program info block. Null/undefined shows "—", same fallback as every other optional field here. */
   program?: string | null;
+  /**
+   * The student's full academicFields dict (Department, Semester, Division/
+   * Class, Enrollment No., Course, Year, Academic Year, etc. - whichever
+   * this Organization Type actually collects, see STUDENT_FIELDS_BY_TYPE).
+   * Drives the "Academic Details" panel via getPopulatedStudentAcademicFields
+   * - only fields the student genuinely has a value for are drawn, and the
+   * whole panel is omitted for a student/org type with nothing set. Gated
+   * by the same Result Fields mechanism as everything else here, under the
+   * 'academicDetails' key.
+   */
+  academicFields?: Record<string, string> | null;
   examCode?: string | null;
   examType?: string | null;
   durationMinutes?: number;
@@ -87,6 +98,39 @@ export interface ResultPdfContext {
 
 function isResultFieldEnabled(context: ResultPdfContext, branding: TenantBranding, key: string): boolean {
   return isResultFieldVisible(branding.organizationType, context.enabledResultFields, key);
+}
+
+/**
+ * Draws the "Academic Details" panel (Department, Semester, Division/
+ * Class, Enrollment No., Course, Year, Academic Year, etc. - whichever of
+ * the student's own academicFields this Organization Type collects and
+ * this student actually has set) in a 2-column grid, sized to however many
+ * fields there actually are. Shared by both drawStudentReport and
+ * drawAcademicReport so the two layouts can't independently drift the way
+ * other duplicated blocks in this file already learned not to. Draws
+ * nothing and returns `y` unchanged when there's no data or the tenant has
+ * turned this off via Result Fields ('academicDetails').
+ */
+function drawAcademicDetailsPanel(doc: jsPDF, y: number, context: ResultPdfContext, branding: TenantBranding): number {
+  const fields = isResultFieldEnabled(context, branding, 'academicDetails')
+    ? getPopulatedStudentAcademicFields(branding.organizationType, context.academicFields)
+    : [];
+  if (fields.length === 0) return y;
+
+  const cols = 2;
+  const rows = Math.ceil(fields.length / cols);
+  const rowH = 7;
+  const panelH = 10 + rows * rowH;
+  const panelY = ensurePageSpace(doc, y, panelH + 8);
+  panel(doc, MARGIN, panelY, CONTENT_WIDTH, panelH);
+  panelTitle(doc, 'Academic Details', MARGIN + 4, panelY + 7);
+  const colW = CONTENT_WIDTH / cols;
+  fields.forEach((field, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    fieldRow(doc, field.label, field.value, MARGIN + 4 + col * colW, panelY + 14 + row * rowH, 32, colW - 8);
+  });
+  return panelY + panelH + 8;
 }
 
 const QUOTE_TEXT = 'Success is the sum of small efforts, repeated day in and day out.';
@@ -263,6 +307,8 @@ function drawStudentReport(
     fieldRow(doc, 'Total Questions', String(totalQuestions), examX + 2, ey, 26);
   }
   y += infoPanelH + 6;
+
+  y = drawAcademicDetailsPanel(doc, y, context, branding);
 
   // Score Obtained / Passing Marks / Result Status / Grade
   const statGap = 4;
@@ -791,6 +837,8 @@ function drawAcademicReport(
     infoColW - 8,
   );
   y += infoPanelH + 8;
+
+  y = drawAcademicDetailsPanel(doc, y, context, branding);
 
   // Subject-wise marks table - drawn with a full grid (outer border + row/
   // column rules), matching the bordered-table look of the reference

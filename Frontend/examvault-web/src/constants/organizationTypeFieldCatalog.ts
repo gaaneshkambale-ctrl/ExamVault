@@ -122,6 +122,11 @@ export interface ResultFieldDef extends FieldDef {
 // this catalog used to also duplicate.
 export const RESULT_FIELD_CATALOG: ResultFieldDef[] = [
   { key: 'studentId', label: 'Student / Candidate ID', group: 'Student Information' },
+  // Everything from STUDENT_FIELDS_BY_TYPE the student actually has set
+  // (Department, Semester, Division/Class, Enrollment No., Course, Year,
+  // Academic Year, etc.) except Program, which already has its own always-
+  // shown field on the report - see getPopulatedStudentAcademicFields.
+  { key: 'academicDetails', label: 'Academic Details (Department, Semester, Enrollment No., etc.)', group: 'Student Information' },
   { key: 'examDate', label: 'Exam / Assessment Date', group: 'Exam Information' },
   { key: 'duration', label: 'Duration', group: 'Exam Information' },
   { key: 'rank', label: 'Rank', group: 'Result Information' },
@@ -153,11 +158,12 @@ export const RESULT_FIELD_CATALOG: ResultFieldDef[] = [
 ];
 
 export const RESULT_FIELD_KEYS_BY_TYPE: Record<string, string[]> = {
-  College: ['studentId', 'examDate', 'remarks'],
-  University: ['studentId', 'examDate', 'remarks'],
-  School: ['studentId', 'examDate', 'attendance', 'remarks'],
+  College: ['studentId', 'academicDetails', 'examDate', 'remarks'],
+  University: ['studentId', 'academicDetails', 'examDate', 'remarks'],
+  School: ['studentId', 'academicDetails', 'examDate', 'attendance', 'remarks'],
   'Coaching Institute': [
     'studentId',
+    'academicDetails',
     'examDate',
     'duration',
     'rank',
@@ -167,10 +173,11 @@ export const RESULT_FIELD_KEYS_BY_TYPE: Record<string, string[]> = {
     'incorrectAnswers',
     'unanswered',
   ],
-  'Training Institute': ['studentId', 'duration', 'moduleWiseScore', 'practicalScore', 'theoryScore', 'trainerRemarks'],
-  'Corporate / L&D': ['competency', 'skills', 'remarks'],
-  'Certification Institute': ['competency'],
+  'Training Institute': ['studentId', 'academicDetails', 'duration', 'moduleWiseScore', 'practicalScore', 'theoryScore', 'trainerRemarks'],
+  'Corporate / L&D': ['academicDetails', 'competency', 'skills', 'remarks'],
+  'Certification Institute': ['academicDetails', 'competency'],
   'Recruitment / Hiring': [
+    'academicDetails',
     'duration',
     'aptitude',
     'logicalReasoning',
@@ -283,6 +290,30 @@ export const DEFAULT_STUDENT_FIELDS: FieldDef[] = [];
 export function getStudentFieldsForType(organizationType: string | null | undefined): FieldDef[] {
   if (!organizationType) return DEFAULT_STUDENT_FIELDS;
   return STUDENT_FIELDS_BY_TYPE[organizationType] ?? DEFAULT_STUDENT_FIELDS;
+}
+
+export interface PopulatedAcademicField {
+  label: string;
+  value: string;
+}
+
+// The student's own type-specific academic fields (Department, Semester,
+// Division/Class, Enrollment No., Course, Year, Academic Year, etc. - see
+// STUDENT_FIELDS_BY_TYPE above) that actually have a real value set, for
+// rendering on the Student Result PDF (generateResultPdf.ts) alongside
+// Roll No./Registration No. and Program, which are already shown there
+// separately - 'program' is excluded here to avoid a duplicate row. Only
+// ever returns fields the student genuinely has a value for; never
+// fabricates a placeholder for a blank one, and returns an empty array
+// (no panel drawn at all) for a student/org type with nothing set.
+export function getPopulatedStudentAcademicFields(
+  organizationType: string | null | undefined,
+  academicFields: Record<string, string> | null | undefined,
+): PopulatedAcademicField[] {
+  if (!academicFields) return [];
+  return getStudentFieldsForType(organizationType)
+    .filter((field) => field.key !== 'program' && academicFields[field.key])
+    .map((field) => ({ label: field.label, value: academicFields[field.key] }));
 }
 
 // Display label only - the underlying field is always the same real
