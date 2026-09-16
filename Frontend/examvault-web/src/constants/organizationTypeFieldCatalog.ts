@@ -297,23 +297,63 @@ export interface PopulatedAcademicField {
   value: string;
 }
 
-// The student's own type-specific academic fields (Department, Semester,
-// Division/Class, Enrollment No., Course, Year, Academic Year, etc. - see
-// STUDENT_FIELDS_BY_TYPE above) that actually have a real value set, for
-// rendering on the Student Result PDF (generateResultPdf.ts) alongside
-// Roll No./Registration No. and Program, which are already shown there
-// separately - 'program' is excluded here to avoid a duplicate row. Only
-// ever returns fields the student genuinely has a value for; never
-// fabricates a placeholder for a blank one, and returns an empty array
-// (no panel drawn at all) for a student/org type with nothing set.
+// The fixed display order (and one label override) for the "Student &
+// Academic Information" section of the Student Result PDF
+// (generateResultPdf.ts) - matches exactly what was asked for a College/
+// University-style report. PRN/Registration No. and Enrollment No. are
+// deliberately NOT here - the caller reads those two directly so they can
+// sit right after Roll No., before Program, at a fixed position in that
+// section; this function only covers what comes after Program.
+const STUDENT_ACADEMIC_INFO_PRIORITY: { key: string; labelOverride?: string }[] = [
+  { key: 'department' },
+  { key: 'year', labelOverride: 'Year of Study' },
+  { key: 'semester' },
+  { key: 'division' },
+  { key: 'academicYear' },
+];
+
+// The student's own type-specific academic fields that actually have a
+// real value set, for the "Student & Academic Information" section of the
+// Student Result PDF, in the fixed order above - then any OTHER field this
+// Organization Type's own catalog defines (eg. a School's Admission No./
+// Class, a Coaching Institute's Batch) that isn't already covered by that
+// fixed order or shown separately by the caller (Program, PRN, Enrollment
+// No.), so a non-College/University tenant still sees its own fields
+// rather than losing them entirely. Course is left out only when Program
+// is also part of this Organization Type's catalog - the two are the same
+// real-world thing for a College/University student (redundant with
+// Program, which already has its own field), but Course stays for an
+// Organization Type with no Program at all (eg. a Coaching Institute,
+// where Course is the primary field). Only ever returns fields the
+// student genuinely has a value for; never fabricates a placeholder for a
+// blank one, and returns an empty array (no panel drawn at all) for a
+// student/org type with nothing set.
 export function getPopulatedStudentAcademicFields(
   organizationType: string | null | undefined,
   academicFields: Record<string, string> | null | undefined,
 ): PopulatedAcademicField[] {
   if (!academicFields) return [];
-  return getStudentFieldsForType(organizationType)
-    .filter((field) => field.key !== 'program' && academicFields[field.key])
+  const catalog = getStudentFieldsForType(organizationType);
+  const labelByKey = new Map(catalog.map((field) => [field.key, field.label]));
+  const priorityKeys = new Set(STUDENT_ACADEMIC_INFO_PRIORITY.map(({ key }) => key));
+  const hasProgram = catalog.some((field) => field.key === 'program');
+
+  const prioritized = STUDENT_ACADEMIC_INFO_PRIORITY.filter(({ key }) => labelByKey.has(key) && academicFields[key]).map(
+    ({ key, labelOverride }) => ({ label: labelOverride ?? labelByKey.get(key)!, value: academicFields[key] }),
+  );
+  const remainder = catalog
+    .filter(
+      (field) =>
+        field.key !== 'program' &&
+        field.key !== 'prn' &&
+        field.key !== 'enrollmentNo' &&
+        !priorityKeys.has(field.key) &&
+        !(hasProgram && field.key === 'course') &&
+        academicFields[field.key],
+    )
     .map((field) => ({ label: field.label, value: academicFields[field.key] }));
+
+  return [...prioritized, ...remainder];
 }
 
 // Display label only - the underlying field is always the same real

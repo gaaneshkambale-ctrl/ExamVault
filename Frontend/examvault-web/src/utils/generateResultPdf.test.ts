@@ -283,17 +283,19 @@ describe('generateExamResultsBooklet (Exam Result is a roster, not a repeated St
   });
 });
 
-describe('Student Result - Academic Details panel (Department, Semester, Enrollment No., etc.)', () => {
-  it('draws nothing when the student has no academicFields at all', async () => {
+describe('Student Result - "Student & Academic Information" section (Roll No., PRN/Registration No., Enrollment No., Program, Department, Year of Study, Semester, Division/Class, Academic Year)', () => {
+  it('always draws the section (Student Name, Roll No.) even with no academic data at all', async () => {
     await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
       studentName: 'Priya Sharma',
       rollNumber: 'ROLL-001',
     });
     const drawn = allDrawnText(lastJsPdfInstance.text);
-    expect(drawn).not.toContain('Academic Details');
+    expect(drawn).toContain('Student & Academic Information');
+    expect(drawn).toContain('Roll No.');
+    expect(drawn).toContain('ROLL-001');
   });
 
-  it('draws every populated academic field with its real value, excluding Program (already shown separately)', async () => {
+  it('draws Roll No., PRN/Registration No., Enrollment No., Program and every populated academic field with its real value, "Year" relabeled "Year of Study", Course omitted (redundant with Program)', async () => {
     // College/University's own catalog (Department/Semester/Division/etc.) -
     // Coaching Institute's fixed FAKE_BRANDING only recognizes batch/course/
     // academicYear, so this test needs a realistic College/University tenant.
@@ -302,38 +304,75 @@ describe('Student Result - Academic Details panel (Department, Semester, Enrollm
       studentName: 'Priya Sharma',
       rollNumber: 'ROLL-001',
       program: 'B.Tech Computer Engineering',
-      academicFields: { program: 'B.Tech Computer Engineering', department: 'Computer Engineering', semester: '6', division: 'A' },
+      academicFields: {
+        program: 'B.Tech Computer Engineering',
+        course: 'B.Tech Computer Engineering',
+        prn: 'PRN2026001',
+        enrollmentNo: 'ENR2026001',
+        department: 'Computer Engineering',
+        semester: '6',
+        year: '3',
+        division: 'A',
+        academicYear: '2026-27',
+      },
     });
     const drawn = allDrawnText(lastJsPdfInstance.text);
-    expect(drawn).toContain('Academic Details');
+    expect(drawn).toContain('Student & Academic Information');
+    expect(drawn).toContain('Roll No.');
+    expect(drawn).toContain('PRN / Registration No.');
+    expect(drawn).toContain('PRN2026001');
+    expect(drawn).toContain('Enrollment No.');
+    expect(drawn).toContain('ENR2026001');
+    expect(drawn).toContain('Program');
+    expect(drawn).toContain('B.Tech Computer Engineering');
     expect(drawn).toContain('Department');
     expect(drawn).toContain('Computer Engineering');
+    expect(drawn).toContain('Year of Study');
+    expect(drawn).not.toContain('Year');
     expect(drawn).toContain('Semester');
     expect(drawn).toContain('Division / Class');
-    // Program already has its own dedicated field elsewhere on the report -
-    // the panel itself must not draw a second "Program" row.
-    const programCount = drawn.filter((t) => t === 'Program').length;
-    expect(programCount).toBeLessThanOrEqual(1);
+    expect(drawn).toContain('Academic Year');
+    expect(drawn).toContain('2026-27');
+    // Course is redundant with Program for College/University - must not
+    // appear as its own row (its value is identical to Program's here, so
+    // this only proves the label is gone, not the value).
+    expect(drawn).not.toContain('Course');
   });
 
-  it('respects Result Fields - hidden when the tenant has turned off "academicDetails", shown when unset', async () => {
+  it('respects Result Fields - PRN/Enrollment No./Department/etc. hidden when the tenant has turned off "academicDetails", Roll No. and Program stay (they had their own always-on field before that toggle existed)', async () => {
     const context = {
       studentName: 'Priya Sharma',
       rollNumber: 'ROLL-001',
-      academicFields: { department: 'Computer Engineering' },
+      program: 'B.Tech Computer Engineering',
+      academicFields: { department: 'Computer Engineering', prn: 'PRN2026001' },
     };
     vi.mocked(loadTenantBranding).mockResolvedValueOnce({ ...FAKE_BRANDING, organizationType: 'University' });
     await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
       ...context,
       enabledResultFields: ['studentId'], // academicDetails left out -> gated off
     });
-    expect(allDrawnText(lastJsPdfInstance.text)).not.toContain('Academic Details');
+    const hiddenDrawn = allDrawnText(lastJsPdfInstance.text);
+    expect(hiddenDrawn).toContain('Roll No.');
+    expect(hiddenDrawn).toContain('Program');
+    expect(hiddenDrawn).not.toContain('Department');
+    expect(hiddenDrawn).not.toContain('PRN / Registration No.');
 
     vi.mocked(loadTenantBranding).mockResolvedValueOnce({ ...FAKE_BRANDING, organizationType: 'University' });
     await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
       ...context,
       enabledResultFields: ['studentId', 'academicDetails'],
     });
-    expect(allDrawnText(lastJsPdfInstance.text)).toContain('Academic Details');
+    const shownDrawn = allDrawnText(lastJsPdfInstance.text);
+    expect(shownDrawn).toContain('Department');
+    expect(shownDrawn).toContain('PRN / Registration No.');
+  });
+
+  it('omits Program entirely (not even as "—") for an Organization Type with no Program concept at all, eg. Coaching Institute', async () => {
+    // FAKE_BRANDING already defaults to 'Coaching Institute'.
+    await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
+      studentName: 'Priya Sharma',
+      rollNumber: 'ROLL-001',
+    });
+    expect(allDrawnText(lastJsPdfInstance.text)).not.toContain('Program');
   });
 });

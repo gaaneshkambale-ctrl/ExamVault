@@ -14471,3 +14471,62 @@ Engineering, Semester 6, Year 3, Academic Year 2026-27, Division /
 Class A - matching the raw AcademicFieldsJson column exactly.
 
 Committed as d6901a7 on dev and pushed.
+
+---
+
+Student Result PDF - merged the student-identity fields and the new
+Academic Details fields into ONE titled "Student & Academic
+Information" section, per an explicit follow-up spec: Student Name,
+Roll No., PRN / Registration No., Enrollment No., Program, Department,
+Year of Study, Semester, Division / Class, Academic Year - in that
+order. Previously these were split across an untitled two-column panel
+(Student Name/"Registration No."(mislabeled)/Program next to Exam
+info) plus a separately-titled "Academic Details" panel below it.
+
+Changes:
+- Roll No. now labeled "Roll No." consistently in BOTH Student Result
+  layouts (drawAcademicReport used to mislabel it "Registration No.",
+  which collided with the real PRN/Registration No. academic field).
+- New shared `drawInfoGridPanel()` (generalized from the old academic-
+  details-only panel) draws any titled label/value grid, reused for
+  both "Student & Academic Information" and a now-separate "Exam
+  Information" panel - previously Exam info shared an untitled panel
+  with Student info.
+- `getPopulatedStudentAcademicFields()` narrowed to a fixed, ordered
+  set (Department, Year of Study - relabeled from "Year", Semester,
+  Division/Class, Academic Year, then any other org-type-specific
+  field) - PRN and Enrollment No. moved to the caller so they can sit
+  at a fixed position (right after Roll No., before Program) rather
+  than wherever the generic catalog happened to order them. Course is
+  now excluded whenever Program is also part of that Organization
+  Type's catalog (the two are the same real-world value for a College/
+  University student - confirmed against Arjun Mehta's own data, where
+  course and program are identical strings) - kept for an Organization
+  Type with no Program at all (eg. Coaching Institute), where Course is
+  the primary field.
+- Program now always shows (with a "—" fallback) for any Organization
+  Type that has a Program concept in its catalog at all, not just when
+  a value happens to be set - matches how every other always-on field
+  here already behaves - and is omitted entirely (not even "—") for an
+  Organization Type with no Program concept (eg. Coaching Institute).
+- drawStudentReport's decorative avatar circle and its Email field were
+  dropped - neither fit the new label/value grid, and Email wasn't part
+  of the requested section; both were purely cosmetic/informational,
+  not load-bearing data.
+
+Verified: `npx tsc --noEmit` - 0 errors (also caught+removed the now-
+unused `getInitials` import left behind by dropping the avatar).
+`npm run build` - 0 errors. `npm run test` - 143/143 passing (rewrote
+the prior Academic Details tests to match the new fixed order/labels,
+plus a new case proving Course is kept for Coaching Institute but
+dropped for College/University). Docker frontend rebuilt/redeployed.
+
+Live-verified against Greenfield University's real student Arjun
+Mehta: downloaded the real PDF and confirmed "Student & Academic
+Information" now shows all 10 fields in the exact requested order and
+pairing (Student Name/Roll No., PRN-Registration No./Enrollment No.,
+Program/Department, Year of Study/Semester, Division-Class/Academic
+Year), with "Exam Information" as its own section right below it -
+still one page, no duplicated Course row, real values throughout.
+
+Not yet committed - awaiting explicit user instruction to commit.

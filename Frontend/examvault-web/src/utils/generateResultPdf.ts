@@ -24,7 +24,6 @@ import {
   drawTableHeader,
   ensurePageSpace,
   fieldRow,
-  getInitials,
   loadTenantBranding,
   panel,
   panelTitle,
@@ -35,7 +34,7 @@ import {
 import type { TenantBranding } from './pdfReportKit';
 import type { ExamAttendance } from './advanceExamReport';
 import { getResultPdfVariant, RESULT_PDF_VARIANT_COPY } from './resultPdfVariants';
-import { getPopulatedStudentAcademicFields, isResultFieldVisible } from '../constants/organizationTypeFieldCatalog';
+import { getPopulatedStudentAcademicFields, getStudentFieldsForType, isResultFieldVisible } from '../constants/organizationTypeFieldCatalog';
 
 export interface ResultPdfSectionStat {
   name: string;
@@ -101,20 +100,14 @@ function isResultFieldEnabled(context: ResultPdfContext, branding: TenantBrandin
 }
 
 /**
- * Draws the "Academic Details" panel (Department, Semester, Division/
- * Class, Enrollment No., Course, Year, Academic Year, etc. - whichever of
- * the student's own academicFields this Organization Type collects and
- * this student actually has set) in a 2-column grid, sized to however many
- * fields there actually are. Shared by both drawStudentReport and
- * drawAcademicReport so the two layouts can't independently drift the way
- * other duplicated blocks in this file already learned not to. Draws
- * nothing and returns `y` unchanged when there's no data or the tenant has
- * turned this off via Result Fields ('academicDetails').
+ * Draws a titled panel of label/value rows in a 2-column grid, sized to
+ * however many rows there actually are. Shared by both drawStudentReport
+ * and drawAcademicReport for their "Student & Academic Information" and
+ * "Exam Information" sections, so the two layouts can't independently
+ * drift the way other duplicated blocks in this file already learned not
+ * to. Draws nothing and returns `y` unchanged when there are no fields.
  */
-function drawAcademicDetailsPanel(doc: jsPDF, y: number, context: ResultPdfContext, branding: TenantBranding): number {
-  const fields = isResultFieldEnabled(context, branding, 'academicDetails')
-    ? getPopulatedStudentAcademicFields(branding.organizationType, context.academicFields)
-    : [];
+function drawInfoGridPanel(doc: jsPDF, y: number, title: string, fields: { label: string; value: string }[]): number {
   if (fields.length === 0) return y;
 
   const cols = 2;
@@ -123,7 +116,7 @@ function drawAcademicDetailsPanel(doc: jsPDF, y: number, context: ResultPdfConte
   const panelH = 10 + rows * rowH;
   const panelY = ensurePageSpace(doc, y, panelH + 8);
   panel(doc, MARGIN, panelY, CONTENT_WIDTH, panelH);
-  panelTitle(doc, 'Academic Details', MARGIN + 4, panelY + 7);
+  panelTitle(doc, title, MARGIN + 4, panelY + 7);
   const colW = CONTENT_WIDTH / cols;
   fields.forEach((field, i) => {
     const col = i % cols;
@@ -131,6 +124,44 @@ function drawAcademicDetailsPanel(doc: jsPDF, y: number, context: ResultPdfConte
     fieldRow(doc, field.label, field.value, MARGIN + 4 + col * colW, panelY + 14 + row * rowH, 32, colW - 8);
   });
   return panelY + panelH + 8;
+}
+
+/**
+ * The "Student & Academic Information" section's fields, in a fixed order:
+ * Student Name and Roll No. always come first (Roll No. gated by the
+ * 'studentId' Result Field, same as before this section existed); PRN/
+ * Registration No. and Enrollment No. come right after, so all 3 identity-
+ * ish fields sit together, followed by Program (unconditional - it had its
+ * own always-shown field before 'academicDetails' existed, so turning that
+ * toggle off must not make Program disappear too); then Department, Year
+ * of Study, Semester, Division/Class, Academic Year (and anything else
+ * this Organization Type's own catalog defines), all gated by
+ * 'academicDetails' together - see getPopulatedStudentAcademicFields.
+ */
+function buildStudentAcademicInfoFields(context: ResultPdfContext, branding: TenantBranding): { label: string; value: string }[] {
+  const fields: { label: string; value: string }[] = [{ label: 'Student Name', value: context.studentName ?? 'Unknown Student' }];
+  if (isResultFieldEnabled(context, branding, 'studentId')) {
+    fields.push({ label: 'Roll No.', value: context.rollNumber ?? '—' });
+  }
+  if (isResultFieldEnabled(context, branding, 'academicDetails')) {
+    if (context.academicFields?.prn) {
+      fields.push({ label: 'PRN / Registration No.', value: context.academicFields.prn });
+    }
+    if (context.academicFields?.enrollmentNo) {
+      fields.push({ label: 'Enrollment No.', value: context.academicFields.enrollmentNo });
+    }
+  }
+  // Shown (with a "—" fallback, like every other always-on field here) only
+  // for an Organization Type that actually has a Program concept at all -
+  // omitted entirely for one that doesn't (eg. a Coaching Institute), same
+  // as every other academic field below.
+  if (getStudentFieldsForType(branding.organizationType).some((field) => field.key === 'program')) {
+    fields.push({ label: 'Program', value: context.program ?? '—' });
+  }
+  if (isResultFieldEnabled(context, branding, 'academicDetails')) {
+    fields.push(...getPopulatedStudentAcademicFields(branding.organizationType, context.academicFields));
+  }
+  return fields;
 }
 
 const QUOTE_TEXT = 'Success is the sum of small efforts, repeated day in and day out.';
@@ -240,75 +271,35 @@ function drawStudentReport(
   doc.line(MARGIN, y + 19, PAGE_WIDTH - MARGIN, y + 19);
   y += 25;
 
-  // Student + Examination info (one combined panel)
-  const infoPanelH = 54;
-  panel(doc, MARGIN, y, CONTENT_WIDTH, infoPanelH);
-  {
-    const leftW = CONTENT_WIDTH * 0.36;
-    const avatarR = 9;
-    const avatarCx = MARGIN + 6 + avatarR;
-    const avatarCy = y + 16;
-    setColor(doc, 'setFillColor', { r: 219, g: 234, b: 254 });
-    doc.circle(avatarCx, avatarCy, avatarR, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    setColor(doc, 'setTextColor', BRAND);
-    doc.text(getInitials(context.studentName ?? 'Unknown'), avatarCx, avatarCy + 1.3, { align: 'center' });
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12.5);
-    setColor(doc, 'setTextColor', TEXT_DARK);
-    doc.text(context.studentName ?? 'Unknown Student', avatarCx + avatarR + 5, avatarCy - 1);
-
-    let fy = y + 32;
-    fieldRow(doc, 'Roll No.', isResultFieldEnabled(context, branding, 'studentId') ? (context.rollNumber ?? '—') : '—', MARGIN + 4, fy, 22);
-    fy += 6;
-    fieldRow(doc, 'Email', context.studentEmail ?? '—', MARGIN + 4, fy, 22);
-
-    const examX = MARGIN + leftW + 4;
-    setColor(doc, 'setDrawColor', BORDER);
-    doc.setLineWidth(0.3);
-    doc.line(examX - 2, y + 6, examX - 2, y + infoPanelH - 6);
-
-    let ey = y + 9;
-    fieldRow(doc, 'Exam Title', result.examTitle, examX + 2, ey, 26);
-    ey += 6;
-    fieldRow(doc, 'Exam Code', context.examCode ?? '—', examX + 2, ey, 26);
-    ey += 6;
-    fieldRow(doc, 'Exam Type', context.examType ?? '—', examX + 2, ey, 26);
-    ey += 6;
-    fieldRow(
-      doc,
-      'Exam Date',
-      isResultFieldEnabled(context, branding, 'examDate') ? (startDate ? startDate.toLocaleDateString() : endDate.toLocaleDateString()) : '—',
-      examX + 2,
-      ey,
-      26,
-    );
-    ey += 6;
-    fieldRow(
-      doc,
-      'Exam Time',
-      startDate ? `${startDate.toLocaleTimeString()} - ${endDate.toLocaleTimeString()}` : endDate.toLocaleTimeString(),
-      examX + 2,
-      ey,
-      26,
-    );
-    ey += 6;
-    fieldRow(
-      doc,
-      'Duration',
-      isResultFieldEnabled(context, branding, 'duration') && context.durationMinutes ? `${context.durationMinutes} Minutes` : '—',
-      examX + 2,
-      ey,
-      26,
-    );
-    ey += 6;
-    fieldRow(doc, 'Total Questions', String(totalQuestions), examX + 2, ey, 26);
-  }
-  y += infoPanelH + 6;
-
-  y = drawAcademicDetailsPanel(doc, y, context, branding);
+  // Student & Academic Information, then Exam Information - two separate
+  // titled panels (previously one untitled panel split Student|Exam side
+  // by side, with academic fields in a third panel below; merged per a
+  // direct request so every student/academic field lives in one section).
+  y = drawInfoGridPanel(doc, y, 'Student & Academic Information', buildStudentAcademicInfoFields(context, branding));
+  y = drawInfoGridPanel(
+    doc,
+    y,
+    'Exam Information',
+    [
+      { label: 'Exam Title', value: result.examTitle },
+      { label: 'Exam Code', value: context.examCode ?? '—' },
+      { label: 'Exam Type', value: context.examType ?? '—' },
+      {
+        label: 'Exam Date',
+        value: isResultFieldEnabled(context, branding, 'examDate')
+          ? startDate
+            ? startDate.toLocaleDateString()
+            : endDate.toLocaleDateString()
+          : '—',
+      },
+      { label: 'Exam Time', value: startDate ? `${startDate.toLocaleTimeString()} - ${endDate.toLocaleTimeString()}` : endDate.toLocaleTimeString() },
+      {
+        label: 'Duration',
+        value: isResultFieldEnabled(context, branding, 'duration') && context.durationMinutes ? `${context.durationMinutes} Minutes` : '—',
+      },
+      { label: 'Total Questions', value: String(totalQuestions) },
+    ],
+  );
 
   // Score Obtained / Passing Marks / Result Status / Grade
   const statGap = 4;
@@ -794,51 +785,23 @@ function drawAcademicReport(
   doc.text(variantCopy.title.toUpperCase(), PAGE_WIDTH / 2, y, { align: 'center' });
   y += 9;
 
-  // Two-column info panel: Student/Registration/Program | Exam/Date/Duration
-  const infoPanelH = 26;
-  panel(doc, MARGIN, y, CONTENT_WIDTH, infoPanelH);
-  const infoColW = CONTENT_WIDTH / 2;
-  let ly = y + 7;
-  fieldRow(doc, 'Student Name', context.studentName ?? 'Unknown Student', MARGIN + 4, ly, 32, infoColW - 8);
-  ly += 7;
-  fieldRow(
-    doc,
-    'Registration No.',
-    isResultFieldEnabled(context, branding, 'studentId') ? (context.rollNumber ?? '—') : '—',
-    MARGIN + 4,
-    ly,
-    32,
-    infoColW - 8,
-  );
-  ly += 7;
-  fieldRow(doc, 'Program', context.program ?? '—', MARGIN + 4, ly, 32, infoColW - 8);
-
-  let ry = y + 7;
-  const infoRightX = MARGIN + infoColW + 4;
-  fieldRow(doc, 'Exam Name', result.examTitle, infoRightX, ry, 26, infoColW - 8);
-  ry += 7;
-  fieldRow(
-    doc,
-    'Exam Date',
-    isResultFieldEnabled(context, branding, 'examDate') ? new Date(result.submittedAtUtc).toLocaleDateString() : '—',
-    infoRightX,
-    ry,
-    26,
-    infoColW - 8,
-  );
-  ry += 7;
-  fieldRow(
-    doc,
-    'Duration',
-    isResultFieldEnabled(context, branding, 'duration') && context.durationMinutes ? `${context.durationMinutes} Minutes` : '—',
-    infoRightX,
-    ry,
-    26,
-    infoColW - 8,
-  );
-  y += infoPanelH + 8;
-
-  y = drawAcademicDetailsPanel(doc, y, context, branding);
+  // Student & Academic Information, then Exam Information - two separate
+  // titled panels (previously one untitled two-column panel put Student/
+  // Registration/Program beside Exam/Date/Duration, with academic fields
+  // in a further panel below; merged per a direct request so every
+  // student/academic field lives in one section).
+  y = drawInfoGridPanel(doc, y, 'Student & Academic Information', buildStudentAcademicInfoFields(context, branding));
+  y = drawInfoGridPanel(doc, y, 'Exam Information', [
+    { label: 'Exam Name', value: result.examTitle },
+    {
+      label: 'Exam Date',
+      value: isResultFieldEnabled(context, branding, 'examDate') ? new Date(result.submittedAtUtc).toLocaleDateString() : '—',
+    },
+    {
+      label: 'Duration',
+      value: isResultFieldEnabled(context, branding, 'duration') && context.durationMinutes ? `${context.durationMinutes} Minutes` : '—',
+    },
+  ]);
 
   // Subject-wise marks table - drawn with a full grid (outer border + row/
   // column rules), matching the bordered-table look of the reference
