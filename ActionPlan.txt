@@ -14470,4 +14470,4 @@ Course/Program B.Tech Computer Engineering, Department Computer
 Engineering, Semester 6, Year 3, Academic Year 2026-27, Division /
 Class A - matching the raw AcademicFieldsJson column exactly.
 
-Not yet committed - awaiting explicit user instruction to commit.
+Committed as d6901a7 on dev and pushed.
