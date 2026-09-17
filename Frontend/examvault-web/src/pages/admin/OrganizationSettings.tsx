@@ -245,6 +245,7 @@ const SAMPLE_ADVANCE_EXAM: ExamResponse = {
   examTypeId: null,
   tags: '',
   academicFields: null,
+  restrictToAcademicScope: true,
   shuffleQuestions: false,
   shuffleOptions: false,
   showResult: true,

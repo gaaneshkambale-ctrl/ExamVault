@@ -105,7 +105,10 @@ public class AssignmentsController : ControllerBase
             request.EnableLiveVideo,
             bearerToken,
             createdByUserId,
-            ownerUserId);
+            ownerUserId,
+            request.AllowEligibilityOverride,
+            request.OverrideReason,
+            User.IsInRole("Admin") || User.IsInRole("SuperAdmin"));
 
         var result = await _createAssignmentHandler.HandleAsync(command, cancellationToken);
 
@@ -138,16 +141,33 @@ public class AssignmentsController : ControllerBase
             return NotFound(new { message = "Group not found." });
         }
 
+        if (result.IsEligibilityRejected)
+        {
+            return BadRequest(new
+            {
+                message = $"{string.Join(", ", result.IneligibleStudentNames)} " +
+                    (result.IneligibleStudentNames.Count == 1 ? "is" : "are") +
+                    $" not eligible for this examination. The examination is restricted to: {result.EligibilityScopeDescription}.",
+                ineligibleStudentNames = result.IneligibleStudentNames,
+                examScope = result.EligibilityScopeDescription,
+            });
+        }
+
         _logger.LogInformation(
             "Assignment {AssignmentNumber} created for exam {ExamId}, targeting {Count} student(s).",
             result.Assignment!.AssignmentNumber,
             request.ExamId,
             result.TargetUserIds.Count);
+        var auditDetails = $"{result.ExamTitle} -> {result.TargetUserIds.Count} student(s)";
+        if (result.OverriddenCount > 0)
+        {
+            auditDetails += $" - {result.OverriddenCount} of {result.TargetUserIds.Count} assigned via eligibility override: {request.OverrideReason}";
+        }
         await _auditClient.RecordAsync(
             result.Assignment!.TenantId,
             "Exams",
             "Assigned exam",
-            $"{result.ExamTitle} -> {result.TargetUserIds.Count} student(s)",
+            auditDetails,
             result.Assignment.Id.ToString(),
             createdByUserId,
             User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),

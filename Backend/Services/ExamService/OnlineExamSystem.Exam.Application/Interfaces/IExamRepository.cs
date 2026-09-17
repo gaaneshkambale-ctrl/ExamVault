@@ -63,9 +63,15 @@ public interface IExamRepository
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    // overriddenUserIds/overrideReason: the subset of targetUserIds (if any)
+    // that failed the exam's academic-scope eligibility check but were
+    // assigned anyway via an Admin's override - stamped onto only those
+    // targets' rows, one shared reason for the whole request.
     Task AddAssignmentAsync(
         ExamAssignment assignment,
         IReadOnlyList<Guid> targetUserIds,
+        IReadOnlySet<Guid>? overriddenUserIds = null,
+        string? overrideReason = null,
         CancellationToken cancellationToken = default);
 
     Task<ExamAssignment?> GetAssignmentByIdAsync(Guid assignmentId, CancellationToken cancellationToken = default);

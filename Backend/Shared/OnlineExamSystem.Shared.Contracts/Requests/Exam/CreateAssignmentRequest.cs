@@ -17,4 +17,10 @@ public record CreateAssignmentRequest(
     bool AllowReviewAfterSubmit,
     bool AutoSubmitOnTimeOver,
     bool EnableProctoring,
-    bool EnableLiveVideo);
+    bool EnableLiveVideo,
+    // Admin-only "Assign Anyway" override for a student who doesn't match
+    // the exam's academic scope (eg. a backlog/re-examination case) - one
+    // shared OverrideReason for the whole request. Ignored server-side for
+    // a non-Admin caller regardless of what's sent here.
+    bool AllowEligibilityOverride = false,
+    string? OverrideReason = null);

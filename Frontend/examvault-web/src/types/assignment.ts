@@ -18,6 +18,12 @@ export interface CreateAssignmentRequest {
   autoSubmitOnTimeOver: boolean;
   enableProctoring: boolean;
   enableLiveVideo: boolean;
+  // Admin-only "Assign Anyway" override for a student outside the exam's
+  // academic scope (eg. backlog/re-examination) - one shared reason for
+  // the whole request. The backend ignores both for a non-Admin caller
+  // regardless of what's sent here.
+  allowEligibilityOverride?: boolean;
+  overrideReason?: string | null;
 }
 
 export interface UpdateAssignmentRequest {

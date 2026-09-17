@@ -14,6 +14,7 @@ const validForm: CreateExamRequest = {
   instructions: 'Answer all questions.',
   examTypeId: 'exam-type-1',
   tags: '',
+  restrictToAcademicScope: true,
 };
 
 describe('validateCreateExam', () => {

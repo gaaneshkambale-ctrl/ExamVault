@@ -15,7 +15,7 @@ import type { CreateExamRequest, CreationMethod, ExamTypeOption } from '../../ty
 import { useExamDefaults, useExamTypes } from '../../hooks/useExams';
 import { extractServerError } from '../../utils/apiError';
 import { iconForExamType } from '../../utils/examTypeIcons';
-import { getExamFieldsForType } from '../../constants/organizationTypeFieldCatalog';
+import { getExamFieldsForType, hasExamAcademicScope } from '../../constants/organizationTypeFieldCatalog';
 import ExamWizardStepper from '../../components/ExamWizardStepper';
 import AcademicHierarchyFields from '../../components/AcademicHierarchyFields';
 
@@ -37,6 +37,7 @@ const initialFormState: CreateExamRequest = {
   examTypeId: null,
   tags: '',
   academicFields: {},
+  restrictToAcademicScope: true,
 };
 
 function ClockIcon() {
@@ -120,6 +121,7 @@ export default function CreateExam() {
   const { data: examDefaults } = useExamDefaults();
   const { data: branding } = useQuery({ queryKey: ['organization-branding'], queryFn: getOrganizationBranding });
   const examFields = getExamFieldsForType(branding?.organizationType);
+  const showScopeToggle = hasExamAcademicScope(branding?.organizationType);
   const [form, setForm] = useState<CreateExamRequest>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreateExamRequest, string>>>(
     {},
@@ -163,11 +165,14 @@ export default function CreateExam() {
 
   // Every field in the exam's "Academic Details" section (organization-
   // type-specific - eg. a College's Semester) is mandatory, same rule as
-  // the Student Academic Details section on Add/Edit User.
+  // the Student Academic Details section on Add/Edit User - unless the
+  // Admin unchecked "Restrict exam to academic group", in which case this
+  // exam has no scope at all and nothing here is required.
   const validateExamAcademicFields = (): Record<string, string> => {
+    if (showScopeToggle && !form.restrictToAcademicScope) return {};
     const errors: Record<string, string> = {};
     examFields.forEach((field) => {
-      if (!form.academicFields?.[field.key]?.trim()) {
+      if (!field.optional && !form.academicFields?.[field.key]?.trim()) {
         errors[field.key] = `${field.label} is required.`;
       }
     });
@@ -442,14 +447,38 @@ export default function CreateExam() {
                     <div className="fw-bold mb-2">
                       Academic Details ({branding?.organizationType ?? 'Exam'})
                     </div>
-                    <Row className="mb-3">
-                      <AcademicHierarchyFields
-                        fields={examFields}
-                        values={form.academicFields ?? {}}
-                        errors={academicFieldErrors}
-                        onChange={updateAcademicField}
+                    {showScopeToggle && (
+                      <Form.Check
+                        type="checkbox"
+                        id="restrictToAcademicScope"
+                        className="mb-3"
+                        label="Restrict exam to academic group"
+                        checked={form.restrictToAcademicScope}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          // Unchecking clears any already-entered scope values rather than
+                          // leaving them hidden-but-still-submitted - re-checking starts fresh
+                          // rather than silently resurrecting stale Program/Department/Semester
+                          // values the Admin can no longer see on screen.
+                          setForm((prev) => ({
+                            ...prev,
+                            restrictToAcademicScope: checked,
+                            academicFields: checked ? prev.academicFields : {},
+                          }));
+                          setAcademicFieldErrors({});
+                        }}
                       />
-                    </Row>
+                    )}
+                    {(!showScopeToggle || form.restrictToAcademicScope) && (
+                      <Row className="mb-3">
+                        <AcademicHierarchyFields
+                          fields={examFields}
+                          values={form.academicFields ?? {}}
+                          errors={academicFieldErrors}
+                          onChange={updateAcademicField}
+                        />
+                      </Row>
+                    )}
                   </>
                 )}
 

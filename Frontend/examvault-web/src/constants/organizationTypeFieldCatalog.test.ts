@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPopulatedStudentAcademicFields, getStudentFieldsForType } from './organizationTypeFieldCatalog';
+import { getPopulatedStudentAcademicFields, getStudentFieldsForType, hasExamAcademicScope } from './organizationTypeFieldCatalog';
 
 describe('getStudentFieldsForType', () => {
   it('has no separate Course key for College/University - Program is the single field for that real-world value there', () => {
@@ -9,6 +9,23 @@ describe('getStudentFieldsForType', () => {
 
   it('keeps Course for an Organization Type with no Program field at all (eg. a Coaching Institute)', () => {
     expect(getStudentFieldsForType('Coaching Institute').find((f) => f.key === 'course')).toBeDefined();
+  });
+});
+
+describe('hasExamAcademicScope', () => {
+  it('is true for College/University - their exam fields include Program/Department/Semester/Division', () => {
+    expect(hasExamAcademicScope('College')).toBe(true);
+    expect(hasExamAcademicScope('University')).toBe(true);
+  });
+
+  it('is false for an org type whose exam fields are not eligibility-relevant (eg. a School\'s Term/Subject)', () => {
+    expect(hasExamAcademicScope('School')).toBe(false);
+    expect(hasExamAcademicScope('Coaching Institute')).toBe(false);
+  });
+
+  it('is false for an unrecognized or missing org type', () => {
+    expect(hasExamAcademicScope(null)).toBe(false);
+    expect(hasExamAcademicScope('Some Custom Type')).toBe(false);
   });
 });
 

@@ -26,4 +26,12 @@ public record CreateAssignmentCommand(
     // check). Distinct from CreatedByUserId above (always set, records
     // provenance) even though they're the same value for an Instructor
     // caller.
-    Guid? OwnerUserId = null);
+    Guid? OwnerUserId = null,
+    // Academic-eligibility override ("Assign Anyway"), Admin-only -
+    // CreateAssignmentHandler ignores both fields entirely for a non-Admin
+    // caller (IsAdminCaller = false) rather than trusting the client not to
+    // send them, same "don't rely on the UI alone" principle used
+    // everywhere else eligibility is enforced in this feature.
+    bool AllowEligibilityOverride = false,
+    string? OverrideReason = null,
+    bool IsAdminCaller = false);

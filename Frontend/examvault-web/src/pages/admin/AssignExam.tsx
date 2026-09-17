@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { isAxiosError } from 'axios';
 import { Alert, Button, Card, Col, Form, InputGroup, ListGroup, Nav, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +8,7 @@ import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import TablePagination from '../../components/reports/TablePagination';
 import { createAssignment, updateAssignment } from '../../api/assignmentApi';
 import { useAssignment } from '../../hooks/useAssignments';
+import { useAuth } from '../../hooks/useAuth';
 import { useExams } from '../../hooks/useExams';
 import { useGroups } from '../../hooks/useGroups';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
@@ -14,6 +16,7 @@ import { useStudents } from '../../hooks/useUsers';
 import { useFeatures } from '../../hooks/useFeatures';
 import type { AssignmentTargetType, ExamAssignmentResponse } from '../../types/assignment';
 import { extractServerError } from '../../utils/apiError';
+import { describeScope, getExamScope, isStudentEligible } from '../../utils/examAssignmentEligibility';
 
 type WizardStep = 1 | 2 | 3 | 4;
 
@@ -124,6 +127,8 @@ function toDatetimeLocalValue(date: Date): string {
 export default function AssignExam() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdminCaller = user?.role === 'Admin';
   const [searchParams] = useSearchParams();
   const { id: assignmentId } = useParams<{ id: string }>();
   const isEditMode = !!assignmentId;
@@ -181,6 +186,26 @@ export default function AssignExam() {
   const [createdAssignment, setCreatedAssignment] = useState<ExamAssignmentResponse | null>(null);
   const [submitError, setSubmitError] = useState('');
 
+  // Academic-eligibility "Assign Anyway" override - the backend rejects a
+  // create-assignment request naming the ineligible students (400), and
+  // this state captures that so the panel below can offer an Admin-only
+  // override rather than just a dead-end error. Reset whenever the exam
+  // selection changes, since a different exam has a different scope.
+  const [ineligibility, setIneligibility] = useState<{ names: string[]; scope: string } | null>(null);
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  // Step 2's Students picker defaults to eligible-only when the exam is
+  // scoped - this reveals the rest (greyed out, still selectable, but will
+  // need the override above to actually be assigned).
+  const [showAllStudents, setShowAllStudents] = useState(false);
+
+  useEffect(() => {
+    setIneligibility(null);
+    setOverrideConfirmed(false);
+    setOverrideReason('');
+    setShowAllStudents(false);
+  }, [selectedExamId]);
+
   useEffect(() => {
     if (!isEditMode || !existingAssignment || prefilled) {
       return;
@@ -220,6 +245,19 @@ export default function AssignExam() {
     : publishableExams.find((e) => e.id === selectedExamId) ?? null;
   const selectedGroup = (groups ?? []).find((g) => g.id === selectedGroupId) ?? null;
 
+  const examScope = useMemo(
+    () => getExamScope(selectedExam?.academicFields, selectedExam?.restrictToAcademicScope ?? false),
+    [selectedExam],
+  );
+  const hasExamScope = Object.keys(examScope).length > 0;
+  const eligibleStudents = hasExamScope ? students.filter((s) => isStudentEligible(examScope, s)) : students;
+  // Everyone if the exam has no scope; otherwise eligible-only by default,
+  // with the rest revealed (still selectable, but flagged) via
+  // showAllStudents - matches the "hiding it isn't the only protection"
+  // lesson from the Certificate feature: the backend enforces this
+  // regardless of what the picker shows.
+  const visibleStudents = !hasExamScope || showAllStudents ? students : eligibleStudents;
+
   const examCategories = useMemo(
     () => [...new Set(publishableExams.map((e) => e.category).filter(Boolean))],
     [publishableExams],
@@ -244,7 +282,7 @@ export default function AssignExam() {
   const examRangeStart = filteredExams.length === 0 ? 0 : (examCurrentPage - 1) * examPageSize + 1;
   const examRangeEnd = Math.min(examCurrentPage * examPageSize, filteredExams.length);
 
-  const availableStudents = students.filter(
+  const availableStudents = visibleStudents.filter(
     (s) => !selectedStudentIds.includes(s.id) && s.fullName.toLowerCase().includes(studentSearch.trim().toLowerCase()),
   );
   const selectedStudents = students.filter((s) => selectedStudentIds.includes(s.id));
@@ -258,7 +296,7 @@ export default function AssignExam() {
     setPickedSelected([]);
   };
   const moveAllToSelected = () => {
-    setSelectedStudentIds(students.map((s) => s.id));
+    setSelectedStudentIds(visibleStudents.map((s) => s.id));
     setPickedAvailable([]);
   };
 
@@ -282,13 +320,30 @@ export default function AssignExam() {
         autoSubmitOnTimeOver,
         enableProctoring,
         enableLiveVideo: enableProctoring && enableLiveVideo,
+        allowEligibilityOverride: overrideConfirmed,
+        overrideReason: overrideConfirmed ? overrideReason.trim() : null,
       }),
     onSuccess: (assignment) => {
       setSubmitError('');
+      setIneligibility(null);
       setCreatedAssignment(assignment);
       queryClient.invalidateQueries({ queryKey: ['assignments'] });
     },
-    onError: (error) => setSubmitError(extractServerError(error)),
+    onError: (error) => {
+      const eligibilityData = isAxiosError(error)
+        ? (error.response?.data as { ineligibleStudentNames?: string[]; examScope?: string } | undefined)
+        : undefined;
+      if (eligibilityData?.ineligibleStudentNames?.length) {
+        setIneligibility({
+          names: eligibilityData.ineligibleStudentNames,
+          scope: eligibilityData.examScope ?? describeScope(examScope),
+        });
+        setSubmitError('');
+        return;
+      }
+      setIneligibility(null);
+      setSubmitError(extractServerError(error));
+    },
   });
 
   const updateMutation = useMutation({
@@ -493,7 +548,47 @@ export default function AssignExam() {
         })}
       </div>
 
-      {submitError && <Alert variant="danger">{submitError}</Alert>}
+      {ineligibility && (
+        <Alert variant="warning" className="mb-3">
+          <div className="fw-bold mb-2">⚠ Academic mismatch</div>
+          <div className="mb-2">
+            {ineligibility.names.join(', ')} {ineligibility.names.length === 1 ? 'is' : 'are'} not eligible for this
+            examination. The examination is restricted to: <strong>{ineligibility.scope}</strong>.
+          </div>
+          {isAdminCaller ? (
+            <>
+              <Form.Check
+                type="checkbox"
+                id="overrideConfirmed"
+                className="mb-2"
+                label="I confirm this exception"
+                checked={overrideConfirmed}
+                onChange={(e) => setOverrideConfirmed(e.target.checked)}
+              />
+              <Form.Group className="mb-2" style={{ maxWidth: 420 }}>
+                <Form.Label className="small mb-1">Reason *</Form.Label>
+                <Form.Control
+                  size="sm"
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                  placeholder="e.g. Backlog / Re-examination"
+                />
+              </Form.Group>
+              <Button
+                variant="warning"
+                size="sm"
+                disabled={!overrideConfirmed || !overrideReason.trim() || saveMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+              >
+                Assign Anyway
+              </Button>
+            </>
+          ) : (
+            <div className="text-muted small mb-0">Only an Admin can override this restriction.</div>
+          )}
+        </Alert>
+      )}
+      {submitError && !ineligibility && <Alert variant="danger">{submitError}</Alert>}
 
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-4">
@@ -625,6 +720,13 @@ export default function AssignExam() {
           {step === 2 && (
             <>
               <p className="text-muted mb-3">Choose students or batches to assign the exam.</p>
+              {hasExamScope && (
+                <Alert variant="light" className="border mb-3 py-2 px-3 small">
+                  <span className="text-muted">Academic Scope: </span>
+                  <strong>{describeScope(examScope)}</strong>
+                  {!examScope.division && <span className="text-muted"> / All Divisions</span>}
+                </Alert>
+              )}
               <Nav variant="tabs" className="mb-3">
                 <Nav.Item>
                   <Nav.Link active={targetType === 'Students'} onClick={() => setTargetType('Students')}>
@@ -646,7 +748,24 @@ export default function AssignExam() {
               {targetType === 'Students' && (
                 <Row className="g-3">
                   <Col md={5}>
-                    <div className="fw-medium small mb-2">Available Students ({availableStudents.length})</div>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="fw-medium small">
+                        {hasExamScope
+                          ? showAllStudents
+                            ? `All Students (${availableStudents.length})`
+                            : `Eligible Students (${availableStudents.length})`
+                          : `Available Students (${availableStudents.length})`}
+                      </div>
+                      {hasExamScope && (
+                        <Form.Check
+                          type="checkbox"
+                          label="Show all students"
+                          className="small"
+                          checked={showAllStudents}
+                          onChange={(e) => setShowAllStudents(e.target.checked)}
+                        />
+                      )}
+                    </div>
                     <InputGroup className="mb-2">
                       <InputGroup.Text><SearchIcon /></InputGroup.Text>
                       <Form.Control
@@ -657,34 +776,46 @@ export default function AssignExam() {
                       />
                     </InputGroup>
                     <ListGroup style={{ maxHeight: 280, overflowY: 'auto' }}>
-                      {availableStudents.map((s) => (
-                        <ListGroup.Item
-                          key={s.id}
-                          action
-                          active={pickedAvailable.includes(s.id)}
-                          onClick={() =>
-                            setPickedAvailable((prev) =>
-                              prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
-                            )
-                          }
-                        >
-                          <Form.Check
-                            type="checkbox"
-                            readOnly
-                            checked={pickedAvailable.includes(s.id)}
-                            label={`${s.fullName}`}
-                          />
-                        </ListGroup.Item>
-                      ))}
+                      {availableStudents.map((s) => {
+                        const eligible = !hasExamScope || isStudentEligible(examScope, s);
+                        return (
+                          <ListGroup.Item
+                            key={s.id}
+                            action
+                            active={pickedAvailable.includes(s.id)}
+                            onClick={() =>
+                              setPickedAvailable((prev) =>
+                                prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
+                              )
+                            }
+                          >
+                            <Form.Check
+                              type="checkbox"
+                              readOnly
+                              checked={pickedAvailable.includes(s.id)}
+                              label={
+                                <>
+                                  {s.fullName}
+                                  {!eligible && (
+                                    <span className="text-warning ms-2 small">⚠ Outside academic scope</span>
+                                  )}
+                                </>
+                              }
+                            />
+                          </ListGroup.Item>
+                        );
+                      })}
                       {availableStudents.length === 0 && (
-                        <div className="text-center text-muted small py-3">No students available.</div>
+                        <div className="text-center text-muted small py-3">
+                          {hasExamScope && !showAllStudents ? 'No eligible students found.' : 'No students available.'}
+                        </div>
                       )}
                     </ListGroup>
                     <Form.Check
                       type="checkbox"
-                      label="Select All"
+                      label={hasExamScope && !showAllStudents ? 'Select All Eligible Students' : 'Select All'}
                       className="mt-2"
-                      checked={selectedStudentIds.length === students.length && students.length > 0}
+                      checked={selectedStudentIds.length === visibleStudents.length && visibleStudents.length > 0}
                       onChange={(e: ChangeEvent<HTMLInputElement>) =>
                         e.target.checked ? moveAllToSelected() : setSelectedStudentIds([])
                       }
@@ -737,32 +868,40 @@ export default function AssignExam() {
                       </div>
                     ) : (
                     <ListGroup style={{ maxHeight: 280, overflowY: 'auto', minHeight: 40 }}>
-                      {selectedStudents.map((s) => (
-                        <ListGroup.Item
-                          key={s.id}
-                          className="d-flex justify-content-between align-items-center"
-                        >
-                          <Form.Check
-                            type="checkbox"
-                            readOnly
-                            checked={pickedSelected.includes(s.id)}
-                            label={s.fullName}
-                            onClick={() =>
-                              setPickedSelected((prev) =>
-                                prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
-                              )
-                            }
-                          />
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="text-danger p-0"
-                            onClick={() => setSelectedStudentIds((prev) => prev.filter((id) => id !== s.id))}
+                      {selectedStudents.map((s) => {
+                        const eligible = !hasExamScope || isStudentEligible(examScope, s);
+                        return (
+                          <ListGroup.Item
+                            key={s.id}
+                            className="d-flex justify-content-between align-items-center"
                           >
-                            &times;
-                          </Button>
-                        </ListGroup.Item>
-                      ))}
+                            <Form.Check
+                              type="checkbox"
+                              readOnly
+                              checked={pickedSelected.includes(s.id)}
+                              label={
+                                <>
+                                  {s.fullName}
+                                  {!eligible && <span className="text-warning ms-2 small">⚠ Outside academic scope</span>}
+                                </>
+                              }
+                              onClick={() =>
+                                setPickedSelected((prev) =>
+                                  prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
+                                )
+                              }
+                            />
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="text-danger p-0"
+                              onClick={() => setSelectedStudentIds((prev) => prev.filter((id) => id !== s.id))}
+                            >
+                              &times;
+                            </Button>
+                          </ListGroup.Item>
+                        );
+                      })}
                     </ListGroup>
                     )}
                   </Col>
@@ -797,7 +936,16 @@ export default function AssignExam() {
 
               {targetType === 'AllStudents' && (
                 <Alert variant="info" className="mb-0">
-                  This exam will be assigned to all {students.length} student account(s) currently in the system.
+                  {hasExamScope ? (
+                    <>
+                      This exam will be assigned to all {eligibleStudents.length} student account(s) matching its academic scope.
+                      {students.length - eligibleStudents.length > 0 && (
+                        <> The other {students.length - eligibleStudents.length} student account(s) outside this scope will need an Admin override.</>
+                      )}
+                    </>
+                  ) : (
+                    <>This exam will be assigned to all {students.length} student account(s) currently in the system.</>
+                  )}
                 </Alert>
               )}
             </>
@@ -1030,6 +1178,16 @@ export default function AssignExam() {
                           {targetType === 'AllStudents' && `All Students (${students.length})`}
                         </Col>
                       </Row>
+                      {overrideConfirmed && overrideReason.trim() && (
+                        <Row className="mb-2">
+                          <Col xs={12}>
+                            <Alert variant="warning" className="py-2 px-2 mb-0 small">
+                              This assignment includes student(s) outside the exam&apos;s academic scope - Reason:{' '}
+                              {overrideReason.trim()}
+                            </Alert>
+                          </Col>
+                        </Row>
+                      )}
                       <Row className="mb-2">
                         <Col xs={6} className="text-muted small">
                           Start Date &amp; Time

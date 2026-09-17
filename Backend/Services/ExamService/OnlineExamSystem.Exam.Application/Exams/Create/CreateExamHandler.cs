@@ -109,6 +109,7 @@ public class CreateExamHandler
             CertificateEnabled = defaults.CertificateEnabled,
             MinimumCertificateScorePercent = defaults.MinimumCertificateScorePercent,
             AcademicFieldsJson = command.AcademicFields is { Count: > 0 } ? JsonSerializer.Serialize(command.AcademicFields) : null,
+            RestrictToAcademicScope = command.RestrictToAcademicScope,
         };
         exam.ExamCode = GenerateExamCode(command.Category, exam.Id);
 

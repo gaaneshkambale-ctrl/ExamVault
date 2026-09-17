@@ -24,6 +24,13 @@ export interface CreateExamRequest {
   examTypeId?: string | null;
   tags?: string;
   academicFields?: Record<string, string> | null;
+  // "Restrict exam to academic group" (Assign Exam eligibility) - backend
+  // defaults true, so every already-existing College/University exam
+  // behaves as scoped without a backfill; Admin can uncheck it for an exam
+  // like a General Aptitude Test that should be assignable to anyone. Only
+  // meaningful for org types whose EXAM_FIELDS_BY_TYPE actually has
+  // Program/Department/Semester/Division keys - see hasExamAcademicScope.
+  restrictToAcademicScope: boolean;
 }
 
 export interface ExamSettings {

@@ -47,6 +47,7 @@ public class ExamDbContext : TenantScopedDbContext
             entity.Property(e => e.Tags).HasMaxLength(500);
             entity.Property(e => e.Instructions).HasMaxLength(2000);
             entity.Property(e => e.NegativeMarks).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.RestrictToAcademicScope).HasDefaultValue(true);
             entity.HasIndex(e => e.TenantId);
             entity.HasOne(e => e.ExamType)
                 .WithMany()
@@ -103,6 +104,7 @@ public class ExamDbContext : TenantScopedDbContext
         modelBuilder.Entity<ExamAssignmentTarget>(entity =>
         {
             entity.HasKey(t => t.Id);
+            entity.Property(t => t.OverrideReason).HasMaxLength(500);
             entity.HasIndex(t => new { t.ExamAssignmentId, t.UserId }).IsUnique();
             entity.HasOne<ExamAssignment>()
                 .WithMany()

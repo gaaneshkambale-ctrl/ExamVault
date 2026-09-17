@@ -14853,3 +14853,344 @@ Save Changes again - saved with no error, re-confirmed via SQL that
 corrected placeholder text "2026-27" (grey, matching the real format).
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+PLAN (not started, no code written yet) - Exam Academic Scope +
+Assignment Eligibility
+
+User gave a full architecture recommendation for closing a real gap:
+Assign Exam currently lets any student be assigned to any exam - eg. a
+Semester 6 B.Tech exam could be handed to a BCA Semester 2 student -
+because nothing on the assignment path checks academic fit. User chose,
+via AskUserQuestion: (1) write this plan doc first, no code yet: (2)
+first implementation slice = Core (scope + eligible-student filtering +
+backend rejection) + Admin override with reason + audit log. Batch/
+Group-based eligibility is explicitly OUT of this slice - the existing
+Batch tab on Assign Exam keeps working exactly as it does today,
+unfiltered, until a later phase.
+
+Ran a full codebase survey first (Explore subagent) rather than assume
+anything - findings below are what's REALLY there today, not the
+user's proposed schema (which assumed normalized FK columns that don't
+exist):
+
+Current state (verified):
+- Exam entity is actually named `ExamPaper` (table `Exams`,
+  ExamService), not `Exam`. It already has `AcademicFieldsJson`
+  (nullable JSON dictionary string) - added in migration
+  `20260913073833_AddAcademicFieldsToExamPaper` - populated today per
+  `EXAM_FIELDS_BY_TYPE` in organizationTypeFieldCatalog.ts. For
+  College/University that's currently `program`, `department`,
+  `semester`, `examDate` - no `division` key yet, and these fields are
+  already mandatory on every College/University exam today (no opt-out
+  toggle exists).
+- Assignment already has real entities: `ExamAssignment` (one row per
+  assign action, `TargetType` enum Students/Batch/AllStudents) and
+  `ExamAssignmentTarget` (one row per resolved student). Created via
+  `CreateAssignmentCommand`/`CreateAssignmentHandler`
+  (OnlineExamSystem.Exam.Application/Assignments/Create/), endpoint
+  `POST /api/assignments` (AssignmentsController.cs). Today the handler
+  validates shape (FluentValidation), exam existence, Instructor
+  ownership, and `exam.Status == Published` - nothing checks whether a
+  target student's academic fields match the exam's at all.
+- Student academic data (UserService `AppUser.AcademicFieldsJson`) is
+  ALSO a free-text JSON dict of strings, same convention as Exam - not
+  normalized ProgramId/DepartmentId FKs as the user's mockup assumed.
+  `AcademicListItem` (Program/Department/Semester/Division tenant
+  lists, self-referencing `ParentId` hierarchy) exists and drives the
+  cascading picker UI, but neither Student nor Exam actually stores a
+  reference to it by id - only the matching string `Value` gets saved,
+  same pattern AcademicHierarchyFields.tsx already documents in its own
+  comments ("not item ids"). So eligibility for this feature has to be
+  a STRING comparison against known keys (program/department/semester/
+  division), matching how the rest of this codebase already handles
+  academic data - not an FK join.
+- CreateExam.tsx already renders an "Academic Details" section for any
+  org type with `EXAM_FIELDS_BY_TYPE` entries, via the same shared
+  `AcademicHierarchyFields` component Student Academic Details uses.
+- AssignExam.tsx is a 4-step wizard (Select Exam / Select Students-
+  Batch / Schedule & Settings / Review & Confirm). Step 2's Students
+  tab already fetches `StudentSummary.academicFields` from
+  `GET /api/users/students` (ListStudents) - the data needed for
+  client-side filtering is already on the wire, just unused for
+  filtering today (only a plain name search exists).
+- An audit log pipeline already exists and is already wired to exactly
+  this action: `AssignmentsController.Create` already calls
+  `_auditClient.RecordAsync(tenantId, "Exams", "Assigned exam", ...)`
+  after a successful assignment, going through NotificationService's
+  `AuditLog` table via each service's local `IAuditClient` (documented
+  fire-and-forget - never blocks/fails the real operation). No new
+  audit table needed - extend this same call site.
+
+Proposed design for the Core + Override slice (all pending user
+confirmation on the open questions below before any code is written):
+
+1. Data model (2 small EF Core migrations, ExamService):
+   - `ExamPaper.RestrictToAcademicScope` (bool) - new column on Exams.
+     When true, the exam's Program/Department/Semester/(Division) in
+     `AcademicFieldsJson` are enforced as an eligibility filter; when
+     false, behaves exactly as every exam does today (assignable to
+     anyone).
+   - `ExamAssignmentTarget.IsEligibilityOverride` (bool, default false)
+     and `ExamAssignmentTarget.OverrideReason` (string?, nullable) -
+     new columns on ExamAssignmentTargets, set per-row only for
+     students who didn't match the exam's scope but were assigned
+     anyway via an explicit override. Keeps the override record
+     attached to the exact assignment row it applies to, rather than a
+     brand new table.
+   - No changes to AppUser or AcademicListItem - eligibility reads
+     Student.AcademicFieldsJson as-is.
+
+2. Backend (ExamService, cross-calling UserService the same way
+   GetGroupMembersAsync/GetAllStudentUserIdsAsync already do via
+   IUserLookupClient):
+   - Add one more IUserLookupClient method to bulk-fetch target
+     students' AcademicFieldsJson by userId list (internal service
+     call, same auth pattern as the two existing lookup methods - no
+     new authed public endpoint needed unless that pattern doesn't
+     already support this shape).
+   - CreateAssignmentCommand gains `AllowEligibilityOverride` (bool)
+     and `OverrideReason` (string?, required by FluentValidation only
+     when the flag is true).
+   - CreateAssignmentHandler: after `targetUserIds` is resolved (same
+     point for Students/Batch/AllStudents - Batch/AllStudents also get
+     the check in this design, even though the Batch UI itself isn't
+     getting eligibility filtering yet, so the backend stays the real
+     boundary regardless of which UI path was used) and only when
+     `exam.RestrictToAcademicScope`: fetch each target's academic
+     fields, compare against the exam's own populated scope keys only
+     (so an exam with no `division` set imposes no division
+     restriction - "All Divisions" by omission, matching the user's
+     mockup). Ineligible + `!AllowEligibilityOverride` -> reject the
+     whole request with 400 naming the exam's scope and the specific
+     ineligible student(s), mirroring the user's mockup text. Ineligible
+     + `AllowEligibilityOverride` (+ required OverrideReason) -> allow
+     it, and stamp only the actually-ineligible `ExamAssignmentTarget`
+     rows with `IsEligibilityOverride=true`/`OverrideReason`.
+   - Extend the existing `_auditClient.RecordAsync(...)` call at the
+     end of `AssignmentsController.Create`: when any override occurred,
+     add that to the existing Details string (eg. "... - 3 of 42
+     assigned via eligibility override: Backlog re-examination") rather
+     than adding a new audit module/table.
+   - Security note carried over from the Certificate Eligibility work
+     earlier this session: the client-side eligible-student filter in
+     AssignExam.tsx is a UX convenience only - CreateAssignmentHandler
+     is the real, only enforcement boundary, exactly like
+     isCertificateEligible() vs GetExamHandler's server-side check.
+
+3. Frontend:
+   - organizationTypeFieldCatalog.ts: add `division` (optional) to
+     `EXAM_FIELDS_BY_TYPE.College`/`.University` (pending open question
+     below on whether to add it now).
+   - CreateExam.tsx: new "Restrict exam to academic group" checkbox
+     driving `restrictToAcademicScope` on the create-exam form/DTO.
+     Checked -> today's existing Academic Details section (required).
+     Unchecked -> hidden entirely, exam has no scope (same as today's
+     School/Coaching/etc. org types that have no EXAM_FIELDS_BY_TYPE
+     scope keys at all).
+   - AssignExam.tsx Step 2: when the selected exam is restricted, show
+     its Academic Scope summary (Program / Department / Semester /
+     Division-or-"All Divisions") above the tabs; filter the Students
+     tab list to eligible students by default ("Eligible Students
+     (42)"), with a way to reveal ineligible students (greyed out,
+     require override to select). Selecting an ineligible student shows
+     the inline "⚠ Academic mismatch" panel (exam scope vs. that
+     student's own fields) with a required "I confirm this exception"
+     checkbox + Reason field gating that selection. AllStudents tab
+     label becomes dynamic: "All Eligible Students (N)" when scoped,
+     "All Students" when not - exact wording change the user called
+     out. Batch tab: left untouched/unfiltered in this slice (explicit
+     scope decision, not an oversight).
+   - Review & Confirm (step 4): show an override summary banner when
+     applicable, before the real Confirm/submit.
+
+4. Tests + verification (same pipeline as every feature this session):
+   backend unit tests on CreateAssignmentHandler's new branches
+   (eligible / ineligible-blocked / ineligible-with-override-and-reason
+   / ineligible-override-without-reason-rejected), frontend tests for
+   the catalog change and any pure eligibility-matching helper pulled
+   out of AssignExam.tsx, `dotnet build ExamVault.sln` + `npm run
+   build` as the real gates, Docker rebuild/redeploy, then live
+   verification via browser automation against real tenant data: a
+   scoped exam assigned to an eligible student (succeeds), the same
+   exam attempted against an ineligible student with no override
+   (blocked - check both the UI path and a direct API call, since UI-
+   only protection was explicitly the wrong pattern in the Certificate
+   feature too), then the same with override+reason (succeeds, and the
+   resulting audit entry is visible via Platform Activity).
+
+Open questions - RESOLVED by user (via AskUserQuestion):
+1. Toggle default: TRUE (ON) for College/University -
+   `RestrictToAcademicScope` defaults to true for those org types, so
+   every existing College/University exam instantly behaves as scoped
+   (matching today's de-facto mandatory Program/Department/Semester
+   fields) without any migration data-backfill step - Admin can uncheck
+   per-exam for things like a General Aptitude Test. Org types with no
+   EXAM_FIELDS_BY_TYPE scope keys (School/Coaching/etc.) get no toggle,
+   same as today.
+2. Override granularity: ONE shared reason per whole assignment batch
+   (not per-student) - `CreateAssignmentCommand.OverrideReason` is a
+   single field covering every overridden target in that request.
+3. Division: ADD `division` to `EXAM_FIELDS_BY_TYPE.College`/
+   `.University` now, optional (unset = "All Divisions" = unrestricted
+   at the division level even though Program/Department/Semester are
+   enforced).
+4. Override permission: ADMIN-ONLY. `AllowEligibilityOverride`/
+   `OverrideReason` on CreateAssignmentCommand only take effect for an
+   Admin caller - an Instructor's assignment request against an
+   ineligible student gets a hard 400 rejection with no override path,
+   even if those fields were somehow sent. Enforce this in
+   CreateAssignmentHandler (not just hide the checkbox in
+   AssignExam.tsx's UI for Instructors) - same "don't rely on the UI
+   alone" principle as everywhere else in this plan.
+
+Plan finalized. Ready to implement - awaiting explicit go-ahead.
+
+---
+
+IMPLEMENTED - Exam Academic Scope + Assignment Eligibility (Core +
+Admin-only override/audit). User said "start implementing" after the plan
+above; Batch/Group-based eligibility filtering stays explicitly deferred
+(the Batch tab keeps working exactly as before, unfiltered).
+
+BACKEND (ExamService):
+- `ExamPaper.RestrictToAcademicScope` (bool, default true) - new column,
+  migration `20260917170526_AddAcademicScopeAndEligibilityOverride`
+  (`dotnet ef migrations add ... --project OnlineExamSystem.Exam.Infrastructure
+  --startup-project OnlineExamSystem.Exam.API`). Default true means every
+  already-existing College/University exam (Program/Department/Semester
+  already mandatory there) instantly behaves as scoped with zero backfill.
+- `ExamAssignmentTarget.IsEligibilityOverride` (bool) + `OverrideReason`
+  (string?, max 500) - same migration - stamped only on the specific
+  target rows that needed the override, not every row in the batch.
+- `CreateAssignmentHandler`: after resolving targetUserIds (Students/
+  Batch/AllStudents all get the check - the backend is the real boundary
+  regardless of which UI path was used), if `exam.RestrictToAcademicScope`
+  and the exam's `AcademicFieldsJson` has at least one of
+  program/department/semester/division set: fetches each target's own
+  academic fields (new `IUserLookupClient.GetStudentAcademicScopesAsync`,
+  reusing the existing `GET /api/users/students` call rather than a new
+  endpoint - that response already carried `academicFields` for Student
+  Reports' export), string-compares (case-insensitive, trimmed) only the
+  keys the exam itself has set. Ineligible + no override -> `400` naming
+  the exam's scope and the specific student(s)
+  (`CreateAssignmentResult.EligibilityRejected`). Ineligible + Admin
+  override with a required reason -> proceeds, stamps only the
+  ineligible targets' rows. `command.IsAdminCaller` (set server-side from
+  `User.IsInRole("Admin"/"SuperAdmin")` in AssignmentsController, not
+  trusted from the request) gates the override - an Instructor sending
+  `AllowEligibilityOverride=true` still gets a hard rejection.
+- Extended the assignment-creation audit call (already existed, already
+  wired to this exact action) rather than adding a new table: Details
+  gains "... - N of M assigned via eligibility override: <reason>" when
+  applicable.
+- Contracts: `CreateExamRequest`/`UpdateExamRequest`/`ExamResponse`/
+  `CreateAssignmentRequest` all gained new trailing optional fields
+  (`RestrictToAcademicScope` / `AllowEligibilityOverride`+`OverrideReason`)
+  - non-breaking for any existing caller.
+- Backend tests: 5 new CreateAssignmentHandlerTests cases (eligible/
+  ineligible-blocked/admin-override-succeeds-and-stamps/non-admin-
+  override-still-rejected/unscoped-exam-skips-check-entirely) - all
+  passing, 103/103 ExamService application tests total (was 98).
+
+FRONTEND:
+- organizationTypeFieldCatalog.ts: added `division` (optional) to
+  `EXAM_FIELDS_BY_TYPE.College`/`.University`. New
+  `hasExamAcademicScope(orgType)` helper (checks whether an org type's
+  exam fields include any of the 4 eligibility-relevant keys - true only
+  for College/University today).
+- AcademicHierarchyFields.tsx: the cascading-picker branch (Program/
+  Department/Semester/Division selects) now respects `field.optional`
+  for its asterisk AND its empty-option text ("All {label}" instead of
+  "Select {label}") - previously only the free-text branch respected
+  `optional`, so Division (now optional) needed this to actually not be
+  hard-required.
+- CreateExam.tsx / EditExam.tsx: new "Restrict exam to academic group"
+  checkbox (only shown for org types `hasExamAcademicScope` is true for),
+  defaults checked. Unchecking hides the whole Academic Details section,
+  clears any already-entered values, and skips its validation entirely -
+  an unchecked exam has no scope, same as today's School/Coaching exams
+  that never had scope fields at all.
+- New `utils/examAssignmentEligibility.ts` (pure functions, unit tested):
+  `getExamScope`, `isStudentEligible`, `describeScope` - client-side
+  mirror of the backend's own eligibility logic, used only for the
+  Assign Exam picker's UX (backend re-checks independently regardless of
+  what this computes - same "don't rely on the UI alone" lesson as the
+  Certificate feature).
+- AssignExam.tsx Step 2: shows the exam's "Academic Scope: ..." summary
+  when restricted; Students tab defaults to eligible-only ("Eligible
+  Students (N)"), with a "Show all students" toggle that reveals the
+  rest marked "⚠ Outside academic scope" (both in the picker list and
+  the Selected list, in case one was picked while revealed); "Select All
+  Eligible Students" only selects the currently-visible pool. AllStudents
+  tab's info alert now says how many of the real student count are
+  actually eligible when the exam is scoped. On a 400 eligibility
+  rejection, shows the "⚠ Academic mismatch" panel (exam scope + named
+  ineligible student(s)) with, for an Admin caller only, an "I confirm
+  this exception" checkbox + required Reason + "Assign Anyway" button
+  that resubmits with the override; a non-Admin caller sees the
+  rejection with no override option at all. Step 4's review card shows
+  an override summary banner when one was used, before the real Confirm.
+- Frontend tests: new `organizationTypeFieldCatalog.test.ts` describe
+  block for `hasExamAcademicScope` (3 cases) + new
+  `examAssignmentEligibility.test.ts` (11 cases covering scope
+  extraction, eligibility matching, and scope description). 166/166
+  frontend tests passing (was 152).
+
+VERIFIED:
+- `dotnet build ExamVault.sln` - 0 errors (full solution, confirms the
+  shared-contract changes didn't break any other service).
+- `npx tsc --noEmit -p .` / `npm run build` - 0 errors.
+- `npm run test -- --run` - 166/166. `dotnet test` (ExamService) -
+  103/103.
+- Docker: `exam-api`, `user-api`, `frontend` rebuilt/redeployed. Startup
+  logs confirmed the EF migration applied cleanly
+  (`ALTER TABLE [ExamAssignmentTargets] ADD [IsEligibilityOverride]...`).
+  Direct SQL confirmed every pre-existing exam's `RestrictToAcademicScope`
+  defaulted to `1` with no backfill step, exactly as designed.
+
+Live-verified against Greenfield University's real "University Semester
+Exam" (scope: B.Tech Computer Engineering / Computer Science / Semester
+5 - genuinely different from Arjun Mehta's own stored Computer
+Engineering / Semester 6, so this was a real mismatch, not a staged one):
+- Assign Exam Step 2 showed "Academic Scope: B.Tech Computer Engineering
+  / Computer Science / Semester 5 / All Divisions" and "Eligible Students
+  (0)" - "No eligible students found." Checking "Show all students"
+  revealed Arjun Mehta marked "⚠ Outside academic scope" (found and fixed
+  a real bug here mid-verification: the heading stayed "Eligible
+  Students (N)" even once ineligible students were included by the
+  toggle - now switches to "All Students (N)"/‌"Select All" while the
+  toggle is on).
+- Selected Arjun anyway and pushed through to Confirm & Assign: backend
+  rejected with the "⚠ Academic mismatch" panel, text matching the
+  original mockup almost verbatim ("Arjun Mehta is not eligible for this
+  examination. The examination is restricted to: B.Tech Computer
+  Engineering / Computer Science / Semester 5."). Confirmed via direct
+  SQL that no new ExamAssignments row was created by the blocked attempt
+  (the only row for this exam was a pre-existing one from 2026-09-13).
+- Checked "I confirm this exception", entered "Backlog re-examination",
+  clicked "Assign Anyway": succeeded (Assignment ASG-14012). SQL
+  confirmed the new ExamAssignmentTarget row has
+  `IsEligibilityOverride=1`, `OverrideReason='Backlog re-examination'`,
+  and the correct UserId. Confirmed the audit log (NotificationDb.
+  AuditLogs) recorded: "Assigned exam University Semester Exam -> 1
+  student(s) - 1 of 1 assigned via eligibility override: Backlog
+  re-examination".
+- Create Exam: "Restrict exam to academic group" defaults checked for
+  University, Program/Department/Semester required with red asterisks,
+  Division shown without one ("Select Semester first" placeholder,
+  becomes "All Division / Class" once unlocked). Unchecking it live
+  removed the entire Program/Department/Semester/Division/Exam Date
+  section from the form, confirming an exam saved this way would have no
+  scope at all.
+
+NOT live-verified this pass (time/scope): Instructor-role override
+rejection (covered by the
+Non_admin_caller_cannot_use_the_override_even_if_the_request_supplies_it
+backend unit test, not re-checked end-to-end with a real Instructor
+login this session); Edit Exam's own toggle (code identical to Create
+Exam's, not re-clicked live); the AllStudents/Batch tabs' eligibility
+behavior (Students tab was the one exercised).
+
+Not yet committed - awaiting explicit user instruction to commit.

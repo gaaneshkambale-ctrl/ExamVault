@@ -134,7 +134,7 @@ export default function AcademicHierarchyFields({ fields, values, errors, onChan
           return (
             <Col xs={12} md={6} key={level.key} className="mb-3">
               <Form.Label className="small">
-                {level.label} <span className="text-danger">*</span>
+                {level.label} {!field.optional && <span className="text-danger">*</span>}
               </Form.Label>
               <Form.Select
                 value={selectedIds[level.key] ?? ''}
@@ -146,7 +146,9 @@ export default function AcademicHierarchyFields({ fields, values, errors, onChan
                   handleSelect(index, id, item?.value ?? '');
                 }}
               >
-                <option value="">{disabled ? `Select ${parentLevel!.label} first` : `Select ${level.label}`}</option>
+                <option value="">
+                  {disabled ? `Select ${parentLevel!.label} first` : field.optional ? `All ${level.label}` : `Select ${level.label}`}
+                </option>
                 {query.data?.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.value}

@@ -17,6 +17,7 @@ function makeExam(overrides: Partial<ExamResponse> & Pick<ExamResponse, 'id' | '
     examTypeId: null,
     tags: '',
     academicFields: null,
+    restrictToAcademicScope: true,
     shuffleQuestions: false,
     shuffleOptions: false,
     showResult: true,

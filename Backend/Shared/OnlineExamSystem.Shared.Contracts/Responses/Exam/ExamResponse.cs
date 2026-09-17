@@ -38,4 +38,5 @@ public record ExamResponse(
     string? CreatedByName = null,
     Dictionary<string, string>? AcademicFields = null,
     bool CertificateEnabled = false,
-    int MinimumCertificateScorePercent = 80);
+    int MinimumCertificateScorePercent = 80,
+    bool RestrictToAcademicScope = true);

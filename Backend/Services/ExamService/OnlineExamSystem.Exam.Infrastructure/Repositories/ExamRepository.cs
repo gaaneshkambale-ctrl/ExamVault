@@ -154,13 +154,25 @@ public class ExamRepository : IExamRepository
     public async Task AddAssignmentAsync(
         ExamAssignment assignment,
         IReadOnlyList<Guid> targetUserIds,
+        IReadOnlySet<Guid>? overriddenUserIds = null,
+        string? overrideReason = null,
         CancellationToken cancellationToken = default)
     {
         await _dbContext.ExamAssignments.AddAsync(assignment, cancellationToken);
 
         var targets = targetUserIds
             .Distinct()
-            .Select(userId => new ExamAssignmentTarget { ExamAssignmentId = assignment.Id, UserId = userId })
+            .Select(userId =>
+            {
+                var isOverride = overriddenUserIds?.Contains(userId) ?? false;
+                return new ExamAssignmentTarget
+                {
+                    ExamAssignmentId = assignment.Id,
+                    UserId = userId,
+                    IsEligibilityOverride = isOverride,
+                    OverrideReason = isOverride ? overrideReason : null,
+                };
+            })
             .ToList();
         await _dbContext.ExamAssignmentTargets.AddRangeAsync(targets, cancellationToken);
     }

@@ -14,4 +14,5 @@ public record CreateExamCommand(
     string? ExamCode = null,
     Guid? ExamTypeId = null,
     string Tags = "",
-    Dictionary<string, string>? AcademicFields = null);
+    Dictionary<string, string>? AcademicFields = null,
+    bool RestrictToAcademicScope = true);

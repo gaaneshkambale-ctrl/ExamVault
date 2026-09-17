@@ -394,12 +394,18 @@ export const EXAM_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
     { key: 'program', label: 'Program' },
     { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
+    // Optional, unlike Program/Department/Semester - an exam scoped to just
+    // Program/Department/Semester leaves Division unrestricted ("All
+    // Divisions") in the Assign Exam eligibility check, same convention as
+    // an exam with no scope keys at all being fully unrestricted.
+    { key: 'division', label: 'Division / Class', optional: true },
     { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
   ],
   University: [
     { key: 'program', label: 'Program' },
     { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
+    { key: 'division', label: 'Division / Class', optional: true },
     { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
   ],
   School: [
@@ -436,4 +442,18 @@ export const DEFAULT_EXAM_FIELDS: FieldDef[] = [];
 export function getExamFieldsForType(organizationType: string | null | undefined): FieldDef[] {
   if (!organizationType) return DEFAULT_EXAM_FIELDS;
   return EXAM_FIELDS_BY_TYPE[organizationType] ?? DEFAULT_EXAM_FIELDS;
+}
+
+// The only keys CreateAssignmentHandler's eligibility check compares
+// (Backend/.../CreateAssignmentHandler.cs's own ScopeKeys) - out of
+// whatever EXAM_FIELDS_BY_TYPE an org type has, only these four
+// participate in "is this student eligible for this exam". Today that's
+// College/University only - School/Coaching/etc.'s own exam fields (Term,
+// Test Series, ...) aren't scope-relevant, so the "Restrict exam to
+// academic group" toggle has nothing to restrict for them and stays
+// hidden.
+const EXAM_SCOPE_KEYS = ['program', 'department', 'semester', 'division'];
+
+export function hasExamAcademicScope(organizationType: string | null | undefined): boolean {
+  return getExamFieldsForType(organizationType).some((field) => EXAM_SCOPE_KEYS.includes(field.key));
 }

@@ -12,7 +12,7 @@ import { archiveExam, publishExam, unpublishExam, updateExam } from '../../api/e
 import { getOrganizationBranding } from '../../api/organizationSettingsApi';
 import { useExam, useExamTypes } from '../../hooks/useExams';
 import { validateCreateExam } from '../../utils/createExamValidation';
-import { getExamFieldsForType } from '../../constants/organizationTypeFieldCatalog';
+import { getExamFieldsForType, hasExamAcademicScope } from '../../constants/organizationTypeFieldCatalog';
 import type { CreationMethod, ExamResponse, ExamStatus, UpdateExamRequest } from '../../types/exam';
 import { extractServerError } from '../../utils/apiError';
 
@@ -199,6 +199,7 @@ export default function EditExam() {
   const { data: allExamTypes } = useExamTypes();
   const { data: branding } = useQuery({ queryKey: ['organization-branding'], queryFn: getOrganizationBranding });
   const examFields = getExamFieldsForType(branding?.organizationType);
+  const showScopeToggle = hasExamAcademicScope(branding?.organizationType);
 
   const [form, setForm] = useState<UpdateExamRequest | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof UpdateExamRequest, string>>>(
@@ -285,9 +286,10 @@ export default function EditExam() {
   };
 
   const validateExamAcademicFields = (currentForm: UpdateExamRequest): Record<string, string> => {
+    if (showScopeToggle && !currentForm.restrictToAcademicScope) return {};
     const errors: Record<string, string> = {};
     examFields.forEach((field) => {
-      if (!currentForm.academicFields?.[field.key]?.trim()) {
+      if (!field.optional && !currentForm.academicFields?.[field.key]?.trim()) {
         errors[field.key] = `${field.label} is required.`;
       }
     });
@@ -507,14 +509,34 @@ export default function EditExam() {
                 {examFields.length > 0 && (
                   <>
                     <SectionHeader icon={<GearIcon />} title={`Academic Details (${branding?.organizationType ?? 'Exam'})`} />
-                    <Row className="mb-3">
-                      <AcademicHierarchyFields
-                        fields={examFields}
-                        values={form.academicFields ?? {}}
-                        errors={academicFieldErrors}
-                        onChange={updateAcademicField}
+                    {showScopeToggle && (
+                      <Form.Check
+                        type="checkbox"
+                        id="editRestrictToAcademicScope"
+                        className="mb-3"
+                        label="Restrict exam to academic group"
+                        checked={form.restrictToAcademicScope}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setForm((prev) =>
+                            prev
+                              ? { ...prev, restrictToAcademicScope: checked, academicFields: checked ? prev.academicFields : {} }
+                              : prev,
+                          );
+                          setAcademicFieldErrors({});
+                        }}
                       />
-                    </Row>
+                    )}
+                    {(!showScopeToggle || form.restrictToAcademicScope) && (
+                      <Row className="mb-3">
+                        <AcademicHierarchyFields
+                          fields={examFields}
+                          values={form.academicFields ?? {}}
+                          errors={academicFieldErrors}
+                          onChange={updateAcademicField}
+                        />
+                      </Row>
+                    )}
                   </>
                 )}
 

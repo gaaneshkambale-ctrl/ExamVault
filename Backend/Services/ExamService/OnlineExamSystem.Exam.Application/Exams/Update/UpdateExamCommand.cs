@@ -33,4 +33,5 @@ public record UpdateExamCommand(
     Guid? OwnerUserId = null,
     Dictionary<string, string>? AcademicFields = null,
     bool CertificateEnabled = false,
-    int MinimumCertificateScorePercent = 80);
+    int MinimumCertificateScorePercent = 80,
+    bool RestrictToAcademicScope = true);

@@ -158,13 +158,22 @@ public class FakeExamRepository : IExamRepository
     public Task AddAssignmentAsync(
         ExamAssignment assignment,
         IReadOnlyList<Guid> targetUserIds,
+        IReadOnlySet<Guid>? overriddenUserIds = null,
+        string? overrideReason = null,
         CancellationToken cancellationToken = default)
     {
         assignment.AssignmentNumber = _assignments.Count + 1;
         _assignments.Add(assignment);
         foreach (var userId in targetUserIds)
         {
-            _targets.Add(new ExamAssignmentTarget { ExamAssignmentId = assignment.Id, UserId = userId });
+            var isOverride = overriddenUserIds?.Contains(userId) ?? false;
+            _targets.Add(new ExamAssignmentTarget
+            {
+                ExamAssignmentId = assignment.Id,
+                UserId = userId,
+                IsEligibilityOverride = isOverride,
+                OverrideReason = isOverride ? overrideReason : null,
+            });
         }
 
         return Task.CompletedTask;

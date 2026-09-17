@@ -31,5 +31,10 @@ public class CreateAssignmentValidator : AbstractValidator<CreateAssignmentComma
         RuleFor(x => x.MaxAttempts).GreaterThan(0);
 
         RuleFor(x => x.GraceTimeMinutes).GreaterThanOrEqualTo(0);
+
+        RuleFor(x => x.OverrideReason)
+            .NotEmpty()
+            .WithMessage("A reason is required to override academic eligibility.")
+            .When(x => x.AllowEligibilityOverride);
     }
 }

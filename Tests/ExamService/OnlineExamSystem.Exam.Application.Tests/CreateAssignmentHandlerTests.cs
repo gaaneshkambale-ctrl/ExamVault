@@ -191,4 +191,125 @@ public class CreateAssignmentHandlerTests
         Assert.False(result.Success);
         Assert.NotEmpty(result.ValidationErrors);
     }
+
+    private static ExamPaper ScopedExam(string program = "B.Tech", string department = "Computer Engineering", string semester = "6") =>
+        new()
+        {
+            Title = "University Semester Exam",
+            Status = ExamStatus.Published,
+            RestrictToAcademicScope = true,
+            AcademicFieldsJson = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["program"] = program,
+                ["department"] = department,
+                ["semester"] = semester,
+            }),
+        };
+
+    private static StudentAcademicScope Scope(Guid userId, string program, string department, string semester) =>
+        new(userId, new Dictionary<string, string> { ["program"] = program, ["department"] = department, ["semester"] = semester });
+
+    [Fact]
+    public async Task Eligible_student_is_assigned_to_a_scoped_exam()
+    {
+        var repository = new FakeExamRepository();
+        var exam = ScopedExam();
+        await repository.AddAsync(exam);
+        var studentId = Guid.NewGuid();
+        var handler = CreateHandler(
+            repository,
+            new FakeUserLookupClient(result: null, academicScopes: [Scope(studentId, "B.Tech", "Computer Engineering", "6")]));
+
+        var result = await handler.HandleAsync(StudentsCommand(exam.Id, studentId));
+
+        Assert.True(result.Success);
+        Assert.False(repository.Targets.Single().IsEligibilityOverride);
+    }
+
+    [Fact]
+    public async Task Ineligible_student_without_override_is_rejected_with_scope_details()
+    {
+        var repository = new FakeExamRepository();
+        var exam = ScopedExam();
+        await repository.AddAsync(exam);
+        var studentId = Guid.NewGuid();
+        var handler = CreateHandler(
+            repository,
+            new FakeUserLookupClient(result: null, academicScopes: [Scope(studentId, "BCA", "Computer Applications", "2")]));
+
+        var result = await handler.HandleAsync(StudentsCommand(exam.Id, studentId));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsEligibilityRejected);
+        Assert.Equal("B.Tech / Computer Engineering / 6", result.EligibilityScopeDescription);
+        Assert.Empty(repository.Assignments);
+    }
+
+    [Fact]
+    public async Task Admin_override_with_reason_assigns_an_ineligible_student_and_stamps_the_target_row()
+    {
+        var repository = new FakeExamRepository();
+        var exam = ScopedExam();
+        await repository.AddAsync(exam);
+        var studentId = Guid.NewGuid();
+        var handler = CreateHandler(
+            repository,
+            new FakeUserLookupClient(result: null, academicScopes: [Scope(studentId, "BCA", "Computer Applications", "2")]));
+
+        var command = StudentsCommand(exam.Id, studentId) with
+        {
+            AllowEligibilityOverride = true,
+            OverrideReason = "Backlog re-examination",
+            IsAdminCaller = true,
+        };
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.OverriddenCount);
+        var target = repository.Targets.Single();
+        Assert.True(target.IsEligibilityOverride);
+        Assert.Equal("Backlog re-examination", target.OverrideReason);
+    }
+
+    [Fact]
+    public async Task Non_admin_caller_cannot_use_the_override_even_if_the_request_supplies_it()
+    {
+        var repository = new FakeExamRepository();
+        var exam = ScopedExam();
+        await repository.AddAsync(exam);
+        var studentId = Guid.NewGuid();
+        var handler = CreateHandler(
+            repository,
+            new FakeUserLookupClient(result: null, academicScopes: [Scope(studentId, "BCA", "Computer Applications", "2")]));
+
+        var command = StudentsCommand(exam.Id, studentId) with
+        {
+            AllowEligibilityOverride = true,
+            OverrideReason = "Backlog re-examination",
+            IsAdminCaller = false,
+        };
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsEligibilityRejected);
+        Assert.Empty(repository.Assignments);
+    }
+
+    [Fact]
+    public async Task Unscoped_exam_assigns_a_mismatched_student_without_any_eligibility_check()
+    {
+        var repository = new FakeExamRepository();
+        var exam = ScopedExam();
+        exam.RestrictToAcademicScope = false;
+        await repository.AddAsync(exam);
+        var studentId = Guid.NewGuid();
+        var handler = CreateHandler(
+            repository,
+            new FakeUserLookupClient(result: null, academicScopes: [Scope(studentId, "BCA", "Computer Applications", "2")]));
+
+        var result = await handler.HandleAsync(StudentsCommand(exam.Id, studentId));
+
+        Assert.True(result.Success);
+        Assert.False(repository.Targets.Single().IsEligibilityOverride);
+    }
 }

@@ -71,4 +71,16 @@ public class ExamPaper : TenantScopedEntity
     // fields matter varies entirely by the tenant's Organization Type, so
     // this deliberately isn't a fixed set of new columns.
     public string? AcademicFieldsJson { get; set; }
+
+    // When true, CreateAssignmentHandler rejects (or requires an Admin
+    // override for) a target student whose own AcademicFieldsJson doesn't
+    // match this exam's program/department/semester/division values.
+    // Defaults true so every already-existing College/University exam
+    // (Program/Department/Semester have been mandatory there since before
+    // this flag existed) starts enforcing eligibility with no backfill
+    // migration needed - the check itself only ever compares whichever
+    // keys THIS exam's own AcademicFieldsJson actually has, so it's a
+    // harmless no-op for org types (School, Coaching, etc.) whose exam
+    // fields don't include those keys at all.
+    public bool RestrictToAcademicScope { get; set; } = true;
 }
