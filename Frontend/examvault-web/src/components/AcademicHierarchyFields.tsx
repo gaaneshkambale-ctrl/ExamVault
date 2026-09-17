@@ -40,7 +40,11 @@ interface Props {
 // matching item since, the picker just starts unselected for that level.
 export default function AcademicHierarchyFields({ fields, values, errors, onChange }: Props) {
   const activeLevels = HIER_ORDER.filter((level) => fields.some((f) => f.key === level.key));
-  const otherFields = fields.filter((f) => !HIER_ORDER.some((level) => level.key === f.key));
+  // Index within activeLevels for each hierarchy key, so rendering below can
+  // walk `fields` in its own real order (interleaving the cascading
+  // pickers with the free-text fields exactly where the catalog places
+  // them) instead of always grouping every picker first.
+  const levelIndexByKey = new Map<string, number>(activeLevels.map((level, i) => [level.key, i]));
 
   const [selectedIds, setSelectedIds] = useState<Record<string, string>>({});
 
@@ -106,55 +110,59 @@ export default function AcademicHierarchyFields({ fields, values, errors, onChan
 
   return (
     <>
-      {activeLevels.map((level, index) => {
-        const query = queryByLevel[level.key];
-        const parentLevel = index > 0 ? activeLevels[index - 1] : null;
-        const disabled = !!parentLevel && !selectedIds[parentLevel.key];
+      {fields.map((field) => {
+        const index = levelIndexByKey.get(field.key);
+        if (index !== undefined) {
+          const level = activeLevels[index];
+          const query = queryByLevel[level.key];
+          const parentLevel = index > 0 ? activeLevels[index - 1] : null;
+          const disabled = !!parentLevel && !selectedIds[parentLevel.key];
+          return (
+            <Col xs={12} md={6} key={level.key} className="mb-3">
+              <Form.Label className="small">
+                {level.label} <span className="text-danger">*</span>
+              </Form.Label>
+              <Form.Select
+                value={selectedIds[level.key] ?? ''}
+                disabled={disabled}
+                isInvalid={!!errors?.[level.key]}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const item = query.data?.find((o) => o.id === id);
+                  handleSelect(index, id, item?.value ?? '');
+                }}
+              >
+                <option value="">{disabled ? `Select ${parentLevel!.label} first` : `Select ${level.label}`}</option>
+                {query.data?.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.value}
+                  </option>
+                ))}
+              </Form.Select>
+              {!disabled && query.isSuccess && query.data.length === 0 && (
+                <Form.Text className="text-muted">
+                  No {level.label} values yet - add them in Organization Settings &gt; Academic Configuration.
+                </Form.Text>
+              )}
+              <Form.Control.Feedback type="invalid">{errors?.[level.key]}</Form.Control.Feedback>
+            </Col>
+          );
+        }
         return (
-          <Col xs={12} md={6} key={level.key} className="mb-3">
+          <Col xs={12} md={6} key={field.key} className="mb-3">
             <Form.Label className="small">
-              {level.label} <span className="text-danger">*</span>
+              {field.label} {!field.optional && <span className="text-danger">*</span>}
             </Form.Label>
-            <Form.Select
-              value={selectedIds[level.key] ?? ''}
-              disabled={disabled}
-              isInvalid={!!errors?.[level.key]}
-              onChange={(e) => {
-                const id = e.target.value;
-                const item = query.data?.find((o) => o.id === id);
-                handleSelect(index, id, item?.value ?? '');
-              }}
-            >
-              <option value="">{disabled ? `Select ${parentLevel!.label} first` : `Select ${level.label}`}</option>
-              {query.data?.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.value}
-                </option>
-              ))}
-            </Form.Select>
-            {!disabled && query.isSuccess && query.data.length === 0 && (
-              <Form.Text className="text-muted">
-                No {level.label} values yet - add them in Organization Settings &gt; Academic Configuration.
-              </Form.Text>
-            )}
-            <Form.Control.Feedback type="invalid">{errors?.[level.key]}</Form.Control.Feedback>
+            <Form.Control
+              value={values[field.key] ?? ''}
+              placeholder={field.placeholder}
+              onChange={(e) => onChange(field.key, e.target.value)}
+              isInvalid={!!errors?.[field.key]}
+            />
+            <Form.Control.Feedback type="invalid">{errors?.[field.key]}</Form.Control.Feedback>
           </Col>
         );
       })}
-      {otherFields.map((field) => (
-        <Col xs={12} md={6} key={field.key} className="mb-3">
-          <Form.Label className="small">
-            {field.label} <span className="text-danger">*</span>
-          </Form.Label>
-          <Form.Control
-            value={values[field.key] ?? ''}
-            placeholder={field.placeholder}
-            onChange={(e) => onChange(field.key, e.target.value)}
-            isInvalid={!!errors?.[field.key]}
-          />
-          <Form.Control.Feedback type="invalid">{errors?.[field.key]}</Form.Control.Feedback>
-        </Col>
-      ))}
     </>
   );
 }

@@ -14671,3 +14671,59 @@ verification TOGETHER as one phase, not just a bare "backend PDF
 endpoint" bolted onto the current client-rendered flow. Only once this
 ships should certificate copy upgrade to "Officially Issued
 Certificate"/"Verify Certificate" language.
+
+---
+
+Add/Edit User (Student Academic Details) - made College/University's
+Course field optional (no longer mandatory to save), and reordered the
+section to: Roll No., Enrollment No., PRN / Registration No., Program,
+Department, Semester, Division / Class, Course, Year of Study,
+Academic Year - per an explicit request.
+
+Added a new `optional?: boolean` flag to FieldDef
+(organizationTypeFieldCatalog.ts) - Course is the only field currently
+using it, since it duplicates Program for most College/University
+students (confirmed earlier against Arjun Mehta's own real data - both
+are literally "B.Tech Computer Engineering") and was blocking a save
+that had every other academic field genuinely filled in. Every other
+field (including the cascading Program/Department/Semester/Division
+pickers) stays required, unchanged. Relabeled 'year' -> "Year of Study"
+directly in the catalog (College/University only) - the Student Result
+PDF's own labelOverride for this same relabel is now redundant, so
+removed it and simplified that priority list to plain keys, letting it
+read the label straight from the catalog like everything else there.
+
+AcademicHierarchyFields.tsx (shared by this form AND Edit Exam's
+academic fields) used to hardcode "every cascading picker renders
+first, then every free-text field" regardless of catalog order -
+restructured to render in the catalog array's own order instead,
+interleaving pickers and text fields wherever each is actually
+positioned. This is what makes the reorder above possible; also
+confirmed it doesn't change Exam academic fields' rendering (that
+catalog already lists Program/Department/Semester consecutively before
+Exam Date, so its render order is identical to before). Required
+asterisk now only shows for non-optional fields.
+
+Verified: `npx tsc --noEmit`/`npm run build` - 0 errors (one real type
+fix needed - levelIndexByKey's Map needed an explicit <string, number>
+signature once it started being looked up by a generic FieldDef.key
+instead of just the 4 known hierarchy keys). `npm run test` -
+150/150 passing, unaffected (the priority-order/label assertions in
+organizationTypeFieldCatalog.test.ts and generateResultPdf.test.ts
+were already written against "Year of Study" and the fixed priority
+order, not raw catalog order, so nothing needed updating there).
+Docker frontend rebuilt/redeployed.
+
+Live-verified against Greenfield University's real student Arjun
+Mehta: Edit User's Academic Details section now renders in exactly the
+requested order, and "Course" is the only field without a red required
+asterisk - every other field (Roll No., Enrollment No., PRN/
+Registration No., Program, Department, Semester, Division/Class, Year
+of Study, Academic Year) still shows one. Did not test-save with
+Course blank against this real record (would have destructively
+cleared his real stored Course value for a one-off verification) - the
+validation change itself is a one-line early-return, low-risk, and the
+rendering change (no asterisk) is the part that was actually live-
+verified.
+
+Not yet committed - awaiting explicit user instruction to commit.

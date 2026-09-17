@@ -16,6 +16,13 @@ export interface FieldDef {
   key: string;
   label: string;
   placeholder?: string;
+  // Every field in a Student/Exam "Academic Details" section is required by
+  // default (see CreateUser.tsx/EditUser.tsx's validateAcademicFields) -
+  // set true for a field that genuinely shouldn't block saving on its own,
+  // eg. College/University's Course, which duplicates Program for most
+  // students and was blocking real saves that had every OTHER field filled
+  // in.
+  optional?: boolean;
 }
 
 const COLLEGE_FIELDS: FieldDef[] = [
@@ -238,24 +245,27 @@ export const STUDENT_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
   College: [
     { key: 'enrollmentNo', label: 'Enrollment No.' },
     { key: 'prn', label: 'PRN / Registration No.' },
-    { key: 'course', label: 'Course' },
     { key: 'program', label: 'Program' },
     { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
-    { key: 'year', label: 'Year' },
-    { key: 'academicYear', label: 'Academic Year' },
     { key: 'division', label: 'Division / Class' },
+    // Not required - duplicates Program for most students (both are
+    // "B.Tech Computer Engineering" in practice), so it shouldn't block
+    // saving a record that has every other academic field filled in.
+    { key: 'course', label: 'Course', optional: true },
+    { key: 'year', label: 'Year of Study' },
+    { key: 'academicYear', label: 'Academic Year' },
   ],
   University: [
     { key: 'enrollmentNo', label: 'Enrollment No.' },
     { key: 'prn', label: 'PRN / Registration No.' },
-    { key: 'course', label: 'Course' },
     { key: 'program', label: 'Program' },
     { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
-    { key: 'year', label: 'Year' },
-    { key: 'academicYear', label: 'Academic Year' },
     { key: 'division', label: 'Division / Class' },
+    { key: 'course', label: 'Course', optional: true },
+    { key: 'year', label: 'Year of Study' },
+    { key: 'academicYear', label: 'Academic Year' },
   ],
   School: [
     { key: 'admissionNo', label: 'Admission No.' },
@@ -297,20 +307,15 @@ export interface PopulatedAcademicField {
   value: string;
 }
 
-// The fixed display order (and one label override) for the "Student &
-// Academic Information" section of the Student Result PDF
-// (generateResultPdf.ts) - matches exactly what was asked for a College/
-// University-style report. PRN/Registration No. and Enrollment No. are
-// deliberately NOT here - the caller reads those two directly so they can
-// sit right after Roll No., before Program, at a fixed position in that
-// section; this function only covers what comes after Program.
-const STUDENT_ACADEMIC_INFO_PRIORITY: { key: string; labelOverride?: string }[] = [
-  { key: 'department' },
-  { key: 'year', labelOverride: 'Year of Study' },
-  { key: 'semester' },
-  { key: 'division' },
-  { key: 'academicYear' },
-];
+// The fixed display order for the "Student & Academic Information" section
+// of the Student Result PDF (generateResultPdf.ts) - matches exactly what
+// was asked for a College/University-style report. PRN/Registration No.
+// and Enrollment No. are deliberately NOT here - the caller reads those two
+// directly so they can sit right after Roll No., before Program, at a
+// fixed position in that section; this function only covers what comes
+// after Program. Labels come straight from the catalog (STUDENT_FIELDS_BY_
+// TYPE) - no override needed here.
+const STUDENT_ACADEMIC_INFO_PRIORITY_KEYS = ['department', 'year', 'semester', 'division', 'academicYear'];
 
 // The student's own type-specific academic fields that actually have a
 // real value set, for the "Student & Academic Information" section of the
@@ -335,12 +340,13 @@ export function getPopulatedStudentAcademicFields(
   if (!academicFields) return [];
   const catalog = getStudentFieldsForType(organizationType);
   const labelByKey = new Map(catalog.map((field) => [field.key, field.label]));
-  const priorityKeys = new Set(STUDENT_ACADEMIC_INFO_PRIORITY.map(({ key }) => key));
+  const priorityKeys = new Set(STUDENT_ACADEMIC_INFO_PRIORITY_KEYS);
   const hasProgram = catalog.some((field) => field.key === 'program');
 
-  const prioritized = STUDENT_ACADEMIC_INFO_PRIORITY.filter(({ key }) => labelByKey.has(key) && academicFields[key]).map(
-    ({ key, labelOverride }) => ({ label: labelOverride ?? labelByKey.get(key)!, value: academicFields[key] }),
-  );
+  const prioritized = STUDENT_ACADEMIC_INFO_PRIORITY_KEYS.filter((key) => labelByKey.has(key) && academicFields[key]).map((key) => ({
+    label: labelByKey.get(key)!,
+    value: academicFields[key],
+  }));
   const remainder = catalog
     .filter(
       (field) =>

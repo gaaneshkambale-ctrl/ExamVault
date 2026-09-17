@@ -115,7 +115,9 @@ export default function EditUser() {
   };
 
   // Every field in the Student "Academic Details" section (the relabeled
-  // Roll No./ID plus every type-specific field) is mandatory.
+  // Roll No./ID plus every type-specific field) is mandatory by default,
+  // except a field explicitly marked `optional` in the catalog (eg.
+  // College/University's Course, which duplicates Program).
   const validateAcademicFields = (currentForm: UpdateUserRequest): Record<string, string> => {
     if (currentForm.role !== 'Student') return {};
     const errors: Record<string, string> = {};
@@ -123,6 +125,7 @@ export default function EditUser() {
       errors.rollNumber = `${rollNumberLabel} is required.`;
     }
     studentFields.forEach((field) => {
+      if (field.optional) return;
       if (!currentForm.academicFields?.[field.key]?.trim()) {
         errors[field.key] = `${field.label} is required.`;
       }

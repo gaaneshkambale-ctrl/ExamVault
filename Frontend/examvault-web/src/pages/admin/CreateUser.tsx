@@ -227,8 +227,10 @@ export default function CreateUser() {
   };
 
   // Every field in the Student "Academic Details" section (the relabeled
-  // Roll No./ID plus every type-specific field) is mandatory - required so
-  // the data this org type actually needs is never silently left blank.
+  // Roll No./ID plus every type-specific field) is mandatory by default -
+  // required so the data this org type actually needs is never silently
+  // left blank - except a field explicitly marked `optional` in the
+  // catalog (eg. College/University's Course, which duplicates Program).
   const validateAcademicFields = (): Record<string, string> => {
     if (form.role !== 'Student') return {};
     const errors: Record<string, string> = {};
@@ -236,6 +238,7 @@ export default function CreateUser() {
       errors.rollNumber = `${rollNumberLabel} is required.`;
     }
     studentFields.forEach((field) => {
+      if (field.optional) return;
       if (!form.academicFields?.[field.key]?.trim()) {
         errors[field.key] = `${field.label} is required.`;
       }
