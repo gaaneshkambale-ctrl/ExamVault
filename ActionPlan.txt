@@ -15194,3 +15194,80 @@ Exam's, not re-clicked live); the AllStudents/Batch tabs' eligibility
 behavior (Students tab was the one exercised).
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+FOLLOW-UP LIVE VERIFICATION - clean, purpose-built College tenant.
+
+The earlier verification pass used Greenfield University's real pre-
+existing data, where "ineligible" happened to be true by accident
+(exam scope didn't match Arjun Mehta's real stored fields) rather than
+by deliberate test design. To get an unambiguous, controlled test -
+and because commit f9ed619 was already pushed - a brand new tenant was
+created via the Super Admin panel (Platform Admin > Organizations >
+Create Organization) specifically for this: "Eligibility Test College"
+(slug `eligibility-test`, Organization Type College, Admin "Test
+Admin" / admin@eligibilitytest.edu). Note on process: creating the
+tenant/admin via the Super Admin panel is Regular app usage (no
+password ever entered) - logging INTO the new tenant as its Admin
+still required a real password, so per the standing hard rule against
+ever entering credentials into a login field, the user logged in as
+Test Admin themselves before this continued.
+
+Test data built fresh, entirely through the real UI/API (no direct
+SQL inserts):
+- Organization Settings > Academic Configuration: Program "B.Tech" >
+  Department "Computer Engineering" > Semesters "Semester 6" and
+  "Semester 2" > Division "A" (under Semester 6) and Division "B"
+  (under Semester 2) - deliberately built two full, valid academic
+  paths so the "ineligible" student is a real, differently-enrolled
+  student, not malformed data.
+- Also set Default Academic Year (2026-27) and Authorized Signatory
+  Name, both now-mandatory fields from earlier session work - caught
+  and fixed a real UI bug along the way (see below).
+- Two students via Add New User: "Eligible Student"
+  (B.Tech/Computer Engineering/Semester 6/A) and "Ineligible Student"
+  (B.Tech/Computer Engineering/Semester 2/B).
+- One Exam Type ("Semester Exam") and one Single-Choice question -
+  both required before an exam can be created/published on a
+  brand-new tenant with nothing seeded yet.
+- Exam "Semester 6 Data Structures Exam", Restrict to academic group
+  checked (default), scoped to B.Tech / Computer Engineering /
+  Semester 6, Division deliberately left unset ("All Divisions") to
+  also verify that path - then Published.
+
+Live-verified, in order, on this clean tenant:
+1. Assign Exam Step 2 correctly showed "Academic Scope: B.Tech /
+   Computer Engineering / Semester 6 / All Divisions" and "Eligible
+   Students (1)" listing only the Eligible Student - Ineligible
+   Student correctly excluded from the default view entirely.
+2. Assigned to Eligible Student alone (no override needed) - succeeded
+   immediately (Assignment ASG-14013). SQL confirmed
+   IsEligibilityOverride=0, OverrideReason=NULL on that target row.
+3. Toggled "Show all students" - Ineligible Student appeared marked
+   "⚠ Outside academic scope", exactly as designed.
+4. Attempted to assign Ineligible Student alone (no override) -
+   backend correctly rejected with the "⚠ Academic mismatch" panel:
+   "Ineligible Student is not eligible for this examination. The
+   examination is restricted to: B.Tech / Computer Engineering /
+   Semester 6." SQL confirmed the blocked attempt created zero new
+   ExamAssignments rows (count stayed at 1, the prior eligible one).
+5. Checked "I confirm this exception", entered "Backlog /
+   Re-examination", clicked "Assign Anyway" - succeeded (Assignment
+   ASG-14014). SQL confirmed IsEligibilityOverride=1,
+   OverrideReason='Backlog / Re-examination' on the new target row,
+   and the NotificationDb AuditLogs table has both entries: the plain
+   "Assigned exam ... -> 1 student(s)" line for the eligible case, and
+   "... - 1 of 1 assigned via eligibility override: Backlog /
+   Re-examination" for the override case.
+
+Re-confirmed on this clean data: the "Eligible Students (N)" heading
+now correctly switches to "All Students (N)" (with "Select All"
+dropping the word "Eligible") once "Show all students" is checked -
+this was a real bug found and fixed during the earlier Greenfield
+verification pass, already included in commit f9ed619, not a new fix
+from this pass.
+
+This pass added no code changes - purely a cleaner, controlled
+re-verification of the already-committed feature on fresh data. No
+new commit needed for this entry.
