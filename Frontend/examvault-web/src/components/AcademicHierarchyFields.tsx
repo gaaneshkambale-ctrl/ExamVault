@@ -26,6 +26,18 @@ interface Props {
   values: Record<string, string>;
   errors?: Record<string, string>;
   onChange: (key: string, value: string) => void;
+  // Overrides HIER_ORDER's default "Program" label - only the Student
+  // Academic Details form passes "Program/Course" (Course was removed as
+  // its own field there, since it's the same real-world value as Program
+  // for a College/University student). Left undefined for Exam academic
+  // fields, which never had a separate Course to merge in - stays "Program".
+  programLabel?: string;
+  // Free-text field keys to render read-only (eg. 'academicYear', locked to
+  // a tenant-wide default the caller already prefilled into `values` -
+  // still submits normally, just not hand-editable per record). Only
+  // applies to the free-text fields, not the cascading Program/Department/
+  // Semester/Division pickers.
+  disabledFields?: readonly string[];
 }
 
 // Cascading Program -> Department -> Semester -> Division selects, sourced
@@ -38,8 +50,10 @@ interface Props {
 // selected id is best-effort resolved by matching the stored string
 // against that level's loaded options; if a tenant renamed/removed the
 // matching item since, the picker just starts unselected for that level.
-export default function AcademicHierarchyFields({ fields, values, errors, onChange }: Props) {
-  const activeLevels = HIER_ORDER.filter((level) => fields.some((f) => f.key === level.key));
+export default function AcademicHierarchyFields({ fields, values, errors, onChange, programLabel, disabledFields }: Props) {
+  const activeLevels = HIER_ORDER.filter((level) => fields.some((f) => f.key === level.key)).map((level) =>
+    level.key === 'program' && programLabel ? { ...level, label: programLabel } : level,
+  );
   // Index within activeLevels for each hierarchy key, so rendering below can
   // walk `fields` in its own real order (interleaving the cascading
   // pickers with the free-text fields exactly where the catalog places
@@ -148,6 +162,7 @@ export default function AcademicHierarchyFields({ fields, values, errors, onChan
             </Col>
           );
         }
+        const isDisabled = disabledFields?.includes(field.key) ?? false;
         return (
           <Col xs={12} md={6} key={field.key} className="mb-3">
             <Form.Label className="small">
@@ -158,7 +173,9 @@ export default function AcademicHierarchyFields({ fields, values, errors, onChan
               placeholder={field.placeholder}
               onChange={(e) => onChange(field.key, e.target.value)}
               isInvalid={!!errors?.[field.key]}
+              disabled={isDisabled}
             />
+            {isDisabled && <Form.Text className="text-muted">Set tenant-wide in Organization Settings.</Form.Text>}
             <Form.Control.Feedback type="invalid">{errors?.[field.key]}</Form.Control.Feedback>
           </Col>
         );

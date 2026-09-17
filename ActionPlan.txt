@@ -14727,3 +14727,129 @@ rendering change (no asterisk) is the part that was actually live-
 verified.
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Add/Edit User (Student Academic Details) - follow-up to the optional-
+Course change above: removed the separate Course field from College/
+University entirely (rather than just leaving it optional) and
+relabeled Program to "Program/Course" on that form, per explicit
+confirmation that the two are the same real-world value there (re-
+verified: Arjun Mehta's own real stored data has course and program as
+the literal identical string "B.Tech Computer Engineering").
+
+STUDENT_FIELDS_BY_TYPE.College/.University no longer have a 'course'
+key at all. getPopulatedStudentAcademicFields's now-dead hasProgram/
+course-exclusion logic removed along with it (no catalog has both
+'program' and 'course' anymore, so that runtime check could never
+fire) - a Coaching Institute's real Course field is unaffected, it was
+never gated by that logic to begin with, just a plain catalog field.
+
+AcademicHierarchyFields.tsx (shared with Edit Exam's academic fields)
+gained an optional `programLabel` prop specifically so this relabel
+stays scoped to the Student form - Edit Exam's own Program field (no
+Course concept there at all) still just says "Program", unaffected.
+
+Verified: `npx tsc --noEmit`/`npm run build` - 0 errors. `npm run test`
+- 152/152 passing (2 new: getStudentFieldsForType has no 'course' key
+for College/University but still has one for Coaching Institute;
+updated the existing "excludes Course" test's framing now that it's a
+deleted field, not a runtime-filtered one - a stray old `course` value
+in academicFields, from before this change, is now silently ignored
+rather than displayed, since it's simply not part of the catalog
+walked over anymore). Docker frontend rebuilt/redeployed.
+
+Live-verified against Greenfield University's real student Arjun
+Mehta: Edit User's Academic Details now shows "Program/Course *" (its
+value, B.Tech Computer Engineering, unchanged) with no separate Course
+row at all - Roll No., Enrollment No., PRN/Registration No., Program/
+Course, Department, Semester, Division/Class, Year of Study, Academic
+Year, in that order.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Add New User - Academic Year now prefills from the tenant's Default
+Academic Year (Organization Settings -> General -> Additional
+Settings) and renders disabled, per explicit request. Investigated
+first: `getOrganizationBranding()` (already fetched in CreateUser.tsx
+for organizationType) hits the same /api/tenants/mine/branding
+endpoint that returns the FULL OrganizationSettings shape, including
+defaultAcademicYear - already available with zero new API/backend
+work, just unused until now.
+
+New useEffect in CreateUser.tsx seeds `academicFields.academicYear`
+from `branding.defaultAcademicYear` once it loads, only if the Admin
+hasn't already typed something else in first. New `disabledFields`
+prop on AcademicHierarchyFields.tsx (shared with Edit Exam - unused
+there) renders any listed free-text key read-only with a "Set tenant-
+wide in Organization Settings." hint; only passed for 'academicYear',
+and only when the tenant actually has a default configured - an
+unconfigured tenant leaves the field exactly as before (empty,
+editable). Deliberately scoped to Add New User only, per the request -
+Edit User's Academic Year stays a normal editable field, since an
+existing student's real academic year may legitimately differ from
+today's tenant default and shouldn't be silently overwritten/locked.
+
+Verified: `npx tsc --noEmit`/`npm run build` - 0 errors. `npm run test`
+- 152/152 passing, unaffected (no existing test covers CreateUser.tsx/
+EditUser.tsx - page components without test coverage in this
+codebase). Docker frontend rebuilt/redeployed.
+
+Live-verified against Greenfield University: found its
+DefaultAcademicYear was actually NULL despite the settings page showing
+"2026 - 2027" (that was placeholder/hint text, not a saved value) -
+set a real one ("2026-27") through the real Organization Settings UI
+and confirmed it persisted to the database. Then opened Add New User
+(Role & Access tab, where Academic Details actually lives) and
+confirmed Academic Year shows "2026-27", pre-filled and visibly
+disabled, with the new helper text - did not submit/create the test
+user, only inspected the field.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Organization Settings - Default Academic Year is now a mandatory
+field, per explicit request ("make mendetory field in default
+academic year org settings"). Previously it was a plain optional text
+input with no client-side required-field check at all - `handleSave`
+just called `updateMutation.mutateAsync(draft)` directly, so an admin
+could clear it and save, silently breaking Add New User's Academic
+Year prefill/lock feature (which depends on a real tenant value
+existing).
+
+OrganizationSettings.tsx: new `academicYearError` state.
+`handleSave` now checks `!draft?.defaultAcademicYear?.trim()` first -
+if blank, sets the error message, switches to the General tab (the
+Save button row is shared with Reports & Documents, so this makes
+sure the error is actually visible regardless of which tab the admin
+was on), and returns without saving. `handleReset` also clears the
+error. The field's label got a red required asterisk, `isInvalid`/
+`Form.Control.Feedback` wired to the new error (cleared as soon as
+the admin types), and a new helper text: "Prefills and locks the
+Academic Year field on Add New User."
+
+Also fixed the field's placeholder text per follow-up request - was
+"2026 - 2027" (spaced, 4-digit second year), changed to "2026-27" to
+match the real format the rest of the app actually uses/stores (eg.
+Arjun Mehta's stored academicYear, and the value already saved for
+Greenfield University).
+
+Verified: `npx tsc --noEmit`/`npm run build` - 0 errors, built in
+6.36s. `npm run test` - 152/152 passing, unaffected (no existing test
+covers OrganizationSettings.tsx - a page component without test
+coverage in this codebase). Docker frontend rebuilt/redeployed.
+
+Live-verified against Greenfield University: cleared Default Academic
+Year and clicked Save Changes - red "Default Academic Year is
+required." error appeared under the field, save was blocked; confirmed
+via direct SQL query against the Tenants table that the stored value
+was untouched (still "2026-27", not overwritten with NULL/empty).
+Re-typed "2026-27" (error cleared immediately on typing) and clicked
+Save Changes again - saved with no error, re-confirmed via SQL that
+"2026-27" persisted. Also confirmed the empty field now shows the
+corrected placeholder text "2026-27" (grey, matching the real format).
+
+Not yet committed - awaiting explicit user instruction to commit.

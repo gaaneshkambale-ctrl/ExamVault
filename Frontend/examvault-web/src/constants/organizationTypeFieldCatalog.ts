@@ -242,6 +242,12 @@ export function isResultFieldVisible(
 // see ROLL_NUMBER_LABEL_BY_TYPE below - since "Roll No." reads oddly for a
 // Corporate "Employee ID" or a Coaching Institute's "Student ID".
 export const STUDENT_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
+  // No separate Course field - confirmed against real stored data (see
+  // getPopulatedStudentAcademicFields's own comment) that it's the same
+  // real-world value as Program for a College/University student, so
+  // there's nothing distinct for it to capture. Program's own on-screen
+  // label becomes "Program/Course" (see CreateUser.tsx/EditUser.tsx's
+  // `programLabel` prop) to make that merge visible rather than silent.
   College: [
     { key: 'enrollmentNo', label: 'Enrollment No.' },
     { key: 'prn', label: 'PRN / Registration No.' },
@@ -249,10 +255,6 @@ export const STUDENT_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
     { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
     { key: 'division', label: 'Division / Class' },
-    // Not required - duplicates Program for most students (both are
-    // "B.Tech Computer Engineering" in practice), so it shouldn't block
-    // saving a record that has every other academic field filled in.
-    { key: 'course', label: 'Course', optional: true },
     { key: 'year', label: 'Year of Study' },
     { key: 'academicYear', label: 'Academic Year' },
   ],
@@ -263,7 +265,6 @@ export const STUDENT_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
     { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
     { key: 'division', label: 'Division / Class' },
-    { key: 'course', label: 'Course', optional: true },
     { key: 'year', label: 'Year of Study' },
     { key: 'academicYear', label: 'Academic Year' },
   ],
@@ -321,18 +322,17 @@ const STUDENT_ACADEMIC_INFO_PRIORITY_KEYS = ['department', 'year', 'semester', '
 // real value set, for the "Student & Academic Information" section of the
 // Student Result PDF, in the fixed order above - then any OTHER field this
 // Organization Type's own catalog defines (eg. a School's Admission No./
-// Class, a Coaching Institute's Batch) that isn't already covered by that
-// fixed order or shown separately by the caller (Program, PRN, Enrollment
-// No.), so a non-College/University tenant still sees its own fields
-// rather than losing them entirely. Course is left out only when Program
-// is also part of this Organization Type's catalog - the two are the same
-// real-world thing for a College/University student (redundant with
-// Program, which already has its own field), but Course stays for an
-// Organization Type with no Program at all (eg. a Coaching Institute,
-// where Course is the primary field). Only ever returns fields the
-// student genuinely has a value for; never fabricates a placeholder for a
-// blank one, and returns an empty array (no panel drawn at all) for a
-// student/org type with nothing set.
+// Class, a Coaching Institute's Course/Batch) that isn't already covered
+// by that fixed order or shown separately by the caller (Program, PRN,
+// Enrollment No.), so a non-College/University tenant still sees its own
+// fields rather than losing them entirely. College/University's catalog
+// has no separate Course key at all (see STUDENT_FIELDS_BY_TYPE's own
+// comment - it's the same real-world value as Program there), so there's
+// nothing to exclude for those two; a Coaching Institute's real Course
+// field passes through here untouched, same as any other of its fields.
+// Only ever returns fields the student genuinely has a value for; never
+// fabricates a placeholder for a blank one, and returns an empty array (no
+// panel drawn at all) for a student/org type with nothing set.
 export function getPopulatedStudentAcademicFields(
   organizationType: string | null | undefined,
   academicFields: Record<string, string> | null | undefined,
@@ -341,7 +341,6 @@ export function getPopulatedStudentAcademicFields(
   const catalog = getStudentFieldsForType(organizationType);
   const labelByKey = new Map(catalog.map((field) => [field.key, field.label]));
   const priorityKeys = new Set(STUDENT_ACADEMIC_INFO_PRIORITY_KEYS);
-  const hasProgram = catalog.some((field) => field.key === 'program');
 
   const prioritized = STUDENT_ACADEMIC_INFO_PRIORITY_KEYS.filter((key) => labelByKey.has(key) && academicFields[key]).map((key) => ({
     label: labelByKey.get(key)!,
@@ -354,7 +353,6 @@ export function getPopulatedStudentAcademicFields(
         field.key !== 'prn' &&
         field.key !== 'enrollmentNo' &&
         !priorityKeys.has(field.key) &&
-        !(hasProgram && field.key === 'course') &&
         academicFields[field.key],
     )
     .map((field) => ({ label: field.label, value: academicFields[field.key] }));

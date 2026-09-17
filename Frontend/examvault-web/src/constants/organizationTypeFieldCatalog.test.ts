@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { getPopulatedStudentAcademicFields } from './organizationTypeFieldCatalog';
+import { getPopulatedStudentAcademicFields, getStudentFieldsForType } from './organizationTypeFieldCatalog';
+
+describe('getStudentFieldsForType', () => {
+  it('has no separate Course key for College/University - Program is the single field for that real-world value there', () => {
+    expect(getStudentFieldsForType('College').find((f) => f.key === 'course')).toBeUndefined();
+    expect(getStudentFieldsForType('University').find((f) => f.key === 'course')).toBeUndefined();
+  });
+
+  it('keeps Course for an Organization Type with no Program field at all (eg. a Coaching Institute)', () => {
+    expect(getStudentFieldsForType('Coaching Institute').find((f) => f.key === 'course')).toBeDefined();
+  });
+});
 
 describe('getPopulatedStudentAcademicFields', () => {
-  it('returns Department/Year of Study/Semester/Division/Academic Year for a College/University student, in that fixed order, excluding Program/PRN/Enrollment No. (shown separately by the caller) and Course (redundant with Program)', () => {
+  it('returns Department/Year of Study/Semester/Division/Academic Year for a College/University student, in that fixed order, excluding Program/PRN/Enrollment No. (shown separately by the caller) - a stray stored "course" value (from before the field was removed) is ignored, since it is no longer part of this catalog at all', () => {
     const fields = getPopulatedStudentAcademicFields('University', {
       program: 'B.Tech Computer Engineering',
       department: 'Computer Engineering',
@@ -54,7 +65,7 @@ describe('getPopulatedStudentAcademicFields', () => {
     expect(fields.find((f) => f.label === 'Semester')).toBeUndefined();
   });
 
-  it('keeps Course for an Organization Type with no Program field at all (eg. a Coaching Institute) - only excluded when redundant with Program', () => {
+  it('includes Course for an Organization Type whose own catalog still has it (eg. a Coaching Institute) - just like any other of its fields', () => {
     const fields = getPopulatedStudentAcademicFields('Coaching Institute', {
       batch: 'Batch 2026-A',
       course: 'CAT Preparation',

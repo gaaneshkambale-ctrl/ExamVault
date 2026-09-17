@@ -309,6 +309,7 @@ export default function EditUser() {
                       values={form.academicFields ?? {}}
                       errors={academicFieldErrors}
                       onChange={updateAcademicField}
+                      programLabel="Program/Course"
                     />
                   </Row>
                 </>

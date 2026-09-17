@@ -1624,6 +1624,7 @@ export default function OrganizationSettingsPage() {
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [academicYearError, setAcademicYearError] = useState('');
 
   // Only seeds `draft` on the initial load - a background refetch of
   // `settings` (tab switch, window focus, post-mutation invalidation) must
@@ -1719,6 +1720,15 @@ export default function OrganizationSettingsPage() {
   const handleSave = async () => {
     setSaveError('');
     setSaved(false);
+    // Required so Add New User's Academic Year prefill (CreateUser.tsx)
+    // always has a real tenant value to lock onto, rather than silently
+    // falling back to a blank, freely-editable field per admin's whim.
+    if (!draft?.defaultAcademicYear?.trim()) {
+      setAcademicYearError('Default Academic Year is required.');
+      setActiveTab('General');
+      return;
+    }
+    setAcademicYearError('');
     try {
       await updateMutation.mutateAsync(draft);
       setSaved(true);
@@ -1727,7 +1737,10 @@ export default function OrganizationSettingsPage() {
     }
   };
 
-  const handleReset = () => setDraft(toDraft(settings));
+  const handleReset = () => {
+    setDraft(toDraft(settings));
+    setAcademicYearError('');
+  };
 
   const handleAssetUpload = (asset: 'logo' | 'favicon' | 'signature') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2293,12 +2306,22 @@ export default function OrganizationSettingsPage() {
                   />
                   <Row className="g-3">
                     <Col xs={6}>
-                      <Form.Label className="small">Default Academic Year</Form.Label>
+                      <Form.Label className="small">
+                        Default Academic Year <span className="text-danger">*</span>
+                      </Form.Label>
                       <Form.Control
                         value={draft.defaultAcademicYear ?? ''}
-                        onChange={(e) => set('defaultAcademicYear', e.target.value)}
-                        placeholder="2026 - 2027"
+                        onChange={(e) => {
+                          set('defaultAcademicYear', e.target.value);
+                          if (academicYearError) setAcademicYearError('');
+                        }}
+                        placeholder="2026-27"
+                        isInvalid={!!academicYearError}
                       />
+                      <Form.Control.Feedback type="invalid">{academicYearError}</Form.Control.Feedback>
+                      <Form.Text className="text-muted">
+                        Prefills and locks the Academic Year field on Add New User.
+                      </Form.Text>
                     </Col>
                     <Col xs={6}>
                       <Form.Label className="small">Default Language</Form.Label>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, InputGroup, Row, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
@@ -183,6 +183,22 @@ export default function CreateUser() {
   const { data: branding } = useQuery({ queryKey: ['organization-branding'], queryFn: getOrganizationBranding });
   const studentFields = getStudentFieldsForType(branding?.organizationType);
   const rollNumberLabel = getRollNumberLabelForType(branding?.organizationType);
+
+  // A new student is almost always enrolling in whatever academic year the
+  // tenant is currently running (Organization Settings -> General ->
+  // Additional Settings -> Default Academic Year) - prefill it once that
+  // loads, and lock the field so it stays that tenant-wide value rather
+  // than inviting a mistyped/inconsistent one per student. Only when the
+  // tenant has actually set one, and only if the Admin hasn't already
+  // typed something else in first (StrictMode/refetch safe) - an
+  // unconfigured tenant leaves this field exactly as before: a normal,
+  // empty, editable box.
+  useEffect(() => {
+    if (!branding?.defaultAcademicYear) return;
+    setForm((prev) =>
+      prev.academicFields?.academicYear ? prev : { ...prev, academicFields: { ...prev.academicFields, academicYear: branding.defaultAcademicYear! } },
+    );
+  }, [branding?.defaultAcademicYear]);
 
   // Admin/Student/Instructor are real, selectable roles (the rest are
   // disabled "not available" options) - same per-role permission sets
@@ -498,6 +514,8 @@ export default function CreateUser() {
                         values={form.academicFields ?? {}}
                         errors={academicFieldErrors}
                         onChange={updateAcademicField}
+                        programLabel="Program/Course"
+                        disabledFields={branding?.defaultAcademicYear ? ['academicYear'] : []}
                       />
                     </Row>
                   </>
