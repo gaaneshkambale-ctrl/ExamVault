@@ -112,6 +112,8 @@ const EXAM: ExamResponse = {
   tenantId: 'tenant-1',
   createdByUserId: 'admin-1',
   createdByName: 'Test Admin',
+  certificateEnabled: false,
+  minimumCertificateScorePercent: 80,
 };
 
 const SCHEME = getExamResultScheme(EXAM.examTypeName ?? undefined);

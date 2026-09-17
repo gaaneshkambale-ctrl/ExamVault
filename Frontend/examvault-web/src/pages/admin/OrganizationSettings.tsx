@@ -267,6 +267,8 @@ const SAMPLE_ADVANCE_EXAM: ExamResponse = {
   tenantId: 'sample-tenant',
   createdByUserId: 'sample-admin',
   createdByName: 'Sample Admin',
+  certificateEnabled: false,
+  minimumCertificateScorePercent: 80,
 };
 
 function buildSampleAttempt(

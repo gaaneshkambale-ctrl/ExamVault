@@ -23,6 +23,7 @@ import { isReportTypeAvailable } from '../../constants/reportTypeCatalog';
 import { buildAdvanceExamReport } from '../../utils/advanceExamReport';
 import { buildQuestionDifficulty, buildSectionWiseStats } from '../../utils/advanceExamReportAnalysis';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
+import { isCertificateEligible } from '../../utils/certificateId';
 import { exportAdvanceExamReportExcel } from '../../utils/exportAdvanceExamReportExcel';
 import { exportAdvanceExamReportPdf } from '../../utils/exportAdvanceExamReportPdf';
 
@@ -57,12 +58,13 @@ export default function AdvanceExamReport() {
 
   const loading = isLoadingExam || isLoadingResults || isLoadingUsers;
   const scheme = getExamResultScheme(exam?.examTypeName ?? undefined);
-  // Certificate visibility is gated on two independent axes: the exam's own
-  // Exam Type (scheme.showCertificate, above) AND the tenant's Organization
-  // Type (reportTypeCatalog.ts) - a Coaching Institute or Recruitment
-  // tenant never offers certificates regardless of how an individual exam
-  // happens to be typed.
-  const showCertificate = scheme.showCertificate && isReportTypeAvailable(branding?.organizationType, 'certificate');
+  // Certificate visibility is gated on two independent axes: this specific
+  // exam's own Certificate Generation toggle (Edit Exam - exam.
+  // certificateEnabled) AND the tenant's Organization Type
+  // (reportTypeCatalog.ts) - a Coaching Institute or Recruitment tenant
+  // never offers certificates regardless of how an individual exam is
+  // configured.
+  const showCertificate = !!exam?.certificateEnabled && isReportTypeAvailable(branding?.organizationType, 'certificate');
 
   // Exam.startAtUtc/endAtUtc are frequently null - scheduling in this app is
   // actually enforced per-assignment, not per-exam (see StartAttemptHandler.cs's
@@ -339,7 +341,7 @@ export default function AdvanceExamReport() {
                           <td>{new Date(entry.row.attempt.submittedAtUtc).toLocaleString()}</td>
                           {showCertificate && (
                             <td className="pe-4">
-                              {entry.row.attempt.passed ? (
+                              {isCertificateEligible(entry.row.attempt, exam) ? (
                                 <button
                                   type="button"
                                   className="btn btn-outline-primary btn-sm"

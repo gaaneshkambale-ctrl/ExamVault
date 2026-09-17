@@ -14530,3 +14530,144 @@ Year), with "Exam Information" as its own section right below it -
 still one page, no duplicated Course row, real values throughout.
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Certificate Generation - added a real, per-exam "Enable Certificate
+Generation" toggle + "Minimum Certificate Score (%)" field at Edit Exam
+time, per explicit request: "then only certificate will create."
+Replaces the previous non-configurable rule (a single hardcoded 80%
+threshold in certificateId.ts, plus a fixed per-Exam-Type on/off flag
+in examResultScheme.ts) - an Admin can now turn certificates on/off
+and set the qualifying score independently for each exam.
+
+Backend: ExamPaper.CertificateEnabled (bool)/MinimumCertificateScorePercent
+(int, default 80) - same pattern as NegativeMarkingEnabled/NegativeMarks.
+Seeded from a new tenant-wide ExamDefaults.CertificateEnabled/
+MinimumCertificateScorePercent pair at exam creation (Settings -> Exam
+Settings gets a matching "Certificate Generation" section), then
+editable per exam via Update. New EF migration (AddCertificateSettings)
+- caught and fixed a real gotcha: EF's scaffolded AddColumn defaultValue
+was 0 (the CLR int default), NOT the entity's `= 80` initializer (EF
+migrations don't pick up C# property initializers as SQL defaults) -
+manually corrected to defaultValue: 80 so existing exams don't silently
+end up with a 0% "minimum" the moment someone flips CertificateEnabled
+on later. Added FluentValidation range rule (0-100) and backend tests
+(CreateExamHandler tenant-default inheritance, UpdateExamHandler
+round-trip, validator boundaries) - 98/98 ExamService tests passing.
+
+Frontend: new "Certificate Generation" SettingCard on Edit Exam
+(matches the Negative Marking card's exact pattern - toggle + a
+conditionally-shown number input) and a matching section on the Exam
+Settings tenant-defaults page. isCertificateEligible() (certificateId.ts)
+now takes the result's own exam (certificateEnabled +
+minimumCertificateScorePercent) instead of a fixed constant - missing/
+loading exam data is treated as "not eligible," never assumed eligible
+by default. Rewired every real consumer to pass the actual exam through:
+My Certificates, Certificate Details (added a useExam() call it didn't
+have before), the certificates/results sidebar counts, Detailed Exam
+Report's Certificate column (also fixed a latent bug there - it only
+ever checked "did they pass," never the score threshold, even before
+this task), and Exam Type Performance's Certificate column (generalized
+to check each row's OWN exam - a type's exam cohort can now mix exams
+that award certificates with ones that don't). Removed the now-fully-
+dead `showCertificate` field from examResultScheme.ts (ExamResultScheme
+interface + all 7 scheme entries) once nothing read it anymore, and
+updated the stale doc comments in reportTypeCatalog.ts that referenced
+it.
+
+Verified: `dotnet build ExamVault.sln` - 0 errors. `npx tsc --noEmit` -
+0 errors. `npm run build` - 0 errors (caught 4 fixture files - Organization
+Settings' sample exam preview, examSummary/performanceSummary/
+exportAdvanceExamReportPdf tests - missing the 2 new required
+ExamResponse fields; fixed each). `npm run test` - 150/150 passing (7
+new in certificateId.test.ts: disabled exam is never eligible regardless
+of score, missing/loading exam data is never assumed eligible, real
+enable+threshold combinations, a per-exam minimum below the old fixed
+80% default, failed attempts never eligible even above the threshold).
+
+Live-verified end to end on Greenfield University's real "University
+Semester Exam": enabled Certificate Generation and set Minimum
+Certificate Score to 70% via the real Edit Exam form (hit and resolved
+a real, unrelated pre-existing obstacle along the way - this exam's
+Academic Details Program/Department/Semester fields were required and
+had never been filled in, blocking save entirely; filled them with real
+values from the tenant's actual academic lists). Reloaded the edit page
+and confirmed both settings persisted. Opened the real Detailed Exam
+Report page - the Certificate column and a live "Download" button now
+appear for Arjun Mehta (100%, well above the new 70% threshold),
+sourced from the exam's own real settings rather than the old fixed
+rule. Clicked Download and got a genuine, correctly-populated
+certificate PDF (real name, exam title, 100% / Grade A+, real
+completion date).
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Certificate Eligibility - Complete. Scope note (explicit user decision,
+recorded so this doesn't get silently re-litigated later): eligibility
+(the Enable Certificate Generation toggle + Minimum Certificate Score,
+and every real page respecting it) is done and verified. What it is
+NOT, and was never claimed to be: a backend-issued or cryptographically
+verifiable credential. The certificate PDF itself remains entirely
+client-rendered (generateCertificatePdf.ts) from data the student's own
+already-authorized API calls return - same as before this task. Checked
+the actual UI copy for overclaiming language ("tamper-proof",
+"officially verified", etc.) - none exists today; the title is
+"Certificate of Achievement" and the QR caption is the neutral "Scan to
+verify this result", both fine to keep as-is. Worth re-checking this
+same thing whenever certificate-related copy changes, until the real
+verification endpoint below exists - at that point (and not before) the
+copy can honestly upgrade to "Officially Issued Certificate"/"Verify
+Certificate".
+
+Deliberately confirmed backend-enforced, so this scope decision is
+informed rather than assumed: GET /api/exams/{id} (GetExamHandler.cs)
+only returns an exam to a Student caller when it's Published AND
+IsUserAssignedAsync is true (404 otherwise, indistinguishable from
+"doesn't exist") - certificateEnabled/minimumCertificateScorePercent
+can't be probed for an exam that isn't theirs. GET /api/results
+(ResultsController.Get) takes no userId param - the result is derived
+entirely from the caller's own bearer token server-side, so a student
+can never fetch another student's score. Both real inputs to the
+eligibility decision are therefore properly authorized; what's NOT
+backend-enforced is the eligibility decision itself and the PDF
+rendering, because neither touches the backend at all in the current
+architecture - a technically sophisticated student could open dev tools
+and call generateCertificatePdf() directly with their own already-
+visible (but below-threshold) result to produce a self-styled PDF. This
+is an unchanged property of the whole certificate feature, not a
+regression introduced by this task - the previous fixed-80% version had
+the identical bypassability.
+
+---
+
+Server-Issued Certificate & Verification - Future Enhancement, NOT
+STARTED. Explicit user architecture (recorded verbatim as the agreed
+design for whenever this phase is picked up, so it isn't re-derived
+from scratch):
+
+Exam (CertificateEnabled, MinimumCertificateScorePercent) -> Student
+Result -> backend certificate eligibility check (score >= minimum) ->
+reject, or create a real Certificate record -> unique Certificate ID/
+Number -> signed/secure verification -> Certificate PDF -> QR
+verification.
+
+Certificate record (proposed columns): CertificateId, CertificateNumber,
+TenantId, ExamId, ResultId, StudentId, StudentNameSnapshot,
+ExamNameSnapshot, Percentage, Grade, IssuedAt, VerificationToken,
+Status, PdfHash, CreatedAt.
+
+Verification URL pattern: https://examvaults.in/verify/{certificateNumber}
+- the verification page must retrieve the certificate from the backend
+by that number, not render whatever data the browser/QR payload
+supplies (the current /certificates/:examId page's QR just links back
+to itself - not real verification, see the note above).
+
+Explicit scope for this future phase, per the user: build server-side
+eligibility + the certificate record + a unique certificate number + QR
+verification TOGETHER as one phase, not just a bare "backend PDF
+endpoint" bolted onto the current client-rendered flow. Only once this
+ships should certificate copy upgrade to "Officially Issued
+Certificate"/"Verify Certificate" language.

@@ -53,7 +53,9 @@ public class ExamDefaultsController : ControllerBase
                 request.AutoSaveEnabled,
                 request.AutoSubmitEnabled,
                 request.QuestionNavigationMode,
-                request.ResultPublishingMode),
+                request.ResultPublishingMode,
+                request.CertificateEnabled,
+                request.MinimumCertificateScorePercent),
             cancellationToken);
         return Ok(ToResponse(settings));
     }
@@ -69,5 +71,7 @@ public class ExamDefaultsController : ControllerBase
             settings.AutoSubmitEnabled,
             settings.QuestionNavigationMode.ToString(),
             settings.ResultPublishingMode.ToString(),
-            settings.UpdatedAtUtc);
+            settings.UpdatedAtUtc,
+            settings.CertificateEnabled,
+            settings.MinimumCertificateScorePercent);
 }

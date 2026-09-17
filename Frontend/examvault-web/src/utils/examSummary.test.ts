@@ -39,6 +39,8 @@ function makeExam(overrides: Partial<ExamResponse> & Pick<ExamResponse, 'id' | '
     tenantId: 'tenant-1',
     createdByUserId: 'admin-1',
     createdByName: 'Test Admin',
+    certificateEnabled: false,
+    minimumCertificateScorePercent: 80,
     ...overrides,
   };
 }

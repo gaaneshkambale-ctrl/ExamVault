@@ -52,6 +52,26 @@ public class UpdateExamHandlerTests
         Assert.False(result.Exam!.ShuffleQuestions);
         Assert.True(result.Exam!.NegativeMarkingEnabled);
         Assert.Equal(0.25m, result.Exam!.NegativeMarks);
+        // Not set explicitly by CommandFor - defaults to off/80, same as a
+        // brand-new exam that predates this feature.
+        Assert.False(result.Exam!.CertificateEnabled);
+        Assert.Equal(80, result.Exam!.MinimumCertificateScorePercent);
+    }
+
+    [Fact]
+    public async Task Certificate_generation_and_its_minimum_score_can_be_turned_on_per_exam()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals" };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository);
+        var command = CommandFor(exam.Id) with { CertificateEnabled = true, MinimumCertificateScorePercent = 70 };
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.True(result.Exam!.CertificateEnabled);
+        Assert.Equal(70, result.Exam!.MinimumCertificateScorePercent);
     }
 
     [Fact]

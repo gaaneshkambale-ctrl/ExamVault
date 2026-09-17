@@ -6,16 +6,19 @@
 // this matches by the exact name the seeded types use today and falls back
 // to a generic Pass/Fail scheme for any custom type an admin creates later.
 //
-// Certificate here means "eligible for a certificate" only (a badge/column
-// derived from pass/fail) - this app has no certificate generation feature
-// (no PDF/template/storage), so nothing is actually generated or issued.
-// Recruitment's outcome is a direct pass/fail relabel (Selected/Rejected) -
-// there's no multi-stage "Shortlisted" state anywhere in the data model.
+// Certificate eligibility/generation is no longer part of this per-Exam-Type
+// scheme - it's a per-exam setting instead (Edit Exam's "Certificate
+// Generation" toggle/threshold, see certificateId.ts's isCertificateEligible
+// and ExamPaper.CertificateEnabled/MinimumCertificateScorePercent), since a
+// fixed per-type on/off flag couldn't express "this specific exam awards a
+// certificate at 70%, that one doesn't award one at all" even within the
+// same Exam Type. Recruitment's outcome is a direct pass/fail relabel
+// (Selected/Rejected) - there's no multi-stage "Shortlisted" state anywhere
+// in the data model.
 export interface ExamResultScheme {
   passingLabel: string;
   outcomeLabels: { pass: string; fail: string };
   showRankPercentile: boolean;
-  showCertificate: boolean;
   hasPassFailConcept: boolean;
   // Attempts beyond a student's first, distinct from the "Total Attempts"
   // column every type already shows - only meaningful for types where
@@ -28,7 +31,6 @@ const DEFAULT_SCHEME: ExamResultScheme = {
   passingLabel: 'Passing',
   outcomeLabels: { pass: 'Pass', fail: 'Fail' },
   showRankPercentile: false,
-  showCertificate: false,
   hasPassFailConcept: true,
   showRepeatAttempts: false,
 };
@@ -40,7 +42,6 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     passingLabel: 'Passing',
     outcomeLabels: { pass: 'Pass', fail: 'Fail' },
     showRankPercentile: false,
-    showCertificate: true,
     hasPassFailConcept: true,
     showRepeatAttempts: false,
   },
@@ -48,7 +49,6 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     passingLabel: 'Qualifying Score',
     outcomeLabels: { pass: 'Qualified', fail: 'Not Qualified' },
     showRankPercentile: true,
-    showCertificate: false,
     hasPassFailConcept: true,
     showRepeatAttempts: false,
   },
@@ -56,7 +56,6 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     passingLabel: 'Cut-off',
     outcomeLabels: { pass: 'Qualified', fail: 'Not Qualified' },
     showRankPercentile: true,
-    showCertificate: false,
     hasPassFailConcept: true,
     showRepeatAttempts: false,
   },
@@ -64,7 +63,6 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     passingLabel: 'Cut-off',
     outcomeLabels: { pass: 'Selected', fail: 'Rejected' },
     showRankPercentile: true,
-    showCertificate: false,
     hasPassFailConcept: true,
     showRepeatAttempts: false,
   },
@@ -72,7 +70,6 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     passingLabel: 'Passing',
     outcomeLabels: { pass: 'Pass', fail: 'Fail' },
     showRankPercentile: false,
-    showCertificate: false,
     hasPassFailConcept: false,
     showRepeatAttempts: true,
   },
@@ -80,7 +77,6 @@ const SCHEMES: Record<string, ExamResultScheme> = {
     passingLabel: 'Passing',
     outcomeLabels: { pass: 'Pass', fail: 'Fail' },
     showRankPercentile: false,
-    showCertificate: false,
     hasPassFailConcept: false,
     showRepeatAttempts: true,
   },

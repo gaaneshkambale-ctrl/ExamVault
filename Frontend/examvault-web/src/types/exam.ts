@@ -42,6 +42,14 @@ export interface ExamSettings {
   allowNotes: boolean;
   autoSubmitOnTimeEnd: boolean;
   confirmBeforeSubmit: boolean;
+  // Per-exam certificate gate (Edit Exam's "Certificate Generation" card) -
+  // a student only ever sees/downloads a certificate for THIS exam when
+  // certificateEnabled is true AND their score % is >=
+  // minimumCertificateScorePercent (see certificateId.ts's
+  // isCertificateEligible). Seeded from the tenant's Exam Settings
+  // defaults at creation, then editable per exam.
+  certificateEnabled: boolean;
+  minimumCertificateScorePercent: number;
 }
 
 export interface UpdateExamRequest extends CreateExamRequest, ExamSettings {}
@@ -136,4 +144,6 @@ export interface ExamDefaultsResponse {
   questionNavigationMode: QuestionNavigationMode;
   resultPublishingMode: ResultPublishingMode;
   updatedAtUtc: string;
+  certificateEnabled: boolean;
+  minimumCertificateScorePercent: number;
 }

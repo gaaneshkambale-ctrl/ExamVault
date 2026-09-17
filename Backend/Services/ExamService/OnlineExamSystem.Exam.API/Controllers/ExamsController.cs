@@ -191,7 +191,9 @@ public class ExamsController : ControllerBase
             request.ExamCode,
             request.ExamTypeId,
             ownerUserId,
-            request.AcademicFields);
+            request.AcademicFields,
+            request.CertificateEnabled,
+            request.MinimumCertificateScorePercent);
 
         var result = await _updateExamHandler.HandleAsync(command, cancellationToken);
 
@@ -398,5 +400,7 @@ public class ExamsController : ControllerBase
             createdByName,
             string.IsNullOrEmpty(exam.AcademicFieldsJson)
                 ? null
-                : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(exam.AcademicFieldsJson));
+                : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(exam.AcademicFieldsJson),
+            exam.CertificateEnabled,
+            exam.MinimumCertificateScorePercent);
 }

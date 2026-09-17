@@ -21,6 +21,8 @@ const FACTORY_DEFAULTS: Omit<ExamDefaultsResponse, 'updatedAtUtc'> = {
   autoSubmitEnabled: true,
   questionNavigationMode: 'Free',
   resultPublishingMode: 'Manual',
+  certificateEnabled: false,
+  minimumCertificateScorePercent: 80,
 };
 
 function SectionBar({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
@@ -67,6 +69,15 @@ function ListIcon() {
       <line x1="3" y1="6" x2="3.01" y2="6" />
       <line x1="3" y1="12" x2="3.01" y2="12" />
       <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
+function CertificateIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="6" />
+      <path d="M9 13.5 7 22l5-3 5 3-2-8.5" />
     </svg>
   );
 }
@@ -272,6 +283,38 @@ export default function ExamSettingsPage() {
                       <option value="Manual">Manual</option>
                     </Form.Select>
                     <Form.Text className="text-muted">When to show results to students.</Form.Text>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <SectionBar
+                icon={<CertificateIcon />}
+                title="Certificate Generation"
+                subtitle="Default for whether new exams award a certificate, and the minimum score required."
+              />
+
+              <Row className="mb-2">
+                <Col md={6}>
+                  <ToggleRow
+                    label="Enable Certificate Generation"
+                    description="New exams start with certificate generation on or off by default - editable per exam."
+                    checked={settings.certificateEnabled}
+                    onChange={(v) => update({ certificateEnabled: v })}
+                    disabled={false}
+                  />
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-bold small">Minimum Certificate Score (%)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={settings.minimumCertificateScorePercent}
+                      onChange={(e) => update({ minimumCertificateScorePercent: Number(e.target.value) })}
+                      disabled={!settings.certificateEnabled}
+                    />
+                    <Form.Text className="text-muted">A student must score at least this % (and pass) to earn a certificate.</Form.Text>
                   </Form.Group>
                 </Col>
               </Row>

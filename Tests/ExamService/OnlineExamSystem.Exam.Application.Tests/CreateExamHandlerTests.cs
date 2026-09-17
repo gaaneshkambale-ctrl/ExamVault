@@ -166,6 +166,28 @@ public class CreateExamHandlerTests
         Assert.True(result.Exam!.NegativeMarkingEnabled);
         Assert.Equal(0.25m, result.Exam!.NegativeMarks);
         Assert.True(result.Exam!.AutoSubmitOnTimeEnd);
+        Assert.False(result.Exam!.CertificateEnabled);
+        Assert.Equal(80, result.Exam!.MinimumCertificateScorePercent);
+    }
+
+    [Fact]
+    public async Task New_exam_inherits_the_tenants_configured_certificate_defaults()
+    {
+        var repository = new FakeExamRepository();
+        var handler = CreateHandler(repository);
+        var defaults = await repository.GetOrCreateExamDefaultsAsync();
+        defaults.CertificateEnabled = true;
+        defaults.MinimumCertificateScorePercent = 70;
+        var examTypeId = await SeedExamTypeAsync(repository);
+        var command = new CreateExamCommand(
+            "Certification Round", "Description", "Technical", false, "Manual", 60, 50, 25, "Instructions",
+            Guid.NewGuid(), ExamTypeId: examTypeId);
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.True(result.Exam!.CertificateEnabled);
+        Assert.Equal(70, result.Exam!.MinimumCertificateScorePercent);
     }
 
     [Fact]

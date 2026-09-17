@@ -9,9 +9,10 @@
 // Academic Result, Assessment Report, Custom Report) with no underlying
 // computation to back them - the same "don't fabricate what has nowhere to
 // be captured" reasoning already applied to points 4-8's newer fields.
-// Certificate eligibility is ALSO already gated per-exam by Exam Type (see
-// examResultScheme.ts's showCertificate) - this catalog adds the missing
-// second axis, Organization Type, on top of that existing one.
+// Certificate eligibility is ALSO already gated per-exam (Edit Exam's
+// "Certificate Generation" toggle/threshold - see certificateId.ts's
+// isCertificateEligible) - this catalog adds the missing second axis,
+// Organization Type, on top of that existing one.
 export type ReportTypeKey = 'studentResult' | 'examResultBooklet' | 'detailedExamReport' | 'certificate';
 
 export interface ReportTypeDef {

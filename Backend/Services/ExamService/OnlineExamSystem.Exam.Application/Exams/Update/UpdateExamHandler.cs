@@ -68,6 +68,8 @@ public class UpdateExamHandler
         exam.AllowNotes = command.AllowNotes;
         exam.AutoSubmitOnTimeEnd = command.AutoSubmitOnTimeEnd;
         exam.ConfirmBeforeSubmit = command.ConfirmBeforeSubmit;
+        exam.CertificateEnabled = command.CertificateEnabled;
+        exam.MinimumCertificateScorePercent = command.MinimumCertificateScorePercent;
         if (command.AcademicFields is not null)
         {
             exam.AcademicFieldsJson = command.AcademicFields.Count > 0 ? JsonSerializer.Serialize(command.AcademicFields) : null;

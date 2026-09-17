@@ -25,4 +25,6 @@ public record UpdateExamRequest(
     bool ConfirmBeforeSubmit,
     string? ExamCode = null,
     Guid? ExamTypeId = null,
-    Dictionary<string, string>? AcademicFields = null);
+    Dictionary<string, string>? AcademicFields = null,
+    bool CertificateEnabled = false,
+    int MinimumCertificateScorePercent = 80);

@@ -36,4 +36,6 @@ public record ExamResponse(
     string Tags = "",
     Guid CreatedByUserId = default,
     string? CreatedByName = null,
-    Dictionary<string, string>? AcademicFields = null);
+    Dictionary<string, string>? AcademicFields = null,
+    bool CertificateEnabled = false,
+    int MinimumCertificateScorePercent = 80);

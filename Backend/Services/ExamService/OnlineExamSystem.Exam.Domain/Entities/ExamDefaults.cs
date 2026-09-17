@@ -21,5 +21,12 @@ public class ExamDefaults : TenantScopedEntity
     public bool AutoSubmitEnabled { get; set; } = true;
     public QuestionNavigationMode QuestionNavigationMode { get; set; } = QuestionNavigationMode.Free;
     public ResultPublishingMode ResultPublishingMode { get; set; } = ResultPublishingMode.Manual;
+    // Tenant-wide defaults for the new per-exam Certificate Generation
+    // toggle/threshold (see ExamPaper.cs) - seed a newly created exam's
+    // matching fields, same as every other Default*/NegativeMarking* field
+    // here. CertificateEnabled defaults to false (opt-in only) since this is
+    // a brand-new toggle with no prior tenant-level setting to inherit from.
+    public bool CertificateEnabled { get; set; }
+    public int MinimumCertificateScorePercent { get; set; } = 80;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

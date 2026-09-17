@@ -52,6 +52,17 @@ public class ExamPaper : TenantScopedEntity
     public bool AutoSubmitOnTimeEnd { get; set; } = true;
     public bool ConfirmBeforeSubmit { get; set; } = true;
 
+    // Per-exam certificate gate (Edit Exam's "Certificate Generation" card) -
+    // seeded from the tenant's ExamDefaults at creation (same pattern as
+    // NegativeMarkingEnabled/NegativeMarks above), then editable per exam.
+    // A student only ever sees/downloads a certificate for THIS exam when
+    // CertificateEnabled is true AND their score % is >=
+    // MinimumCertificateScorePercent (see certificateId.ts's
+    // isCertificateEligible) - replaces the previous fixed, non-configurable
+    // 80% threshold and Exam-Type-based on/off flag.
+    public bool CertificateEnabled { get; set; }
+    public int MinimumCertificateScorePercent { get; set; } = 80;
+
     // Organization-type-specific exam fields captured at Create/Edit Exam
     // time - eg. a College's Semester, a Coaching Institute's Test Series.
     // JSON-serialized Dictionary<string,string>, same flexible-schema

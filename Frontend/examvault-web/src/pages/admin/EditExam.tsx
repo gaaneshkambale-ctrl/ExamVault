@@ -83,6 +83,11 @@ const icons = {
       <line x1="19" y1="5" x2="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" />
     </SettingIcon>
   ),
+  certificate: (
+    <SettingIcon>
+      <circle cx="12" cy="8" r="6" /><path d="M9 13.5 7 22l5-3 5 3-2-8.5" />
+    </SettingIcon>
+  ),
   questionNavigation: (
     <SettingIcon>
       <circle cx="12" cy="12" r="9" /><path d="M16 8l-3 5-5 3 3-5 5-3z" />
@@ -636,6 +641,26 @@ export default function EditExam() {
                             step={0.25}
                             value={form.negativeMarks}
                             onChange={(e) => updateField('negativeMarks', Number(e.target.value))}
+                          />
+                        </Form.Group>
+                      )}
+                    </SettingCard>
+                    <SettingCard
+                      icon={icons.certificate}
+                      title="Certificate Generation"
+                      description="Award a certificate to students who clear the minimum score below"
+                      checked={form.certificateEnabled}
+                      onToggle={(checked) => updateField('certificateEnabled', checked)}
+                    >
+                      {form.certificateEnabled && (
+                        <Form.Group controlId="editMinimumCertificateScore">
+                          <Form.Label className="fw-bold small">Minimum Certificate Score (%)</Form.Label>
+                          <Form.Control
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={form.minimumCertificateScorePercent}
+                            onChange={(e) => updateField('minimumCertificateScorePercent', Number(e.target.value))}
                           />
                         </Form.Group>
                       )}

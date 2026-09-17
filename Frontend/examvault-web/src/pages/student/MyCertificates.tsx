@@ -10,7 +10,7 @@ import { getGrade } from '../../types/result';
 import type { ResultSummaryResponse } from '../../types/result';
 import type { CreationMethod } from '../../types/exam';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
-import { CERTIFICATE_MIN_PERCENTAGE, isCertificateEligible } from '../../utils/certificateId';
+import { isCertificateEligible } from '../../utils/certificateId';
 
 const creationMethodLabel: Record<CreationMethod, string> = {
   Manual: 'Manual',
@@ -40,6 +40,8 @@ export default function MyCertificates() {
     return map;
   }, [exams]);
 
+  const examById = useMemo(() => new Map((exams ?? []).map((exam) => [exam.id, exam])), [exams]);
+
   const resultQueries = useQueries({
     queries: publishedExams.map((exam) => ({
       queryKey: ['results', 'mine', exam.id],
@@ -51,12 +53,15 @@ export default function MyCertificates() {
   const isLoadingResults = publishedExams.length > 0 && resultQueries.some((q) => q.isLoading);
   const loading = isLoadingExams || isLoadingResults;
 
-  // A certificate is earned for every exam the student scored 80%+ on - no
-  // separate issuance step, no persisted certificate record. Generated fresh
-  // client-side from the same result data "My Results" already shows.
+  // A certificate is earned for every exam the student cleared the exam's
+  // own configured minimum score on (Edit Exam's "Certificate Generation"
+  // card - each exam has its own on/off toggle and threshold, not a single
+  // fixed percentage across every exam) - no separate issuance step, no
+  // persisted certificate record. Generated fresh client-side from the same
+  // result data "My Results" already shows.
   const rows: ResultSummaryResponse[] = resultQueries
     .map((q) => q.data)
-    .filter((result): result is ResultSummaryResponse => !!result && isCertificateEligible(result))
+    .filter((result): result is ResultSummaryResponse => !!result && isCertificateEligible(result, examById.get(result.examId)))
     .sort((a, b) => new Date(b.submittedAtUtc).getTime() - new Date(a.submittedAtUtc).getTime());
 
   const filteredRows = rows.filter((result) =>
@@ -66,7 +71,7 @@ export default function MyCertificates() {
   return (
     <StudentLayout active="My Certificates">
       <h1 className="h4 fw-bold mb-1 text-primary">My Certificates</h1>
-      <p className="text-muted mb-4">A certificate for every exam you've scored {CERTIFICATE_MIN_PERCENTAGE}% or above on.</p>
+      <p className="text-muted mb-4">A certificate for every exam that offers one and whose minimum score you've cleared.</p>
 
       <Row className="g-2 mb-3">
         <Col md={6}>
@@ -89,7 +94,7 @@ export default function MyCertificates() {
 
           {!loading && rows.length === 0 && (
             <div className="text-center text-muted py-5">
-              No certificates yet. Score {CERTIFICATE_MIN_PERCENTAGE}% or above on an exam to earn one here.
+              No certificates yet. They appear here once you clear an exam's minimum certificate score.
             </div>
           )}
 

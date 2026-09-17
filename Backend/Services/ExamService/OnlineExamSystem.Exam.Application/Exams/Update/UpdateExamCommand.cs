@@ -31,4 +31,6 @@ public record UpdateExamCommand(
     // exam.CreatedByUserId to match, matching the ownership scope List/
     // GetById already enforce for Instructor.
     Guid? OwnerUserId = null,
-    Dictionary<string, string>? AcademicFields = null);
+    Dictionary<string, string>? AcademicFields = null,
+    bool CertificateEnabled = false,
+    int MinimumCertificateScorePercent = 80);

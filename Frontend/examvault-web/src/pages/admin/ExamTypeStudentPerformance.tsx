@@ -8,6 +8,7 @@ import { useExamTypeReportData } from '../../hooks/useExamTypeReportData';
 import { useStudents } from '../../hooks/useUsers';
 import { exportRowsToCsv } from '../../utils/exportCsv';
 import { computePercentile, computeRank, getExamResultScheme } from '../../utils/examResultScheme';
+import { isCertificateEligible } from '../../utils/certificateId';
 import type { AdminAttemptResultResponse } from '../../types/result';
 
 function percentOf(r: AdminAttemptResultResponse): number {
@@ -22,6 +23,16 @@ export default function ExamTypeStudentPerformance() {
   const { data: users, isLoading: isLoadingUsers } = useStudents();
   const loading = isLoadingType || isLoadingUsers;
   const scheme = getExamResultScheme(examType?.name);
+
+  // Certificate Generation is a per-exam setting (Edit Exam), not a fixed
+  // Exam-Type-wide flag - this cohort can mix exams that offer one with
+  // exams that don't, so the column shows if ANY of them do, and each row's
+  // own eligibility comes from ITS OWN last attempt's exam, not the type as
+  // a whole.
+  const examById = useMemo(() => new Map(examsOfType.map((exam) => [exam.id, exam])), [examsOfType]);
+  const showCertificateColumn = examsOfType.some((exam) => exam.certificateEnabled);
+  const isRowCertificateEligible = (r: { lastAttempt: AdminAttemptResultResponse }) =>
+    isCertificateEligible(r.lastAttempt, examById.get(r.lastAttempt.examId));
 
   const [search, setSearch] = useState('');
   const [examFilter, setExamFilter] = useState('All');
@@ -172,7 +183,7 @@ export default function ExamTypeStudentPerformance() {
                         'Last Attempt',
                         ...(scheme.showRankPercentile ? ['Rank', 'Percentile'] : []),
                         ...(scheme.hasPassFailConcept ? [`${scheme.outcomeLabels.pass} %`, 'Result'] : []),
-                        ...(scheme.showCertificate ? ['Certificate'] : []),
+                        ...(showCertificateColumn ? ['Certificate'] : []),
                       ],
                       rows.map((r) => [
                         r.fullName,
@@ -185,7 +196,7 @@ export default function ExamTypeStudentPerformance() {
                         ...(scheme.hasPassFailConcept
                           ? [Math.round(r.passPercent), r.lastAttempt.passed ? scheme.outcomeLabels.pass : scheme.outcomeLabels.fail]
                           : []),
-                        ...(scheme.showCertificate ? [r.lastAttempt.passed ? 'Eligible' : 'Not Eligible'] : []),
+                        ...(showCertificateColumn ? [isRowCertificateEligible(r) ? 'Eligible' : 'Not Eligible'] : []),
                       ]),
                     )
                   }
@@ -215,7 +226,7 @@ export default function ExamTypeStudentPerformance() {
                       </>
                     )}
                     {scheme.hasPassFailConcept && <th>{scheme.outcomeLabels.pass} %</th>}
-                    {scheme.showCertificate && <th>Certificate</th>}
+                    {showCertificateColumn && <th>Certificate</th>}
                     {scheme.hasPassFailConcept && <th className="pe-4">Result</th>}
                   </tr>
                 </thead>
@@ -236,10 +247,10 @@ export default function ExamTypeStudentPerformance() {
                         </>
                       )}
                       {scheme.hasPassFailConcept && <td>{Math.round(r.passPercent)}%</td>}
-                      {scheme.showCertificate && (
+                      {showCertificateColumn && (
                         <td>
-                          <Badge bg={r.lastAttempt.passed ? 'success' : 'secondary'}>
-                            {r.lastAttempt.passed ? 'Eligible' : 'Not Eligible'}
+                          <Badge bg={isRowCertificateEligible(r) ? 'success' : 'secondary'}>
+                            {isRowCertificateEligible(r) ? 'Eligible' : 'Not Eligible'}
                           </Badge>
                         </td>
                       )}

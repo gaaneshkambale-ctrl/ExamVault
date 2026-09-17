@@ -9,12 +9,14 @@ import type { ResultSummaryResponse } from '../types/result';
 // and My Certificates already each build/would build their own copy of this
 // same ['results','mine',examId] query - react-query dedupes identical query
 // keys, so computing both counts here doesn't cost more than one). A
-// certificate is earned for every exam the student scored 80%+ on (see
+// certificate is earned for every exam whose own Certificate Generation
+// toggle is on and whose minimum score the student cleared (see
 // isCertificateEligible/MyCertificates.tsx's own comment) - no separate
 // issuance step or persisted certificate record to count instead.
 export function useResultsAndCertificatesCounts(): { resultsCount: number; certificatesCount: number } {
   const { data: exams } = useExams();
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
+  const examById = useMemo(() => new Map((exams ?? []).map((exam) => [exam.id, exam])), [exams]);
 
   const resultQueries = useQueries({
     queries: publishedExams.map((exam) => ({
@@ -30,6 +32,6 @@ export function useResultsAndCertificatesCounts(): { resultsCount: number; certi
 
   return {
     resultsCount: results.length,
-    certificatesCount: results.filter(isCertificateEligible).length,
+    certificatesCount: results.filter((result) => isCertificateEligible(result, examById.get(result.examId))).length,
   };
 }

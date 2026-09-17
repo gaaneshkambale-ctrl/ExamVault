@@ -106,6 +106,8 @@ public class CreateExamHandler
             NegativeMarkingEnabled = examType?.NegativeMarkingEnabled ?? defaults.NegativeMarkingEnabled,
             NegativeMarks = examType?.NegativeMarkingValue ?? defaults.NegativeMarkingValue,
             AutoSubmitOnTimeEnd = examType?.AutoSubmitEnabled ?? defaults.AutoSubmitEnabled,
+            CertificateEnabled = defaults.CertificateEnabled,
+            MinimumCertificateScorePercent = defaults.MinimumCertificateScorePercent,
             AcademicFieldsJson = command.AcademicFields is { Count: > 0 } ? JsonSerializer.Serialize(command.AcademicFields) : null,
         };
         exam.ExamCode = GenerateExamCode(command.Category, exam.Id);
