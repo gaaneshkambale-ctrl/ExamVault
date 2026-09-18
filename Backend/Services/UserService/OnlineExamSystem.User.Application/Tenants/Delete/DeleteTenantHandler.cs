@@ -32,9 +32,11 @@ public class DeleteTenantHandler
             return DeleteTenantResult.NotFound();
         }
 
-        // AppUser->Tenant and Group->Tenant are DeleteBehavior.Restrict - their
-        // rows must be gone before the Tenant row can be removed.
-        await _tenantRepository.DeleteUsersAndGroupsForTenantAsync(command.TenantId, cancellationToken);
+        // AppUser/Group/RolePermission/AcademicListItem all have a
+        // DeleteBehavior.Restrict FK to Tenant - their rows must be gone
+        // before the Tenant row can be removed (see
+        // ITenantRepository.DeleteTenantScopedDataAsync's own comment).
+        await _tenantRepository.DeleteTenantScopedDataAsync(command.TenantId, cancellationToken);
         await _tenantRepository.RemoveAsync(tenant, cancellationToken);
         await _tenantRepository.SaveChangesAsync(cancellationToken);
 

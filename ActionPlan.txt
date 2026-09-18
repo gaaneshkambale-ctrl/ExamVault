@@ -15383,3 +15383,57 @@ flow afterward - not left behind):
   typed) - the real happy path still works end-to-end.
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Fixed a real Delete Organization bug found while carrying out the
+user's request to delete all organizations in Super Admin (except
+Platform - flagged first that Platform holds both Super Admin
+accounts and deleting it risks locking out the panel entirely; user
+confirmed keep Platform, delete the 3 tenant orgs).
+
+The very first delete attempt (Eligibility Test College) failed with
+a generic "An unexpected error occurred." - checked user-api's logs
+directly rather than guess, found a real unhandled DbUpdateException:
+"The DELETE statement conflicted with the REFERENCE constraint
+FK_RolePermissions_Tenants_TenantId." DeleteTenantHandler.cs only
+purged Groups/Users before removing the Tenant row (both have a
+DeleteBehavior.Restrict FK to Tenant), but RolePermission and
+AcademicListItem also have that same Restrict FK and were never
+included - so any tenant that had customized Roles & Permissions, or
+had any Program/Department/Semester/Division list configured (like
+Eligibility Test College, built earlier this session), couldn't be
+deleted at all.
+
+Fix: renamed ITenantRepository.DeleteUsersAndGroupsForTenantAsync to
+DeleteTenantScopedDataAsync and extended it to also bulk-delete
+RolePermissions and AcademicListItems for the tenant (both via
+ExecuteDeleteAsync + IgnoreQueryFilters, same pattern already used for
+Groups/Users) before the Tenant row itself is removed.
+AcademicListItem's self-referencing Restrict FK (Program->Department->
+Semester->Division parent chain) doesn't block this, since a single
+bulk DELETE statement removes the whole tenant's tree in one
+statement - no dangling parent reference survives it.
+OrganizationAcademicConfig was confirmed to have no FK to Tenant at
+all (grepped every `HasOne<Tenant>()` in UserDbContext.cs - only 4
+exist: AppUser, Group, AcademicListItem, RolePermission), so it's left
+orphaned rather than purged, matching this handler's own already-
+documented scope (cross-service Exam/Question/Submission/Notification
+rows are left behind the same way).
+
+Verified: `dotnet build` clean, full UserService suite 125/125
+(existing tests, FakeTenantRepository's fake updated to match the
+rename - no behavior to newly test here, this was a real-infra-only
+bug that a fake in-memory repository can't reproduce). Docker
+(user-api) rebuilt/redeployed.
+
+Live-verified: retried the same Eligibility Test College deletion
+after redeploy - succeeded. Went on to delete D Y patil College and
+Greenfield University the same way. Confirmed via direct SQL that only
+the Platform tenant remains, and that both Super Admin accounts
+(Platform Super Admin, QA SuperAdmin) are still intact under it -
+Super Admin panel fully functional afterward (Create Organization page
+loads, sidebar's Active Organizations list correctly shows only
+Platform).
+
+Not yet committed - awaiting explicit user instruction to commit.
