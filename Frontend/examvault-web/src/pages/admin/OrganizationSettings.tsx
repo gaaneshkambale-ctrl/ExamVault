@@ -1128,6 +1128,15 @@ function AcademicConfigurationTab({
 
   const resetToRecommended = () => setResultFields(recommendedResultFieldKeys);
 
+  // Same fix as the General/Reports & Documents tabs' own saved banner
+  // (this tab has its own independent `saved` state) - previously sat on
+  // screen indefinitely until manually dismissed.
+  useEffect(() => {
+    if (!saved) return;
+    const timer = window.setTimeout(() => setSaved(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [saved]);
+
   // collegeCode isn't real academicFields data - it's the read-only Tenant
   // OrganizationCode rendered inline below (see the fieldDefs.map special
   // case). program/department/semester/division are no longer in this
@@ -1639,6 +1648,19 @@ export default function OrganizationSettingsPage() {
       hasInitializedDraft.current = true;
     }
   }, [settings]);
+
+  // The success banner had no auto-dismiss at all - only its own manual
+  // close button - so it sat on screen indefinitely after a save until the
+  // Admin dismissed it themselves. Auto-hides after 5s, same as this app's
+  // own toast conventions elsewhere; a real click on the dismiss button
+  // (setSaved(false) directly) or a new save attempt clears this timer via
+  // the cleanup function so it can't fire late and re-toggle a stale saved
+  // state back on.
+  useEffect(() => {
+    if (!saved) return;
+    const timer = window.setTimeout(() => setSaved(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [saved]);
 
   useEffect(() => {
     let cancelled = false;

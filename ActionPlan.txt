@@ -15437,3 +15437,30 @@ loads, sidebar's Active Organizations list correctly shows only
 Platform).
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Organization Settings - "Organization settings saved." success banner
+now auto-dismisses after 5 seconds. Previously had no timer at all -
+only its own manual dismiss (x) button - so it sat on screen
+indefinitely after every save until the Admin closed it themselves.
+Same fix applied to both of this page's independent `saved` states:
+the General/Reports & Documents tabs' shared banner, and the Academic
+Configuration tab's own separate one (same bug, same page, found while
+fixing the one the user reported). Each is a plain useEffect keyed on
+its own `saved` flag - window.setTimeout(() => setSaved(false), 5000),
+cleaned up via clearTimeout on unmount/re-trigger so a stale timer
+can't fire late and re-toggle a dismissed banner back on.
+
+Verified: `npx tsc --noEmit`/`npm run build` - 0 errors. `npm run
+test` - 166/166 unaffected (no existing test covers this page). Docker
+frontend rebuilt/redeployed.
+
+Live-verified on the real "Test Org" tenant (test.examvaults.in,
+Admin Ganesh Kamble) - General tab already had a real Default Academic
+Year value, so Save Changes succeeded cleanly (not blocked by the
+earlier mandatory-field validation). "Organization settings saved."
+appeared, then confirmed gone from the page after waiting 6+ seconds -
+no code left visible, no manual dismiss needed.
+
+Not yet committed - awaiting explicit user instruction to commit.
