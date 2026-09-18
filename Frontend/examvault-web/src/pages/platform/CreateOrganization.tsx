@@ -11,13 +11,34 @@ import { listOrganizationTypes } from '../../api/organizationTypesApi';
 import { extractServerError } from '../../utils/apiError';
 import { isValidEmail } from '../../utils/email';
 
+// Mirrors CreateTenantValidator.cs (Name/Slug/OrganizationType required,
+// Slug DNS-label-safe and not a reserved word, TrialEndsAtUtc required when
+// IsTrial) and CreateTenantAdminValidator.cs (FullName/Email required
+// together, PhoneNumber format) - kept in sync by hand since there's no
+// shared validation layer between the two apps.
+const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const PHONE_PATTERN = /^[0-9+\-\s()]{7,20}$/;
+// Must match CreateTenantValidator.cs's own ReservedSlugs exactly.
+const RESERVED_SLUGS = ['platform', 'api', 'www'];
+
+type FieldKey =
+  | 'name'
+  | 'slug'
+  | 'orgType'
+  | 'trialEndDate'
+  | 'adminFullName'
+  | 'adminEmail'
+  | 'adminPhoneNumber'
+  | 'adminDesignation';
+
 // Matches org_submenu.png's Create Organization page. Real fields: Name,
 // Subdomain, Organization Type, Address, and Admin Full Name/Email/Phone
-// Number/Designation - if Full Name and Email are filled, this page makes
+// Number/Designation. Admin Information is mandatory on this form (see
+// validate()'s own comment) - every organization created here always gets
 // a second real API call (createTenantAdmin) right after the tenant is
-// created, so creating an org and its first admin is one step instead of
-// the old create-then-separately-add-admin flow. Organization Code is no
-// longer a manual field - the backend generates a unique one automatically
+// created, so creating an org and its first admin is genuinely one step,
+// never a "create org only, add an admin later" partial state. Organization
+// Code is no longer a manual field - the backend generates a unique one automatically
 // on creation (CreateTenantHandler -> OrganizationCodeGenerator), visible
 // afterward on the org's Details page. The mockup's 3 toggles still have no
 // backing field anywhere in this codebase - shown disabled with a "not
@@ -46,6 +67,7 @@ export default function CreateOrganization() {
   const [adminWarning, setAdminWarning] = useState('');
   const [isTrial, setIsTrial] = useState(false);
   const [trialEndDate, setTrialEndDate] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -63,18 +85,21 @@ export default function CreateOrganization() {
         postalCode: postalCode.trim() || undefined,
         country: country.trim() || undefined,
       });
+      // Admin fields are always filled by the time validate() lets this
+      // run, but the tenant is already durably created above - a failure
+      // here (eg. a race against another Admin creating the same email)
+      // must surface as a warning on an already-created org, not silently
+      // fail the whole submission or retry tenant creation.
       let adminError: string | null = null;
-      if (adminFullName.trim() && adminEmail.trim()) {
-        try {
-          await createTenantAdmin(tenant.id, {
-            fullName: adminFullName,
-            email: adminEmail,
-            phoneNumber: adminPhoneNumber.trim() || undefined,
-            designation: adminDesignation.trim() || undefined,
-          });
-        } catch (error) {
-          adminError = `${tenant.name} was created, but the admin account couldn't be added: ${extractServerError(error)}`;
-        }
+      try {
+        await createTenantAdmin(tenant.id, {
+          fullName: adminFullName,
+          email: adminEmail,
+          phoneNumber: adminPhoneNumber.trim(),
+          designation: adminDesignation.trim(),
+        });
+      } catch (error) {
+        adminError = `${tenant.name} was created, but the admin account couldn't be added: ${extractServerError(error)}`;
       }
       return { tenant, adminError };
     },
@@ -92,7 +117,81 @@ export default function CreateOrganization() {
     },
   });
 
-  const adminEmailInvalid = adminEmail.trim().length > 0 && !isValidEmail(adminEmail);
+  // Runs on submit attempt (not per-keystroke) - matches this app's own
+  // pattern elsewhere (CreateExam.tsx, OrganizationSettings.tsx): let the
+  // Admin click Create, show exactly what's wrong inline, rather than a
+  // silently-disabled button that never explains why.
+  //
+  // Admin Information is mandatory on THIS form (explicit choice - every
+  // organization created here gets a real first Admin immediately, no
+  // "create org only" path). That's deliberately scoped to just this
+  // page's own client-side validation, not the shared backend
+  // CreateTenantAdminValidator.cs/CreateTenantAdminCommand - that endpoint
+  // is also used by OrganizationDetails.tsx's own separate "Add Admin"
+  // dialog for an org that already exists, which only ever collects Full
+  // Name/Email (no Phone/Designation) - making Phone/Designation
+  // universally required there would break that real, working flow.
+  const validate = (): Partial<Record<FieldKey, string>> => {
+    const errors: Partial<Record<FieldKey, string>> = {};
+
+    if (!name.trim()) {
+      errors.name = 'Organization Name is required.';
+    }
+
+    if (!slug.trim()) {
+      errors.slug = 'Subdomain is required.';
+    } else if (!SLUG_PATTERN.test(slug.trim())) {
+      errors.slug = 'Lowercase letters, numbers, and hyphens only (e.g. "stanford").';
+    } else if (RESERVED_SLUGS.includes(slug.trim().toLowerCase())) {
+      errors.slug = 'This subdomain is reserved and can\'t be used.';
+    }
+
+    if (!orgType) {
+      errors.orgType = 'Organization Type is required.';
+    }
+
+    if (isTrial && !trialEndDate) {
+      errors.trialEndDate = 'Trial end date is required.';
+    }
+
+    if (!adminFullName.trim()) {
+      errors.adminFullName = 'Admin Full Name is required.';
+    }
+
+    if (!adminEmail.trim()) {
+      errors.adminEmail = 'Admin Email is required.';
+    } else if (!isValidEmail(adminEmail)) {
+      errors.adminEmail = 'Enter a valid email address.';
+    }
+
+    if (!adminPhoneNumber.trim()) {
+      errors.adminPhoneNumber = 'Phone Number is required.';
+    } else if (!PHONE_PATTERN.test(adminPhoneNumber.trim())) {
+      errors.adminPhoneNumber = 'Enter a valid phone number.';
+    }
+
+    if (!adminDesignation.trim()) {
+      errors.adminDesignation = 'Designation is required.';
+    }
+
+    return errors;
+  };
+
+  const clearFieldErrors = (...fields: FieldKey[]) => {
+    setFieldErrors((prev) => {
+      if (!fields.some((field) => prev[field])) return prev;
+      const next = { ...prev };
+      fields.forEach((field) => delete next[field]);
+      return next;
+    });
+  };
+
+  const handleCreate = () => {
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    createMutation.mutate();
+  };
 
   const activeOrgs = (tenants ?? []).filter((t) => t.isActive).slice(0, 5);
   const suspendedOrgs = (tenants ?? []).filter((t) => !t.isActive).slice(0, 5);
@@ -116,8 +215,19 @@ export default function CreateOrganization() {
               <Row className="g-3 mb-2">
                 <Col md={6}>
                   <Form.Group controlId="orgName">
-                    <Form.Label>Organization Name *</Form.Label>
-                    <Form.Control value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Greenfield University" />
+                    <Form.Label>
+                      Organization Name <span className="text-danger">*</span>
+                    </Form.Label>
+                    <Form.Control
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        clearFieldErrors('name');
+                      }}
+                      placeholder="e.g. Greenfield University"
+                      isInvalid={!!fieldErrors.name}
+                    />
+                    <Form.Control.Feedback type="invalid">{fieldErrors.name}</Form.Control.Feedback>
                     <Form.Text className="text-muted">
                       A unique Organization Code will be generated automatically from this name.
                     </Form.Text>
@@ -125,20 +235,43 @@ export default function CreateOrganization() {
                 </Col>
                 <Col md={6}>
                   <Form.Group controlId="orgSlug">
-                    <Form.Label>Subdomain *</Form.Label>
+                    <Form.Label>
+                      Subdomain <span className="text-danger">*</span>
+                    </Form.Label>
                     <div className="d-flex align-items-center gap-2">
-                      <Form.Control value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="greenfield" />
+                      <Form.Control
+                        value={slug}
+                        onChange={(e) => {
+                          setSlug(e.target.value);
+                          clearFieldErrors('slug');
+                        }}
+                        placeholder="greenfield"
+                        isInvalid={!!fieldErrors.slug}
+                      />
                       <span className="text-muted text-nowrap">.examvaults.in</span>
                     </div>
-                    <Form.Text className="text-muted">This will be used for tenant access.</Form.Text>
+                    {fieldErrors.slug ? (
+                      <div className="invalid-feedback d-block">{fieldErrors.slug}</div>
+                    ) : (
+                      <Form.Text className="text-muted">This will be used for tenant access.</Form.Text>
+                    )}
                   </Form.Group>
                 </Col>
               </Row>
               <Row className="g-3 mb-2">
                 <Col md={6}>
                   <Form.Group controlId="orgType">
-                    <Form.Label>Organization Type</Form.Label>
-                    <Form.Select value={orgType} onChange={(e) => setOrgType(e.target.value)}>
+                    <Form.Label>
+                      Organization Type <span className="text-danger">*</span>
+                    </Form.Label>
+                    <Form.Select
+                      value={orgType}
+                      onChange={(e) => {
+                        setOrgType(e.target.value);
+                        clearFieldErrors('orgType');
+                      }}
+                      isInvalid={!!fieldErrors.orgType}
+                    >
                       <option value="">Select type</option>
                       {(organizationTypes ?? []).map((type) => (
                         <option key={type.id} value={type.name}>
@@ -146,6 +279,7 @@ export default function CreateOrganization() {
                         </option>
                       ))}
                     </Form.Select>
+                    <Form.Control.Feedback type="invalid">{fieldErrors.orgType}</Form.Control.Feedback>
                   </Form.Group>
                 </Col>
               </Row>
@@ -175,13 +309,22 @@ export default function CreateOrganization() {
                       onChange={(e) => setIsTrial(e.target.checked)}
                     />
                     {isTrial && (
-                      <Form.Control
-                        type="date"
-                        className="mt-2"
-                        min={minTrialDate}
-                        value={trialEndDate}
-                        onChange={(e) => setTrialEndDate(e.target.value)}
-                      />
+                      <>
+                        <Form.Label className="d-block mt-2 mb-1 small">
+                          Trial End Date <span className="text-danger">*</span>
+                        </Form.Label>
+                        <Form.Control
+                          type="date"
+                          min={minTrialDate}
+                          value={trialEndDate}
+                          onChange={(e) => {
+                            setTrialEndDate(e.target.value);
+                            clearFieldErrors('trialEndDate');
+                          }}
+                          isInvalid={!!fieldErrors.trialEndDate}
+                        />
+                        <Form.Control.Feedback type="invalid">{fieldErrors.trialEndDate}</Form.Control.Feedback>
+                      </>
                     )}
                   </Form.Group>
                 </Col>
@@ -191,54 +334,76 @@ export default function CreateOrganization() {
               <Row className="g-3 mb-2">
                 <Col md={6}>
                   <Form.Group controlId="adminFullName">
-                    <Form.Label>Admin Full Name</Form.Label>
+                    <Form.Label>
+                      Admin Full Name <span className="text-danger">*</span>
+                    </Form.Label>
                     <Form.Control
                       value={adminFullName}
-                      onChange={(e) => setAdminFullName(e.target.value)}
+                      onChange={(e) => {
+                        setAdminFullName(e.target.value);
+                        clearFieldErrors('adminFullName');
+                      }}
                       placeholder="e.g. Dr. Emily Carter"
+                      isInvalid={!!fieldErrors.adminFullName}
                     />
+                    <Form.Control.Feedback type="invalid">{fieldErrors.adminFullName}</Form.Control.Feedback>
                   </Form.Group>
                 </Col>
                 <Col md={6}>
                   <Form.Group controlId="adminEmail">
-                    <Form.Label>Admin Email</Form.Label>
+                    <Form.Label>
+                      Admin Email <span className="text-danger">*</span>
+                    </Form.Label>
                     <Form.Control
                       type="email"
                       value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
+                      onChange={(e) => {
+                        setAdminEmail(e.target.value);
+                        clearFieldErrors('adminEmail');
+                      }}
                       placeholder="admin@greenfield.edu"
-                      isInvalid={adminEmailInvalid}
+                      isInvalid={!!fieldErrors.adminEmail}
                     />
-                    <Form.Control.Feedback type="invalid">Enter a valid email address.</Form.Control.Feedback>
+                    <Form.Control.Feedback type="invalid">{fieldErrors.adminEmail}</Form.Control.Feedback>
                   </Form.Group>
                 </Col>
               </Row>
               <Row className="g-3 mb-2">
                 <Col md={6}>
                   <Form.Group controlId="adminPhone">
-                    <Form.Label>Phone Number</Form.Label>
+                    <Form.Label>
+                      Phone Number <span className="text-danger">*</span>
+                    </Form.Label>
                     <Form.Control
                       value={adminPhoneNumber}
-                      onChange={(e) => setAdminPhoneNumber(e.target.value)}
-                      placeholder="+1 202-555-0198"
+                      onChange={(e) => {
+                        setAdminPhoneNumber(e.target.value);
+                        clearFieldErrors('adminPhoneNumber');
+                      }}
+                      placeholder="+91 98765 43210"
+                      isInvalid={!!fieldErrors.adminPhoneNumber}
                     />
+                    <Form.Control.Feedback type="invalid">{fieldErrors.adminPhoneNumber}</Form.Control.Feedback>
                   </Form.Group>
                 </Col>
                 <Col md={6}>
                   <Form.Group controlId="adminDesignation">
-                    <Form.Label>Designation</Form.Label>
+                    <Form.Label>
+                      Designation <span className="text-danger">*</span>
+                    </Form.Label>
                     <Form.Control
                       value={adminDesignation}
-                      onChange={(e) => setAdminDesignation(e.target.value)}
+                      onChange={(e) => {
+                        setAdminDesignation(e.target.value);
+                        clearFieldErrors('adminDesignation');
+                      }}
                       placeholder="System Administrator"
+                      isInvalid={!!fieldErrors.adminDesignation}
                     />
+                    <Form.Control.Feedback type="invalid">{fieldErrors.adminDesignation}</Form.Control.Feedback>
                   </Form.Group>
                 </Col>
               </Row>
-              <p className="text-muted small">
-                Leave Admin Full Name/Email blank to create the organization only - you can add an admin later.
-              </p>
-
               <h2 className="h6 fw-bold mb-3 mt-4">Address Information</h2>
               <Row className="g-3 mb-2">
                 <Col md={6}>
@@ -291,17 +456,7 @@ export default function CreateOrganization() {
                 <Link to="/platform/organizations" className="btn btn-outline-secondary">
                   Cancel
                 </Link>
-                <Button
-                  variant="primary"
-                  disabled={
-                    !name.trim() ||
-                    !slug.trim() ||
-                    (isTrial && !trialEndDate) ||
-                    adminEmailInvalid ||
-                    createMutation.isPending
-                  }
-                  onClick={() => createMutation.mutate()}
-                >
+                <Button variant="primary" disabled={createMutation.isPending} onClick={handleCreate}>
                   {createMutation.isPending ? 'Creating...' : '+ Create Organization'}
                 </Button>
               </div>

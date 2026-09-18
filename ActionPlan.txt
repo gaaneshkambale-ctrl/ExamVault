@@ -15271,3 +15271,115 @@ from this pass.
 This pass added no code changes - purely a cleaner, controlled
 re-verification of the already-committed feature on fresh data. No
 new commit needed for this entry.
+
+---
+
+Create Organization (Super Admin) - removed University from
+Organization Types, +91 phone placeholder, then mandatory-fields +
+professional validation.
+
+1. Deleted "University" from Organization Types (Platform Admin >
+   Organizations > Organization Types) after confirming College and
+   University are byte-for-byte identical across every field catalog
+   (Student/Exam/Academic/Result fields) - user's own premise, verified
+   before acting. Permanent delete, per user's explicit choice over
+   deactivate. Safe for the existing Greenfield University tenant since
+   Tenant.OrganizationType is stored as free text, not an FK to this
+   table (confirmed in DeleteOrganizationTypeHandler.cs's own comment,
+   and live-verified: DB still shows Greenfield's OrganizationType as
+   'University' untouched, unaffected by the dropdown deletion).
+2. Phone Number placeholder on Create Organization's Admin Information
+   changed from "+1 202-555-0198" to "+91 98765 43210".
+3. Organization Name/Subdomain (and Trial End Date, when Trial is
+   checked) now show a real red asterisk instead of a plain "*" in the
+   label text, with actual inline validation (red border + specific
+   message) triggered on clicking Create rather than a silently-
+   disabled button that never explained why - matches this app's own
+   established pattern (CreateExam.tsx, OrganizationSettings.tsx).
+   Admin Full Name/Email/Phone/Designation started as a "required
+   together as a pair" rule (each required only if the other was
+   filled), then the user explicitly asked to make the whole Admin
+   Information block mandatory - implemented as a scoped frontend-only
+   decision: every org created via THIS page now always gets a real
+   admin in one step, but the shared backend CreateTenantAdminCommand/
+   Validator was deliberately left alone, since that same endpoint
+   backs OrganizationDetails.tsx's own separate "Add Admin" dialog
+   (confirmed real/working - only collects Full Name/Email, no Phone/
+   Designation), which would have broken if those became universally
+   backend-required. The now-inaccurate "Leave Admin Full Name/Email
+   blank to create the organization only" help text was removed.
+
+Real backend gaps found and fixed (a user-pasted external proposal
+claimed several of these; verified each against the actual code before
+acting - most of the proposal's other claims didn't hold up, see below):
+- Duplicate Organization Name used to fall through to an unhandled
+  DbUpdateException -> generic 500 "An unexpected error occurred."
+  (Tenants.Name has a unique DB index, but nothing checked for a
+  duplicate before SaveChangesAsync, unlike Slug). Added
+  ITenantRepository.GetByNameAsync (mirrors GetBySlugAsync),
+  CreateTenantHandler now checks it before the Slug check,
+  CreateTenantResult.NameConflict(), TenantsController maps it to a
+  clean 409 "An organization with this name already exists." - same
+  pattern Slug already had.
+- Reserved-subdomain checking didn't exist at tenant-creation time at
+  all. The Gateway's TenantResolutionMiddleware.cs already treats
+  `platform`, `api`, `www` specially (excluded from tenant subdomain
+  resolution) - but nothing stopped a Super Admin from actually
+  creating a tenant with one of those as its Slug, which would then be
+  permanently unreachable at its own subdomain (requests always fall
+  through unresolved instead of routing to it). Added a
+  CreateTenantValidator.cs rule blocking exactly those 3 reserved
+  words (not the 8-word list the pasted proposal assumed - only 3 are
+  actually reserved anywhere in this codebase), mirrored client-side in
+  CreateOrganization.tsx for instant feedback.
+- Organization Type is now genuinely required, both
+  CreateTenantValidator.cs (NotEmpty) and the frontend (red asterisk +
+  inline error) - previously fully optional on both sides.
+
+Explicitly NOT changed, with reasoning (fact-checked and reported to
+the user before any code was touched, since several of the pasted
+proposal's other claims didn't match the real system):
+- Plan stays optional - already defaults cleanly to "Full Access"
+  (TenantConstants.FullAccessPlanId, a real seeded Plan with every
+  PlanFeature) when left blank; this isn't a gap, it's a working
+  convenience default the proposal wasn't aware of.
+- Admin email uniqueness stays per-tenant (composite (TenantId, Email)
+  unique index + CreateTenantAdminHandler's own scoped check) rather
+  than becoming global - this is intentional: the same person can
+  legitimately be an admin at two different tenants in this schema.
+- Trial stayed a checkbox (unchecked = No) rather than becoming a
+  forced Yes/No radio group - purely cosmetic, no functional gap
+  (unchecked already IS an explicit "No" outcome).
+
+Verified: `dotnet build ExamVault.sln` clean. New
+CreateTenantHandlerTests.cs (7 tests: valid-command success, duplicate
+name rejected even with a different slug, duplicate slug rejected even
+with a different name, all 3 reserved slugs rejected, missing
+Organization Type fails validation) - all pass. Full UserService suite
+125/125 (was 118). `npx tsc --noEmit`/`npm run build` - 0 errors.
+Frontend suite 166/166 unaffected. Docker (user-api, frontend)
+rebuilt/redeployed.
+
+Live-verified on the real Super Admin panel, each as its own throwaway
+test org (created then deleted via the real "type name to confirm"
+flow afterward - not left behind):
+- Submitted "Greenfield University" as the Organization Name (the
+  real existing tenant's exact name) with a fresh slug - got "An
+  organization with this name already exists." instead of a 500.
+- Typed "api" as the Subdomain - blocked client-side instantly with
+  "This subdomain is reserved and can't be used." before ever hitting
+  the backend.
+- Left Organization Type unselected and submitted - "Organization Type
+  is required." shown inline, exactly matching Name/Subdomain's
+  existing pattern.
+- Left the entire Admin Information block blank and submitted - all
+  four fields (Full Name, Email, Phone, Designation) showed red
+  asterisks and their own specific "... is required." message
+  simultaneously; filling each one cleared its own error live.
+- Filled every field correctly (Org Type=College, no Trial, full Admin
+  block) and submitted - org created with Status Active admin in one
+  step, confirmed on the resulting Organization Details page (Admin
+  Information: Name/Email/Status all populated, matching what was
+  typed) - the real happy path still works end-to-end.
+
+Not yet committed - awaiting explicit user instruction to commit.

@@ -13,6 +13,9 @@ public class FakeTenantRepository : ITenantRepository
     public Task<Tenant?> GetBySlugAsync(string slug, CancellationToken cancellationToken = default) =>
         Task.FromResult(_tenants.FirstOrDefault(t => t.Slug == slug));
 
+    public Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_tenants.FirstOrDefault(t => t.Name == name));
+
     public Task<Tenant?> GetByOrganizationCodeAsync(string organizationCode, CancellationToken cancellationToken = default) =>
         Task.FromResult(_tenants.FirstOrDefault(t => t.OrganizationCode == organizationCode));
 

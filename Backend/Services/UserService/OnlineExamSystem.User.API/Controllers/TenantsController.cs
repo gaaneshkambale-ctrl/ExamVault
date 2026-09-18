@@ -94,6 +94,11 @@ public class TenantsController : ControllerBase
                 createdByUserId),
             cancellationToken);
 
+        if (result.NameAlreadyExists)
+        {
+            return Conflict(new { message = "An organization with this name already exists." });
+        }
+
         if (result.SlugAlreadyExists)
         {
             return Conflict(new { message = "A tenant with this slug already exists." });

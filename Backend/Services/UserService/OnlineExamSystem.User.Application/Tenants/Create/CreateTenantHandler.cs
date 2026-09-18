@@ -31,6 +31,12 @@ public class CreateTenantHandler
             return CreateTenantResult.Invalid(validationResult.Errors.Select(e => e.ErrorMessage).ToList());
         }
 
+        var existingByName = await _tenantRepository.GetByNameAsync(command.Name, cancellationToken);
+        if (existingByName is not null)
+        {
+            return CreateTenantResult.NameConflict();
+        }
+
         var existing = await _tenantRepository.GetBySlugAsync(command.Slug, cancellationToken);
         if (existing is not null)
         {
