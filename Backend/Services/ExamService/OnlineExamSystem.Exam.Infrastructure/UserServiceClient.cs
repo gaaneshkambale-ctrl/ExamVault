@@ -43,12 +43,44 @@ public class UserServiceClient : IUserLookupClient
         string bearerToken,
         CancellationToken cancellationToken = default)
     {
-        var users = await GetAllUsersAsync(bearerToken, cancellationToken);
+        var students = await GetAllStudentsAsync(bearerToken, cancellationToken);
+        return students.Select(s => s.Id).ToList();
+    }
 
-        return users
-            .Where(u => string.Equals(u.Role, "Student", StringComparison.OrdinalIgnoreCase))
-            .Select(u => u.Id)
+    public async Task<IReadOnlyList<StudentAcademicScope>> GetStudentAcademicScopesAsync(
+        IReadOnlyList<Guid> userIds,
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        var students = await GetAllStudentsAsync(bearerToken, cancellationToken);
+        var idSet = userIds.ToHashSet();
+
+        return students
+            .Where(s => idSet.Contains(s.Id) && s.AcademicFields is { Count: > 0 })
+            .Select(s => new StudentAcademicScope(s.Id, s.AcademicFields!))
             .ToList();
+    }
+
+    // GET /api/users/students rather than /api/users (which GetAllUsersAsync
+    // below calls) - this runs with the caller's own forwarded bearer token,
+    // and an Instructor caller (AllStudents assignment on an exam they own)
+    // has no "Users - View" permission for the full list, only for this
+    // students-only slice. Already returns each student's AcademicFields
+    // (added for Student Reports' export), so the eligibility check below
+    // reuses this same call rather than adding a new endpoint.
+    private async Task<List<StudentSummaryApiResponse>> GetAllStudentsAsync(
+        string bearerToken,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/users/students");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<List<StudentSummaryApiResponse>>(
+            JsonOptions,
+            cancellationToken) ?? [];
     }
 
     public async Task<IReadOnlyList<UserLookupInfo>> GetUsersByIdsAsync(
@@ -94,5 +126,11 @@ public class UserServiceClient : IUserLookupClient
         public string FullName { get; init; } = string.Empty;
         public string Email { get; init; } = string.Empty;
         public string Role { get; init; } = string.Empty;
+    }
+
+    private sealed class StudentSummaryApiResponse
+    {
+        public Guid Id { get; init; }
+        public Dictionary<string, string>? AcademicFields { get; init; }
     }
 }

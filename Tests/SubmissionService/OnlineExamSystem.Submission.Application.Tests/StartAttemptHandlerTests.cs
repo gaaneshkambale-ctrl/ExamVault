@@ -25,7 +25,7 @@ public class StartAttemptHandlerTests
     private static StartAttemptCommand ValidCommand() => new(ExamId, UserId, "test-token");
 
     private static ExamLookupResult OpenExam(int maxAttempts = 3) =>
-        new(ExamId, "Published", maxAttempts, StartAtUtc: null, EndAtUtc: null);
+        new(ExamId, "Published", maxAttempts, StartAtUtc: null, EndAtUtc: null, DurationMinutes: 60);
 
     [Fact]
     public async Task Valid_request_creates_new_attempt()

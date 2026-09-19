@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using OnlineExamSystem.Exam.Application.Interfaces;
@@ -10,6 +11,12 @@ namespace OnlineExamSystem.Exam.Application.Assignments.Create;
 
 public class CreateAssignmentHandler
 {
+    // The only keys CreateExam.tsx's Academic Details section ever writes
+    // for an org type with academic-scope fields (College/University) -
+    // AcademicFieldsJson can hold other org-type-specific keys too (eg.
+    // testSeries) but those aren't eligibility-relevant, so they're ignored
+    // here rather than compared.
+    private static readonly string[] ScopeKeys = ["program", "department", "semester", "division"];
     private readonly IExamRepository _examRepository;
     private readonly IUserLookupClient _userLookupClient;
     private readonly IInternalUserLookupClient _internalUserLookupClient;
@@ -49,6 +56,11 @@ public class CreateAssignmentHandler
             return CreateAssignmentResult.ExamNotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId && exam.CreatedByUserId != ownerUserId)
+        {
+            return CreateAssignmentResult.Forbidden();
+        }
+
         if (exam.Status != ExamStatus.Published)
         {
             return CreateAssignmentResult.ExamNotPublished();
@@ -85,6 +97,44 @@ public class CreateAssignmentHandler
                 break;
         }
 
+        IReadOnlySet<Guid>? overriddenUserIds = null;
+        var examScope = ParseScope(exam.AcademicFieldsJson);
+
+        // Only when the exam actually opted into a scope AND that scope has
+        // at least one real value - an exam with RestrictToAcademicScope=true
+        // but no matching keys set (eg. an org type without Program/
+        // Department/Semester fields at all) has nothing to enforce.
+        if (exam.RestrictToAcademicScope && examScope.Count > 0)
+        {
+            var scopes = await _userLookupClient.GetStudentAcademicScopesAsync(
+                targetUserIds,
+                command.BearerToken,
+                cancellationToken);
+            var scopeByUserId = scopes.ToDictionary(s => s.UserId, s => s.AcademicFields);
+
+            var ineligibleUserIds = targetUserIds
+                .Where(id => !IsEligible(examScope, scopeByUserId.GetValueOrDefault(id)))
+                .ToList();
+
+            if (ineligibleUserIds.Count > 0)
+            {
+                if (!command.IsAdminCaller || !command.AllowEligibilityOverride)
+                {
+                    var ineligibleUsers = await _userLookupClient.GetUsersByIdsAsync(
+                        ineligibleUserIds,
+                        command.BearerToken,
+                        cancellationToken);
+                    var names = ineligibleUserIds
+                        .Select(id => ineligibleUsers.FirstOrDefault(u => u.Id == id)?.FullName ?? id.ToString())
+                        .ToList();
+
+                    return CreateAssignmentResult.EligibilityRejected(DescribeScope(examScope), names);
+                }
+
+                overriddenUserIds = ineligibleUserIds.ToHashSet();
+            }
+        }
+
         var assignment = new ExamAssignment
         {
             ExamId = command.ExamId,
@@ -103,9 +153,15 @@ public class CreateAssignmentHandler
             AutoSubmitOnTimeOver = command.AutoSubmitOnTimeOver,
             EnableProctoring = command.EnableProctoring,
             EnableLiveVideo = command.EnableLiveVideo,
+            CreatedByUserId = command.CreatedByUserId,
         };
 
-        await _examRepository.AddAssignmentAsync(assignment, targetUserIds, cancellationToken);
+        await _examRepository.AddAssignmentAsync(
+            assignment,
+            targetUserIds,
+            overriddenUserIds,
+            overriddenUserIds is { Count: > 0 } ? command.OverrideReason : null,
+            cancellationToken);
         await _examRepository.SaveChangesAsync(cancellationToken);
 
         try
@@ -136,6 +192,45 @@ public class CreateAssignmentHandler
             _logger.LogWarning(ex, "Failed to publish ExamAssignedEvent for assignment {AssignmentId}.", assignment.Id);
         }
 
-        return CreateAssignmentResult.Ok(assignment, targetUserIds);
+        return CreateAssignmentResult.Ok(assignment, targetUserIds, exam.Title, overriddenUserIds?.Count ?? 0);
     }
+
+    private static IReadOnlyDictionary<string, string> ParseScope(string? academicFieldsJson)
+    {
+        if (string.IsNullOrEmpty(academicFieldsJson))
+        {
+            return new Dictionary<string, string>();
+        }
+
+        var fields = JsonSerializer.Deserialize<Dictionary<string, string>>(academicFieldsJson)
+            ?? new Dictionary<string, string>();
+
+        return ScopeKeys
+            .Where(key => fields.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            .ToDictionary(key => key, key => fields[key].Trim(), StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsEligible(
+        IReadOnlyDictionary<string, string> examScope,
+        IReadOnlyDictionary<string, string>? studentFields)
+    {
+        if (studentFields is null)
+        {
+            return false;
+        }
+
+        foreach (var (key, examValue) in examScope)
+        {
+            if (!studentFields.TryGetValue(key, out var studentValue) ||
+                !string.Equals(studentValue.Trim(), examValue, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string DescribeScope(IReadOnlyDictionary<string, string> examScope) =>
+        string.Join(" / ", ScopeKeys.Where(examScope.ContainsKey).Select(key => examScope[key]));
 }

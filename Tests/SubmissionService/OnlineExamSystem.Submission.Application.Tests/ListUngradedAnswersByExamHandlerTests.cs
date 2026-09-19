@@ -1,4 +1,5 @@
 using OnlineExamSystem.Submission.Application.Attempts.ListUngradedByExam;
+using OnlineExamSystem.Submission.Application.Interfaces;
 using OnlineExamSystem.Submission.Application.Tests.Fakes;
 using OnlineExamSystem.Submission.Domain.Entities;
 using OnlineExamSystem.Submission.Domain.Enums;
@@ -52,7 +53,7 @@ public class ListUngradedAnswersByExamHandlerTests
             SelectedOptionId = Guid.NewGuid(),
             AnsweredAtUtc = DateTime.UtcNow,
         });
-        var handler = new ListUngradedAnswersByExamHandler(repository);
+        var handler = new ListUngradedAnswersByExamHandler(repository, new FakeExamLookupClient(null));
 
         var result = await handler.HandleAsync(new ListUngradedAnswersByExamQuery(ExamId));
 
@@ -66,9 +67,33 @@ public class ListUngradedAnswersByExamHandlerTests
     public async Task No_submitted_attempts_returns_empty()
     {
         var repository = new FakeSubmissionRepository();
-        var handler = new ListUngradedAnswersByExamHandler(repository);
+        var handler = new ListUngradedAnswersByExamHandler(repository, new FakeExamLookupClient(null));
 
         var result = await handler.HandleAsync(new ListUngradedAnswersByExamQuery(ExamId));
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task Instructor_grading_queue_for_an_exam_they_do_not_own_is_empty()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = SubmittedAttempt();
+        repository.SeedAttempt(attempt);
+        repository.SeedAnswer(new AttemptAnswer
+        {
+            AttemptId = attempt.Id,
+            QuestionId = QuestionId,
+            AnswerText = "code answer",
+            AnsweredAtUtc = DateTime.UtcNow,
+        });
+        var otherInstructorId = Guid.NewGuid();
+        var examLookupClient = new FakeExamLookupClient(
+            new ExamLookupResult(ExamId, "Published", 1, null, null, 60, CreatedByUserId: Guid.NewGuid()));
+        var handler = new ListUngradedAnswersByExamHandler(repository, examLookupClient);
+
+        var result = await handler.HandleAsync(
+            new ListUngradedAnswersByExamQuery(ExamId, OwnerUserId: otherInstructorId, BearerToken: "test-token"));
 
         Assert.Empty(result);
     }

@@ -2,13 +2,16 @@ import apiClient, { getRefreshToken } from './axiosClient';
 import type {
   ChangePasswordRequest,
   CreateUserRequest,
+  ForgotPasswordRequest,
   LoginRequest,
   LoginResponse,
   RefreshTokenResponse,
   RegisterRequest,
   RegisterResponse,
   ResetPasswordRequest,
+  ResetPasswordWithTokenRequest,
   PlatformUserListItem,
+  StudentSummary,
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UserListItem,
@@ -25,6 +28,14 @@ export async function registerUser(request: RegisterRequest): Promise<RegisterRe
 export async function loginUser(request: LoginRequest): Promise<LoginResponse> {
   const { data } = await apiClient.post<LoginResponse>('/api/users/login', request);
   return data;
+}
+
+export async function forgotPassword(request: ForgotPasswordRequest): Promise<void> {
+  await apiClient.post('/api/users/forgot-password', request);
+}
+
+export async function resetPasswordWithToken(request: ResetPasswordWithTokenRequest): Promise<void> {
+  await apiClient.post('/api/users/reset-password-with-token', request);
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<RefreshTokenResponse> {
@@ -109,6 +120,11 @@ export async function listUsers(): Promise<UserListItem[]> {
 // SuperAdmin-role rows a tenant Admin's own call never returns.
 export async function listAllUsers(): Promise<PlatformUserListItem[]> {
   const { data } = await apiClient.get<PlatformUserListItem[]>('/api/users');
+  return data;
+}
+
+export async function listStudents(): Promise<StudentSummary[]> {
+  const { data } = await apiClient.get<StudentSummary[]>('/api/users/students');
   return data;
 }
 

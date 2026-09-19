@@ -68,6 +68,14 @@ public class Program
         var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
             ?? throw new InvalidOperationException("Missing \"Jwt:SigningKey\" configuration.");
 
+        builder.Services.Configure<JwtSettings>(options =>
+        {
+            options.Issuer = jwtIssuer;
+            options.Audience = jwtAudience;
+            options.SigningKey = jwtSigningKey;
+        });
+        builder.Services.AddSingleton<ISystemTokenProvider, SystemTokenProvider>();
+
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -83,7 +91,11 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
 

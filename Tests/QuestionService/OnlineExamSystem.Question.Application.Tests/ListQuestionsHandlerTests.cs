@@ -48,4 +48,25 @@ public class ListQuestionsHandlerTests
 
         Assert.Empty(result);
     }
+
+    [Fact]
+    public async Task OwnerUserId_filters_out_questions_created_by_someone_else()
+    {
+        var repository = new FakeQuestionRepository();
+        var examId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+
+        var mine = new ExamQuestion { ExamId = examId, QuestionText = "Mine", CreatedByUserId = ownerId };
+        await repository.AddAsync(mine, []);
+
+        var theirs = new ExamQuestion { ExamId = examId, QuestionText = "Theirs", CreatedByUserId = Guid.NewGuid() };
+        await repository.AddAsync(theirs, []);
+
+        var handler = new ListQuestionsHandler(repository);
+
+        var result = await handler.HandleAsync(new ListQuestionsQuery(examId, OwnerUserId: ownerId));
+
+        var entry = Assert.Single(result);
+        Assert.Equal("Mine", entry.Question.QuestionText);
+    }
 }

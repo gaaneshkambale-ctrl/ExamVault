@@ -10,4 +10,6 @@ public record ExamDefaultsResponse(
     bool AutoSubmitEnabled,
     string QuestionNavigationMode,
     string ResultPublishingMode,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    bool CertificateEnabled = false,
+    int MinimumCertificateScorePercent = 80);

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using OnlineExamSystem.Question.Application.Questions;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Tests.Fakes;
@@ -9,7 +10,11 @@ namespace OnlineExamSystem.Question.Application.Tests;
 public class CreateQuestionHandlerTests
 {
     private static CreateQuestionHandler CreateHandler(FakeQuestionRepository repository) =>
-        new(repository, new CreateQuestionValidator());
+        new(
+            repository,
+            new CreateQuestionValidator(),
+            new FakeSqlExpectedOutputClient(),
+            NullLogger<CreateQuestionHandler>.Instance);
 
     [Fact]
     public async Task Valid_command_creates_question_with_options()

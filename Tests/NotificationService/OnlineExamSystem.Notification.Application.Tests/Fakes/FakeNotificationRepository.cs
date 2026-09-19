@@ -64,6 +64,7 @@ public class FakeNotificationRepository : INotificationRepository
         string? status,
         int page,
         int pageSize,
+        IReadOnlyList<Guid>? ownedExamIds = null,
         CancellationToken cancellationToken = default)
     {
         var query = _notifications.AsEnumerable();
@@ -77,9 +78,12 @@ public class FakeNotificationRepository : INotificationRepository
             query = query.Where(n => n.Title.Contains(search, StringComparison.OrdinalIgnoreCase));
         }
 
+        var ownedExamIdSet = ownedExamIds?.ToHashSet();
         var now = DateTime.UtcNow;
         var grouped = query
             .GroupBy(n => n.BatchId)
+            .Where(g => ownedExamIdSet is null ||
+                (g.First().RelatedExamId is { } relatedExamId && ownedExamIdSet.Contains(relatedExamId)))
             .Select(g => new NotificationBatchSummary(
                 g.Key,
                 g.First().Title,
@@ -129,17 +133,23 @@ public class FakeNotificationRepository : INotificationRepository
         return Task.FromResult<(IReadOnlyList<NotificationBatchSummary>, int)>((page1, grouped.Count));
     }
 
-    public Task<NotificationHistoryStats> GetHistoryStatsAsync(CancellationToken cancellationToken = default)
+    public Task<NotificationHistoryStats> GetHistoryStatsAsync(
+        IReadOnlyList<Guid>? ownedExamIds = null,
+        CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var todayStartUtc = now.Date;
+        var ownedExamIdSet = ownedExamIds?.ToHashSet();
+        var scoped = ownedExamIdSet is null
+            ? _notifications
+            : _notifications.Where(n => n.RelatedExamId is { } id && ownedExamIdSet.Contains(id)).ToList();
 
-        var sentToday = _notifications.Count(n => n.CreatedAtUtc >= todayStartUtc && n.EmailStatus != EmailStatus.Pending);
-        var delivered = _notifications.Count(n => n.EmailStatus == EmailStatus.Delivered);
-        var failed = _notifications.Count(n => n.EmailStatus == EmailStatus.Failed);
-        var scheduled = _notifications.Count(n => n.ScheduledAtUtc.HasValue && n.ScheduledAtUtc.Value > now);
-        var total = _notifications.Count;
-        var pending = _notifications.Count(n => n.EmailStatus == EmailStatus.Pending);
+        var sentToday = scoped.Count(n => n.CreatedAtUtc >= todayStartUtc && n.EmailStatus != EmailStatus.Pending);
+        var delivered = scoped.Count(n => n.EmailStatus == EmailStatus.Delivered);
+        var failed = scoped.Count(n => n.EmailStatus == EmailStatus.Failed);
+        var scheduled = scoped.Count(n => n.ScheduledAtUtc.HasValue && n.ScheduledAtUtc.Value > now);
+        var total = scoped.Count;
+        var pending = scoped.Count(n => n.EmailStatus == EmailStatus.Pending);
 
         return Task.FromResult(new NotificationHistoryStats(sentToday, delivered, failed, scheduled, total, pending));
     }

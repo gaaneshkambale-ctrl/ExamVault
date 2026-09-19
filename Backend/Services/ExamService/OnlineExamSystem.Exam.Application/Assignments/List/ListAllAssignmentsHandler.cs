@@ -14,5 +14,5 @@ public class ListAllAssignmentsHandler
     public Task<IReadOnlyList<AssignmentWithExamTitle>> HandleAsync(
         ListAllAssignmentsQuery query,
         CancellationToken cancellationToken = default) =>
-        _examRepository.GetAllAssignmentsAsync(cancellationToken);
+        _examRepository.GetAllAssignmentsAsync(query.OwnerUserId, cancellationToken);
 }

@@ -21,13 +21,21 @@ public class GetExamHandler
             return null;
         }
 
-        if (query.IsAdmin)
+        if (query.Scope == ExamAccessScope.All)
         {
             return exam;
         }
 
-        // Deliberately not distinguishing "doesn't exist" from "not assigned" -
-        // both look like a 404 to a student who wasn't given access.
+        if (query.Scope == ExamAccessScope.OwnedOnly)
+        {
+            // Deliberately not distinguishing "doesn't exist" from "not yours" -
+            // both look like a 404 to an Instructor who doesn't own this exam.
+            return exam.CreatedByUserId == query.CallerId ? exam : null;
+        }
+
+        // AssignedPublishedOnly (Student) - deliberately not distinguishing
+        // "doesn't exist" from "not assigned" - both look like a 404 to a
+        // student who wasn't given access.
         if (exam.Status != ExamStatus.Published)
         {
             return null;

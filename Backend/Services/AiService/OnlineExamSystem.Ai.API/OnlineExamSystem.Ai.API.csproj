@@ -16,6 +16,7 @@
     <ProjectReference Include="..\OnlineExamSystem.Ai.Application\OnlineExamSystem.Ai.Application.csproj" />
     <ProjectReference Include="..\OnlineExamSystem.Ai.Infrastructure\OnlineExamSystem.Ai.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Contracts\OnlineExamSystem.Shared.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\Shared\OnlineExamSystem.Shared.Common\OnlineExamSystem.Shared.Common.csproj" />
   </ItemGroup>
 
 </Project>

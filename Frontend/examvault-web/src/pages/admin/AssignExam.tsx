@@ -1,19 +1,112 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Alert, Button, Card, Col, Form, ListGroup, Nav, Row, Spinner, Table } from 'react-bootstrap';
+import { isAxiosError } from 'axios';
+import { Alert, Button, Card, Col, Form, InputGroup, ListGroup, Nav, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import TablePagination from '../../components/reports/TablePagination';
 import { createAssignment, updateAssignment } from '../../api/assignmentApi';
 import { useAssignment } from '../../hooks/useAssignments';
+import { useAuth } from '../../hooks/useAuth';
 import { useExams } from '../../hooks/useExams';
 import { useGroups } from '../../hooks/useGroups';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
-import { useUsers } from '../../hooks/useUsers';
+import { useStudents } from '../../hooks/useUsers';
+import { useFeatures } from '../../hooks/useFeatures';
 import type { AssignmentTargetType, ExamAssignmentResponse } from '../../types/assignment';
 import { extractServerError } from '../../utils/apiError';
+import { describeScope, getExamScope, isStudentEligible } from '../../utils/examAssignmentEligibility';
 
 type WizardStep = 1 | 2 | 3 | 4;
+
+const EXAMS_PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function DocumentIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#198754" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function StepCheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+interface StatusIconProps {
+  ok: boolean;
+}
+
+function StatusIcon({ ok }: StatusIconProps) {
+  return ok ? <CheckIcon /> : <XIcon />;
+}
 
 const TIME_ZONES = [
   'UTC',
@@ -34,6 +127,8 @@ function toDatetimeLocalValue(date: Date): string {
 export default function AssignExam() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdminCaller = user?.role === 'Admin';
   const [searchParams] = useSearchParams();
   const { id: assignmentId } = useParams<{ id: string }>();
   const isEditMode = !!assignmentId;
@@ -41,13 +136,25 @@ export default function AssignExam() {
     useAssignment(assignmentId);
   const { data: exams, isLoading: examsLoading } = useExams();
   const { data: groups } = useGroups();
-  const { data: users } = useUsers();
+  const { data: students = [] } = useStudents();
   const questionCounts = useQuestionCountsByExam(exams?.map((e) => e.id));
+  const { hasFeature } = useFeatures();
+  // Real gate, not cosmetic - Submission Service's JoinRecording now
+  // requires the Proctoring PlanFeature (see ActionPlan.txt's "SPLIT
+  // LiveMonitoring" plan), so an org without it would never get a working
+  // camera feed no matter what's checked here. Disabling the toggle rather
+  // than just leaving it clickable-but-inert matches this app's own
+  // no-dead-control convention.
+  const hasProctoring = hasFeature('Proctoring');
 
   const [step, setStep] = useState<WizardStep>(1);
   const [examSearch, setExamSearch] = useState('');
   const [selectedExamId, setSelectedExamId] = useState<string | null>(searchParams.get('examId'));
   const [prefilled, setPrefilled] = useState(false);
+  const [showExamFilters, setShowExamFilters] = useState(false);
+  const [examCategoryFilter, setExamCategoryFilter] = useState('All');
+  const [examPage, setExamPage] = useState(1);
+  const [examPageSize, setExamPageSize] = useState(EXAMS_PAGE_SIZE_OPTIONS[0]);
 
   const [targetType, setTargetType] = useState<AssignmentTargetType>('Students');
   const [studentSearch, setStudentSearch] = useState('');
@@ -79,6 +186,26 @@ export default function AssignExam() {
   const [createdAssignment, setCreatedAssignment] = useState<ExamAssignmentResponse | null>(null);
   const [submitError, setSubmitError] = useState('');
 
+  // Academic-eligibility "Assign Anyway" override - the backend rejects a
+  // create-assignment request naming the ineligible students (400), and
+  // this state captures that so the panel below can offer an Admin-only
+  // override rather than just a dead-end error. Reset whenever the exam
+  // selection changes, since a different exam has a different scope.
+  const [ineligibility, setIneligibility] = useState<{ names: string[]; scope: string } | null>(null);
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  // Step 2's Students picker defaults to eligible-only when the exam is
+  // scoped - this reveals the rest (greyed out, still selectable, but will
+  // need the override above to actually be assigned).
+  const [showAllStudents, setShowAllStudents] = useState(false);
+
+  useEffect(() => {
+    setIneligibility(null);
+    setOverrideConfirmed(false);
+    setOverrideReason('');
+    setShowAllStudents(false);
+  }, [selectedExamId]);
+
   useEffect(() => {
     if (!isEditMode || !existingAssignment || prefilled) {
       return;
@@ -106,7 +233,6 @@ export default function AssignExam() {
     setPrefilled(true);
   }, [isEditMode, existingAssignment, prefilled]);
 
-  const students = useMemo(() => (users ?? []).filter((u) => u.role === 'Student'), [users]);
   // Only Published exams are assignable - an assignment on a Draft/Archived
   // exam would be silently invisible to students, so it's excluded here
   // rather than allowed through and failing at submit time.
@@ -119,11 +245,44 @@ export default function AssignExam() {
     : publishableExams.find((e) => e.id === selectedExamId) ?? null;
   const selectedGroup = (groups ?? []).find((g) => g.id === selectedGroupId) ?? null;
 
-  const filteredExams = publishableExams.filter((e) =>
-    e.title.toLowerCase().includes(examSearch.trim().toLowerCase()),
+  const examScope = useMemo(
+    () => getExamScope(selectedExam?.academicFields, selectedExam?.restrictToAcademicScope ?? false),
+    [selectedExam],
+  );
+  const hasExamScope = Object.keys(examScope).length > 0;
+  const eligibleStudents = hasExamScope ? students.filter((s) => isStudentEligible(examScope, s)) : students;
+  // Everyone if the exam has no scope; otherwise eligible-only by default,
+  // with the rest revealed (still selectable, but flagged) via
+  // showAllStudents - matches the "hiding it isn't the only protection"
+  // lesson from the Certificate feature: the backend enforces this
+  // regardless of what the picker shows.
+  const visibleStudents = !hasExamScope || showAllStudents ? students : eligibleStudents;
+
+  const examCategories = useMemo(
+    () => [...new Set(publishableExams.map((e) => e.category).filter(Boolean))],
+    [publishableExams],
   );
 
-  const availableStudents = students.filter(
+  const filteredExams = publishableExams.filter((e) => {
+    if (!e.title.toLowerCase().includes(examSearch.trim().toLowerCase())) return false;
+    if (examCategoryFilter !== 'All' && e.category !== examCategoryFilter) return false;
+    return true;
+  });
+
+  useEffect(() => {
+    setExamPage(1);
+  }, [examSearch, examCategoryFilter]);
+
+  const examTotalPages = Math.max(1, Math.ceil(filteredExams.length / examPageSize));
+  const examCurrentPage = Math.min(examPage, examTotalPages);
+  const pagedExams = filteredExams.slice(
+    (examCurrentPage - 1) * examPageSize,
+    examCurrentPage * examPageSize,
+  );
+  const examRangeStart = filteredExams.length === 0 ? 0 : (examCurrentPage - 1) * examPageSize + 1;
+  const examRangeEnd = Math.min(examCurrentPage * examPageSize, filteredExams.length);
+
+  const availableStudents = visibleStudents.filter(
     (s) => !selectedStudentIds.includes(s.id) && s.fullName.toLowerCase().includes(studentSearch.trim().toLowerCase()),
   );
   const selectedStudents = students.filter((s) => selectedStudentIds.includes(s.id));
@@ -137,7 +296,7 @@ export default function AssignExam() {
     setPickedSelected([]);
   };
   const moveAllToSelected = () => {
-    setSelectedStudentIds(students.map((s) => s.id));
+    setSelectedStudentIds(visibleStudents.map((s) => s.id));
     setPickedAvailable([]);
   };
 
@@ -161,13 +320,30 @@ export default function AssignExam() {
         autoSubmitOnTimeOver,
         enableProctoring,
         enableLiveVideo: enableProctoring && enableLiveVideo,
+        allowEligibilityOverride: overrideConfirmed,
+        overrideReason: overrideConfirmed ? overrideReason.trim() : null,
       }),
     onSuccess: (assignment) => {
       setSubmitError('');
+      setIneligibility(null);
       setCreatedAssignment(assignment);
       queryClient.invalidateQueries({ queryKey: ['assignments'] });
     },
-    onError: (error) => setSubmitError(extractServerError(error)),
+    onError: (error) => {
+      const eligibilityData = isAxiosError(error)
+        ? (error.response?.data as { ineligibleStudentNames?: string[]; examScope?: string } | undefined)
+        : undefined;
+      if (eligibilityData?.ineligibleStudentNames?.length) {
+        setIneligibility({
+          names: eligibilityData.ineligibleStudentNames,
+          scope: eligibilityData.examScope ?? describeScope(examScope),
+        });
+        setSubmitError('');
+        return;
+      }
+      setIneligibility(null);
+      setSubmitError(extractServerError(error));
+    },
   });
 
   const updateMutation = useMutation({
@@ -226,28 +402,28 @@ export default function AssignExam() {
 
   if (isEditMode && (assignmentLoading || !prefilled) && !assignmentError) {
     return (
-      <AdminLayout active="Exams">
+      <RoleAwareLayout active="Exams">
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
   if (isEditMode && assignmentError) {
     return (
-      <AdminLayout active="Exams">
+      <RoleAwareLayout active="Exams">
         <div className="text-center text-muted py-5">
           Couldn't load this assignment.{' '}
           <Link to="/admin/exams">Back to Exams</Link>
         </div>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
   if (createdAssignment) {
     return (
-      <AdminLayout active="Exams">
+      <RoleAwareLayout active="Exams">
         <Card className="border-0 shadow-sm mx-auto" style={{ maxWidth: 560 }}>
           <Card.Body className="p-4 text-center">
             <div
@@ -325,12 +501,12 @@ export default function AssignExam() {
             </div>
           </Card.Body>
         </Card>
-      </AdminLayout>
+      </RoleAwareLayout>
     );
   }
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <h1 className="h4 fw-bold mb-1 text-primary">{isEditMode ? 'Edit Assignment' : 'Assign Exam'}</h1>
       <p className="text-muted mb-4">
         {isEditMode
@@ -338,17 +514,81 @@ export default function AssignExam() {
           : 'Assign an exam to students or batches.'}
       </p>
 
-      <Nav variant="pills" className="mb-4 gap-2">
-        {stepLabels.map(({ step: s, label }) => (
-          <Nav.Item key={s}>
-            <Nav.Link active={step === s} disabled className="text-nowrap" style={step === s ? {} : { opacity: 0.6 }}>
-              {s}. {label}
-            </Nav.Link>
-          </Nav.Item>
-        ))}
-      </Nav>
+      <div className="d-flex align-items-center mb-4">
+        {stepLabels.map(({ step: s, label }, i) => {
+          const isDone = s < step;
+          const isActive = s === step;
+          return (
+            <div key={s} className="d-flex align-items-center" style={{ flex: i === stepLabels.length - 1 ? '0 0 auto' : '1 1 auto' }}>
+              <div className="d-flex align-items-center gap-2 text-nowrap">
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-circle fw-bold flex-shrink-0"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    fontSize: 13,
+                    background: isDone ? '#198754' : isActive ? '#4f46e5' : '#e9ecef',
+                    color: isDone || isActive ? 'white' : '#6c757d',
+                  }}
+                >
+                  {isDone ? <StepCheckIcon /> : s}
+                </div>
+                <span
+                  className="small"
+                  style={{ color: isActive ? '#4f46e5' : isDone ? '#198754' : '#6c757d', fontWeight: isActive ? 600 : 400 }}
+                >
+                  {label}
+                </span>
+              </div>
+              {i < stepLabels.length - 1 && (
+                <div className="flex-grow-1 mx-2" style={{ height: 2, background: isDone ? '#198754' : '#e9ecef' }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
 
-      {submitError && <Alert variant="danger">{submitError}</Alert>}
+      {ineligibility && (
+        <Alert variant="warning" className="mb-3">
+          <div className="fw-bold mb-2">⚠ Academic mismatch</div>
+          <div className="mb-2">
+            {ineligibility.names.join(', ')} {ineligibility.names.length === 1 ? 'is' : 'are'} not eligible for this
+            examination. The examination is restricted to: <strong>{ineligibility.scope}</strong>.
+          </div>
+          {isAdminCaller ? (
+            <>
+              <Form.Check
+                type="checkbox"
+                id="overrideConfirmed"
+                className="mb-2"
+                label="I confirm this exception"
+                checked={overrideConfirmed}
+                onChange={(e) => setOverrideConfirmed(e.target.checked)}
+              />
+              <Form.Group className="mb-2" style={{ maxWidth: 420 }}>
+                <Form.Label className="small mb-1">Reason *</Form.Label>
+                <Form.Control
+                  size="sm"
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                  placeholder="e.g. Backlog / Re-examination"
+                />
+              </Form.Group>
+              <Button
+                variant="warning"
+                size="sm"
+                disabled={!overrideConfirmed || !overrideReason.trim() || saveMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+              >
+                Assign Anyway
+              </Button>
+            </>
+          ) : (
+            <div className="text-muted small mb-0">Only an Admin can override this restriction.</div>
+          )}
+        </Alert>
+      )}
+      {submitError && !ineligibility && <Alert variant="danger">{submitError}</Alert>}
 
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-4">
@@ -367,21 +607,52 @@ export default function AssignExam() {
 
           {step === 1 && !isEditMode && (
             <>
-              <h2 className="h6 fw-bold mb-3">Select Exam</h2>
-              <Form.Control
-                type="search"
-                placeholder="Search exam..."
-                value={examSearch}
-                onChange={(e) => setExamSearch(e.target.value)}
-                className="mb-3"
-              />
+              <h2 className="h6 fw-bold mb-1">Select Exam</h2>
+              <p className="text-muted small mb-3">Choose an exam to assign to students or batches.</p>
+              <div className="d-flex gap-2 mb-3">
+                <InputGroup>
+                  <InputGroup.Text><SearchIcon /></InputGroup.Text>
+                  <Form.Control
+                    type="search"
+                    placeholder="Search exam by title or keyword..."
+                    value={examSearch}
+                    onChange={(e) => setExamSearch(e.target.value)}
+                  />
+                </InputGroup>
+                <Button
+                  variant={showExamFilters ? 'secondary' : 'outline-secondary'}
+                  className="d-flex align-items-center gap-2 text-nowrap"
+                  onClick={() => setShowExamFilters((v) => !v)}
+                >
+                  <FilterIcon /> Filters
+                </Button>
+              </div>
+              {showExamFilters && (
+                <Row className="g-2 mb-3">
+                  <Col md={4}>
+                    <Form.Select
+                      size="sm"
+                      value={examCategoryFilter}
+                      onChange={(e) => setExamCategoryFilter(e.target.value)}
+                    >
+                      <option value="All">All Categories</option>
+                      {examCategories.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Col>
+                </Row>
+              )}
               {examsLoading ? (
                 <div className="d-flex justify-content-center py-4">
                   <Spinner animation="border" />
                 </div>
               ) : (
+                <>
                 <Table hover className="align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th></th>
                       <th>Exam Title</th>
@@ -392,7 +663,7 @@ export default function AssignExam() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredExams.map((exam) => (
+                    {pagedExams.map((exam) => (
                       <tr
                         key={exam.id}
                         role="button"
@@ -406,7 +677,12 @@ export default function AssignExam() {
                             onChange={() => setSelectedExamId(exam.id)}
                           />
                         </td>
-                        <td>{exam.title}</td>
+                        <td>
+                          <div className="fw-medium">{exam.title}</div>
+                          {exam.category && (
+                            <span className="badge bg-light text-dark border mt-1">{exam.category}</span>
+                          )}
+                        </td>
                         <td>{exam.creationMethod === 'AiGenerated' ? 'AI Generated' : 'Manual'}</td>
                         <td>{questionCounts[exam.id] ?? exam.totalQuestions}</td>
                         <td>{exam.durationMinutes} min</td>
@@ -415,6 +691,20 @@ export default function AssignExam() {
                     ))}
                   </tbody>
                 </Table>
+                {filteredExams.length > 0 && (
+                  <TablePagination
+                    page={examCurrentPage}
+                    totalPages={examTotalPages}
+                    rangeStart={examRangeStart}
+                    rangeEnd={examRangeEnd}
+                    totalCount={filteredExams.length}
+                    onPageChange={setExamPage}
+                    pageSize={examPageSize}
+                    pageSizeOptions={EXAMS_PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setExamPageSize}
+                  />
+                )}
+                </>
               )}
               {!examsLoading && publishableExams.length === 0 && (
                 <div className="text-center text-muted py-4">
@@ -429,7 +719,14 @@ export default function AssignExam() {
 
           {step === 2 && (
             <>
-              <h2 className="h6 fw-bold mb-3">Choose students or batches to assign the exam.</h2>
+              <p className="text-muted mb-3">Choose students or batches to assign the exam.</p>
+              {hasExamScope && (
+                <Alert variant="light" className="border mb-3 py-2 px-3 small">
+                  <span className="text-muted">Academic Scope: </span>
+                  <strong>{describeScope(examScope)}</strong>
+                  {!examScope.division && <span className="text-muted"> / All Divisions</span>}
+                </Alert>
+              )}
               <Nav variant="tabs" className="mb-3">
                 <Nav.Item>
                   <Nav.Link active={targetType === 'Students'} onClick={() => setTargetType('Students')}>
@@ -451,86 +748,162 @@ export default function AssignExam() {
               {targetType === 'Students' && (
                 <Row className="g-3">
                   <Col md={5}>
-                    <div className="fw-medium small mb-2">Available Students</div>
-                    <Form.Control
-                      type="search"
-                      placeholder="Search students..."
-                      value={studentSearch}
-                      onChange={(e) => setStudentSearch(e.target.value)}
-                      className="mb-2"
-                    />
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="fw-medium small">
+                        {hasExamScope
+                          ? showAllStudents
+                            ? `All Students (${availableStudents.length})`
+                            : `Eligible Students (${availableStudents.length})`
+                          : `Available Students (${availableStudents.length})`}
+                      </div>
+                      {hasExamScope && (
+                        <Form.Check
+                          type="checkbox"
+                          label="Show all students"
+                          className="small"
+                          checked={showAllStudents}
+                          onChange={(e) => setShowAllStudents(e.target.checked)}
+                        />
+                      )}
+                    </div>
+                    <InputGroup className="mb-2">
+                      <InputGroup.Text><SearchIcon /></InputGroup.Text>
+                      <Form.Control
+                        type="search"
+                        placeholder="Search students..."
+                        value={studentSearch}
+                        onChange={(e) => setStudentSearch(e.target.value)}
+                      />
+                    </InputGroup>
                     <ListGroup style={{ maxHeight: 280, overflowY: 'auto' }}>
-                      {availableStudents.map((s) => (
-                        <ListGroup.Item
-                          key={s.id}
-                          action
-                          active={pickedAvailable.includes(s.id)}
-                          onClick={() =>
-                            setPickedAvailable((prev) =>
-                              prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
-                            )
-                          }
-                        >
-                          <Form.Check
-                            type="checkbox"
-                            readOnly
-                            checked={pickedAvailable.includes(s.id)}
-                            label={`${s.fullName}`}
-                          />
-                        </ListGroup.Item>
-                      ))}
+                      {availableStudents.map((s) => {
+                        const eligible = !hasExamScope || isStudentEligible(examScope, s);
+                        return (
+                          <ListGroup.Item
+                            key={s.id}
+                            action
+                            active={pickedAvailable.includes(s.id)}
+                            onClick={() =>
+                              setPickedAvailable((prev) =>
+                                prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
+                              )
+                            }
+                          >
+                            <Form.Check
+                              type="checkbox"
+                              readOnly
+                              checked={pickedAvailable.includes(s.id)}
+                              label={
+                                <>
+                                  {s.fullName}
+                                  {!eligible && (
+                                    <span className="text-warning ms-2 small">⚠ Outside academic scope</span>
+                                  )}
+                                </>
+                              }
+                            />
+                          </ListGroup.Item>
+                        );
+                      })}
                       {availableStudents.length === 0 && (
-                        <div className="text-center text-muted small py-3">No students available.</div>
+                        <div className="text-center text-muted small py-3">
+                          {hasExamScope && !showAllStudents ? 'No eligible students found.' : 'No students available.'}
+                        </div>
                       )}
                     </ListGroup>
                     <Form.Check
                       type="checkbox"
-                      label="Select All"
+                      label={hasExamScope && !showAllStudents ? 'Select All Eligible Students' : 'Select All'}
                       className="mt-2"
-                      checked={selectedStudentIds.length === students.length && students.length > 0}
+                      checked={selectedStudentIds.length === visibleStudents.length && visibleStudents.length > 0}
                       onChange={(e: ChangeEvent<HTMLInputElement>) =>
                         e.target.checked ? moveAllToSelected() : setSelectedStudentIds([])
                       }
                     />
                   </Col>
                   <Col md={2} className="d-flex flex-column align-items-center justify-content-center gap-2">
-                    <Button variant="outline-secondary" size="sm" onClick={moveToSelected} disabled={pickedAvailable.length === 0}>
-                      &gt;
+                    <Button
+                      variant="outline-secondary"
+                      onClick={moveToSelected}
+                      disabled={pickedAvailable.length === 0}
+                      className="d-flex align-items-center justify-content-center"
+                      style={{ width: 40, height: 40 }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
                     </Button>
-                    <Button variant="outline-secondary" size="sm" onClick={moveToAvailable} disabled={pickedSelected.length === 0}>
-                      &lt;
+                    <Button
+                      variant="outline-secondary"
+                      onClick={moveToAvailable}
+                      disabled={pickedSelected.length === 0}
+                      className="d-flex align-items-center justify-content-center"
+                      style={{ width: 40, height: 40 }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                      </svg>
                     </Button>
                   </Col>
                   <Col md={5}>
                     <div className="fw-medium small mb-2">Selected Students ({selectedStudents.length})</div>
-                    <ListGroup style={{ maxHeight: 280, overflowY: 'auto', minHeight: 40 }}>
-                      {selectedStudents.map((s) => (
-                        <ListGroup.Item
-                          key={s.id}
-                          className="d-flex justify-content-between align-items-center"
+                    {selectedStudents.length === 0 ? (
+                      <div
+                        className="d-flex flex-column align-items-center justify-content-center text-center border rounded-3 p-4 bg-body-tertiary"
+                        style={{ minHeight: 280 }}
+                      >
+                        <div
+                          className="d-flex align-items-center justify-content-center rounded-circle mb-3"
+                          style={{ width: 72, height: 72, background: '#eef2ff' }}
                         >
-                          <Form.Check
-                            type="checkbox"
-                            readOnly
-                            checked={pickedSelected.includes(s.id)}
-                            label={s.fullName}
-                            onClick={() =>
-                              setPickedSelected((prev) =>
-                                prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
-                              )
-                            }
-                          />
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="text-danger p-0"
-                            onClick={() => setSelectedStudentIds((prev) => prev.filter((id) => id !== s.id))}
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#c7d2fe" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                          </svg>
+                        </div>
+                        <div className="fw-bold small">No students selected</div>
+                        <div className="text-muted small">Choose students from the list to assign the exam.</div>
+                      </div>
+                    ) : (
+                    <ListGroup style={{ maxHeight: 280, overflowY: 'auto', minHeight: 40 }}>
+                      {selectedStudents.map((s) => {
+                        const eligible = !hasExamScope || isStudentEligible(examScope, s);
+                        return (
+                          <ListGroup.Item
+                            key={s.id}
+                            className="d-flex justify-content-between align-items-center"
                           >
-                            &times;
-                          </Button>
-                        </ListGroup.Item>
-                      ))}
+                            <Form.Check
+                              type="checkbox"
+                              readOnly
+                              checked={pickedSelected.includes(s.id)}
+                              label={
+                                <>
+                                  {s.fullName}
+                                  {!eligible && <span className="text-warning ms-2 small">⚠ Outside academic scope</span>}
+                                </>
+                              }
+                              onClick={() =>
+                                setPickedSelected((prev) =>
+                                  prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
+                                )
+                              }
+                            />
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="text-danger p-0"
+                              onClick={() => setSelectedStudentIds((prev) => prev.filter((id) => id !== s.id))}
+                            >
+                              &times;
+                            </Button>
+                          </ListGroup.Item>
+                        );
+                      })}
                     </ListGroup>
+                    )}
                   </Col>
                 </Row>
               )}
@@ -563,7 +936,16 @@ export default function AssignExam() {
 
               {targetType === 'AllStudents' && (
                 <Alert variant="info" className="mb-0">
-                  This exam will be assigned to all {students.length} student account(s) currently in the system.
+                  {hasExamScope ? (
+                    <>
+                      This exam will be assigned to all {eligibleStudents.length} student account(s) matching its academic scope.
+                      {students.length - eligibleStudents.length > 0 && (
+                        <> The other {students.length - eligibleStudents.length} student account(s) outside this scope will need an Admin override.</>
+                      )}
+                    </>
+                  ) : (
+                    <>This exam will be assigned to all {students.length} student account(s) currently in the system.</>
+                  )}
                 </Alert>
               )}
             </>
@@ -571,23 +953,37 @@ export default function AssignExam() {
 
           {step === 3 && (
             <Row className="g-4">
-              <Col md={6}>
-                <h2 className="h6 fw-bold mb-3">Schedule</h2>
+              <Col md={6} className="pe-md-4">
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <div
+                    className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                    style={{ width: 32, height: 32, background: '#eef2ff' }}
+                  >
+                    <CalendarIcon />
+                  </div>
+                  <h2 className="h6 fw-bold mb-0">Schedule</h2>
+                </div>
                 <Form.Group className="mb-3">
                   <Form.Label>Start Date &amp; Time</Form.Label>
-                  <Form.Control
-                    type="datetime-local"
-                    value={startAtLocal}
-                    onChange={(e) => setStartAtLocal(e.target.value)}
-                  />
+                  <InputGroup>
+                    <InputGroup.Text><CalendarIcon /></InputGroup.Text>
+                    <Form.Control
+                      type="datetime-local"
+                      value={startAtLocal}
+                      onChange={(e) => setStartAtLocal(e.target.value)}
+                    />
+                  </InputGroup>
                 </Form.Group>
                 <Form.Group className="mb-3">
                   <Form.Label>End Date &amp; Time</Form.Label>
-                  <Form.Control
-                    type="datetime-local"
-                    value={endAtLocal}
-                    onChange={(e) => setEndAtLocal(e.target.value)}
-                  />
+                  <InputGroup>
+                    <InputGroup.Text><CalendarIcon /></InputGroup.Text>
+                    <Form.Control
+                      type="datetime-local"
+                      value={endAtLocal}
+                      onChange={(e) => setEndAtLocal(e.target.value)}
+                    />
+                  </InputGroup>
                 </Form.Group>
                 <Form.Group className="mb-3">
                   <Form.Label>Time Zone</Form.Label>
@@ -629,8 +1025,16 @@ export default function AssignExam() {
                   </Form.Group>
                 )}
               </Col>
-              <Col md={6}>
-                <h2 className="h6 fw-bold mb-3">More Settings</h2>
+              <Col md={6} className="ps-md-4 border-start">
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <div
+                    className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                    style={{ width: 32, height: 32, background: '#eef2ff' }}
+                  >
+                    <GearIcon />
+                  </div>
+                  <h2 className="h6 fw-bold mb-0">More Settings</h2>
+                </div>
                 <div className="d-flex flex-column gap-3">
                   <Form.Check
                     type="switch"
@@ -672,6 +1076,7 @@ export default function AssignExam() {
                     id="enableProctoring"
                     label="Enable Proctoring"
                     checked={enableProctoring}
+                    disabled={!hasProctoring}
                     onChange={(e) => {
                       setEnableProctoring(e.target.checked);
                       if (!e.target.checked) {
@@ -685,14 +1090,20 @@ export default function AssignExam() {
                     label="Allow Live Video Feed"
                     className="ms-4 mt-1"
                     checked={enableLiveVideo}
-                    disabled={!enableProctoring}
+                    disabled={!hasProctoring || !enableProctoring}
                     onChange={(e) => setEnableLiveVideo(e.target.checked)}
                   />
-                  <div className="form-text ms-4">
-                    Lets an admin watch this student's camera live during the exam. Face-detection and
-                    tab/window monitoring above work either way - this only controls whether the camera is
-                    ever published for watching.
-                  </div>
+                  {hasProctoring ? (
+                    <div className="form-text ms-4">
+                      Lets an admin watch this student's camera live during the exam. Face-detection and
+                      tab/window monitoring above work either way - this only controls whether the camera is
+                      ever published for watching.
+                    </div>
+                  ) : (
+                    <div className="form-text ms-4 text-warning">
+                      Your organization's plan doesn't include Proctoring, so this can't be turned on.
+                    </div>
+                  )}
                 </div>
               </Col>
             </Row>
@@ -700,12 +1111,23 @@ export default function AssignExam() {
 
           {step === 4 && selectedExam && (
             <>
-              <h2 className="h6 fw-bold mb-3">Review assignment details before confirming.</h2>
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-2 flex-shrink-0"
+                  style={{ width: 32, height: 32, background: '#eef2ff' }}
+                >
+                  <DocumentIcon />
+                </div>
+                <h2 className="h6 fw-bold mb-0">Review assignment details before confirming.</h2>
+              </div>
               <Row className="g-3 mb-3">
                 <Col md={6}>
                   <Card className="border h-100">
                     <Card.Body>
-                      <div className="fw-bold small text-uppercase text-muted mb-2">Exam Details</div>
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <DocumentIcon />
+                        <div className="fw-bold small text-uppercase text-muted">Exam Details</div>
+                      </div>
                       <Row className="mb-2">
                         <Col xs={6} className="text-muted small">
                           Exam Title
@@ -742,7 +1164,10 @@ export default function AssignExam() {
                 <Col md={6}>
                   <Card className="border h-100">
                     <Card.Body>
-                      <div className="fw-bold small text-uppercase text-muted mb-2">Assignment Details</div>
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <PeopleIcon />
+                        <div className="fw-bold small text-uppercase text-muted">Assignment Details</div>
+                      </div>
                       <Row className="mb-2">
                         <Col xs={6} className="text-muted small">
                           Assign To
@@ -753,6 +1178,16 @@ export default function AssignExam() {
                           {targetType === 'AllStudents' && `All Students (${students.length})`}
                         </Col>
                       </Row>
+                      {overrideConfirmed && overrideReason.trim() && (
+                        <Row className="mb-2">
+                          <Col xs={12}>
+                            <Alert variant="warning" className="py-2 px-2 mb-0 small">
+                              This assignment includes student(s) outside the exam&apos;s academic scope - Reason:{' '}
+                              {overrideReason.trim()}
+                            </Alert>
+                          </Col>
+                        </Row>
+                      )}
                       <Row className="mb-2">
                         <Col xs={6} className="text-muted small">
                           Start Date &amp; Time
@@ -782,50 +1217,48 @@ export default function AssignExam() {
                 </Col>
               </Row>
 
-              <Row className="g-3">
-                <Col md={6}>
-                  <Card className="border">
-                    <Card.Body>
-                      <div className="fw-bold small text-uppercase text-muted mb-2">Settings Summary</div>
+              <Card className="border">
+                <Card.Body>
+                  <div className="d-flex align-items-center gap-2 mb-3">
+                    <GearIcon />
+                    <div className="fw-bold small text-uppercase text-muted">Settings Summary</div>
+                  </div>
+                  <Row>
+                    <Col md={6}>
                       {[
                         ['Show Instructions', showInstructions],
-                        ['Show Results', showResultsAfterSubmit],
+                        ['Show Results After Submit', showResultsAfterSubmit],
                         ['Show Correct Answers', showCorrectAnswers],
                         ['Allow Review After Submit', allowReviewAfterSubmit],
                       ].map(([label, value]) => (
-                        <div key={label as string} className="d-flex justify-content-between border-bottom py-1">
+                        <div key={label as string} className="d-flex justify-content-between align-items-center border-bottom py-2">
                           <span>{label}</span>
-                          <span className={value ? 'text-success' : 'text-danger'}>{value ? '✓' : '✗'}</span>
+                          <StatusIcon ok={value as boolean} />
                         </div>
                       ))}
-                    </Card.Body>
-                  </Card>
-                </Col>
-                <Col md={6}>
-                  <Card className="border">
-                    <Card.Body>
-                      <div className="fw-bold small text-uppercase text-muted mb-2">&nbsp;</div>
+                    </Col>
+                    <Col md={6} className="ps-md-4 border-start">
                       {[
                         ['Allow Late Join', allowLateJoin],
                         ['Auto Submit on Time Over', autoSubmitOnTimeOver],
                         ['Enable Proctoring', enableProctoring],
                         ['Allow Live Video Feed', enableProctoring && enableLiveVideo],
                       ].map(([label, value]) => (
-                        <div key={label as string} className="d-flex justify-content-between border-bottom py-1">
+                        <div key={label as string} className="d-flex justify-content-between align-items-center border-bottom py-2">
                           <span>{label}</span>
-                          <span className={value ? 'text-success' : 'text-danger'}>{value ? '✓' : '✗'}</span>
+                          <StatusIcon ok={value as boolean} />
                         </div>
                       ))}
                       {allowLateJoin && (
-                        <div className="d-flex justify-content-between py-1">
-                          <span>Grace Time</span>
-                          <span>{graceTimeMinutes} minutes</span>
+                        <div className="d-flex justify-content-between align-items-center py-2">
+                          <span>Grace Time (after start)</span>
+                          <span className="fw-medium">{graceTimeMinutes} minutes</span>
                         </div>
                       )}
-                    </Card.Body>
-                  </Card>
-                </Col>
-              </Row>
+                    </Col>
+                  </Row>
+                </Card.Body>
+              </Card>
             </>
           )}
         </Card.Body>
@@ -850,7 +1283,18 @@ export default function AssignExam() {
             </Button>
           )}
           {step === 4 && (
-            <Button variant="success" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+            <Button
+              variant="success"
+              disabled={saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+              className="d-flex align-items-center gap-2"
+            >
+              {!saveMutation.isPending && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              )}
               {saveMutation.isPending
                 ? isEditMode
                   ? 'Saving...'
@@ -862,6 +1306,6 @@ export default function AssignExam() {
           )}
         </div>
       </div>
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

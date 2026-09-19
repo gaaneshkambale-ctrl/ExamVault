@@ -14,8 +14,10 @@ using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Application.Questions.BulkAssignSection;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
+using OnlineExamSystem.Question.Application.Questions.DeleteForExam;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.ListAll;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Infrastructure.Clients;
@@ -51,21 +53,54 @@ public class Program
         builder.Services.AddScoped<CreateQuestionHandler>();
         builder.Services.AddScoped<GetQuestionHandler>();
         builder.Services.AddScoped<ListQuestionsHandler>();
+        builder.Services.AddScoped<ListAllQuestionsHandler>();
         builder.Services.AddScoped<IValidator<UpdateQuestionCommand>, UpdateQuestionValidator>();
         builder.Services.AddScoped<UpdateQuestionHandler>();
         builder.Services.AddScoped<DeleteQuestionHandler>();
         builder.Services.AddScoped<BulkAssignSectionHandler>();
         builder.Services.AddScoped<UnassignSectionHandler>();
+        builder.Services.AddScoped<DeleteForExamHandler>();
 
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
-            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            // Fire-and-forget audit write must fail fast, not hang on the default
+            // 100s HttpClient timeout - a down NotificationService would otherwise
+            // make every audited business action (exam/question/user create, etc.)
+            // multi-second-to-100s slow instead of merely un-audited. Same value
+            // as the "system-logs" client below.
+            client.Timeout = TimeSpan.FromSeconds(3);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            // HttpClient.Timeout alone measured ~7-12s against a stopped
+            // container in this environment (DNS-resolution-to-a-torn-down-
+            // endpoint overhead sits partly outside that timeout's reach).
+            // ConnectTimeout bounds the DNS+TCP-connect phase specifically,
+            // giving the fast-fail this client actually needs.
+            ConnectTimeout = TimeSpan.FromSeconds(2),
+        });
         builder.Services.AddHttpClient("system-logs", client =>
         {
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
         });
+
+        var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+
+        var executionServiceBaseUrl = builder.Configuration["Services:ExecutionServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:ExecutionServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<ISqlExpectedOutputClient, SqlExpectedOutputClient>(client =>
+            client.BaseAddress = new Uri(executionServiceBaseUrl.TrimEnd('/') + "/"));
+
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
@@ -89,7 +124,11 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
 

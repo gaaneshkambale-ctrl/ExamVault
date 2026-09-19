@@ -31,4 +31,13 @@ public class ExamQuestion : TenantScopedEntity
     // manual grading only.
     public string? FunctionName { get; set; }
     public ParameterType? ReturnType { get; set; }
+
+    // Code/Programming questions only - illustrative example shown to the
+    // student alongside the problem statement (distinct from TestCases,
+    // which drive grading). Constraints is one bullet per line when
+    // rendered; the student view labels it "Constraints" or "Notes"
+    // depending on ProgrammingLanguage, but it is the same field either way.
+    public string? SampleInput { get; set; }
+    public string? SampleOutput { get; set; }
+    public string? Constraints { get; set; }
 }

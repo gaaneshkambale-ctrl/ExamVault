@@ -24,6 +24,8 @@ import { PROGRAMMING_LANGUAGES } from '../../types/question';
 import { runCode, runSql } from '../../api/executionApi';
 import type { RunCodeResponse } from '../../types/execution';
 import { formatTypedValue } from '../../utils/typedValue';
+import { parseSqlSetup, parseSqlRowSet, toSqlTableRows } from '../../utils/sqlSetupParser';
+import DataTable from '../../components/DataTable';
 
 // Lazy-loaded - Monaco is several MB and must not bloat the app's main
 // bundle for every page that isn't a code question.
@@ -109,6 +111,105 @@ function SectionBulbIcon() {
       <path d="M9 18h6" />
       <path d="M10 22h4" />
       <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1v.2h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  );
+}
+
+function ExpandIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+    </svg>
+  );
+}
+
+function CollapseIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+      <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+      <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+      <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+    </svg>
+  );
+}
+
+function TestCaseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
+function QueryResultEmptyIcon() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#adb5bd" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="3" y1="15" x2="21" y2="15" />
+      <line x1="9" y1="3" x2="9" y2="21" />
+      <line x1="15" y1="3" x2="15" y2="21" />
+    </svg>
+  );
+}
+
+function TestCaseStatusIcon({ passed }: { passed: boolean | null }) {
+  if (passed === null) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#adb5bd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={passed ? '#16a34a' : '#dc3545'}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      {passed ? <path d="M8 12.5l2.5 2.5L16 9.5" /> : <path d="M9 9l6 6M15 9l-6 6" />}
+    </svg>
+  );
+}
+
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ transform: expanded ? 'rotate(180deg)' : undefined, transition: 'transform 0.15s ease' }}
+    >
+      <polyline points="6 9 12 15 18 9" />
     </svg>
   );
 }
@@ -262,6 +363,12 @@ export default function TakeExam() {
   const [runningQuestionId, setRunningQuestionId] = useState<string | null>(null);
   const [runCooldownUntil, setRunCooldownUntil] = useState<Record<string, number>>({});
   const [nowTick, setNowTick] = useState(Date.now());
+  const [isEditorExpanded, setIsEditorExpanded] = useState(false);
+  const [resultTab, setResultTab] = useState<'cases' | 'messages'>('cases');
+  // Collapsed by default so a student checks test cases one at a time
+  // instead of seeing every Input/Expected/Got at once - keyed by
+  // "questionId:index" so expand state doesn't bleed between questions.
+  const [expandedTestCases, setExpandedTestCases] = useState<Record<string, boolean>>({});
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [sectionRemainingSeconds, setSectionRemainingSeconds] = useState<number | null>(null);
   const [navFilter, setNavFilter] = useState<NavFilter>('all');
@@ -420,33 +527,102 @@ export default function TakeExam() {
   // is scoped to whichever section is currently open.
   const allQuestions = questions ?? [];
 
+  // Locks the shuffled order in once per attempt (sectionGroupsCacheRef),
+  // rather than recomputing on every `questions`/`sections` refetch (window
+  // refocus, background poll) - `shuffle()` is unseeded, so recomputing mid-
+  // attempt used to produce a NEW random order, desyncing the "Question X of
+  // Y" header/navigator from the actually-displayed question and silently
+  // saving answers against the wrong one. Only locks once `questions` (and
+  // `sections`, if this exam has any) have actually loaded, so an early
+  // computation before sections arrive doesn't get stuck ungrouped.
+  const sectionGroupsCacheRef = useRef<{ attemptId: string | null; groups: SectionGroup[] } | null>(null);
   const sectionGroups = useMemo<SectionGroup[]>(() => {
+    if (sectionGroupsCacheRef.current?.attemptId === attemptId) {
+      return sectionGroupsCacheRef.current.groups;
+    }
     if (!questions) {
       return [];
     }
+
+    let groups: SectionGroup[];
     if (!isSectioned) {
       const ordered = exam?.shuffleQuestions ? shuffle(questions) : questions;
       const withOptions = exam?.shuffleOptions
         ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
         : ordered;
-      return [{ section: null, questions: withOptions }];
+      groups = [{ section: null, questions: withOptions }];
+    } else {
+      groups = orderedSections.map((section) => {
+        const sectionQuestions = questions.filter((q) => q.sectionId === section.id);
+        const ordered = section.shuffleQuestions ? shuffle(sectionQuestions) : sectionQuestions;
+        const withOptions = section.shuffleOptions
+          ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
+          : ordered;
+        return { section, questions: withOptions };
+      });
     }
-    return orderedSections.map((section) => {
-      const sectionQuestions = questions.filter((q) => q.sectionId === section.id);
-      const ordered = section.shuffleQuestions ? shuffle(sectionQuestions) : sectionQuestions;
-      const withOptions = section.shuffleOptions
-        ? ordered.map((q) => ({ ...q, options: shuffle(q.options) }))
-        : ordered;
-      return { section, questions: withOptions };
-    });
-    // Deliberately keyed on the shuffle flags rather than the whole `exam`
-    // object, so the layout doesn't reshuffle on unrelated exam refetches.
-  }, [questions, isSectioned, orderedSections, exam?.shuffleQuestions, exam?.shuffleOptions]);
+
+    // `exam` itself (not just `sections`) must have loaded before deciding
+    // whether sections are "ready" - while `exam` is still undefined,
+    // `exam?.containsSections` is also undefined, which made this true
+    // regardless of whether the exam actually has sections. That let a
+    // race (attemptId resolving before the exam metadata fetch finishes)
+    // permanently cache every question into one ungrouped section for a
+    // real sectioned exam - the sections query itself is gated on
+    // `exam?.containsSections` (see useSections below) so it never even
+    // starts until `exam` loads, meaning `sections !== undefined` alone
+    // was never a safe proxy for "this exam's real sections are known."
+    const sectionsReady = exam !== undefined && (!exam.containsSections || sections !== undefined);
+    if (sectionsReady) {
+      sectionGroupsCacheRef.current = { attemptId, groups };
+    }
+    return groups;
+  }, [
+    attemptId,
+    questions,
+    isSectioned,
+    orderedSections,
+    sections,
+    exam?.containsSections,
+    exam?.shuffleQuestions,
+    exam?.shuffleOptions,
+  ]);
 
   const currentGroup = sectionIndex >= 0 ? sectionGroups[sectionIndex] : undefined;
   const displayQuestions = useMemo(() => currentGroup?.questions ?? [], [currentGroup]);
   const navigationType = currentGroup?.section?.navigationType ?? 'Free';
-  const isForwardOnly = navigationType !== 'Free';
+
+  // A question is "answered" the same way navState treats it (a real
+  // selection/text), independent of the "marked for review" flag - used to
+  // gate Locked-section navigation on real answered state rather than on
+  // `visited`, which resets to nothing useful on refresh.
+  const isQuestionAnswered = (question: QuestionResponse): boolean =>
+    Boolean(answers[question.id]?.selectedOptionId || answers[question.id]?.textAnswer || answers[question.id]?.selectedOptionIds?.length);
+
+  // Sequential and Locked used to collapse into one identical "forward-only"
+  // rule. They're actually different: Sequential is strict one-at-a-time
+  // forward progress (matches the admin UI's "must answer in order"
+  // description); Locked lets a student jump to ANY not-yet-answered
+  // question in the section, but a question with a real saved answer
+  // becomes permanently unreachable ("once answered, cannot be revisited") -
+  // this also closes the old refresh bypass for Locked sections for free,
+  // since it keys off `answers` (server-rehydrated on load), not the
+  // unpersisted `currentIndex`.
+  const canNavigateToIndex = (index: number): boolean => {
+    if (index === currentIndex || navigationType === 'Free') {
+      return true;
+    }
+    if (navigationType === 'Locked') {
+      const target = displayQuestions[index];
+      return target ? !isQuestionAnswered(target) : false;
+    }
+    return index === currentIndex + 1;
+  };
+
+  // Exam-level: hides Mark for Review and skips the Review Summary screen
+  // entirely when off. Section-level AllowReview is handled separately,
+  // alongside the existing Free-section re-entry checks below.
+  const reviewAllowed = exam?.allowReview !== false;
 
   const persistAnswer = (questionId: string, answer: AnswerState) => {
     if (!attemptId) {
@@ -522,7 +698,11 @@ export default function TakeExam() {
       if (current) {
         persistAnswer(current.id, answers[current.id] ?? EMPTY_ANSWER);
       }
-      setMode('review');
+      if (reviewAllowed) {
+        setMode('review');
+      } else {
+        runSubmit(false);
+      }
     }
   };
 
@@ -757,9 +937,7 @@ export default function TakeExam() {
   };
 
   const goToIndex = (index: number) => {
-    // Forward-only sections still need to allow the one-step advance that
-    // "Save & Next" drives - only block backward jumps and skips ahead.
-    if (isForwardOnly && index !== currentIndex && index !== currentIndex + 1) {
+    if (!canNavigateToIndex(index)) {
       return;
     }
     const current = displayQuestions[currentIndex];
@@ -790,6 +968,13 @@ export default function TakeExam() {
   const isLoading = mode === 'loading' || isLoadingExam || isLoadingQuestions || (mode === 'take' && !sectionInitialized);
   const currentQuestion = displayQuestions[currentIndex];
   const currentAnswer = currentQuestion ? (answers[currentQuestion.id] ?? EMPTY_ANSWER) : null;
+
+  // Never carry a maximized editor (or the previous question's Messages tab
+  // selection) over to a different question.
+  useEffect(() => {
+    setIsEditorExpanded(false);
+    setResultTab('cases');
+  }, [currentQuestion?.id]);
 
   // Bucketed off navState (not raw answer flags) so the grid colors, the
   // filter tabs, and the stats row can never disagree with each other - a
@@ -840,7 +1025,15 @@ export default function TakeExam() {
             const isCurrent = index === sectionIndex;
             const isCompleted = Boolean(sectionStates[section.id]?.isCompleted);
             const isOpenable = canOpenSection(index);
-            const isLocked = !isOpenable && !isCurrent && !isCompleted;
+            // A completed non-Free section can only be re-entered while
+            // it's still the current one - clicking back into it later
+            // used to hit the server's own completed-section rejection
+            // (Sequential/Locked sections lock once finished), surfacing
+            // as a raw error. Same rule the Review screen's own section
+            // list already applies via `canReturn`.
+            const canReenterCompleted = (section.navigationType === 'Free' && section.allowReview) || isCurrent;
+            const isClickable = isCurrent || (isCompleted ? canReenterCompleted : isOpenable);
+            const isLocked = !isClickable;
             const sectionQuestions = sectionGroups[index]?.questions ?? [];
             const total = sectionQuestions.length;
             const answered = sectionQuestions.filter((q) => navState(q) === 'answered').length;
@@ -853,7 +1046,7 @@ export default function TakeExam() {
               <button
                 key={section.id}
                 type="button"
-                disabled={sectionEntering || (!isOpenable && !isCurrent)}
+                disabled={sectionEntering || !isClickable}
                 onClick={() => void switchToSection(index)}
                 className="text-start border-0 bg-transparent p-0 flex-shrink-0"
                 style={{ width: 216, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'pointer' }}
@@ -861,22 +1054,34 @@ export default function TakeExam() {
                 <div
                   className="d-flex align-items-center gap-2 px-3 py-3 rounded-4"
                   style={{
-                    border: isCurrent ? '1.5px solid #4f46e5' : '1px solid #e5e7eb',
-                    background: isCurrent ? '#eef2ff' : 'white',
+                    border: isCurrent ? '1.5px solid #4f46e5' : '1px solid var(--bs-border-color)',
+                    background: isCurrent ? 'var(--bs-primary-bg-subtle)' : 'var(--bs-tertiary-bg)',
                     boxShadow: isCurrent ? '0 4px 10px rgba(79, 70, 229, 0.14)' : 'none',
                   }}
                 >
                   <div className="position-relative flex-shrink-0">
                     <div
                       className="rounded-circle d-flex align-items-center justify-content-center"
-                      style={{ width: 36, height: 36, background: '#e0e7ff', color: '#4338ca' }}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        background: 'var(--bs-primary-bg-subtle)',
+                        color: 'var(--bs-primary-text-emphasis)',
+                      }}
                     >
                       {isLocked ? '\u{1F512}' : <SectionIcon />}
                     </div>
                     {isCompleted && (
                       <span
                         className="position-absolute rounded-circle bg-success text-white d-flex align-items-center justify-content-center"
-                        style={{ width: 14, height: 14, fontSize: 9, bottom: -2, right: -2, border: '1.5px solid white' }}
+                        style={{
+                          width: 14,
+                          height: 14,
+                          fontSize: 9,
+                          bottom: -2,
+                          right: -2,
+                          border: '1.5px solid var(--bs-body-bg)',
+                        }}
                       >
                         &#10003;
                       </span>
@@ -884,8 +1089,8 @@ export default function TakeExam() {
                   </div>
                   <div className="flex-grow-1 overflow-hidden">
                     <div
-                      className="fw-semibold text-truncate"
-                      style={{ fontSize: 13.5, color: '#0f172a' }}
+                      className="fw-semibold text-truncate text-body"
+                      style={{ fontSize: 13.5 }}
                       title={section.name}
                     >
                       {section.name}
@@ -900,7 +1105,10 @@ export default function TakeExam() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-1 rounded-pill" style={{ height: 3, background: '#e5e7eb', overflow: 'hidden' }}>
+                <div
+                  className="mt-1 rounded-pill"
+                  style={{ height: 3, background: 'var(--bs-tertiary-bg)', overflow: 'hidden' }}
+                >
                   <div
                     className="h-100 rounded-pill"
                     style={{ width: `${progressPct}%`, background: isCurrent ? '#4f46e5' : progressColor }}
@@ -975,7 +1183,7 @@ export default function TakeExam() {
               return null;
             }
             const isCurrent = mode === 'take' && index === currentIndex;
-            const isDisabled = isForwardOnly && index !== currentIndex;
+            const isDisabled = !canNavigateToIndex(index);
             return (
               <button
                 key={question.id}
@@ -986,6 +1194,12 @@ export default function TakeExam() {
                 style={{
                   width: 34,
                   height: 34,
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  whiteSpace: 'nowrap',
+                  fontSize: 13,
                   border: isCurrent ? '2px solid #2563eb' : '1px solid #dee2e6',
                   opacity: isDisabled ? 0.5 : 1,
                   ...navStateStyle[navState(question)],
@@ -1155,7 +1369,7 @@ export default function TakeExam() {
               <Button
                 variant="primary"
                 disabled={mode === 'loading' || submitMutation.isPending}
-                onClick={() => (mode === 'review' ? requestSubmit() : setMode('review'))}
+                onClick={() => (mode === 'review' || !reviewAllowed ? requestSubmit() : setMode('review'))}
               >
                 Submit Exam
               </Button>
@@ -1199,12 +1413,19 @@ export default function TakeExam() {
                       {currentGroup?.section && ' · '}
                       Question {currentIndex + 1} of {displayQuestions.length}
                     </span>
-                    <Form.Check
-                      type="checkbox"
-                      label="Mark for Review"
-                      checked={currentAnswer.isMarkedForReview}
-                      onChange={(e) => updateAnswer(currentQuestion.id, { isMarkedForReview: e.target.checked })}
-                    />
+                    <div className="d-flex align-items-center gap-3">
+                      <span className="badge rounded-pill fw-medium border text-dark bg-light">
+                        {currentQuestion.marks} Marks
+                      </span>
+                      {reviewAllowed && (
+                        <Form.Check
+                          type="checkbox"
+                          label="Mark for Review"
+                          checked={currentAnswer.isMarkedForReview}
+                          onChange={(e) => updateAnswer(currentQuestion.id, { isMarkedForReview: e.target.checked })}
+                        />
+                      )}
+                    </div>
                   </div>
 
                   {currentGroup?.section?.instructions && (
@@ -1213,7 +1434,11 @@ export default function TakeExam() {
                     </Alert>
                   )}
 
-                  <p className="fw-medium mb-4">{currentQuestion.questionText}</p>
+                  {currentQuestion.questionType !== 'CodeProgram' && (
+                    <p className="fw-medium mb-4" style={{ whiteSpace: 'pre-wrap' }}>
+                      {currentQuestion.questionText}
+                    </p>
+                  )}
 
                   {currentQuestion.questionType === 'CodeProgram' ? (
                     (() => {
@@ -1235,8 +1460,148 @@ export default function TakeExam() {
                       const cooldownRemaining = Math.max(0, Math.ceil((cooldownEndsAt - nowTick) / 1000));
                       const runResult = runResults[currentQuestion.id];
                       const runError = runErrors[currentQuestion.id];
+                      const messages = runError
+                        ? [runError]
+                        : Array.from(
+                            new Set(
+                              (runResult?.outcomes ?? [])
+                                .map((o) => o.error)
+                                .filter((e): e is string => Boolean(e)),
+                            ),
+                          );
+                      const tabButtonStyle = (active: boolean) =>
+                        active
+                          ? { background: 'white', color: '#0f172a', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }
+                          : { background: 'transparent', color: '#6c757d' };
                       return (
-                        <>
+                        <Row className="g-4">
+                          <Col xs={12} lg={5}>
+                            <h2 className="h6 fw-bold mb-1">
+                              {isSql ? 'SQL Question' : 'Coding Question'}
+                            </h2>
+                            <p className="fw-medium" style={{ whiteSpace: 'pre-wrap' }}>
+                              {currentQuestion.questionText}
+                            </p>
+
+                            {isSql && currentQuestion.sqlTestCases?.[0]?.setupSql && (() => {
+                              const setupSql = currentQuestion.sqlTestCases[0].setupSql;
+                              const parsedTables = parseSqlSetup(setupSql);
+                              return (
+                                <div className="mb-3">
+                                  <div className="fw-medium mb-1">
+                                    Use the following {parsedTables && parsedTables.length > 1 ? 'tables' : 'table'}:
+                                  </div>
+                                  {parsedTables ? (
+                                    <div className="d-flex flex-column gap-2">
+                                      {parsedTables.map((table) => (
+                                        <div key={table.tableName}>
+                                          <div className="fw-bold mb-1">{table.tableName}</div>
+                                          <div className="overflow-x-auto">
+                                            <DataTable columns={table.columns} rows={table.rows} />
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-3 overflow-hidden border">
+                                      <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
+                                        Setup SQL
+                                      </div>
+                                      <div className="bg-body px-3 py-2">
+                                        <pre
+                                          className="mb-0 small text-body"
+                                          style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                        >
+                                          {setupSql}
+                                        </pre>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
+                            {isSql && currentQuestion.sqlTestCases?.[0]?.expectedOutput != null && (() => {
+                              const parsed = parseSqlRowSet(currentQuestion.sqlTestCases[0].expectedOutput!);
+                              return (
+                                <div
+                                  className="rounded-3 overflow-hidden mb-3 border"
+                                  style={{ width: 'fit-content', maxWidth: '100%' }}
+                                >
+                                  <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
+                                    Expected Output
+                                  </div>
+                                  <div className="bg-body overflow-x-auto">
+                                    {parsed === null ? (
+                                      <pre
+                                        className="mb-0 small px-3 py-2 text-body"
+                                        style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                      >
+                                        {currentQuestion.sqlTestCases[0].expectedOutput}
+                                      </pre>
+                                    ) : parsed.rows.length === 0 ? (
+                                      <div className="text-muted small px-3 py-2">No rows returned</div>
+                                    ) : (
+                                      <DataTable columns={parsed.columns} rows={toSqlTableRows(parsed)} bordered={false} />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {!isSql && (() => {
+                              // Same real per-question test cases (and the same DataTable
+                              // rendering) the admin's Question Preview shows - one row per
+                              // parameter combination, falling back to the single sample
+                              // pair only when there are no structured test cases yet. Used
+                              // to be a single-row plain <table>, which both showed only one
+                              // example when several existed and rendered without the
+                              // DataTable's grid borders.
+                              const parameters = currentQuestion.parameters ?? [];
+                              const exampleColumns =
+                                parameters.length > 0 ? [...parameters.map((p) => p.name), 'Output'] : ['Input', 'Output'];
+                              const exampleRows: string[][] =
+                                currentQuestion.testCases && currentQuestion.testCases.length > 0
+                                  ? currentQuestion.testCases.map((tc) => [
+                                      ...tc.arguments.map((arg, i) => formatTypedValue(arg, parameters[i]?.type ?? 'String')),
+                                      currentQuestion.returnType
+                                        ? formatTypedValue(tc.expectedOutput, currentQuestion.returnType)
+                                        : String(tc.expectedOutput),
+                                    ])
+                                  : currentQuestion.sampleInput || currentQuestion.sampleOutput
+                                    ? [[currentQuestion.sampleInput ?? '', currentQuestion.sampleOutput ?? '']]
+                                    : [];
+
+                              return exampleRows.length > 0 ? (
+                                <div className="rounded-3 overflow-hidden mb-3 border">
+                                  <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
+                                    Example
+                                  </div>
+                                  <div className="bg-body overflow-x-auto">
+                                    <DataTable columns={exampleColumns} rows={exampleRows} bordered={false} />
+                                  </div>
+                                </div>
+                              ) : null;
+                            })()}
+
+                            {currentQuestion.constraints && (
+                              <div className="rounded-3 overflow-hidden mb-3 border">
+                                <div className="px-3 py-2 fw-bold small bg-primary-subtle text-primary-emphasis">
+                                  {isSql ? 'Notes' : 'Constraints'}
+                                </div>
+                                <ul className="bg-body text-body mb-0 px-4 py-2 small">
+                                  {currentQuestion.constraints
+                                    .split('\n')
+                                    .map((line) => line.trim())
+                                    .filter(Boolean)
+                                    .map((line, i) => (
+                                      <li key={i}>{line}</li>
+                                    ))}
+                                </ul>
+                              </div>
+                            )}
+                          </Col>
+                          <Col xs={12} lg={7}>
                           <div className="d-flex justify-content-between align-items-center mb-2">
                             {currentQuestion.allowLanguageChange ? (
                               <Form.Select
@@ -1257,13 +1622,62 @@ export default function TakeExam() {
                                 ))}
                               </Form.Select>
                             ) : (
-                              <span className="badge bg-light text-dark border">
+                              <span
+                                className="badge rounded-pill fw-medium"
+                                style={{ background: '#eef2ff', color: '#4338ca' }}
+                              >
                                 Language: {PROGRAMMING_LANGUAGES.find((l) => l.value === effectiveLanguage)?.label ?? effectiveLanguage}
                               </span>
                             )}
                             <span className="text-muted small">{codeValue.length} characters</span>
                           </div>
-                          <div className="border rounded overflow-hidden mb-1">
+
+                          <div className="border rounded-3 overflow-hidden mb-3">
+                            <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
+                              <span className="d-flex align-items-center gap-2 fw-semibold small">
+                                <SectionCodeIcon /> {isSql ? 'Your SQL Query' : 'Your Code'}
+                              </span>
+                              <div className="d-flex align-items-center gap-3">
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-sm text-decoration-none text-secondary p-0 d-flex align-items-center gap-1"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        'Reset your code back to the starter template? This will discard your current changes.',
+                                      )
+                                    ) {
+                                      updateTextAnswer(currentQuestion.id, currentQuestion.starterCode ?? '');
+                                      // The starter code has never been run - clear out the
+                                      // previous code's stale Passed/Failed result and any
+                                      // run error, or the Test Cases panel keeps showing an
+                                      // outcome that no longer matches what's in the editor.
+                                      setRunResults((prev) => {
+                                        const next = { ...prev };
+                                        delete next[currentQuestion.id];
+                                        return next;
+                                      });
+                                      setRunErrors((prev) => {
+                                        const next = { ...prev };
+                                        delete next[currentQuestion.id];
+                                        return next;
+                                      });
+                                      setResultTab('cases');
+                                    }
+                                  }}
+                                >
+                                  <ResetIcon /> Reset
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-sm text-decoration-none text-secondary p-0"
+                                  title={isEditorExpanded ? 'Collapse editor' : 'Expand editor'}
+                                  onClick={() => setIsEditorExpanded((prev) => !prev)}
+                                >
+                                  {isEditorExpanded ? <CollapseIcon /> : <ExpandIcon />}
+                                </button>
+                              </div>
+                            </div>
                             <Suspense
                               fallback={
                                 <div
@@ -1284,26 +1698,83 @@ export default function TakeExam() {
                             </Suspense>
                           </div>
 
-                          {hasTestCases && (
+                          {isEditorExpanded && (
                             <div
-                              className="rounded-3 overflow-hidden mt-3"
-                              style={{ background: '#1e1e1e', border: '1px solid #333' }}
+                              className="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column p-3"
+                              style={{ zIndex: 1050, background: 'rgba(15, 15, 20, 0.75)' }}
                             >
-                              <div
-                                className="d-flex justify-content-between align-items-center px-3 py-2"
-                                style={{ borderBottom: '1px solid #333' }}
-                              >
-                                <span className="text-light fw-semibold small">
-                                  Test Cases
-                                  {runResult && (
-                                    <span className="text-secondary fw-normal ms-2">
-                                      {runResult.outcomes.filter((o) => o.passed).length} / {runResult.outcomes.length} passed
-                                    </span>
-                                  )}
-                                </span>
+                              <div className="bg-body rounded-3 shadow d-flex flex-column flex-grow-1 overflow-hidden">
+                                <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
+                                  <span className="d-flex align-items-center gap-2 fw-semibold small">
+                                    <SectionCodeIcon /> {isSql ? 'Your SQL Query' : 'Your Code'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-secondary btn-sm"
+                                    onClick={() => setIsEditorExpanded(false)}
+                                  >
+                                    Close ✕
+                                  </button>
+                                </div>
+                                <div className="flex-grow-1" style={{ minHeight: 0 }}>
+                                  <Suspense
+                                    fallback={
+                                      <div className="d-flex align-items-center justify-content-center bg-dark text-light h-100">
+                                        <Spinner animation="border" size="sm" className="me-2" />
+                                        Loading editor...
+                                      </div>
+                                    }
+                                  >
+                                    <CodeEditor
+                                      language={effectiveLanguage}
+                                      value={codeValue}
+                                      onChange={(next) => updateTextAnswer(currentQuestion.id, next)}
+                                      height="100%"
+                                    />
+                                  </Suspense>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {hasTestCases && (
+                            <div className="border rounded-3 overflow-hidden mt-3">
+                              <div className="d-flex justify-content-between align-items-center px-3 py-2 bg-body-tertiary border-bottom">
+                                <div className="d-flex align-items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setResultTab('cases')}
+                                    className="btn btn-sm rounded-2 border-0 fw-semibold d-flex align-items-center gap-2"
+                                    style={tabButtonStyle(resultTab === 'cases')}
+                                  >
+                                    {isSql ? (
+                                      'Query Result'
+                                    ) : (
+                                      <>
+                                        <TestCaseIcon /> Test Cases
+                                        {runResult && (
+                                          <span className="text-muted fw-normal">
+                                            {runResult.outcomes.filter((o) => o.passed).length}/{runResult.outcomes.length}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setResultTab('messages')}
+                                    className="btn btn-sm rounded-2 border-0 fw-semibold d-flex align-items-center gap-1"
+                                    style={tabButtonStyle(resultTab === 'messages')}
+                                  >
+                                    {isSql ? 'Execution Messages' : 'Messages'}
+                                    {messages.length > 0 && (
+                                      <span className="rounded-circle bg-danger" style={{ width: 6, height: 6 }} />
+                                    )}
+                                  </button>
+                                </div>
                                 <Button
                                   size="sm"
-                                  variant="success"
+                                  variant="primary"
                                   disabled={isRunning || cooldownRemaining > 0}
                                   onClick={() =>
                                     void (isSql
@@ -1317,69 +1788,99 @@ export default function TakeExam() {
                                       Running...
                                     </>
                                   ) : cooldownRemaining > 0 ? (
-                                    `Run Code (${cooldownRemaining}s)`
+                                    `${isSql ? 'Run Query' : 'Run Code'} (${cooldownRemaining}s)`
                                   ) : (
-                                    '▶ Run Code'
+                                    `▶ ${isSql ? 'Run Query' : 'Run Code'}`
                                   )}
                                 </Button>
                               </div>
-                              {runError && <div className="px-3 py-2 text-danger small">{runError}</div>}
-                              <div className="p-3 d-flex flex-column gap-2">
-                                {isSql
-                                  ? currentQuestion.sqlTestCases!.map((testCase, index) => {
-                                      const outcome = runResult?.outcomes[index];
-                                      return (
-                                        <div
-                                          key={index}
-                                          className="rounded-2 px-3 py-2"
-                                          style={{ background: '#252526', border: '1px solid #333' }}
-                                        >
-                                          <div className="d-flex justify-content-between align-items-center">
-                                            <span className="text-light small fw-medium">Test Case {index + 1}</span>
-                                            {outcome && (
-                                              <Badge bg={outcome.passed ? 'success' : 'danger'}>
-                                                {outcome.passed ? 'Passed' : 'Failed'}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                          <pre
-                                            className="text-light small mt-1 mb-0"
-                                            style={{ fontFamily: 'monospace', opacity: 0.85, whiteSpace: 'pre-wrap' }}
-                                          >
-                                            {testCase.setupSql}
-                                          </pre>
-                                          {outcome && (
-                                            <>
-                                              <div
-                                                className="text-light small mt-1"
-                                                style={{ fontFamily: 'monospace', opacity: 0.85 }}
-                                              >
-                                                Expected:
-                                              </div>
-                                              <pre
-                                                className="text-light small mb-1"
-                                                style={{ fontFamily: 'monospace', opacity: 0.85, whiteSpace: 'pre-wrap' }}
-                                              >
-                                                {outcome.expectedOutput || '(no rows)'}
-                                              </pre>
-                                              <div
-                                                className={outcome.passed ? 'text-success' : 'text-danger'}
-                                                style={{ fontFamily: 'monospace', fontSize: 13.5 }}
-                                              >
-                                                Got:
-                                              </div>
-                                              <pre
-                                                className={outcome.passed ? 'text-success' : 'text-danger'}
-                                                style={{ fontFamily: 'monospace', fontSize: 13.5, whiteSpace: 'pre-wrap' }}
-                                              >
-                                                {outcome.error ?? (outcome.actualOutput || '(no rows)')}
-                                              </pre>
-                                            </>
-                                          )}
+                              {resultTab === 'messages' ? (
+                                <div className="p-3">
+                                  {messages.length === 0 ? (
+                                    <div className="text-muted small">
+                                      {runResult
+                                        ? 'No errors - run completed cleanly.'
+                                        : isSql
+                                          ? 'Run your query to see execution messages here...'
+                                          : 'Run your code to see compiler/runtime messages here...'}
+                                    </div>
+                                  ) : (
+                                    messages.map((msg, i) => (
+                                      <pre
+                                        key={i}
+                                        className="text-danger small mb-2"
+                                        style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                      >
+                                        {msg}
+                                      </pre>
+                                    ))
+                                  )}
+                                </div>
+                              ) : isSql ? (() => {
+                                // Query Result is deliberately flat, not "Test Case" cards -
+                                // it's meant to read like a normal SQL client's results pane.
+                                // Only test case 0 (the public one, whose schema is already
+                                // shown above in "Use the following table") ever has its
+                                // actual output rendered here; any hidden test cases beyond it
+                                // only contribute to the overall Passed/Failed + checks-passed
+                                // count, never their own setup or data.
+                                if (!runResult) {
+                                  return (
+                                    <div className="d-flex flex-column align-items-center justify-content-center text-center py-5">
+                                      <QueryResultEmptyIcon />
+                                      <div className="text-muted small mt-2">
+                                        Run your query to see the results here...
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                const publicOutcome = runResult.outcomes[0];
+                                const allPassed = runResult.outcomes.every((o) => o.passed);
+                                const parsedActual =
+                                  publicOutcome && !publicOutcome.error
+                                    ? parseSqlRowSet(publicOutcome.actualOutput)
+                                    : null;
+                                return (
+                                  <div className="p-3">
+                                    <div className="d-flex align-items-center gap-2 mb-2">
+                                      <Badge bg={allPassed ? 'success' : 'danger'}>
+                                        {allPassed ? 'Passed' : 'Failed'}
+                                      </Badge>
+                                      {runResult.outcomes.length > 1 && (
+                                        <span className="text-muted small">
+                                          {runResult.outcomes.filter((o) => o.passed).length}/
+                                          {runResult.outcomes.length} checks passed
+                                        </span>
+                                      )}
+                                    </div>
+                                    {publicOutcome?.error ? (
+                                      <div className="text-muted small">
+                                        Query failed - see Execution Messages for details.
+                                      </div>
+                                    ) : parsedActual ? (
+                                      parsedActual.rows.length === 0 ? (
+                                        <div className="text-muted small">(no rows)</div>
+                                      ) : (
+                                        <div className="overflow-x-auto">
+                                          <DataTable
+                                            columns={parsedActual.columns}
+                                            rows={toSqlTableRows(parsedActual)}
+                                          />
                                         </div>
-                                      );
-                                    })
-                                  : currentQuestion.testCases!.map((testCase, index) => {
+                                      )
+                                    ) : (
+                                      <pre
+                                        className="mb-0 small"
+                                        style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}
+                                      >
+                                        {publicOutcome?.actualOutput || '(no rows)'}
+                                      </pre>
+                                    )}
+                                  </div>
+                                );
+                              })() : (
+                              <div className="p-3 d-flex flex-column gap-2">
+                                {currentQuestion.testCases!.map((testCase, index) => {
                                       const outcome = runResult?.outcomes[index];
                                       const argsText = currentQuestion.parameters!
                                         .map((p, i) => `${p.name} = ${formatTypedValue(testCase.arguments[i], p.type)}`)
@@ -1388,47 +1889,58 @@ export default function TakeExam() {
                                         testCase.expectedOutput,
                                         currentQuestion.returnType!,
                                       );
+                                      const key = `${currentQuestion.id}:${index}`;
+                                      const isExpanded = Boolean(expandedTestCases[key]);
                                       return (
                                         <div
                                           key={index}
-                                          className="rounded-2 px-3 py-2"
-                                          style={{ background: '#252526', border: '1px solid #333' }}
+                                          className={`rounded-3 border overflow-hidden${outcome ? (outcome.passed ? ' bg-success-subtle' : ' bg-danger-subtle') : ''}`}
                                         >
-                                          <div className="d-flex justify-content-between align-items-center">
-                                            <span className="text-light small fw-medium">Test Case {index + 1}</span>
-                                            {outcome && (
-                                              <Badge bg={outcome.passed ? 'success' : 'danger'}>
-                                                {outcome.passed ? 'Passed' : 'Failed'}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                          <div
-                                            className="text-light small mt-1"
-                                            style={{ fontFamily: 'monospace', opacity: 0.85 }}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setExpandedTestCases((prev) => ({ ...prev, [key]: !isExpanded }))
+                                            }
+                                            className="w-100 border-0 bg-transparent px-3 py-2 d-flex align-items-center gap-2 text-start"
                                           >
-                                            Input: {argsText}
-                                          </div>
-                                          <div
-                                            className="text-light small"
-                                            style={{ fontFamily: 'monospace', opacity: 0.85 }}
-                                          >
-                                            Expected: {expectedText}
-                                          </div>
-                                          {outcome && (
-                                            <div
-                                              className={outcome.passed ? 'text-success' : 'text-danger'}
-                                              style={{ fontFamily: 'monospace', fontSize: 13.5, marginTop: 2 }}
-                                            >
-                                              Got: {outcome.error ?? outcome.actualOutput}
+                                            <span className="flex-shrink-0">
+                                              <TestCaseStatusIcon passed={outcome ? outcome.passed : null} />
+                                            </span>
+                                            <span className="small fw-medium flex-grow-1">Test Case {index + 1}</span>
+                                            <Badge bg={outcome ? (outcome.passed ? 'success' : 'danger') : 'secondary'}>
+                                              {outcome ? (outcome.passed ? 'Passed' : 'Failed') : 'Not Run'}
+                                            </Badge>
+                                            <span className="flex-shrink-0 text-muted">
+                                              <ChevronIcon expanded={isExpanded} />
+                                            </span>
+                                          </button>
+                                          {isExpanded && (
+                                            <div className="px-3 pb-3">
+                                              <div className="text-muted small" style={{ fontFamily: 'monospace' }}>
+                                                Input: {argsText}
+                                              </div>
+                                              <div className="text-muted small" style={{ fontFamily: 'monospace' }}>
+                                                Expected: {expectedText}
+                                              </div>
+                                              {outcome && (
+                                                <div
+                                                  className={outcome.passed ? 'text-success' : 'text-danger'}
+                                                  style={{ fontFamily: 'monospace', fontSize: 13.5, marginTop: 2 }}
+                                                >
+                                                  Got: {outcome.error ?? outcome.actualOutput}
+                                                </div>
+                                              )}
                                             </div>
                                           )}
                                         </div>
                                       );
                                     })}
                               </div>
+                              )}
                             </div>
                           )}
-                        </>
+                          </Col>
+                        </Row>
                       );
                     })()
                   ) : (
@@ -1442,11 +1954,10 @@ export default function TakeExam() {
                           <label
                             key={option.id}
                             htmlFor={`option-${option.id}`}
-                            className="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2"
+                            className={`d-flex align-items-center gap-2 border rounded-3 px-3 py-2 mb-2${selected ? ' bg-success-subtle' : ''}`}
                             style={{
                               cursor: 'pointer',
                               borderColor: selected ? '#16a34a' : undefined,
-                              background: selected ? '#f0fdf4' : undefined,
                             }}
                           >
                             <Form.Check
@@ -1476,19 +1987,23 @@ export default function TakeExam() {
                     </Form>
                   )}
 
-                  <div className="small mt-2" style={{ minHeight: 20 }}>
-                    {saveAnswerMutation.isPending && <span className="text-muted">Saving...</span>}
+                  <div className="mt-2" style={{ minHeight: 20 }}>
+                    {saveAnswerMutation.isPending && <span className="small text-muted">Saving...</span>}
                     {!saveAnswerMutation.isPending && lastSavedAt && (
-                      <span className="text-success">
-                        &#10003; Answer saved &nbsp;|&nbsp; Last saved: {lastSavedAt.toLocaleTimeString()}
-                      </span>
+                      <div
+                        className="small text-success rounded-3 px-3 py-2 d-inline-flex align-items-center gap-2"
+                        style={{ background: '#f0fdf4' }}
+                      >
+                        <TestCaseStatusIcon passed={true} />
+                        Answer saved &nbsp;|&nbsp; Last saved: {lastSavedAt.toLocaleTimeString()}
+                      </div>
                     )}
                   </div>
 
                   <div className="d-flex justify-content-between mt-3">
                     <Button
                       variant="outline-secondary"
-                      disabled={isForwardOnly || currentIndex === 0}
+                      disabled={currentIndex === 0 || !canNavigateToIndex(currentIndex - 1)}
                       onClick={() => goToIndex(Math.max(0, currentIndex - 1))}
                     >
                       &larr; Save &amp; Previous
@@ -1507,7 +2022,9 @@ export default function TakeExam() {
                       {isLastQuestionInSection
                         ? sectionIndex < sectionGroups.length - 1
                           ? 'Next Section →'
-                          : 'Review & Submit'
+                          : reviewAllowed
+                            ? 'Review & Submit'
+                            : 'Submit Exam'
                         : 'Save & Next →'}
                     </Button>
                   </div>
@@ -1555,7 +2072,7 @@ export default function TakeExam() {
                         const sectionQuestions = sectionGroups[index]?.questions ?? [];
                         const sectionAnswered = sectionQuestions.filter((q) => navState(q) === 'answered').length;
                         const isCompleted = Boolean(sectionStates[section.id]?.isCompleted);
-                        const canReturn = section.navigationType === 'Free' || index === sectionIndex;
+                        const canReturn = (section.navigationType === 'Free' && section.allowReview) || index === sectionIndex;
                         return (
                           <div
                             key={section.id}
@@ -1627,7 +2144,7 @@ export default function TakeExam() {
             <h1 className="h5 fw-bold mb-1">Exam Submitted Successfully!</h1>
             <p className="text-muted mb-4">Thank you for completing the exam.</p>
 
-            <Card className="border-0 bg-light text-start mb-4">
+            <Card className="border-0 bg-body-tertiary text-start mb-4">
               <Card.Body>
                 <h2 className="h6 fw-bold mb-3">{exam?.title ?? 'Exam'}</h2>
                 <Row className="g-2">

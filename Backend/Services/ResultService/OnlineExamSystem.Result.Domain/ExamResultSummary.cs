@@ -20,6 +20,28 @@ public class ExamResultSummary
     /// manually graded yet - TotalScore still reflects a real number (that question
     /// contributes 0 until graded), but it's provisional.</summary>
     public bool HasPendingGrading { get; init; }
+
+    // Computed from this attempt's own Questions, independent of whether
+    // ShowCorrectAnswers hides the per-question Questions list above - the
+    // aggregate counts don't reveal which specific questions were right or
+    // wrong, so they're always safe to expose. No Rank/Percentile here (see
+    // ExamRankingCalculator's own doc comment for why that's Admin-report
+    // only for now).
+    public int CorrectCount { get; init; }
+    public int IncorrectCount { get; init; }
+    public int SkippedCount { get; init; }
+    public double Accuracy { get; init; }
+
+    // Null when this attempt isn't the student's own latest submitted
+    // attempt on the exam (an old, superseded retake), or when the
+    // best-effort cross-service ranking call failed - never blocks the
+    // student from seeing their own score either way. See
+    // GetResultHandler's own comment for how these are computed via
+    // SystemTokenProvider.
+    public int? Rank { get; init; }
+    public double? Percentile { get; init; }
+    public int? TotalParticipants { get; init; }
+    public double? AverageAccuracy { get; init; }
 }
 
 public class QuestionResult

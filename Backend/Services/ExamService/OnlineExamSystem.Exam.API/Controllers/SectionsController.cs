@@ -1,16 +1,21 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OnlineExamSystem.Exam.Application.Interfaces;
+using OnlineExamSystem.Exam.Application.Sections;
 using OnlineExamSystem.Exam.Application.Sections.Create;
 using OnlineExamSystem.Exam.Application.Sections.Delete;
 using OnlineExamSystem.Exam.Application.Sections.GetById;
 using OnlineExamSystem.Exam.Application.Sections.GetOrCreateDefault;
 using OnlineExamSystem.Exam.Application.Sections.List;
+using OnlineExamSystem.Exam.Application.Sections.ListAll;
 using OnlineExamSystem.Exam.Application.Sections.Reorder;
 using OnlineExamSystem.Exam.Application.Sections.Update;
 using OnlineExamSystem.Exam.Domain.Entities;
 using OnlineExamSystem.Shared.Contracts.Requests.Exam;
 using OnlineExamSystem.Shared.Contracts.Responses.Exam;
 using static OnlineExamSystem.Exam.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Exam.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Exam.API.Controllers;
 
@@ -24,8 +29,11 @@ public class SectionsController : ControllerBase
     private readonly DeleteSectionHandler _deleteSectionHandler;
     private readonly GetSectionHandler _getSectionHandler;
     private readonly ListSectionsHandler _listSectionsHandler;
+    private readonly ListAllSectionsHandler _listAllSectionsHandler;
     private readonly ReorderSectionsHandler _reorderSectionsHandler;
     private readonly GetOrCreateDefaultSectionHandler _getOrCreateDefaultSectionHandler;
+    private readonly IExamRepository _examRepository;
+    private readonly IAuditClient _auditClient;
     private readonly ILogger<SectionsController> _logger;
 
     public SectionsController(
@@ -34,8 +42,11 @@ public class SectionsController : ControllerBase
         DeleteSectionHandler deleteSectionHandler,
         GetSectionHandler getSectionHandler,
         ListSectionsHandler listSectionsHandler,
+        ListAllSectionsHandler listAllSectionsHandler,
         ReorderSectionsHandler reorderSectionsHandler,
         GetOrCreateDefaultSectionHandler getOrCreateDefaultSectionHandler,
+        IExamRepository examRepository,
+        IAuditClient auditClient,
         ILogger<SectionsController> logger)
     {
         _createSectionHandler = createSectionHandler;
@@ -43,16 +54,41 @@ public class SectionsController : ControllerBase
         _deleteSectionHandler = deleteSectionHandler;
         _getSectionHandler = getSectionHandler;
         _listSectionsHandler = listSectionsHandler;
+        _listAllSectionsHandler = listAllSectionsHandler;
         _reorderSectionsHandler = reorderSectionsHandler;
         _getOrCreateDefaultSectionHandler = getOrCreateDefaultSectionHandler;
+        _examRepository = examRepository;
+        _auditClient = auditClient;
         _logger = logger;
     }
 
+    // Instructor is restricted to sections of exams they created themselves
+    // (ownership derives from the parent ExamPaper.CreatedByUserId, same-
+    // service DB, no cross-service call needed) - Admin/SuperAdmin remain
+    // unrestricted.
+    private async Task<bool> CallerOwnsExamAsync(Guid examId, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole("Instructor"))
+        {
+            return true;
+        }
+
+        var exam = await _examRepository.GetByIdAsync(examId, cancellationToken);
+        var callerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        return exam is not null && exam.CreatedByUserId == callerId;
+    }
+
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Create(Guid examId, SectionRequest request, CancellationToken cancellationToken)
     {
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var command = new CreateSectionCommand(
             examId,
             request.Name,
@@ -86,6 +122,16 @@ public class SectionsController : ControllerBase
         }
 
         _logger.LogInformation("Section {SectionId} created for exam {ExamId}.", result.Section!.Id, examId);
+        await _auditClient.RecordAsync(
+            result.TenantId,
+            "Exams",
+            "Created section",
+            $"{result.Section!.Name} (in {result.ExamTitle})",
+            result.Section.Id.ToString(),
+            Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return StatusCode(StatusCodes.Status201Created, ToResponse(result.Section!));
     }
 
@@ -96,11 +142,38 @@ public class SectionsController : ControllerBase
         return Ok(sections.Select(ToResponse));
     }
 
+    // Absolute route (escapes this controller's {examId:guid} prefix) -
+    // Super Admin platform-wide browse across every tenant's exams, not
+    // one exam's own sections.
+    [HttpGet("/api/exams/sections")]
+    [Authorize(Roles = "SuperAdmin")]
+    public async Task<IActionResult> ListAll(CancellationToken cancellationToken)
+    {
+        var sections = await _listAllSectionsHandler.HandleAsync(new ListAllSectionsQuery(), cancellationToken);
+        return Ok(sections.Select(s => new PlatformSectionResponse(
+            s.Section.Id,
+            s.Section.ExamId,
+            s.ExamTitle,
+            s.Section.TenantId,
+            s.Section.Name,
+            s.Section.DisplayOrder,
+            s.Section.QuestionCount,
+            s.Section.Marks,
+            s.Section.DurationMinutes,
+            s.Section.CreatedAtUtc)));
+    }
+
     [HttpGet("default")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> GetOrCreateDefault(Guid examId, CancellationToken cancellationToken)
     {
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var section = await _getOrCreateDefaultSectionHandler.HandleAsync(
             new GetOrCreateDefaultSectionQuery(examId),
             cancellationToken);
@@ -126,8 +199,9 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Update(
         Guid examId,
         Guid id,
@@ -138,6 +212,11 @@ public class SectionsController : ControllerBase
         if (existing is null || existing.ExamId != examId)
         {
             return NotFound(new { message = "Section not found." });
+        }
+
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
         }
 
         var command = new UpdateSectionCommand(
@@ -177,14 +256,20 @@ public class SectionsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Delete(Guid examId, Guid id, CancellationToken cancellationToken)
     {
         var existing = await _getSectionHandler.HandleAsync(new GetSectionQuery(id), cancellationToken);
         if (existing is null || existing.ExamId != examId)
         {
             return NotFound(new { message = "Section not found." });
+        }
+
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
         }
 
         var authorizationHeader = Request.Headers["Authorization"].ToString();
@@ -197,13 +282,19 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPut("reorder")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> Reorder(
         Guid examId,
         ReorderSectionsRequest request,
         CancellationToken cancellationToken)
     {
+        if (!await CallerOwnsExamAsync(examId, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var order = request.Order
             .Select(o => new OnlineExamSystem.Exam.Application.Sections.SectionOrderEntry(o.SectionId, o.DisplayOrder))
             .ToList();

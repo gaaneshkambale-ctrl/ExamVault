@@ -16,7 +16,7 @@ export interface UserProfile {
   id: string;
   fullName: string;
   email: string;
-  role: 'Student' | 'Admin' | 'SuperAdmin';
+  role: 'Student' | 'Admin' | 'SuperAdmin' | 'Instructor';
   mustChangePassword: boolean;
   phoneNumber: string | null;
   hasPhoto: boolean;
@@ -26,10 +26,13 @@ export interface UserProfile {
   dateOfBirth: string | null;
   location: string | null;
   department: string | null;
+  designation: string | null;
   lastLoginAtUtc: string | null;
   joinedOnUtc: string | null;
   formattedUserId: string | null;
   isActive: boolean;
+  rollNumber: string | null;
+  academicFields: Record<string, string> | null;
 }
 
 export interface UpdateMyProfileRequest {
@@ -41,6 +44,7 @@ export interface UpdateMyProfileRequest {
   dateOfBirth?: string | null;
   location?: string | null;
   department?: string | null;
+  designation?: string | null;
 }
 
 export type TimeFormat = 'Hour12' | 'Hour24';
@@ -63,6 +67,16 @@ export interface LoginRequest {
   tenantSlug?: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+  tenantSlug?: string;
+}
+
+export interface ResetPasswordWithTokenRequest {
+  token: string;
+  newPassword: string;
+}
+
 export interface LoginResponse {
   user: UserProfile;
   accessToken: string;
@@ -74,7 +88,7 @@ export interface RefreshTokenResponse {
   refreshToken: string;
 }
 
-export type UserRole = 'Admin' | 'Student';
+export type UserRole = 'Admin' | 'Student' | 'Instructor';
 
 export interface UserListItem {
   id: string;
@@ -91,6 +105,13 @@ export interface UserListItem {
   // page has no use for them.
   tenantId: string;
   lastLoginAtUtc: string | null;
+  createdByUserId: string | null;
+  createdByName: string | null;
+  // Organization-type-specific fields (eg. a College student's Enrollment
+  // No./Semester) - see constants/organizationTypeFieldCatalog.ts. Only
+  // meaningful for Student role; null for every other role and for users
+  // created before this existed.
+  academicFields: Record<string, string> | null;
 }
 
 // GET /api/users returns every role (including SuperAdmin) when called by
@@ -103,13 +124,30 @@ export interface PlatformUserListItem extends Omit<UserListItem, 'role'> {
   role: UserRole | 'SuperAdmin';
 }
 
+// GET /api/users/students - the Instructor-reachable slice of GET /api/users
+// (which requires "Users - View", a permission Instructor deliberately never
+// has). Only the fields an "assign this exam to students" picker needs.
+export interface StudentSummary {
+  id: string;
+  fullName: string;
+  email: string;
+  rollNumber: string | null;
+  hasPhoto: boolean;
+  // Organization-type-specific fields (eg. a College student's Program/
+  // Department/Semester/Division) - see constants/organizationTypeFieldCatalog
+  // .ts. Null for a student with none set, or for an Organization Type that
+  // doesn't collect them at all (eg. a Coaching Institute uses Batch/Course
+  // instead) - never fabricated.
+  academicFields: Record<string, string> | null;
+}
+
 export interface CreateUserRequest {
   fullName: string;
   email: string;
   role: UserRole;
-  isActive: boolean;
   phoneNumber: string;
   rollNumber?: string | null;
+  academicFields?: Record<string, string> | null;
 }
 
 export interface UpdateUserRequest {
@@ -118,6 +156,7 @@ export interface UpdateUserRequest {
   role: UserRole;
   phoneNumber: string;
   rollNumber?: string | null;
+  academicFields?: Record<string, string> | null;
 }
 
 export interface ResetPasswordRequest {
@@ -127,6 +166,14 @@ export interface ResetPasswordRequest {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface RolePermissionsEntry {
+  role: string;
+  permissions: string[];
+  updatedAtUtc: string | null;
+  updatedByUserId?: string | null;
+  updatedByName?: string | null;
 }
 
 export type UserSessionStatus = 'Active' | 'Expired' | 'Revoked';

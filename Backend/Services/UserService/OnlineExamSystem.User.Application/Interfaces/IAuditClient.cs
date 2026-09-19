@@ -14,5 +14,6 @@ public interface IAuditClient
         Guid? userId,
         string? userName,
         string? ipAddress,
+        bool isSuperAdminActor = false,
         CancellationToken cancellationToken = default);
 }

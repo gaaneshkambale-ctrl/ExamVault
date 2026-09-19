@@ -32,4 +32,11 @@ public record ExamResponse(
     bool ConfirmBeforeSubmit,
     Guid? ExamTypeId = null,
     string? ExamTypeName = null,
-    Guid TenantId = default);
+    Guid TenantId = default,
+    string Tags = "",
+    Guid CreatedByUserId = default,
+    string? CreatedByName = null,
+    Dictionary<string, string>? AcademicFields = null,
+    bool CertificateEnabled = false,
+    int MinimumCertificateScorePercent = 80,
+    bool RestrictToAcademicScope = true);

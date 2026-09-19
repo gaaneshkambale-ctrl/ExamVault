@@ -8,13 +8,16 @@ using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.ListAll;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Domain.Entities;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.Question;
 using OnlineExamSystem.Shared.Contracts.Responses.Question;
 using static OnlineExamSystem.Question.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Question.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Question.API.Controllers;
 
@@ -26,10 +29,12 @@ public class QuestionsController : ControllerBase
     private readonly CreateQuestionHandler _createQuestionHandler;
     private readonly GetQuestionHandler _getQuestionHandler;
     private readonly ListQuestionsHandler _listQuestionsHandler;
+    private readonly ListAllQuestionsHandler _listAllQuestionsHandler;
     private readonly UpdateQuestionHandler _updateQuestionHandler;
     private readonly DeleteQuestionHandler _deleteQuestionHandler;
     private readonly BulkAssignSectionHandler _bulkAssignSectionHandler;
     private readonly UnassignSectionHandler _unassignSectionHandler;
+    private readonly IInternalUserLookupClient _userLookupClient;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<QuestionsController> _logger;
 
@@ -37,27 +42,32 @@ public class QuestionsController : ControllerBase
         CreateQuestionHandler createQuestionHandler,
         GetQuestionHandler getQuestionHandler,
         ListQuestionsHandler listQuestionsHandler,
+        ListAllQuestionsHandler listAllQuestionsHandler,
         UpdateQuestionHandler updateQuestionHandler,
         DeleteQuestionHandler deleteQuestionHandler,
         BulkAssignSectionHandler bulkAssignSectionHandler,
         UnassignSectionHandler unassignSectionHandler,
+        IInternalUserLookupClient userLookupClient,
         IAuditClient auditClient,
         ILogger<QuestionsController> logger)
     {
         _createQuestionHandler = createQuestionHandler;
         _getQuestionHandler = getQuestionHandler;
         _listQuestionsHandler = listQuestionsHandler;
+        _listAllQuestionsHandler = listAllQuestionsHandler;
         _updateQuestionHandler = updateQuestionHandler;
         _deleteQuestionHandler = deleteQuestionHandler;
         _bulkAssignSectionHandler = bulkAssignSectionHandler;
         _unassignSectionHandler = unassignSectionHandler;
+        _userLookupClient = userLookupClient;
         _auditClient = auditClient;
         _logger = logger;
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = QuestionsCreate)]
     public async Task<IActionResult> Create(CreateQuestionRequest request, CancellationToken cancellationToken)
     {
         var createdByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -78,7 +88,11 @@ public class QuestionsController : ControllerBase
             request.ReturnType,
             request.Parameters?.Select(p => new QuestionParameterInput(p.Name, p.Type)).ToList(),
             request.TestCases?.Select(ToTestCaseInput).ToList(),
-            request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList());
+            request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList(),
+            request.SampleInput,
+            request.SampleOutput,
+            request.Constraints,
+            GetBearerToken());
 
         var result = await _createQuestionHandler.HandleAsync(command, cancellationToken);
 
@@ -108,7 +122,7 @@ public class QuestionsController : ControllerBase
             request.QuestionText,
             question.Id.ToString(),
             createdByUserId,
-            User.FindFirstValue(ClaimTypes.Email),
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken);
         return StatusCode(
@@ -124,15 +138,38 @@ public class QuestionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var questions = await _listQuestionsHandler.HandleAsync(
-            new ListQuestionsQuery(examId, sectionId, unassignedOnly),
+            new ListQuestionsQuery(examId, sectionId, unassignedOnly, GetCallerOwnerUserId()),
             cancellationToken);
         return Ok(questions.Select(q =>
-            ToResponse(q.Question, q.Options, q.Parameters, q.TestCases, q.SqlTestCases, RevealAnswers)));
+            ToResponse(q.Question, q.Options, q.Parameters, q.TestCases, q.SqlTestCases, RevealAnswersFor(q.Question))));
+    }
+
+    // Super Admin platform-wide Question Bank browse across every tenant's
+    // exams, not one exam's own questions.
+    [HttpGet("all")]
+    [Authorize(Roles = "SuperAdmin")]
+    public async Task<IActionResult> ListAll(CancellationToken cancellationToken)
+    {
+        var questions = await _listAllQuestionsHandler.HandleAsync(new ListAllQuestionsQuery(), cancellationToken);
+        var names = await ActorNameResolver.ResolveAsync(_userLookupClient, questions.Select(q => (Guid?)q.CreatedByUserId), cancellationToken);
+        return Ok(questions.Select(q => new PlatformQuestionResponse(
+            q.Id,
+            q.ExamId,
+            q.SectionId,
+            q.TenantId,
+            q.QuestionType.ToString(),
+            q.QuestionText,
+            q.Marks,
+            q.Difficulty.ToString(),
+            q.CreatedAtUtc,
+            q.CreatedByUserId,
+            names.GetValueOrDefault(q.CreatedByUserId))));
     }
 
     [HttpPut("bulk-assign-section")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = ExamsEdit)]
     public async Task<IActionResult> BulkAssignSection(
         BulkAssignSectionRequest request,
         CancellationToken cancellationToken)
@@ -145,25 +182,45 @@ public class QuestionsController : ControllerBase
             "{Count} question(s) assigned to section {SectionId}.",
             request.QuestionIds.Count,
             request.SectionId);
+
+        if (request.QuestionIds.Count > 0)
+        {
+            // Caller's own ambient tenant, not a fetched entity - BulkAssignSectionHandler
+            // never loads a Question or Section for their TenantId, and this endpoint is
+            // already restricted (via the repository's own tenant scoping) to the caller's
+            // own tenant's questions, same reasoning as RolesController's self-service audit.
+            await _auditClient.RecordAsync(
+                Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!),
+                "Questions",
+                "Assigned questions to section",
+                $"{request.QuestionIds.Count} question(s)",
+                request.SectionId?.ToString(),
+                Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!),
+                User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
+        }
         return NoContent();
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var result = await _getQuestionHandler.HandleAsync(new GetQuestionQuery(id), cancellationToken);
+        var result = await _getQuestionHandler.HandleAsync(new GetQuestionQuery(id, GetCallerOwnerUserId()), cancellationToken);
         if (result is null)
         {
             return NotFound(new { message = "Question not found." });
         }
 
         return Ok(ToResponse(
-            result.Question, result.Options, result.Parameters, result.TestCases, result.SqlTestCases, RevealAnswers));
+            result.Question, result.Options, result.Parameters, result.TestCases, result.SqlTestCases,
+            RevealAnswersFor(result.Question)));
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = Exams)]
+    [Authorize(Policy = QuestionsEdit)]
     public async Task<IActionResult> Update(Guid id, UpdateQuestionRequest request, CancellationToken cancellationToken)
     {
         var command = new UpdateQuestionCommand(
@@ -182,13 +239,23 @@ public class QuestionsController : ControllerBase
             request.ReturnType,
             request.Parameters?.Select(p => new QuestionParameterInput(p.Name, p.Type)).ToList(),
             request.TestCases?.Select(ToTestCaseInput).ToList(),
-            request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList());
+            request.SqlTestCases?.Select(ToSqlTestCaseInput).ToList(),
+            GetCallerOwnerUserId(),
+            request.SampleInput,
+            request.SampleOutput,
+            request.Constraints,
+            GetBearerToken());
 
         var result = await _updateQuestionHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Question not found." });
+        }
+
+        if (result.IsForbidden)
+        {
+            return Forbid();
         }
 
         if (!result.Success)
@@ -223,13 +290,49 @@ public class QuestionsController : ControllerBase
         }
 
         _logger.LogInformation("Question {QuestionId} deleted.", id);
+        var deletedByUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await _auditClient.RecordAsync(
+            result.TenantId,
+            "Questions",
+            "Deleted question",
+            result.QuestionText,
+            id.ToString(),
+            deletedByUserId,
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken);
         return NoContent();
     }
 
-    // Admin sees real IsCorrect flags; any other authenticated caller (a student
-    // taking an exam) gets them masked so the correct answer can't be read off
-    // the network response while GET /api/questions is open to any authenticated role.
-    private bool RevealAnswers => User.IsInRole("Admin");
+    // Admin/SuperAdmin see real IsCorrect flags for every question; Instructor
+    // only for questions they created themselves (ownership, not just role);
+    // any other authenticated caller (a student taking an exam) gets them
+    // masked so the correct answer can't be read off the network response
+    // while GET /api/questions is open to any authenticated role.
+    private bool RevealAnswersFor(ExamQuestion question)
+    {
+        if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
+        {
+            return true;
+        }
+
+        if (User.IsInRole("Instructor"))
+        {
+            return question.CreatedByUserId == Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        }
+
+        return false;
+    }
+
+    // Non-null only for an Instructor caller - Admin/SuperAdmin/Student pass
+    // null through to the handlers for unrestricted access.
+    private Guid? GetCallerOwnerUserId() =>
+        User.IsInRole("Instructor") ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!) : null;
+
+    // Forwarded to Execution Service (see CreateQuestionCommand.BearerToken)
+    // to precompute Sql test cases' Expected Output as this same caller.
+    private string GetBearerToken() =>
+        Request.Headers.Authorization.ToString().Replace("Bearer ", string.Empty, StringComparison.OrdinalIgnoreCase);
 
     private static QuestionTestCaseInput ToTestCaseInput(QuestionTestCaseRequest request) =>
         new(
@@ -279,6 +382,9 @@ public class QuestionsController : ControllerBase
                     t.DisplayOrder))
                 .ToList(),
             sqlTestCases?.OrderBy(t => t.DisplayOrder)
-                .Select(t => new QuestionSqlTestCaseResponse(t.SetupSql, t.DisplayOrder))
-                .ToList());
+                .Select(t => new QuestionSqlTestCaseResponse(t.SetupSql, t.DisplayOrder, t.ExpectedOutput))
+                .ToList(),
+            question.SampleInput,
+            question.SampleOutput,
+            question.Constraints);
 }

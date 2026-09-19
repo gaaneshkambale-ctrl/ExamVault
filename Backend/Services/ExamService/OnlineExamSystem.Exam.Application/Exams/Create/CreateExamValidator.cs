@@ -34,5 +34,9 @@ public class CreateExamValidator : AbstractValidator<CreateExamCommand>
 
         RuleFor(x => x.Instructions)
             .MaximumLength(2000);
+
+        RuleFor(x => x.ExamTypeId)
+            .NotNull()
+            .WithMessage("Exam type is required.");
     }
 }
