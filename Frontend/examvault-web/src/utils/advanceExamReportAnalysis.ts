@@ -120,4 +120,6 @@ export interface AdvanceReportExtras {
   questionDifficulty: QuestionDifficultyStat[];
   organization?: MyTenant;
   generatedByName?: string;
+  /** Tenant.organizationType - MyTenant itself doesn't carry it (name/address only, see its own comment), so callers pass it separately, sourced from useOrganizationBranding(). Drives the roll-number column label (getRollNumberLabelForType), same as every other report/result surface. */
+  organizationType?: string | null;
 }

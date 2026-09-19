@@ -154,7 +154,7 @@ export interface TenantBranding {
   signatureImage: LogoImage | null;
   signatoryName: string | null;
   signatoryDesignation: string | null;
-  /** Organization Settings -> General "Registration / Accreditation No." - shown as a third centered line under the address in the compact "academic" variant's header. */
+  /** Organization Settings -> General "Registration / Accreditation No.", falling back to the tenant's own Organization Code (set at Create Organization, always present) when left blank - shown as a third centered line under the address in the compact "academic" variant's header. */
   registrationNumber: string | null;
   /** Organization Settings -> General "Established Year" - shown as "Est. <year>" next to the institution name in the compact "academic" variant's header. */
   establishedYear: number | null;
@@ -191,7 +191,7 @@ export async function loadTenantBranding(): Promise<TenantBranding> {
       signatureImage: settings.hasSignature ? await loadTenantSignature() : null,
       signatoryName: settings.signatoryName,
       signatoryDesignation: settings.signatoryDesignation,
-      registrationNumber: settings.registrationNumber,
+      registrationNumber: settings.registrationNumber || settings.organizationCode,
       establishedYear: settings.establishedYear,
       showLogoOnReports: settings.showLogoOnPdfReports,
       showPageNumbers: settings.showPageNumbers,

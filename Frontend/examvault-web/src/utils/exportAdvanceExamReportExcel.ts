@@ -10,6 +10,7 @@ import type { ExamResultScheme } from './examResultScheme';
 import type { AdvanceReportData } from './advanceExamReport';
 import type { AdvanceReportExtras } from './advanceExamReportAnalysis';
 import type { MyTenant } from '../types/tenant';
+import { getRollNumberLabelForType } from '../constants/organizationTypeFieldCatalog';
 
 const HEADER_STYLE = { fontWeight: 'bold' as const, backgroundColor: '#1f6f4a', textColor: '#ffffff' };
 const SECTION_STYLE = { fontWeight: 'bold' as const, backgroundColor: '#dff3e7' };
@@ -121,7 +122,7 @@ export async function exportAdvanceExamReportExcel(
   ];
 
   const studentHeaderLabels = [
-    'Roll Number',
+    getRollNumberLabelForType(extras.organizationType),
     'Student Name',
     'Status',
     'Score (Obtained)',

@@ -15,6 +15,8 @@ import { getGrade } from '../../types/result';
 import { violationLabel, severityVariant } from '../../utils/proctoring';
 import { generateResultPdf, isQuestionCorrect, isSkipped } from '../../utils/generateResultPdf';
 import { computeSectionStats } from '../../utils/sectionStats';
+import { useOrganizationBranding } from '../../hooks/useOrganizationSettings';
+import { getRollNumberLabelForType } from '../../constants/organizationTypeFieldCatalog';
 import type { AdminAttemptResultResponse } from '../../types/result';
 import type { ProctoringViolationType } from '../../types/submission';
 
@@ -93,6 +95,8 @@ export default function StudentResultDetails() {
   const { violationsByExam } = useViolationsByExam(examId ? [examId] : []);
   const { data: sections } = useSections(examId);
   const { data: questions } = useQuestions(examId);
+  const { data: branding } = useOrganizationBranding();
+  const rollNumberLabel = getRollNumberLabelForType(branding?.organizationType);
 
   const sortedResults = useMemo(
     () => [...allResults].sort((a, b) => new Date(b.submittedAtUtc).getTime() - new Date(a.submittedAtUtc).getTime()),
@@ -263,7 +267,7 @@ export default function StudentResultDetails() {
               <hr />
               <Row className="g-3 small">
                 <Col xs={6} md={2}>
-                  <div className="text-muted">Roll No.</div>
+                  <div className="text-muted">{rollNumberLabel}</div>
                   <div className="fw-medium">{student?.rollNumber ?? '—'}</div>
                 </Col>
                 <Col xs={6} md={2}>

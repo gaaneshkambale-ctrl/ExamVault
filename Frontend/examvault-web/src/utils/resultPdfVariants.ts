@@ -1,11 +1,15 @@
 // Point 13 of the "Organization Type -> Configuration Template -> Result
-// Engine" architecture doc: genuinely different result PDFs per
-// Organization Type, without forking generateResultPdf.ts into 7 separate
-// files. Scope decision (confirmed with the user): reuse the existing
-// panels/tables/donut-chart primitives in pdfReportKit.ts and vary the
-// copy/tone per type, rather than hand-designing 7 pixel-distinct layouts
-// from scratch - the latter is many hours of PDF-design work the doc's own
-// mockups would need to justify one at a time.
+// Engine" architecture doc. Originally drove genuinely different result PDF
+// LAYOUTS per Organization Type (a compact academic layout for College/
+// University/School, a richer multi-panel dashboard for everything else) -
+// that second layout (drawStudentReport in generateResultPdf.ts) was removed
+// at the user's explicit request, so every Organization Type now renders
+// through the same compact academic layout (drawAcademicReport). This file
+// still exists purely to vary the report's COPY/TONE per type (title,
+// tagline, pass/fail wording) via RESULT_PDF_VARIANT_COPY below - eg. a
+// Certification Institute's report says "Certified"/"Not Certified" where a
+// College's says "Passed"/"Failed", even though both use the identical
+// layout.
 //
 // Keyed by the same Organization Type NAME as organizationTypeFieldCatalog.ts
 // (Super Admin's Organization Types list), not by a fixed enum - a custom

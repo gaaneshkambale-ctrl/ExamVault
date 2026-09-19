@@ -21,6 +21,19 @@ function extractError(error: unknown): string {
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
+// Letters and spaces only - "Practice Exam", "Mid term Exam" pass; "Mock
+// Test 1" or "Exam-A" don't. \p{L} is any Unicode letter, not just A-Z, so
+// this doesn't reject non-Latin exam type names.
+const NAME_PATTERN = /^[\p{L}][\p{L} ]*$/u;
+
+type FieldKey =
+  | 'name'
+  | 'purpose'
+  | 'defaultDurationMinutes'
+  | 'passingScorePercent'
+  | 'defaultMaxAttempts'
+  | 'negativeMarkingValue';
+
 function ShieldIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -68,12 +81,76 @@ export default function ManageExamTypes() {
   const [negativeMarkingEnabled, setNegativeMarkingEnabled] = useState<'' | 'true' | 'false'>('');
   const [negativeMarkingValue, setNegativeMarkingValue] = useState('');
   const [autoSubmitEnabled, setAutoSubmitEnabled] = useState<'' | 'true' | 'false'>('');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const queryClient = useQueryClient();
 
   const numberOrNull = (text: string) => (text.trim() === '' ? null : Number(text));
   const boolOrNull = (tri: '' | 'true' | 'false') => (tri === '' ? null : tri === 'true');
+
+  const clearFieldError = (field: FieldKey) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  // Name is the only truly mandatory field here - everything else is a
+  // per-type override of the platform's own Exam Defaults (Settings > Exam
+  // Defaults), so it's fine left blank. But whatever IS filled in has to be
+  // a sane value, or a bad default silently propagates into every exam
+  // created with this type - mirrors the range rules validateCreateExam.ts
+  // already applies to the exam-creation form itself.
+  const validate = (): Partial<Record<FieldKey, string>> => {
+    const errors: Partial<Record<FieldKey, string>> = {};
+
+    if (!name.trim()) {
+      errors.name = 'Name is required.';
+    } else if (name.trim().length > 100) {
+      errors.name = 'Name must be 100 characters or fewer.';
+    } else if (!NAME_PATTERN.test(name.trim())) {
+      errors.name = 'Name can only contain letters and spaces.';
+    }
+
+    if (purpose.length > 500) {
+      errors.purpose = 'Purpose must be 500 characters or fewer.';
+    }
+
+    if (defaultDurationMinutes.trim() !== '') {
+      const n = Number(defaultDurationMinutes);
+      if (!Number.isFinite(n) || n <= 0) {
+        errors.defaultDurationMinutes = 'Duration must be greater than 0.';
+      }
+    }
+
+    if (passingScorePercent.trim() !== '') {
+      const n = Number(passingScorePercent);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        errors.passingScorePercent = 'Passing score must be between 0 and 100.';
+      }
+    }
+
+    if (defaultMaxAttempts.trim() !== '') {
+      const n = Number(defaultMaxAttempts);
+      if (!Number.isFinite(n) || n <= 0) {
+        errors.defaultMaxAttempts = 'Max attempts must be greater than 0.';
+      }
+    }
+
+    if (negativeMarkingEnabled === 'true' && negativeMarkingValue.trim() === '') {
+      errors.negativeMarkingValue = 'Enter a value, or turn Negative Marking off.';
+    } else if (negativeMarkingValue.trim() !== '') {
+      const n = Number(negativeMarkingValue);
+      if (!Number.isFinite(n) || n < 0) {
+        errors.negativeMarkingValue = 'Negative marking value cannot be negative.';
+      }
+    }
+
+    return errors;
+  };
 
   const buildDefaultsPayload = () => ({
     defaultDurationMinutes: numberOrNull(defaultDurationMinutes),
@@ -102,6 +179,13 @@ export default function ManageExamTypes() {
 
   const activeMutation = editingId ? updateMutation : createMutation;
 
+  const handleSave = () => {
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    activeMutation.mutate();
+  };
+
   const statusMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setExamTypeStatus(id, isActive),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['exam-types'] }),
@@ -110,6 +194,7 @@ export default function ManageExamTypes() {
   const openCreate = () => {
     createMutation.reset();
     updateMutation.reset();
+    setFieldErrors({});
     setEditingId(null);
     setName('');
     setPurpose('');
@@ -125,6 +210,7 @@ export default function ManageExamTypes() {
   const openEdit = (examType: ExamTypeOption) => {
     createMutation.reset();
     updateMutation.reset();
+    setFieldErrors({});
     setEditingId(examType.id);
     setName(examType.name);
     setPurpose(examType.purpose ?? '');
@@ -206,16 +292,32 @@ export default function ManageExamTypes() {
         <Modal.Body>
           {activeMutation.isError && <Alert variant="danger">{extractError(activeMutation.error)}</Alert>}
           <Form.Group className="mb-3" controlId="examTypeName">
-            <Form.Label>Name</Form.Label>
-            <Form.Control value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Practice Exam" />
+            <Form.Label>
+              Name <span className="text-danger">*</span>
+            </Form.Label>
+            <Form.Control
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                clearFieldError('name');
+              }}
+              placeholder="e.g. Practice Exam"
+              isInvalid={!!fieldErrors.name}
+            />
+            <Form.Control.Feedback type="invalid">{fieldErrors.name}</Form.Control.Feedback>
           </Form.Group>
           <Form.Group className="mb-3" controlId="examTypePurpose">
             <Form.Label>Purpose (optional)</Form.Label>
             <Form.Control
               value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
+              onChange={(e) => {
+                setPurpose(e.target.value);
+                clearFieldError('purpose');
+              }}
               placeholder="e.g. Student practice, usually unlimited/repeated attempts"
+              isInvalid={!!fieldErrors.purpose}
             />
+            <Form.Control.Feedback type="invalid">{fieldErrors.purpose}</Form.Control.Feedback>
           </Form.Group>
 
           <hr />
@@ -233,8 +335,13 @@ export default function ManageExamTypes() {
                   min={1}
                   placeholder="Use platform default"
                   value={defaultDurationMinutes}
-                  onChange={(e) => setDefaultDurationMinutes(e.target.value)}
+                  onChange={(e) => {
+                    setDefaultDurationMinutes(e.target.value);
+                    clearFieldError('defaultDurationMinutes');
+                  }}
+                  isInvalid={!!fieldErrors.defaultDurationMinutes}
                 />
+                <Form.Control.Feedback type="invalid">{fieldErrors.defaultDurationMinutes}</Form.Control.Feedback>
               </Form.Group>
             </Col>
             <Col md={6}>
@@ -246,8 +353,13 @@ export default function ManageExamTypes() {
                   max={100}
                   placeholder="Use platform default"
                   value={passingScorePercent}
-                  onChange={(e) => setPassingScorePercent(e.target.value)}
+                  onChange={(e) => {
+                    setPassingScorePercent(e.target.value);
+                    clearFieldError('passingScorePercent');
+                  }}
+                  isInvalid={!!fieldErrors.passingScorePercent}
                 />
+                <Form.Control.Feedback type="invalid">{fieldErrors.passingScorePercent}</Form.Control.Feedback>
               </Form.Group>
             </Col>
           </Row>
@@ -260,8 +372,13 @@ export default function ManageExamTypes() {
                   min={1}
                   placeholder="Use platform default"
                   value={defaultMaxAttempts}
-                  onChange={(e) => setDefaultMaxAttempts(e.target.value)}
+                  onChange={(e) => {
+                    setDefaultMaxAttempts(e.target.value);
+                    clearFieldError('defaultMaxAttempts');
+                  }}
+                  isInvalid={!!fieldErrors.defaultMaxAttempts}
                 />
+                <Form.Control.Feedback type="invalid">{fieldErrors.defaultMaxAttempts}</Form.Control.Feedback>
               </Form.Group>
             </Col>
             <Col md={6}>
@@ -281,7 +398,14 @@ export default function ManageExamTypes() {
                 <Form.Label className="small">Negative Marking</Form.Label>
                 <Form.Select
                   value={negativeMarkingEnabled}
-                  onChange={(e) => setNegativeMarkingEnabled(e.target.value as '' | 'true' | 'false')}
+                  onChange={(e) => {
+                    const value = e.target.value as '' | 'true' | 'false';
+                    setNegativeMarkingEnabled(value);
+                    // A stale "enter a value" error from a previous On ->
+                    // blank submit attempt no longer applies once Negative
+                    // Marking itself is switched away from On.
+                    if (value !== 'true') clearFieldError('negativeMarkingValue');
+                  }}
                 >
                   <option value="">Use platform default</option>
                   <option value="true">On</option>
@@ -291,16 +415,23 @@ export default function ManageExamTypes() {
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3" controlId="examTypeNegativeMarkingValue">
-                <Form.Label className="small">Negative Marking Value</Form.Label>
+                <Form.Label className="small">
+                  Negative Marking Value {negativeMarkingEnabled === 'true' && <span className="text-danger">*</span>}
+                </Form.Label>
                 <Form.Control
                   type="number"
                   min={0}
                   step={0.25}
                   placeholder="Use platform default"
                   value={negativeMarkingValue}
-                  onChange={(e) => setNegativeMarkingValue(e.target.value)}
+                  onChange={(e) => {
+                    setNegativeMarkingValue(e.target.value);
+                    clearFieldError('negativeMarkingValue');
+                  }}
                   disabled={negativeMarkingEnabled === 'false'}
+                  isInvalid={!!fieldErrors.negativeMarkingValue}
                 />
+                <Form.Control.Feedback type="invalid">{fieldErrors.negativeMarkingValue}</Form.Control.Feedback>
               </Form.Group>
             </Col>
           </Row>
@@ -309,11 +440,7 @@ export default function ManageExamTypes() {
           <Button variant="outline-secondary" onClick={() => setShowModal(false)}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            disabled={!name.trim() || activeMutation.isPending}
-            onClick={() => activeMutation.mutate()}
-          >
+          <Button variant="primary" disabled={activeMutation.isPending} onClick={handleSave}>
             {activeMutation.isPending ? (editingId ? 'Saving...' : 'Adding...') : editingId ? 'Save' : 'Add'}
           </Button>
         </Modal.Footer>

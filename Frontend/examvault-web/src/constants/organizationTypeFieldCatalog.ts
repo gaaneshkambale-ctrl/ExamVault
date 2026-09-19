@@ -139,14 +139,6 @@ export const RESULT_FIELD_CATALOG: ResultFieldDef[] = [
   { key: 'rank', label: 'Rank', group: 'Result Information' },
   { key: 'percentile', label: 'Percentile', group: 'Result Information' },
   { key: 'accuracy', label: 'Accuracy', group: 'Result Information' },
-  // These 3 aren't independently gateable in the PDF - the Section-wise
-  // Performance table, Score Distribution donut and Accuracy bars are one
-  // shared visualization built from all three counts together, so checking
-  // any one of them shows that whole block; unchecking all three hides it.
-  // See generateResultPdf.ts's showAnswerBreakdown.
-  { key: 'correctAnswers', label: 'Correct Answers', group: 'Result Information' },
-  { key: 'incorrectAnswers', label: 'Incorrect Answers', group: 'Result Information' },
-  { key: 'unanswered', label: 'Unanswered', group: 'Result Information' },
   { key: 'moduleWiseScore', label: 'Module-wise Score', group: 'Result Information', comingSoon: true },
   { key: 'practicalScore', label: 'Practical Score', group: 'Result Information', comingSoon: true },
   { key: 'theoryScore', label: 'Theory Score', group: 'Result Information', comingSoon: true },
@@ -168,18 +160,7 @@ export const RESULT_FIELD_KEYS_BY_TYPE: Record<string, string[]> = {
   College: ['studentId', 'academicDetails', 'examDate', 'remarks'],
   University: ['studentId', 'academicDetails', 'examDate', 'remarks'],
   School: ['studentId', 'academicDetails', 'examDate', 'attendance', 'remarks'],
-  'Coaching Institute': [
-    'studentId',
-    'academicDetails',
-    'examDate',
-    'duration',
-    'rank',
-    'percentile',
-    'accuracy',
-    'correctAnswers',
-    'incorrectAnswers',
-    'unanswered',
-  ],
+  'Coaching Institute': ['studentId', 'academicDetails', 'examDate', 'duration', 'rank', 'percentile', 'accuracy'],
   'Training Institute': ['studentId', 'academicDetails', 'duration', 'moduleWiseScore', 'practicalScore', 'theoryScore', 'trainerRemarks'],
   'Corporate / L&D': ['academicDetails', 'competency', 'skills', 'remarks'],
   'Certification Institute': ['academicDetails', 'competency'],
@@ -271,7 +252,17 @@ export const STUDENT_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
   School: [
     { key: 'admissionNo', label: 'Admission No.' },
     { key: 'class', label: 'Class' },
-    { key: 'division', label: 'Division' },
+    // Key is 'divisionSection', not 'division' - AcademicHierarchyFields
+    // treats a literal 'division' key as the 4th step of the College/
+    // University Program->Department->Semester->Division cascade (see its
+    // own HIER_ORDER). School has no Program/Department/Semester levels at
+    // all, so a field actually named 'division' would render as a select
+    // whose options never load (its query only enables once a Semester is
+    // selected, which never happens) - a required field the Admin could
+    // never fill in, permanently blocking Add Student for every School
+    // tenant. A differently-named key renders as plain free text instead,
+    // same as every other type-specific field on this page.
+    { key: 'divisionSection', label: 'Division' },
     { key: 'academicYear', label: 'Academic Year' },
   ],
   'Coaching Institute': [
@@ -284,7 +275,12 @@ export const STUDENT_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
     { key: 'enrollmentDate', label: 'Enrollment Date' },
   ],
   'Corporate / L&D': [
-    { key: 'department', label: 'Department' },
+    // 'departmentName', not 'department' - same reserved-key collision as
+    // School's Division above, just one level up the cascade (no Program
+    // level exists here either, so a field named 'department' would be a
+    // permanently-unfillable required select). See that comment for the
+    // full explanation.
+    { key: 'departmentName', label: 'Department' },
     { key: 'designation', label: 'Designation' },
     { key: 'manager', label: 'Manager' },
   ],
@@ -292,7 +288,8 @@ export const STUDENT_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
   'Recruitment / Hiring': [
     { key: 'applicationId', label: 'Application ID' },
     { key: 'position', label: 'Position' },
-    { key: 'department', label: 'Department' },
+    // Same 'departmentName' rename as Corporate / L&D above, same reason.
+    { key: 'departmentName', label: 'Department' },
   ],
 };
 
@@ -389,6 +386,18 @@ export function getRollNumberLabelForType(organizationType: string | null | unde
 // nowhere to be captured. Stored as ExamPaper.AcademicFieldsJson (see
 // Backend/.../ExamPaper.cs) - same flexible-schema reasoning as the
 // Organization/Student catalogs above.
+//
+// College/University/School/Certification Institute used to also have an
+// 'examDate' field here - removed (not just made optional) because it was
+// pure decoration: captured on Create/Edit Exam but never read back
+// anywhere (not shown on Exam Details, explicitly excluded from
+// CreateAssignmentHandler's eligibility ScopeKeys, and every "Exam Date"
+// actually shown anywhere - reports, PDFs - already comes from the real
+// ExamAssignment.StartAtUtc/submittedAtUtc, not this field). An Admin
+// filling it in had no way to know it did nothing. Any exam that already
+// has one stored keeps it in AcademicFieldsJson - it's just no longer
+// collected or shown going forward, same as this catalog's earlier
+// removal of College/University's separate Course field.
 export const EXAM_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
   College: [
     { key: 'program', label: 'Program' },
@@ -399,19 +408,16 @@ export const EXAM_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
     // Divisions") in the Assign Exam eligibility check, same convention as
     // an exam with no scope keys at all being fully unrestricted.
     { key: 'division', label: 'Division / Class', optional: true },
-    { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
   ],
   University: [
     { key: 'program', label: 'Program' },
     { key: 'department', label: 'Department' },
     { key: 'semester', label: 'Semester' },
     { key: 'division', label: 'Division / Class', optional: true },
-    { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
   ],
   School: [
     { key: 'term', label: 'Term' },
     { key: 'subject', label: 'Subject' },
-    { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
   ],
   'Coaching Institute': [
     { key: 'testSeries', label: 'Test Series' },
@@ -427,7 +433,6 @@ export const EXAM_FIELDS_BY_TYPE: Record<string, FieldDef[]> = {
     { key: 'assessmentDate', label: 'Assessment Date', placeholder: 'e.g. 12 Apr 2026' },
   ],
   'Certification Institute': [
-    { key: 'examDate', label: 'Exam Date', placeholder: 'e.g. 12 Apr 2026' },
     { key: 'validFrom', label: 'Valid From' },
     { key: 'validUntil', label: 'Valid Until' },
   ],

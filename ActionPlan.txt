@@ -15464,3 +15464,748 @@ appeared, then confirmed gone from the page after waiting 6+ seconds -
 no code left visible, no manual dismiss needed.
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Add New User (Admin > Users > Add User) - made Phone Number mandatory
+in Step 1, matching the user's exact spec. Read the full form first:
+Full Name/Email were already mandatory and deferred to Next/Submit
+(fieldErrors starts empty, only populated on goToTab/handleSubmit -
+already satisfies "don't show red errors on initial load"), and every
+Step 2 "Academic Details" field (Roll No., Enrollment No., PRN/
+Registration No., Program/Course, Department, Semester, Division/
+Class, Year of Study, Academic Year) was already mandatory via the
+existing studentFields catalog + validateAcademicFields() - confirmed
+live rather than assumed, no code change needed there. Phone Number
+was the one real gap: wired into JSX (isInvalid/Feedback already
+present) but never actually validated in goToTab() or handleSubmit(),
+so it was optional in practice despite looking required-ish.
+
+Frontend (CreateUser.tsx): added
+`if (!form.phoneNumber?.trim()) errors.phoneNumber = 'Phone number is
+required.'` to both goToTab()'s User Information check and
+handleSubmit()'s duplicate check (same pattern as fullName/email).
+Added a red asterisk to the Phone Number label and changed its
+placeholder from "Enter phone number (optional)" to "Enter phone
+number". Left the "no password field... sets their own on first
+login" info message untouched, per the user's explicit instruction.
+Did not add clear-on-change error clearing for Phone Number, to stay
+consistent with Full Name/Email in this same tab, which don't clear on
+change either (errors persist until the next Next click re-validates
+from scratch) - so introducing it only for Phone Number would have
+been a new, inconsistent pattern rather than matching the file's own
+existing convention.
+
+Backend (UserService, CreateUserValidator.cs) - added matching
+server-side rules per the user's explicit "implement the same
+validation server-side, because frontend validation alone can be
+bypassed":
+- PhoneNumber: added .NotEmpty() ahead of the existing regex format
+  check, unconditional (Phone Number is common to every role in Step
+  1, not Student-only).
+- RollNumber: added .NotEmpty(), gated `.When(Role == "Student")` -
+  this was a related, previously-unknown real gap (Roll No. has
+  already been a mandatory, always-visible frontend field for
+  students, but nothing enforced it server-side, so a direct API call
+  could create a Student with no roll number). Scoped to Student only
+  since Admin/Instructor never see or need this field.
+Deliberately did NOT add server-side validation for the rest of the
+Step 2 fields (Enrollment No., PRN, Program, Department, Semester,
+Division, Year of Study, Academic Year) - these live in the free-form
+AcademicFields dictionary, whose required keys are entirely driven by
+the frontend's per-organization-type catalog (organizationTypeFieldCatalog.ts).
+Enforcing them server-side would mean either duplicating that catalog
+in the backend or looking it up per-tenant per-request - a real
+architectural change well beyond this request's scope, not a
+same-shape fix like Phone Number/Roll Number. Noting this here as a
+deliberate scope boundary, same as this session's earlier Create
+Organization Admin Info decision.
+
+Updated Tests/UserService/.../UserRoleValidationTests.cs - the
+existing Create_accepts_tenant_assignable_roles /
+Create_rejects_non_tenant_assignable_roles tests built a
+CreateUserCommand with no PhoneNumber (and no RollNumber for the
+Student case), so they'd now fail on the new mandatory rules despite
+those tests actually being about role acceptance, not phone/roll
+number. Fixed by supplying a valid PhoneNumber (and RollNumber for the
+Student role) in both.
+
+Added new Tests/UserService/.../Users/Create/CreateUserValidatorTests.cs
+(7 tests): rejects missing phone number for both Student and Admin,
+rejects a malformed phone number, rejects missing roll number for
+Student, does NOT require roll number for Admin, accepts a valid
+Student command, accepts a valid Admin command.
+
+Verified: `dotnet test` on UserService.Application.Tests -
+132/132 passing (125 existing + 7 new). Full `dotnet build
+ExamVault.sln` - 0 errors, 0 warnings. Frontend: `npx tsc --noEmit`
+clean, `npm run build` succeeds, `npm run test -- --run` - 166/166
+unaffected (no existing unit test covers this page). Docker (user-api,
+frontend) rebuilt and redeployed.
+
+Live-verified on the real "Test Org" tenant (test.localhost:5173,
+Admin Ganesh Kamble): reloaded the Add New User page - Phone Number
+now shows the red asterisk and the updated placeholder, no errors
+visible on initial load. Clicked Next with everything blank - "Phone
+number is required." appeared correctly alongside Full Name/Email's
+existing errors. Filled in valid Full Name/Email/Phone and advanced to
+Role & Access (Student) - confirmed every Academic Details field
+already carries a red asterisk. Clicked Next again with all of them
+blank - every one (Roll No., Enrollment No., PRN/Registration No.,
+Program, Department, Semester, Division/Class, Year of Study) blocked
+with its own inline "... is required." message, confirming Step 2 was
+already fully enforced exactly as specified, with no code change
+needed there.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Exam Types (Admin > Exams > Exam Types > Add/Edit Exam Type modal) -
+added the same "professional validation" treatment used repeatedly
+this session (CreateOrganization.tsx, CreateExam.tsx, CreateUser.tsx):
+red asterisks on mandatory fields, real inline validation instead of a
+silently-disabled submit button, matching server-side rules. Found
+this form had NONE of it - the only guard was
+`disabled={!name.trim()}` on the Add/Save button; the 4 numeric
+"Recommended Defaults" fields (Default Duration, Passing Score, Max
+Attempts, Negative Marking Value) had zero range checking either
+client- or server-side, so e.g. a Passing Score of 150% or a negative
+Duration could be saved and would silently pre-fill every exam created
+with that type.
+
+Only Name is truly mandatory here (everything else is an optional
+per-type override of the platform's own Exam Defaults, blank = "use
+the platform default") - so the fix isn't about making more fields
+required, it's about making whatever IS filled in a sane value, plus
+one conditional-mandatory rule: Negative Marking Value becomes
+required the moment Negative Marking is switched to "On" (an enabled
+toggle with no value is a meaningless state). Range rules mirror
+validateCreateExam.ts's own conventions (duration > 0, passing score
+0-100, max attempts > 0, negative marking value >= 0) so a type's
+recommended defaults can never suggest something the exam-creation
+form itself would reject.
+
+Frontend (ManageExamTypes.tsx): added a `fieldErrors` state + validate()
+function (Name required/<=100 chars, Purpose <=500 chars, Duration >0
+if present, Passing Score 0-100 if present, Max Attempts >0 if
+present, Negative Marking Value >=0 if present and required when
+Negative Marking = On). Each field clears its own error on change
+(new convention for this file - it had no prior pattern to match,
+picked to mirror CreateOrganization.tsx's create-form style). Negative
+Marking's own onChange additionally clears Negative Marking Value's
+error when switched away from "On", since a stale "enter a value"
+message would otherwise survive a legitimate change of mind. Red
+asterisk on Name always; on Negative Marking Value only while
+Negative Marking = On (conditional, matches the conditional rule).
+Add/Save button changed from `disabled={!name.trim()}` to
+`disabled={activeMutation.isPending}` with an onClick that runs
+validate() first and only calls mutate() when clean - same
+"always-clickable, error is discoverable" pattern used everywhere else
+this session. fieldErrors reset in both openCreate() and openEdit().
+
+Backend (ExamService) - added matching range/conditional rules to
+BOTH CreateExamTypeValidator.cs and UpdateExamTypeValidator.cs (Add
+and Edit go through separate validators/commands, both had the same
+gap): DefaultDurationMinutes > 0, PassingScorePercent between 0-100,
+DefaultMaxAttempts > 0, NegativeMarkingValue >= 0, and NegativeMarkingValue
+required when NegativeMarkingEnabled = true - all gated `.When(...HasValue)`
+so blank/null stays valid (still means "use platform default").
+
+Added Tests/ExamService/.../CreateExamTypeValidatorTests.cs (10 tests)
+and UpdateExamTypeValidatorTests.cs (7 tests) covering: valid command,
+blank defaults valid, empty name fails, non-positive
+duration/max-attempts fail, passing score outside 0-100 fails (with
+0/100 boundaries explicitly valid), negative marking value below 0
+fails, negative marking enabled without a value fails, negative
+marking enabled with a value passes, negative marking disabled
+without a value passes.
+
+Verified: `dotnet test` on Exam.Application.Tests - 125/125 passing
+(108 existing + 17 new). Full `dotnet build ExamVault.sln` - 0 errors,
+0 warnings. Frontend: `npx tsc --noEmit` clean, `npm run build`
+succeeds, `npm run test -- --run` - 166/166 unaffected (no existing
+unit test covers this page). Docker (exam-api, frontend) rebuilt and
+redeployed.
+
+Live-verified on the real "Test Org" tenant (test.localhost:5173,
+Admin Ganesh Kamble): opened Add Exam Type, confirmed Name shows the
+red asterisk. Set Duration=-5, Passing Score=150, Negative Marking=On
+with its Value left blank, Name left blank, clicked Add - all 4
+errors appeared together ("Name is required.", "Duration must be
+greater than 0.", "Passing score must be between 0 and 100.", "Enter a
+value, or turn Negative Marking off." - the last one's red asterisk
+appeared live on the Negative Marking Value label the moment Negative
+Marking was switched to On). Corrected every field to valid values
+(Name "Certification Exam", Duration 45, Passing Score 70, Negative
+Marking Value 0.25) - all errors cleared, Add succeeded and the new
+exam type appeared in the list with the right values. Deleted the test
+exam type afterward (confirmed with the user first, since it's a real
+delete against live tenant data) to leave the tenant clean.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Bulk Import Users (Admin > Users > Bulk Import > Download Sample File)
+- brought this page's validation and sample template in line with the
+Add New User wizard's mandatory-fields work from earlier this session
+(Phone Number now required for every user, Roll Number required for
+Student rows). This page had its own separate, un-synced validateRow()
+that still treated Phone Number and Roll Number as fully optional -
+so a row missing either would show "Valid" in Preview & Validate, then
+fail at Import time with the backend's real 400 error, a worse UX than
+catching it up front like every other field already does.
+
+Extracted the row-validation logic out of ImportUsers.tsx into a new
+Frontend/.../utils/importUsersValidation.ts (`validateImportRow`,
+exported `ImportUserRow` type) - same reasoning as
+createExamValidation.ts earlier this session: a plain function is
+independently unit-testable without rendering the page. Added two new
+rules ahead of the existing duplicate-email check: Phone Number
+required for every row; Roll Number required only when Role is
+exactly "Student" (Admin rows can leave it blank, matching
+CreateUser.tsx's own conditional rule). No backend change needed here
+- bulk import rows go through the same createUser() -> CreateUserValidator.cs
+path as the single Add User form, which already enforces both rules
+server-side from the earlier work.
+
+Updated the downloadable sample file (downloadTemplate()): header row
+now reads "Phone Number *" and "Roll Number (Students only)" instead
+of plain "Phone Number"/"Roll Number" (cosmetic only - parsing is
+positional by column index, not by header text, so this doesn't
+affect parsing). Added a second example row (an Admin, blank Roll
+Number) alongside the existing Student example, so the template
+itself demonstrates the conditional rule rather than only showing the
+case where every column happens to be filled in. Updated the File
+Guidelines card: "Phone Number and Roll Number are both optional." was
+flatly wrong now - replaced with "Required columns: ... Phone Number."
+and its own "Roll Number is required for Student rows - leave it blank
+for Admin." bullet.
+
+Added Frontend/.../utils/importUsersValidation.test.ts (10 tests):
+accepts a valid Student row, accepts a valid Admin row with no Roll
+Number, requires Full Name/Email, rejects an unrecognized role,
+requires Phone Number for both Student and Admin rows, requires Roll
+Number for Student, does not require it for Admin, rejects a duplicate
+email within the file.
+
+Verified: `npx tsc --noEmit` clean, `npm run build` succeeds, `npm run
+test -- --run` - 176/176 passing (166 existing + 10 new). Docker
+(frontend only - no backend change) rebuilt and redeployed.
+
+Live-verified on the real "Test Org" tenant (test.localhost:5173,
+Admin Ganesh Kamble): confirmed the File Guidelines card shows the
+updated copy. Clicked Download Sample File, located the real
+downloaded .xlsx on disk, and re-uploaded that exact file back into
+the page (via the file_upload tool, since a native file picker can't
+be driven by clicks) - both rows (Jane Doe/Student/with Roll Number,
+Priya Sharma/Admin/blank Roll Number) parsed and showed "Valid",
+confirming the template's own header/example-row changes are correct
+and round-trip cleanly through the real xlsx parser. Also generated a
+second test file with a Student row missing Phone Number and another
+Student row missing Roll Number, uploaded it, and confirmed both rows
+were correctly blocked with "Phone Number is required." and "Roll
+Number is required for Student rows." respectively, with Import
+disabled (0 of 2 rows ready). Deleted all local scratch/downloaded
+test files afterward.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Bulk Import Users - Academic Info. User asked "where is academic info
+in sample?" after the previous entry's Phone/Roll Number fix - a fair
+catch: the bulk import sample file and validation never covered the
+Student "Academic Details" fields at all (Enrollment No., PRN,
+Program, Department, Semester, Division, Year of Study, Academic Year
+for College/University - a different set per Organization Type, see
+STUDENT_FIELDS_BY_TYPE in organizationTypeFieldCatalog.ts), even
+though CreateUser.tsx's single Add User wizard has required every one
+of them for Students all session. handleCreate() didn't even send
+`academicFields` in the CreateUserRequest payload - a bulk-imported
+Student got none of this data set, full stop.
+
+This is materially bigger than the Phone/Roll Number fix because these
+fields aren't fixed - they vary per Organization Type (College needs 8
+fields, School needs 4, Corporate/L&D needs 3, etc.), and for College/
+University specifically, Program/Department/Semester/Division aren't
+free text - they're cascading picks from the tenant's own managed
+lists (AcademicListItem: Program -> Department -> Semester -> Division),
+so a spreadsheet cell has to match a REAL configured value under the
+REAL correct parent, not just be non-empty. Asked the user via
+AskUserQuestion on both open design questions before building
+anything: (1) dynamic per-org-type template columns vs a fixed
+College/University-only set for now - chose dynamic (matches
+CreateUser.tsx's own catalog-driven approach, correct for every tenant
+type); (2) for Program/Department/Semester/Division, match against the
+tenant's real configured lists vs just requiring non-blank text - chose
+real-list matching (a mismatched value would otherwise silently import
+junk academic data).
+
+New Frontend/.../utils/academicHierarchyIndex.ts:
+- `getActiveHierarchyLevels(fields)` - same relative-order filter
+  AcademicHierarchyFields.tsx's own `activeLevels` already computes
+  (whichever of program/department/semester/division a catalog
+  defines, in that fixed order) - kept in exact sync with the
+  interactive picker's own logic, including its one known limitation:
+  a catalog with 'department' but no 'program' (Corporate/L&D,
+  Recruitment/Hiring) or 'division' with nothing above it (School)
+  treats that field as top-level (parentId=null expected) - which the
+  interactive picker already can't populate today either (its own
+  query only enables once the level above has a selection, which never
+  happens for these org types). Not fixing that pre-existing gap here
+  - out of scope, and this file only needs to stay consistent with the
+  live picker's real behavior, not correct a different unrelated bug.
+- `fetchAcademicHierarchyIndex(activeLevels)` - fetches the tenant's
+  full tree for just the active levels, one level at a time, each
+  level's fetch parented by every item found one level up and run in
+  parallel via Promise.all - so a whole file's worth of rows can be
+  checked in one pass (a handful of network round trips) instead of
+  one lookup per cell. Reuses the existing GET
+  /api/tenants/mine/academic-lists endpoint - no backend change needed.
+- `resolveAcademicListValue(index, listType, parentId, value)` - case/
+  whitespace-insensitive match against a specific parent, so a
+  Department that's real but under a DIFFERENT Program still fails.
+- `firstAcademicHierarchyChain(index, activeLevels)` - the tenant's
+  first real Program -> Division chain, used to seed the sample file's
+  Student example row with values that actually exist (a fabricated
+  example would fail its own file's validation the moment it's
+  re-uploaded unmodified).
+
+Frontend/.../utils/importUsersValidation.ts - `ImportUserRow` gained
+an `academicFields` field; `validateImportRow` now takes the org
+type's `studentFields` catalog and the fetched `hierarchyIndex` as
+parameters and, for Student rows only, requires every non-optional
+catalog field (same rule CreateUser.tsx's own validateAcademicFields
+already applies) plus the hierarchy-chain match for
+Program/Department/Semester/Division specifically.
+
+ImportUsers.tsx: added a `useQuery(['organization-branding'], ...)`
+(same call CreateUser.tsx already makes) to know the tenant's
+Organization Type; `studentFields`/`rollNumberLabel`/
+`activeHierarchyLevels` all derive from it. Upload is disabled with a
+"Loading organization settings..." spinner until that resolves (can't
+safely determine the right columns before then), and with an error
+Alert if it fails to load. TEMPLATE_HEADERS became
+`buildTemplateHeaders()`, dynamic per org type. `downloadTemplate()`
+now fetches the hierarchy index first (only when the org type actually
+has hierarchy fields) and builds the Student example row from the
+tenant's real first chain plus a small hardcoded
+SAMPLE_VALUE_BY_FIELD_KEY map for the remaining free-text fields
+(enrollmentNo, prn, year, academicYear, etc. across every Organization
+Type's catalog); the Admin example row leaves every academic column
+blank. `handleFileSelected` parses one extra cell per studentFields
+entry into `academicFields`, fetches the hierarchy index fresh for
+this specific upload (not cached, so a tenant's latest Academic
+Configuration always governs), then validates every row against it.
+`handleCreate` now sends `academicFields: row.role === 'Student' ?
+row.academicFields : null` in the CreateUserRequest - previously
+omitted entirely. File Guidelines card gained a conditional bullet
+(only shown when the org type has any Academic Details fields) noting
+they're required for Student rows, with a further note about the
+Program/Department/Semester/Division match requirement only when
+those levels actually apply to this org type. Preview & Validate table
+gained an "Academic Details" column (comma-joined values) when the org
+type has any.
+
+Added Frontend/.../utils/academicHierarchyIndex.test.ts (10 tests):
+getActiveHierarchyLevels for a full College-style catalog / a lone
+non-contiguous level / no hierarchy fields at all; resolveAcademicListValue
+matches by value+parent, is case/whitespace insensitive, rejects a
+wrong parent, returns undefined for an unindexed listType;
+firstAcademicHierarchyChain returns a full chain, stops at the first
+unconfigured level, returns {} when nothing's configured.
+
+Extended Frontend/.../utils/importUsersValidation.test.ts (19 tests
+total, up from 10): existing base-field tests updated to the new
+4-argument signature; new coverage for a plain (non-hierarchy)
+academic field being required for Student and never required for
+Admin, an optional field not being required; the Program/Department
+hierarchy chain accepting a real match, being case/whitespace
+insensitive, rejecting an unknown Program, rejecting a Department that
+exists but under a different Program, and rejecting every hierarchy
+field when the tenant has nothing configured yet.
+
+Verified: `npx tsc --noEmit` clean, `npm run build` succeeds, `npm run
+test -- --run` - 194/194 passing (176 existing + 18 new). Docker
+(frontend only - no backend change; the existing /api/users and
+/api/tenants/mine/academic-lists endpoints already covered everything
+needed) rebuilt and redeployed.
+
+Live-verified on the real "Test Org" tenant (College type,
+test.localhost:5173, Admin Ganesh Kamble) - confirmed via direct SQL
+first that this tenant has one real configured chain: Program "MTECH"
+-> Department "IT" -> Semester "Semister 3" -> Divisions "A"/"B".
+Confirmed the File Guidelines card now shows the new Academic Details
+bullets. Downloaded the sample file and inspected its real contents
+(via read-excel-file/node, the same library the app itself uses) -
+headers exactly matched College's 13-column catalog order, and the
+Student example row's Program/Department/Semester/Division cells were
+exactly "MTECH, IT, Semister 3, A" - the tenant's own real first
+chain, not fabricated data. Re-uploaded that exact downloaded file
+unmodified - both rows (Student with the full real chain, Admin with
+every academic column blank) showed "Valid", confirming the sample
+file round-trips cleanly. Then uploaded a second, hand-built file with
+a Student row using a nonexistent Program ("BTECH NONSENSE") and
+another Student row missing Enrollment No. - both were correctly
+blocked, with the exact messages '"BTECH NONSENSE" is not a configured
+Program value (Organization Settings > Academic Configuration).' and
+"Enrollment No. is required." respectively, Import disabled (0 of 2
+rows ready).
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Add New User (User Information step) - Full Name, Email and Phone
+Number all now have real format validation, not just a required check.
+Previously: Full Name/Email were only checked for non-empty (any
+string of any characters passed - "123", "!!!", a lone letter, all
+"valid"); Email had no format check at all despite the field being
+labeled "Email Address" and using type="email" (which HTML5 barely
+enforces); Phone Number already got its required+format check from
+the earlier mandatory-phone work. User also asked for the red
+asterisk on Full Name/Email to match Phone Number's (which already had
+one) - both now do.
+
+New Frontend/.../utils/createUserValidation.ts - `validateUserInformation(form)`,
+extracted out of CreateUser.tsx's own goToTab()/handleSubmit(), which
+previously duplicated the same 3-line block twice. Rules:
+- Full Name: required, then must match `NAME_PATTERN`
+  (`^\p{L}[\p{L} .'-]{1,199}$`) - starts with a Unicode letter (not
+  just A-Z, so accented/non-Latin names aren't rejected), then any run
+  of letters/spaces/periods/apostrophes/hyphens up to 200 chars total
+  (matches the backend's own MaximumLength). Accepts "Jean-Luc",
+  "O'Brien", "A. Sharma"; rejects a name that's pure digits/symbols or
+  a single character.
+- Email: required, then `isValidEmail()` (existing shared
+  utils/email.ts, already used by CreateOrganization.tsx's Admin Email
+  field - reused rather than re-implemented).
+- Phone Number: required, then `isValidPhone()` - new
+  Frontend/.../utils/phone.ts, extracting the same
+  `^[0-9+\-\s()]{7,20}$` pattern CreateOrganization.tsx's Admin Phone
+  Number field and the backend both already use, so there's now one
+  shared frontend implementation instead of a 2nd/3rd inline copy of
+  the same regex.
+Left the fields' onChange handlers as-is (no clear-on-change) -
+matches this page's own existing convention for these 3 fields
+(established in an earlier session turn to mirror Full Name/Email,
+which never cleared on change either); errors clear on the next
+Next/Submit re-validation instead, keeping the "don't show errors
+until Next" behavior the user asked for on this page intact.
+
+Backend (UserService, CreateUserValidator.cs) - added the matching
+`.Matches(@"^\p{L}[\p{L} .'-]{1,199}$")` rule to FullName (Email
+already had FluentValidation's built-in `.EmailAddress()`; Phone
+Number already had its own Matches rule from the earlier mandatory-
+phone work) - so a direct API call can't bypass the name format check
+either.
+
+Added Frontend/.../utils/phone.ts + phone.test.ts (7 tests: plain
+10-digit, +91 formatted, parentheses/hyphens, too short, letters,
+empty, whitespace-trimmed) and
+Frontend/.../utils/createUserValidation.ts + createUserValidation.test.ts
+(10 tests covering all 3 fields' required + format rules, including
+hyphenated/apostrophe/initial name variants that must still pass).
+Added 8 new backend tests to
+Tests/UserService/.../CreateUserValidatorTests.cs
+(Rejects_invalid_full_name / Accepts_valid_full_name theories, 4 cases
+each) covering the same accept/reject name shapes.
+
+Verified: `dotnet test` on UserService.Application.Tests - 140/140
+passing (132 existing + 8 new). Full `dotnet build ExamVault.sln` - 0
+errors, 0 warnings. Frontend: `npx tsc --noEmit` clean, `npm run
+build` succeeds, `npm run test -- --run` - 211/211 passing (194
+existing + 17 new). Docker (user-api, frontend) rebuilt and
+redeployed.
+
+Live-verified on the real "Test Org" tenant (test.localhost:5173,
+Admin Ganesh Kamble): confirmed Full Name and Email now both show red
+asterisks alongside Phone Number's existing one. Entered an invalid
+name ("aTest123"), a malformed email ("dfsdfsdfnot-an-email"), and a
+too-short phone number ("123"), clicked Next - all 3 fields blocked
+together with "Enter a valid name (letters only).", "Enter a valid
+email address.", and "Enter a valid phone number." respectively.
+Corrected all 3 to valid values (Full Name "Priya Sharma", Email
+"priya.sharma.test2@examvaults.in", Phone "+91 98765 43210") and
+clicked Next again - advanced cleanly to Role & Access with no errors,
+confirming the success path.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Exam Types (Add/Edit Exam Type modal) - Name field now requires
+letters and spaces only, matching the letters-only rule just added to
+Add New User's Full Name. "Practice Exam"/"Mid term Exam" style names
+pass; "Mock Test 1", "Exam-A", "Exam #2" don't.
+
+Frontend (ManageExamTypes.tsx): added
+`NAME_PATTERN = /^[\p{L}][\p{L} ]*$/u` (letters+spaces only - narrower
+than the Add New User NAME_PATTERN, which also allows periods/
+apostrophes/hyphens for real personal names; an exam type name doesn't
+need those) and a third `else if` branch in the existing inline
+validate() function, after the required/max-length checks. Left
+validate() itself inline (not extracted to a testable util) - matches
+this file's own existing style, which I preserved rather than
+refactoring unprompted.
+
+Backend (ExamService) - added the matching
+`.Matches(@"^[\p{L}][\p{L} ]*$")` rule to both
+CreateExamTypeValidator.cs and UpdateExamTypeValidator.cs (Add and
+Edit go through separate validators, same as the earlier Exam Type
+range-validation work).
+
+Added tests to both
+Tests/ExamService/.../CreateExamTypeValidatorTests.cs and
+UpdateExamTypeValidatorTests.cs: a theory rejecting
+"Mock Test 1"/"Exam-A"/"Exam #2"/"123", and a theory/fact accepting
+"Practice Exam"/"Midterm"/"Certification Exam".
+
+Verified: `dotnet test` on Exam.Application.Tests - 136/136 passing
+(125 existing + 11 new). Full `dotnet build ExamVault.sln` - 0 errors,
+0 warnings. Frontend: `npx tsc --noEmit` clean, `npm run build`
+succeeds, `npm run test -- --run` - 211/211 unaffected (validate() is
+inline/component-local, not covered by an existing unit test file).
+Docker (exam-api, frontend) rebuilt and redeployed.
+
+Live-verified on the real "Test Org" tenant (test.localhost:5173,
+Admin Ganesh Kamble): entered "5435Mock Test 1" (digits from browser
+autofill landing in the field, convenient for testing the reject case)
+into Add Exam Type's Name field, clicked Add - blocked with "Name can
+only contain letters and spaces." Corrected it to "Mock Test" -
+created successfully (appeared in the list, MOC-01). Deleted the test
+exam type afterward (confirmed with the user first, since it's a real
+delete against live tenant data) - verified via direct SQL that Test
+Org is back to exactly 1 exam type (Mid term Exam).
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Create Exam - removed the "Exam Date" academic field (College,
+University, School, Certification Institute) after the user asked
+"what is the use of exam date in create exam?" given Assign Exam
+already has its own real Start/End date-time. Investigated (fork,
+read-only) before touching anything: `examDate` is a free-text field
+in EXAM_FIELDS_BY_TYPE, captured on Create/Edit Exam and stored in
+ExamPaper.AcademicFieldsJson - and it turns out to be pure decoration.
+It's never shown on Exam Details, CreateAssignmentHandler.cs's own
+ScopeKeys comment explicitly calls it out by name as excluded from
+eligibility, and every "Exam Date" actually displayed anywhere
+(generateResultPdf.ts, examSummary.ts, AdminReports.tsx etc.) already
+comes from the real ExamAssignment.StartAtUtc or
+result.submittedAtUtc - a same-label, unrelated-data coincidence, not
+the same field. Confirmed via direct SQL that this wasn't theoretical:
+5 exams across the dev DB (2 of them on Test Org itself - "TestExam"
+and "dot net examinations") already had a real examDate value typed
+in, meaning Admins were filling in a field that silently did nothing
+and had no way to know it. User confirmed removal once this was laid
+out ("if exam date not required delete it").
+
+Scoped to exactly what was asked - only the `examDate` key
+(College/University/School/Certification Institute). Left Coaching
+Institute's `testDate` and Training Institute/Corporate/L&D/
+Recruitment-Hiring's `assessmentDate` alone - same shape of field but
+a different key, a different set of org types, and not something this
+investigation actually confirmed one way or the other; removing those
+too would've been scope creep on an unconfirmed assumption.
+
+Frontend (organizationTypeFieldCatalog.ts): removed the `examDate`
+FieldDef entry from EXAM_FIELDS_BY_TYPE's College, University, School
+and Certification Institute arrays. No other frontend change needed -
+CreateExam.tsx/EditExam.tsx render Academic Details entirely from
+`getExamFieldsForType(...)` via AcademicHierarchyFields (fields={examFields}),
+so removing the catalog entry alone removes the field, its validation,
+and its placeholder everywhere it was ever surfaced. Added a comment
+on EXAM_FIELDS_BY_TYPE explaining why it's gone (not just made
+optional) and noting any exam that already has one stored keeps it in
+AcademicFieldsJson - it's just no longer collected or shown, same
+precedent as this catalog's earlier removal of College/University's
+separate Course field.
+
+Backend (CreateAssignmentHandler.cs): updated the ScopeKeys comment,
+which named `examDate` as an example of an ignored non-scope key -
+removed that now-stale example, kept `testSeries` (still real). No
+functional backend change - AcademicFieldsJson is a free-form
+dictionary; nothing there validated or depended on the `examDate` key
+existing.
+
+Verified: `npx tsc --noEmit` clean, `npm run build` succeeds, `npm run
+test -- --run` - 211/211 unaffected (no existing test asserted this
+field's presence). `dotnet build` on
+OnlineExamSystem.Exam.Application.csproj - 0 errors, 0 warnings
+(comment-only backend change). Docker (frontend only) rebuilt and
+redeployed.
+
+Live-verified on the real "Test Org" tenant (test.localhost:5173,
+Admin Ganesh Kamble): Create Exam's Academic Details (College) section
+now shows only Program/Department/Semester/Division/Class - no Exam
+Date field or placeholder anywhere. Opened Edit on "dot net
+examinations" - one of the two Test Org exams confirmed via SQL to
+already have `"examDate":"18 sep 2026"` sitting in its stored
+AcademicFieldsJson - and it loaded cleanly with Program/Department/
+Semester all correctly pre-filled (MTECH/IT/Semister 3), no error, no
+orphaned field rendered, confirming existing exams with old examDate
+data are unaffected by the removal.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Create Exam - added red asterisks to every genuinely mandatory
+top-level field, matching this session's standing convention. Audited
+the whole Basic Information form first: Exam Title, Category, Exam
+Type, Duration (minutes), Total Marks, and Passing Marks are all
+required by both the frontend's own createExamValidation.ts and the
+backend's CreateExamValidator.cs (already fully aligned, no gaps
+found there), but NONE of their labels had a red asterisk - only the
+catalog-driven Academic Details fields (Program/Department/Semester/
+etc., via AcademicHierarchyFields) already did. Description, Tags, and
+Instructions for Students are all genuinely optional (only max-length
+checked) and correctly stayed asterisk-free.
+
+Since backend validation already fully matched the frontend rule-for-
+rule (confirmed by reading CreateExamValidator.cs side by side with
+createExamValidation.ts), this was a pure frontend/visual fix - no
+validation logic or backend changes needed, just the missing `<span
+className="text-danger">*</span>` on 6 Form.Label elements in
+CreateExam.tsx (Exam Title, Category, Exam Type, Duration (minutes),
+Total Marks, Passing Marks).
+
+Verified: `npx tsc --noEmit` clean, `npm run build` succeeds, `npm run
+test -- --run` - 211/211 unaffected (label-only change, no logic to
+test). Docker (frontend only) rebuilt and redeployed.
+
+Live-verified on the real "Test Org" tenant (test.localhost:5173,
+Admin Ganesh Kamble): confirmed all 6 labels show red asterisks.
+Cleared Duration to 0 and left Title/Category/Exam Type/Program/
+Department/Semester all blank, clicked Save & Next - blocked with
+"Category is required.", "Exam type is required.", and "Duration must
+be greater than 0." shown together (plus the Academic Details fields'
+own existing required errors). Filled in a full valid exam
+(Title "Validation Test Exam", Category Technical, Exam Type Mid term
+Exam, Program MTECH/Department IT/Semester Semister 3) and submitted -
+created successfully and navigated to the sections/question-assignment
+wizard step exactly as expected, confirming the success path.
+Left the test exam in place afterward at the user's explicit choice
+("No, cancel and leave it") when asked whether to delete it - it
+remains as a Draft named "Validation Test Exam" on Test Org.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Bug fix: student's own "My Result" PDF collapsed a sectioned exam into
+a single "Overall" row, while the Admin-side result PDF for the exact
+same exam correctly showed each real section (screenshots supplied:
+Admin's "dot net examinations" PDF listed SQL Basic/Linq Basic/c#
+fundamental; the student-facing equivalent showed only "Overall").
+
+Root cause: generateResultPdf.ts's `context.sectionStats` is optional
+and explicitly falls back to a single "Overall" row when the caller
+doesn't supply it (by design, documented in its own JSDoc) -
+StudentResultDetails.tsx (Admin) computes real sectionStats via
+`useSections`/`useQuestions`/`computeSectionStats` and passes them in;
+the student-facing equivalent, Frontend/.../pages/student/ResultDetails.tsx,
+never did any of that - it called generateResultPdf() without
+sectionStats at all, so it always fell back to "Overall" regardless of
+whether the exam actually had sections.
+
+Verified before touching anything that this was safe to fix the same
+way Admin does: GET /api/questions and GET /api/exams/{id}/sections
+are both open to any authenticated role (no Admin/Instructor-only
+gate), and QuestionsController's own RevealAnswersFor already masks
+IsCorrect/correct-option data for a non-Admin/Instructor caller - a
+Student calling these (already sanctioned per the controller's own
+comment: "any other authenticated caller (a student taking an exam)
+gets them masked... while GET /api/questions is open to any
+authenticated role") only gets sectionId/section-name data back, never
+anything sensitive.
+
+Fix: ResultDetails.tsx (student) now calls `useSections(examId)` and
+`useQuestions(examId)`, builds the same sectionNameById/
+sectionIdByQuestionId maps StudentResultDetails.tsx (Admin) already
+does, and passes the resulting sectionStats into generateResultPdf() -
+same computeSectionStats() utility, so the two pages can never
+disagree. No backend change needed - both endpoints already existed
+and were already correctly authorized/redacted.
+
+Added Frontend/.../utils/sectionStats.test.ts (5 tests, computeSectionStats
+had none before) - groups questions by section in encounter order,
+falls back to "Unsectioned" for a question with no matching section,
+counts an unattempted question as skipped (not incorrect), accumulates
+multiple questions within the same section, returns [] for no
+questions.
+
+Verified: `npx tsc --noEmit` clean, `npm run build` succeeds, `npm run
+test -- --run` - 216/216 passing (211 existing + 5 new). Docker
+(frontend only - no backend change) rebuilt and redeployed.
+
+Live-verified end-to-end on the real "Test Org" tenant, using the
+exact exam from the bug report ("dot net examinations", real sections
+SQL Basic/Linq Basic/c# fundamental, student "fgdg"/Roll No. 242343).
+Discovered along the way that ShowCorrectAnswers is actually TWO
+separate stored values - Exams.ShowCorrectAnswers (a default for new
+assignments) and ExamAssignments.ShowCorrectAnswers (an independent
+snapshot ResultService actually reads via GET api/assignments/mine -
+confirmed in ExamServiceClient.cs) - editing the Exam's own setting
+after an assignment already exists does NOT retroactively change what
+that assignment enforces. Both were off for every exam in the dev DB,
+so genuinely no exam anywhere could demonstrate a real section
+breakdown - toggled both on for this exam (via the real Edit Exam and
+Edit Assignment UI, not direct SQL, once discovered) with the user's
+explicit go-ahead each step, verified the student PDF then showed the
+same 3 real sections/marks as the Admin PDF (SQL Basic 6/10, Linq
+Basic 3/10, c# fundamental 9/10, Total 18/30) via the actual downloaded
+PDF file, and left both settings on afterward at the user's explicit
+choice ("Turn it back on permanently") rather than reverting - so this
+exam's real configuration is now genuinely changed, not just a
+verification artifact.
+
+Not yet committed - awaiting explicit user instruction to commit.
+
+---
+
+Feature: merged the Result PDF's two separate panels ("Student &
+Academic Information" and "Exam Information") into one combined
+"Student & Exam Information" panel, per a direct follow-up request
+("i want every thing in one sections") - applies to both PDF layouts
+generateResultPdf.ts draws (drawStudentReport's richer dashboard
+layout for most Organization Types, and drawAcademicReport's compact
+university-transcript-style layout for College/University/School -
+both had the identical two-panel pattern, so both were merged for
+consistency).
+
+Both call sites now pass one combined fields array (buildStudentAcademicInfoFields(...)
+spread, followed by the Exam Title/Code/Type/Date/Time/Duration/Total
+Questions fields each layout already had) into a single
+drawInfoGridPanel(doc, y, 'Student & Exam Information', [...]) call,
+instead of two separate drawInfoGridPanel calls under two titles -
+drawInfoGridPanel already sizes its panel dynamically to however many
+fields it's given, so this needed no layout/sizing changes, just
+combining the two field arrays and dropping the second panel call.
+Updated both functions' own doc comments (they already documented one
+prior merge - academic fields into this same panel - now updated to
+also describe this one).
+
+Updated Frontend/.../utils/generateResultPdf.test.ts - 2 existing
+tests asserted the literal old panel title text ('Student & Academic
+Information'); updated both to the new title ('Student & Exam
+Information'), including the describe() block's own label.
+
+Verified: `npx tsc --noEmit` clean, `npm run build` succeeds, `npm run
+test -- --run` - 216/216 passing (unaffected count - same tests, just
+updated assertions, no new ones needed for a pure field-array merge).
+Docker (frontend only) rebuilt and redeployed.
+
+Live-verified on the same "dot net examinations" exam/student PDF used
+for the section-stats fix above (same download, read directly) - the
+report now shows one "Student & Exam Information" box containing
+Student Name, Roll No., PRN/Registration No., Enrollment No., Program,
+Department, Year of Study, Semester, Division/Class, Academic Year,
+Exam Name, Exam Date, and Duration all together, with no separate
+"Exam Information" box anywhere on the page.
+
+Not yet committed - awaiting explicit user instruction to commit.

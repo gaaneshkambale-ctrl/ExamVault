@@ -257,7 +257,9 @@ export default function CreateExam() {
                 <Row>
                   <Col md={8}>
                     <Form.Group className="mb-3" controlId="examTitle">
-                      <Form.Label className="fw-bold">Exam Title</Form.Label>
+                      <Form.Label className="fw-bold">
+                        Exam Title <span className="text-danger">*</span>
+                      </Form.Label>
                       <Form.Control
                         type="text"
                         placeholder="Enter exam title"
@@ -289,7 +291,9 @@ export default function CreateExam() {
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3" controlId="examCategory">
-                      <Form.Label className="fw-bold">Category</Form.Label>
+                      <Form.Label className="fw-bold">
+                        Category <span className="text-danger">*</span>
+                      </Form.Label>
                       <Form.Select
                         value={form.category}
                         onChange={(e) => updateField('category', e.target.value)}
@@ -318,7 +322,9 @@ export default function CreateExam() {
                 </Row>
 
                 <Form.Group className="mb-3" controlId="examTypeId">
-                  <Form.Label className="fw-bold">Exam Type</Form.Label>
+                  <Form.Label className="fw-bold">
+                    Exam Type <span className="text-danger">*</span>
+                  </Form.Label>
                   <Row className="g-2">
                     {examTypes?.map((type) => {
                       const selected = form.examTypeId === type.id;
@@ -388,7 +394,9 @@ export default function CreateExam() {
                 <Row>
                   <Col md={4}>
                     <Form.Group className="mb-3" controlId="examDuration">
-                      <Form.Label className="fw-bold">Duration (minutes)</Form.Label>
+                      <Form.Label className="fw-bold">
+                        Duration (minutes) <span className="text-danger">*</span>
+                      </Form.Label>
                       <InputGroup hasValidation>
                         <InputGroup.Text><ClockIcon /></InputGroup.Text>
                         <Form.Control
@@ -406,7 +414,9 @@ export default function CreateExam() {
                   </Col>
                   <Col md={4}>
                     <Form.Group className="mb-3" controlId="examTotalMarks">
-                      <Form.Label className="fw-bold">Total Marks</Form.Label>
+                      <Form.Label className="fw-bold">
+                        Total Marks <span className="text-danger">*</span>
+                      </Form.Label>
                       <InputGroup hasValidation>
                         <InputGroup.Text><MarksIcon /></InputGroup.Text>
                         <Form.Control
@@ -424,7 +434,9 @@ export default function CreateExam() {
                   </Col>
                   <Col md={4}>
                     <Form.Group className="mb-3" controlId="examPassingMarks">
-                      <Form.Label className="fw-bold">Passing Marks</Form.Label>
+                      <Form.Label className="fw-bold">
+                        Passing Marks <span className="text-danger">*</span>
+                      </Form.Label>
                       <InputGroup hasValidation>
                         <InputGroup.Text><TargetIcon /></InputGroup.Text>
                         <Form.Control

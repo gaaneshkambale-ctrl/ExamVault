@@ -16,6 +16,8 @@ import { getGrade, type Grade } from '../../types/result';
 import { violationLabel } from '../../utils/proctoring';
 import { generateResultPdf, isQuestionCorrect, isSkipped } from '../../utils/generateResultPdf';
 import { computeSectionStats } from '../../utils/sectionStats';
+import { useOrganizationBranding } from '../../hooks/useOrganizationSettings';
+import { getRollNumberLabelForType } from '../../constants/organizationTypeFieldCatalog';
 import { computeDelta, getCalendarMonthWindows, isWithinRange } from '../../utils/dateRange';
 import { listSections } from '../../api/sectionApi';
 import { listQuestions } from '../../api/questionApi';
@@ -68,6 +70,8 @@ export default function StudentResults() {
   const { data: exams, isLoading: isLoadingExams } = useExams();
   const { data: users, isLoading: isLoadingUsers } = useStudents();
   const { data: groups } = useGroups();
+  const { data: branding } = useOrganizationBranding();
+  const rollNumberLabel = getRollNumberLabelForType(branding?.organizationType);
   const examIds = useMemo(() => (exams ?? []).map((e) => e.id), [exams]);
   const { attemptsByExam } = useAttemptsByExam(examIds);
   const [searchText, setSearchText] = useState('');
@@ -384,7 +388,7 @@ export default function StudentResults() {
               <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Student Name &amp; Email</th>
-                  <th>Roll No.</th>
+                  <th>{rollNumberLabel}</th>
                   <th>Exam Title &amp; Code</th>
                   <th>Score / Total</th>
                   <th>Grade</th>

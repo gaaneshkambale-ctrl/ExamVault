@@ -20,6 +20,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { getExamResultsForAdmin } from '../../api/resultApi';
 import { getExamResultScheme } from '../../utils/examResultScheme';
 import { isReportTypeAvailable } from '../../constants/reportTypeCatalog';
+import { getRollNumberLabelForType } from '../../constants/organizationTypeFieldCatalog';
 import { buildAdvanceExamReport } from '../../utils/advanceExamReport';
 import { buildQuestionDifficulty, buildSectionWiseStats } from '../../utils/advanceExamReportAnalysis';
 import { generateCertificatePdf } from '../../utils/generateCertificatePdf';
@@ -65,6 +66,7 @@ export default function AdvanceExamReport() {
   // never offers certificates regardless of how an individual exam is
   // configured.
   const showCertificate = !!exam?.certificateEnabled && isReportTypeAvailable(branding?.organizationType, 'certificate');
+  const rollNumberLabel = getRollNumberLabelForType(branding?.organizationType);
 
   // Exam.startAtUtc/endAtUtc are frequently null - scheduling in this app is
   // actually enforced per-assignment, not per-exam (see StartAttemptHandler.cs's
@@ -142,6 +144,7 @@ export default function AdvanceExamReport() {
         sectionStats,
         questionDifficulty,
         organization: myTenant,
+        organizationType: branding?.organizationType,
         generatedByName: currentUser?.fullName,
       });
     } finally {
@@ -306,7 +309,7 @@ export default function AdvanceExamReport() {
                 <Table responsive hover className="mb-0 align-middle">
                   <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
-                      <th className="ps-4">Roll Number</th>
+                      <th className="ps-4">{rollNumberLabel}</th>
                       <th>Student Name</th>
                       <th>Status</th>
                       <th>Score</th>

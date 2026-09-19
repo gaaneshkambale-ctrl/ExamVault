@@ -1,14 +1,18 @@
+import { useMemo } from 'react';
 import { Alert, Badge, Button, Card, Col, ProgressBar, Row, Spinner } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useExam } from '../../hooks/useExams';
 import { useMyResult } from '../../hooks/useResults';
 import { useOrganizationAcademicConfig } from '../../hooks/useOrganizationAcademicConfig';
+import { useSections } from '../../hooks/useSections';
+import { useQuestions } from '../../hooks/useQuestions';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuth } from '../../hooks/useAuth';
 import { getGrade } from '../../types/result';
 import type { CreationMethod } from '../../types/exam';
 import { generateResultPdf } from '../../utils/generateResultPdf';
+import { computeSectionStats } from '../../utils/sectionStats';
 import AnswerReviewPanel from '../../components/result/AnswerReviewPanel';
 
 const creationMethodLabel: Record<CreationMethod, string> = {
@@ -43,6 +47,32 @@ export default function ResultDetails() {
   const { data: exam } = useExam(examId);
   const { user } = useAuth();
   const { data: academicConfig } = useOrganizationAcademicConfig();
+  // Both endpoints are open to any authenticated role and already redact
+  // anything sensitive for a non-Admin/Instructor caller (QuestionsController's
+  // own RevealAnswersFor masks IsCorrect/correct-option data for a student) -
+  // only sectionId/section name are actually read here, same as
+  // StudentResultDetails.tsx's admin-facing equivalent, so the student's own
+  // "My Result" PDF/section breakdown stops silently collapsing into a single
+  // "Overall" row for a sectioned exam.
+  const { data: sections } = useSections(examId);
+  const { data: examQuestions } = useQuestions(examId);
+
+  const sectionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sections ?? []) map.set(s.id, s.name);
+    return map;
+  }, [sections]);
+
+  const sectionIdByQuestionId = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const q of examQuestions ?? []) map.set(q.id, q.sectionId);
+    return map;
+  }, [examQuestions]);
+
+  const sectionStats = useMemo(
+    () => (result?.questions ? computeSectionStats(result.questions, sectionIdByQuestionId, sectionNameById) : []),
+    [result, sectionIdByQuestionId, sectionNameById],
+  );
 
   const percentage =
     result && result.totalMarks > 0 ? Math.round((result.totalScore / result.totalMarks) * 100) : 0;
@@ -190,6 +220,7 @@ export default function ResultDetails() {
                   examCode: exam?.examCode ?? null,
                   examType: exam?.examTypeName ?? exam?.category ?? null,
                   durationMinutes: exam?.durationMinutes,
+                  sectionStats,
                   rank: result.rank ?? undefined,
                   totalParticipants: result.totalParticipants ?? undefined,
                   averageAccuracyPercent: result.averageAccuracy ?? undefined,

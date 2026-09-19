@@ -14,8 +14,8 @@ public class CreateAssignmentHandler
     // The only keys CreateExam.tsx's Academic Details section ever writes
     // for an org type with academic-scope fields (College/University) -
     // AcademicFieldsJson can hold other org-type-specific keys too (eg.
-    // examDate, testSeries) but those aren't eligibility-relevant, so they're
-    // ignored here rather than compared.
+    // testSeries) but those aren't eligibility-relevant, so they're ignored
+    // here rather than compared.
     private static readonly string[] ScopeKeys = ["program", "department", "semester", "division"];
     private readonly IExamRepository _examRepository;
     private readonly IUserLookupClient _userLookupClient;

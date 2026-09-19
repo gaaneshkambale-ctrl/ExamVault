@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { getPopulatedStudentAcademicFields, getStudentFieldsForType, hasExamAcademicScope } from './organizationTypeFieldCatalog';
+import {
+  EXAM_FIELDS_BY_TYPE,
+  STUDENT_FIELDS_BY_TYPE,
+  getPopulatedStudentAcademicFields,
+  getStudentFieldsForType,
+  hasExamAcademicScope,
+} from './organizationTypeFieldCatalog';
+import type { FieldDef } from './organizationTypeFieldCatalog';
 
 describe('getStudentFieldsForType', () => {
   it('has no separate Course key for College/University - Program is the single field for that real-world value there', () => {
@@ -70,7 +77,7 @@ describe('getPopulatedStudentAcademicFields', () => {
     const fields = getPopulatedStudentAcademicFields('School', {
       admissionNo: 'ADM-001',
       class: '10',
-      division: 'B',
+      divisionSection: 'B',
       academicYear: '2026-27',
     });
     expect(fields).toContainEqual({ label: 'Division', value: 'B' });
@@ -91,5 +98,60 @@ describe('getPopulatedStudentAcademicFields', () => {
     expect(fields).toContainEqual({ label: 'Course', value: 'CAT Preparation' });
     expect(fields).toContainEqual({ label: 'Batch', value: 'Batch 2026-A' });
     expect(fields).toContainEqual({ label: 'Academic Year', value: '2026-27' });
+  });
+});
+
+// Regression guard for a real bug found while auditing all 8 Organization
+// Types: School's STUDENT_FIELDS_BY_TYPE had a field literally keyed
+// 'division', and Corporate / L&D + Recruitment / Hiring each had one keyed
+// 'department' - AcademicHierarchyFields.tsx treats those 4 exact key names
+// (program/department/semester/division) as steps of one cascading Program
+// -> Department -> Semester -> Division picker, and a step's own query only
+// enables once the PREVIOUS step in that fixed order has a selection. None
+// of those 3 org types have every earlier step in their own catalog, so the
+// field's dropdown could never load any options - a REQUIRED field with no
+// way to ever give it a value, permanently blocking Add User for every
+// School/Corporate/Recruitment tenant. Fixed by renaming the colliding keys
+// (divisionSection, departmentName) so they render as plain free text
+// instead of joining a cascade they don't belong to. This test would have
+// caught it - and catches the same mistake for any future org type.
+describe('cascading hierarchy key safety (AcademicHierarchyFields.tsx)', () => {
+  const HIER_ORDER = ['program', 'department', 'semester', 'division'] as const;
+
+  function assertValidHierarchyPrefix(fields: FieldDef[], catalogName: string, orgType: string) {
+    const presentHierKeys = HIER_ORDER.filter((key) => fields.some((f) => f.key === key));
+    // Whichever hierarchy keys are present must form a contiguous prefix of
+    // HIER_ORDER starting at 'program' - anything else is a field the
+    // cascading picker can never populate.
+    presentHierKeys.forEach((key, i) => {
+      expect(
+        key,
+        `${catalogName}['${orgType}'] hierarchy keys must be a contiguous prefix of ${HIER_ORDER.join(' -> ')}, got [${presentHierKeys.join(', ')}]`,
+      ).toBe(HIER_ORDER[i]);
+    });
+  }
+
+  it('every org type in STUDENT_FIELDS_BY_TYPE has a fillable hierarchy key prefix', () => {
+    for (const [orgType, fields] of Object.entries(STUDENT_FIELDS_BY_TYPE)) {
+      assertValidHierarchyPrefix(fields, 'STUDENT_FIELDS_BY_TYPE', orgType);
+    }
+  });
+
+  it('every org type in EXAM_FIELDS_BY_TYPE has a fillable hierarchy key prefix', () => {
+    for (const [orgType, fields] of Object.entries(EXAM_FIELDS_BY_TYPE)) {
+      assertValidHierarchyPrefix(fields, 'EXAM_FIELDS_BY_TYPE', orgType);
+    }
+  });
+
+  it('School no longer uses the reserved "division" key (renamed to divisionSection)', () => {
+    expect(getStudentFieldsForType('School').find((f) => f.key === 'division')).toBeUndefined();
+    expect(getStudentFieldsForType('School').find((f) => f.key === 'divisionSection')).toBeDefined();
+  });
+
+  it('Corporate / L&D and Recruitment / Hiring no longer use the reserved "department" key (renamed to departmentName)', () => {
+    expect(getStudentFieldsForType('Corporate / L&D').find((f) => f.key === 'department')).toBeUndefined();
+    expect(getStudentFieldsForType('Corporate / L&D').find((f) => f.key === 'departmentName')).toBeDefined();
+    expect(getStudentFieldsForType('Recruitment / Hiring').find((f) => f.key === 'department')).toBeUndefined();
+    expect(getStudentFieldsForType('Recruitment / Hiring').find((f) => f.key === 'departmentName')).toBeDefined();
   });
 });

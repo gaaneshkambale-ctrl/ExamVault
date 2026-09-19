@@ -431,9 +431,12 @@ interface PdfReportSettingsTabProps {
   set: <K extends keyof UpdateOrganizationSettingsRequest>(key: K, value: UpdateOrganizationSettingsRequest[K]) => void;
   logoUrl: string | null;
   signatureUrl: string | null;
+  /** Tenant.OrganizationCode - set once at Create Organization, not editable here. Used as the fallback shown on the "Reg. No." line whenever registrationNumber itself is left blank, so the preview matches what generateResultPdf.ts's loadTenantBranding actually renders. */
+  organizationCode: string | null;
 }
 
-function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSettingsTabProps) {
+function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl, organizationCode }: PdfReportSettingsTabProps) {
+  const effectiveRegistrationNumber = draft.registrationNumber || organizationCode;
   const totalMarks = SAMPLE_REPORT.rows.reduce((sum, r) => sum + r.marks, 0);
   const totalObtained = SAMPLE_REPORT.rows.reduce((sum, r) => sum + r.obtained, 0);
   const percentage = Math.round((totalObtained / totalMarks) * 10000) / 100;
@@ -557,11 +560,11 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
       doc.text(fitText(doc, addressParts.join('  |  '), CONTENT_WIDTH), PAGE_WIDTH / 2, centerY, { align: 'center' });
       centerY += 4;
     }
-    if (draft.registrationNumber) {
+    if (effectiveRegistrationNumber) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
       setColor(doc, 'setTextColor', TEXT_MUTED);
-      doc.text(`Reg. No: ${draft.registrationNumber}`, PAGE_WIDTH / 2, centerY, { align: 'center' });
+      doc.text(`Reg. No: ${effectiveRegistrationNumber}`, PAGE_WIDTH / 2, centerY, { align: 'center' });
       centerY += 4;
     }
     let y = Math.max(MARGIN + logoH + 4, centerY + 2);
@@ -874,8 +877,8 @@ function PdfReportSettingsTab({ draft, set, logoUrl, signatureUrl }: PdfReportSe
                           .filter(Boolean)
                           .join('  |  ')}
                       </div>
-                      {draft.registrationNumber && (
-                        <div className="text-muted small">Reg. No: {draft.registrationNumber}</div>
+                      {effectiveRegistrationNumber && (
+                        <div className="text-muted small">Reg. No: {effectiveRegistrationNumber}</div>
                       )}
                     </div>
                     <div style={{ width: 40 }} />
@@ -1838,7 +1841,7 @@ export default function OrganizationSettingsPage() {
       </div>
 
       {activeTab === 'Reports & Documents' ? (
-        <PdfReportSettingsTab draft={draft} set={set} logoUrl={logoUrl} signatureUrl={signatureUrl} />
+        <PdfReportSettingsTab draft={draft} set={set} logoUrl={logoUrl} signatureUrl={signatureUrl} organizationCode={settings.organizationCode} />
       ) : activeTab === 'Academic Configuration' ? (
         <AcademicConfigurationTab organizationType={draft.organizationType} organizationCode={settings.organizationCode} />
       ) : (
@@ -1923,7 +1926,13 @@ export default function OrganizationSettingsPage() {
                       <Form.Control
                         value={draft.registrationNumber ?? ''}
                         onChange={(e) => set('registrationNumber', e.target.value)}
+                        placeholder={settings.organizationCode ?? ''}
                       />
+                      {!draft.registrationNumber && settings.organizationCode && (
+                        <Form.Text className="text-muted">
+                          Left blank - reports will show your Organization Code ({settings.organizationCode}) instead.
+                        </Form.Text>
+                      )}
                     </Col>
                     <Col xs={12} md={6}>
                       <Form.Label className="small">Tax / Identification No. (Optional)</Form.Label>
@@ -2233,8 +2242,8 @@ export default function OrganizationSettingsPage() {
                               .filter(Boolean)
                               .join('  |  ') || 'Address will appear here'}
                           </div>
-                          {draft.registrationNumber && (
-                            <div className="text-muted small">Reg. No: {draft.registrationNumber}</div>
+                          {(draft.registrationNumber || settings.organizationCode) && (
+                            <div className="text-muted small">Reg. No: {draft.registrationNumber || settings.organizationCode}</div>
                           )}
                         </div>
                         <div style={{ width: 40 }} />

@@ -2,27 +2,56 @@ import { useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { Alert, Badge, Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import readXlsxFile from 'read-excel-file/browser';
 import writeXlsxFile from 'write-excel-file/browser';
 import AdminLayout from '../../layouts/AdminLayout';
 import SectionHeader from '../../components/SectionHeader';
 import { createUser } from '../../api/userApi';
+import { getOrganizationBranding } from '../../api/organizationSettingsApi';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
+import { validateImportRow } from '../../utils/importUsersValidation';
+import type { ImportUserRow } from '../../utils/importUsersValidation';
+import {
+  fetchAcademicHierarchyIndex,
+  firstAcademicHierarchyChain,
+  getActiveHierarchyLevels,
+  HIER_TYPE_BY_KEY,
+} from '../../utils/academicHierarchyIndex';
+import type { AcademicHierarchyIndex } from '../../utils/academicHierarchyIndex';
+import { getStudentFieldsForType, getRollNumberLabelForType } from '../../constants/organizationTypeFieldCatalog';
+import type { FieldDef } from '../../constants/organizationTypeFieldCatalog';
 
-interface ImportRow {
+interface ImportRow extends ImportUserRow {
   id: string;
   rowNumber: number;
-  fullName: string;
-  email: string;
-  role: string;
-  phoneNumber: string;
-  rollNumber: string;
   status: 'Valid' | string;
 }
 
-const TEMPLATE_HEADERS = ['Full Name', 'Email', 'Role', 'Phone Number', 'Roll Number'];
+// Realistic-looking example values for the sample file's Student row, for
+// every free-text (non-hierarchy) key any Organization Type's catalog
+// defines (organizationTypeFieldCatalog.ts) - Program/Department/Semester/
+// Division get their example values from the tenant's own real configured
+// lists instead (see firstAcademicHierarchyChain), since a fabricated value
+// there would fail the sample file's own validation the moment it's
+// re-uploaded unmodified.
+const SAMPLE_VALUE_BY_FIELD_KEY: Record<string, string> = {
+  enrollmentNo: 'ENR-2026-001',
+  prn: 'PRN20260001',
+  year: '2nd Year',
+  academicYear: '2026-27',
+  admissionNo: 'ADM-2026-001',
+  class: '10th',
+  batch: '2026-B',
+  course: 'Data Structures',
+  enrollmentDate: '01-Jul-2026',
+  designation: 'Software Engineer',
+  manager: 'Ganesh Kamble',
+  certificateNo: 'CERT-2026-001',
+  applicationId: 'APP-2026-001',
+  position: 'Frontend Developer',
+};
 
 function UploadIcon() {
   return (
@@ -55,37 +84,49 @@ const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
 
 const STEPS = ['Upload File', 'Preview & Validate', 'Import'] as const;
 
-function validateRow(row: ImportRow, allRows: ImportRow[]): string {
-  if (!row.fullName.trim()) {
-    return 'Full Name is required.';
-  }
-  if (!row.email.trim()) {
-    return 'Email is required.';
-  }
-  if (row.role !== 'Student' && row.role !== 'Admin') {
-    return 'Role must be exactly "Student" or "Admin".';
-  }
-  const emailLower = row.email.trim().toLowerCase();
-  const duplicateInFile = allRows.filter((r) => r.email.trim().toLowerCase() === emailLower);
-  if (duplicateInFile.length > 1) {
-    return 'Duplicate email within the file.';
-  }
-  return 'Valid';
+function buildTemplateHeaders(studentFields: FieldDef[], rollNumberLabel: string): string[] {
+  return [
+    'Full Name',
+    'Email',
+    'Role',
+    'Phone Number *',
+    `${rollNumberLabel} (Students only)`,
+    ...studentFields.map((field) => `${field.label} (Students only${field.optional ? ', optional' : ''})`),
+  ];
 }
 
-async function downloadTemplate() {
+async function downloadTemplate(studentFields: FieldDef[], rollNumberLabel: string, hierarchyIndex: AcademicHierarchyIndex) {
+  const headers = buildTemplateHeaders(studentFields, rollNumberLabel);
+  const activeLevels = getActiveHierarchyLevels(studentFields);
+  const chain = firstAcademicHierarchyChain(hierarchyIndex, activeLevels);
+
+  const studentAcademicCells = studentFields.map((field) => {
+    const hierType = HIER_TYPE_BY_KEY[field.key];
+    const value = hierType ? (chain[hierType] ?? '') : (SAMPLE_VALUE_BY_FIELD_KEY[field.key] ?? '');
+    return { value };
+  });
+
   const data = [
-    TEMPLATE_HEADERS.map((header) => ({ value: header, fontWeight: 'bold' as const })),
+    headers.map((header) => ({ value: header, fontWeight: 'bold' as const })),
     [
       { value: 'Jane Doe' },
       { value: 'jane.doe@example.com' },
       { value: 'Student' },
       { value: '9876543210' },
       { value: 'R-1001' },
+      ...studentAcademicCells,
+    ],
+    [
+      { value: 'Priya Sharma' },
+      { value: 'priya.sharma@example.com' },
+      { value: 'Admin' },
+      { value: '9876543211' },
+      { value: '' },
+      ...studentFields.map(() => ({ value: '' })),
     ],
   ];
   await writeXlsxFile(data, {
-    columns: [{ width: 24 }, { width: 28 }, { width: 14 }, { width: 18 }, { width: 16 }],
+    columns: [{ width: 24 }, { width: 28 }, { width: 14 }, { width: 18 }, { width: 24 }, ...studentFields.map(() => ({ width: 22 }))],
   }).toFile('user-import-template.xlsx');
 }
 
@@ -93,6 +134,13 @@ export default function ImportUsers() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { data: branding, isLoading: isBrandingLoading, isError: isBrandingError } = useQuery({
+    queryKey: ['organization-branding'],
+    queryFn: getOrganizationBranding,
+  });
+  const studentFields = getStudentFieldsForType(branding?.organizationType);
+  const rollNumberLabel = getRollNumberLabelForType(branding?.organizationType);
+  const activeHierarchyLevels = getActiveHierarchyLevels(studentFields);
 
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [parseError, setParseError] = useState('');
@@ -104,6 +152,7 @@ export default function ImportUsers() {
 
   const validRows = rows.filter((r) => r.status === 'Valid');
   const currentStepIndex = createdCount > 0 ? 2 : rows.length > 0 ? 1 : 0;
+  const uploadDisabled = isParsing || isBrandingLoading || isBrandingError;
 
   const handleFileSelected = async (file: File) => {
     setIsParsing(true);
@@ -126,9 +175,20 @@ export default function ImportUsers() {
         role: cells[2] ? String(cells[2]).trim() : '',
         phoneNumber: cells[3] ? String(cells[3]).trim() : '',
         rollNumber: cells[4] ? String(cells[4]).trim() : '',
+        academicFields: Object.fromEntries(
+          studentFields.map((field, fieldIndex) => [field.key, cells[5 + fieldIndex] ? String(cells[5 + fieldIndex]).trim() : '']),
+        ),
         status: 'Valid',
       }));
-      const validated = parsed.map((row) => ({ ...row, status: validateRow(row, parsed) }));
+      // Fetched fresh per upload (not cached) so a tenant's latest Academic
+      // Configuration always governs validation, even if it changed since
+      // the last file was checked in this same session.
+      const hierarchyIndex =
+        activeHierarchyLevels.length > 0 ? await fetchAcademicHierarchyIndex(activeHierarchyLevels) : {};
+      const validated = parsed.map((row) => ({
+        ...row,
+        status: validateImportRow(row, parsed, studentFields, hierarchyIndex),
+      }));
       setRows(validated);
     } catch {
       setParseError('Could not read this file. Please use the downloadable template and try again.');
@@ -150,6 +210,12 @@ export default function ImportUsers() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    const hierarchyIndex =
+      activeHierarchyLevels.length > 0 ? await fetchAcademicHierarchyIndex(activeHierarchyLevels) : {};
+    await downloadTemplate(studentFields, rollNumberLabel, hierarchyIndex);
+  };
+
   const handleCreate = async () => {
     if (validRows.length === 0) return;
     setIsCreating(true);
@@ -163,6 +229,7 @@ export default function ImportUsers() {
           role: row.role as UserRole,
           phoneNumber: row.phoneNumber,
           rollNumber: row.rollNumber || null,
+          academicFields: row.role === 'Student' ? row.academicFields : null,
         };
         return createUser(request);
       }),
@@ -213,7 +280,7 @@ export default function ImportUsers() {
             <p className="text-muted mb-0">Import multiple users at once using an Excel (.xlsx) file.</p>
           </div>
         </div>
-        <Button variant="outline-primary" onClick={() => void downloadTemplate()}>
+        <Button variant="outline-primary" disabled={isBrandingLoading || isBrandingError} onClick={() => void handleDownloadTemplate()}>
           Download Sample File
         </Button>
       </div>
@@ -241,19 +308,20 @@ export default function ImportUsers() {
                 className={`border border-2 border-dashed rounded-3 text-center py-5 px-3 ${isDragOver ? 'bg-primary-subtle' : 'bg-body-tertiary'}`}
                 style={{
                   borderColor: isDragOver ? '#4f46e5' : '#dee2e6',
-                  cursor: 'pointer',
+                  cursor: uploadDisabled ? 'default' : 'pointer',
+                  opacity: uploadDisabled ? 0.7 : 1,
                 }}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !uploadDisabled && fileInputRef.current?.click()}
                 onDragOver={(e) => {
                   e.preventDefault();
-                  setIsDragOver(true);
+                  if (!uploadDisabled) setIsDragOver(true);
                 }}
                 onDragLeave={() => setIsDragOver(false)}
-                onDrop={handleDrop}
+                onDrop={(e) => !uploadDisabled && handleDrop(e)}
               >
                 <div className="text-muted mb-2">Drag and drop your file here</div>
                 <div className="text-muted small mb-3">or</div>
-                <Button variant="primary" size="sm" onClick={(e) => e.stopPropagation()}>
+                <Button variant="primary" size="sm" disabled={uploadDisabled} onClick={(e) => e.stopPropagation()}>
                   Browse File
                 </Button>
                 <div className="text-muted small mt-3">Supported format: .xlsx only</div>
@@ -264,7 +332,7 @@ export default function ImportUsers() {
                 type="file"
                 accept=".xlsx"
                 className="d-none"
-                disabled={isParsing}
+                disabled={uploadDisabled}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
@@ -273,6 +341,18 @@ export default function ImportUsers() {
                 }}
               />
 
+              {isBrandingLoading && (
+                <div className="mt-3 d-flex align-items-center gap-2 text-muted">
+                  <Spinner animation="border" size="sm" />
+                  Loading organization settings...
+                </div>
+              )}
+              {isBrandingError && (
+                <Alert variant="danger" className="mt-3 mb-0">
+                  Couldn't load organization settings, so the correct Academic Details columns can't be determined
+                  yet. Please refresh and try again.
+                </Alert>
+              )}
               {isParsing && (
                 <div className="mt-3 d-flex align-items-center gap-2 text-muted">
                   <Spinner animation="border" size="sm" />
@@ -295,11 +375,20 @@ export default function ImportUsers() {
               <ul className="small text-muted ps-3 mb-0">
                 <li className="mb-2">Download the sample file and follow the format.</li>
                 <li className="mb-2">
-                  Required columns: Full Name, Email, Role (<code>Student</code> or <code>Admin</code>).
+                  Required columns: Full Name, Email, Role (<code>Student</code> or <code>Admin</code>), Phone
+                  Number.
                 </li>
+                <li className="mb-2">{rollNumberLabel} is required for Student rows - leave it blank for Admin.</li>
+                {studentFields.length > 0 && (
+                  <li className="mb-2">
+                    Student rows also need every Academic Details column this organization requires (see the sample
+                    file) - Admin rows can leave them blank.
+                    {activeHierarchyLevels.length > 0 &&
+                      ' Program/Department/Semester/Division must exactly match values already configured in Organization Settings > Academic Configuration.'}
+                  </li>
+                )}
                 <li className="mb-2">Email must be unique, both within the file and across existing users.</li>
-                <li className="mb-2">Password isn't collected here - it's auto-generated and emailed on creation.</li>
-                <li>Phone Number and Roll Number are both optional.</li>
+                <li>Password isn't collected here - it's auto-generated and emailed on creation.</li>
               </ul>
             </Card.Body>
           </Card>
@@ -344,7 +433,8 @@ export default function ImportUsers() {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Phone Number</th>
-                  <th>Roll Number</th>
+                  <th>{rollNumberLabel}</th>
+                  {studentFields.length > 0 && <th>Academic Details</th>}
                   <th>Status</th>
                 </tr>
               </thead>
@@ -357,6 +447,13 @@ export default function ImportUsers() {
                     <td>{row.role}</td>
                     <td>{row.phoneNumber || '-'}</td>
                     <td>{row.rollNumber || '-'}</td>
+                    {studentFields.length > 0 && (
+                      <td className="text-muted small">
+                        {row.role === 'Student' && Object.values(row.academicFields).some(Boolean)
+                          ? Object.values(row.academicFields).filter(Boolean).join(', ')
+                          : '-'}
+                      </td>
+                    )}
                     <td>
                       <Badge bg={row.status === 'Valid' ? 'success' : 'danger'}>{row.status}</Badge>
                     </td>

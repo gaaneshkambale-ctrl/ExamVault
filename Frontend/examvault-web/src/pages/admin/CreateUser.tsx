@@ -11,6 +11,7 @@ import { UsersIcon } from '../../components/icons/ActionIcons';
 import AcademicHierarchyFields from '../../components/AcademicHierarchyFields';
 import type { CreateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
+import { validateUserInformation } from '../../utils/createUserValidation';
 import { getStudentFieldsForType, getRollNumberLabelForType } from '../../constants/organizationTypeFieldCatalog';
 import {
   COSMETIC_ROLES,
@@ -276,9 +277,7 @@ export default function CreateUser() {
       setTab(target);
       return;
     }
-    const errors: Partial<Record<keyof CreateUserFormState, string>> = {};
-    if (!form.fullName.trim()) errors.fullName = 'Full name is required.';
-    if (!form.email.trim()) errors.email = 'Email is required.';
+    const errors = validateUserInformation(form);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       setTab('User Information');
@@ -298,13 +297,7 @@ export default function CreateUser() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    const errors: Partial<Record<keyof CreateUserFormState, string>> = {};
-    if (!form.fullName.trim()) {
-      errors.fullName = 'Full name is required.';
-    }
-    if (!form.email.trim()) {
-      errors.email = 'Email is required.';
-    }
+    const errors = validateUserInformation(form);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       setTab('User Information');
@@ -386,7 +379,9 @@ export default function CreateUser() {
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3" controlId="createUserFullName">
-                      <Form.Label className="fw-bold">Full Name</Form.Label>
+                      <Form.Label className="fw-bold">
+                        Full Name <span className="text-danger">*</span>
+                      </Form.Label>
                       <InputGroup hasValidation>
                         <InputGroup.Text>
                           <PersonIcon />
@@ -404,7 +399,9 @@ export default function CreateUser() {
                   </Col>
                   <Col md={6}>
                     <Form.Group className="mb-3" controlId="createUserEmail">
-                      <Form.Label className="fw-bold">Email Address</Form.Label>
+                      <Form.Label className="fw-bold">
+                        Email Address <span className="text-danger">*</span>
+                      </Form.Label>
                       <InputGroup hasValidation>
                         <InputGroup.Text>
                           <MailIcon />
@@ -425,14 +422,16 @@ export default function CreateUser() {
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3" controlId="createUserPhoneNumber">
-                      <Form.Label className="fw-bold">Phone Number</Form.Label>
+                      <Form.Label className="fw-bold">
+                        Phone Number <span className="text-danger">*</span>
+                      </Form.Label>
                       <InputGroup hasValidation>
                         <InputGroup.Text>
                           <PhoneIcon />
                         </InputGroup.Text>
                         <Form.Control
                           type="tel"
-                          placeholder="Enter phone number (optional)"
+                          placeholder="Enter phone number"
                           value={form.phoneNumber}
                           onChange={(e) => updateField('phoneNumber', e.target.value)}
                           isInvalid={!!fieldErrors.phoneNumber}

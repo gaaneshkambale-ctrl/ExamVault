@@ -8,6 +8,7 @@ import type { ExamResponse } from '../types/exam';
 import type { ExamResultScheme } from './examResultScheme';
 import type { AdvanceReportData } from './advanceExamReport';
 import type { AdvanceReportExtras } from './advanceExamReportAnalysis';
+import { getRollNumberLabelForType } from '../constants/organizationTypeFieldCatalog';
 import {
   AMBER,
   AMBER_BG,
@@ -327,9 +328,10 @@ export async function exportAdvanceExamReportPdf(
   y += col3H + 6;
 
   // Student Performance Details.
+  const rollLabel = getRollNumberLabelForType(branding.organizationType);
   const columns = scheme.showRankPercentile
     ? [
-        { label: 'Roll No', width: 18 },
+        { label: rollLabel, width: 18 },
         { label: 'Student Name', width: 36 },
         { label: 'Status', width: 18 },
         { label: 'Score', width: 18 },
@@ -340,7 +342,7 @@ export async function exportAdvanceExamReportPdf(
         { label: 'Submitted On', width: 32 },
       ]
     : [
-        { label: 'Roll No', width: 22 },
+        { label: rollLabel, width: 22 },
         { label: 'Student Name', width: 46 },
         { label: 'Status', width: 22 },
         { label: 'Score', width: 22 },

@@ -19,7 +19,10 @@ public class UserRoleValidationTests
     [InlineData("Student")]
     public void Create_accepts_tenant_assignable_roles(string role)
     {
-        var command = new CreateUserCommand(Guid.NewGuid(), "Jane Doe", "jane@example.com", role);
+        var command = new CreateUserCommand(
+            Guid.NewGuid(), "Jane Doe", "jane@example.com", role,
+            PhoneNumber: "+91 98765 43210",
+            RollNumber: role == "Student" ? "R-001" : null);
 
         var result = _createValidator.Validate(command);
 
@@ -33,7 +36,9 @@ public class UserRoleValidationTests
     [InlineData("NotARole")]
     public void Create_rejects_non_tenant_assignable_roles(string role)
     {
-        var command = new CreateUserCommand(Guid.NewGuid(), "Jane Doe", "jane@example.com", role);
+        var command = new CreateUserCommand(
+            Guid.NewGuid(), "Jane Doe", "jane@example.com", role,
+            PhoneNumber: "+91 98765 43210");
 
         var result = _createValidator.Validate(command);
 

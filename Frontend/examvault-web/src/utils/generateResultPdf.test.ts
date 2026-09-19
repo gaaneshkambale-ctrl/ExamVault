@@ -283,15 +283,15 @@ describe('generateExamResultsBooklet (Exam Result is a roster, not a repeated St
   });
 });
 
-describe('Student Result - "Student & Academic Information" section (Roll No., PRN/Registration No., Enrollment No., Program, Department, Year of Study, Semester, Division/Class, Academic Year)', () => {
-  it('always draws the section (Student Name, Roll No.) even with no academic data at all', async () => {
+describe('Student Result - "Student & Exam Information" section (Roll No., PRN/Registration No., Enrollment No., Program, Department, Year of Study, Semester, Division/Class, Academic Year)', () => {
+  it('always draws the section (Student Name, roll number) even with no academic data at all, using the org type\'s own roll number label (FAKE_BRANDING is Coaching Institute -> "Student ID")', async () => {
     await generateResultPdf(makeAttempt({ userId: 'u1', totalScore: 45, passed: true }), {
       studentName: 'Priya Sharma',
       rollNumber: 'ROLL-001',
     });
     const drawn = allDrawnText(lastJsPdfInstance.text);
-    expect(drawn).toContain('Student & Academic Information');
-    expect(drawn).toContain('Roll No.');
+    expect(drawn).toContain('Student & Exam Information');
+    expect(drawn).toContain('Student ID');
     expect(drawn).toContain('ROLL-001');
   });
 
@@ -317,7 +317,7 @@ describe('Student Result - "Student & Academic Information" section (Roll No., P
       },
     });
     const drawn = allDrawnText(lastJsPdfInstance.text);
-    expect(drawn).toContain('Student & Academic Information');
+    expect(drawn).toContain('Student & Exam Information');
     expect(drawn).toContain('Roll No.');
     expect(drawn).toContain('PRN / Registration No.');
     expect(drawn).toContain('PRN2026001');
