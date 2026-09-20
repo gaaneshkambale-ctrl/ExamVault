@@ -376,12 +376,18 @@ public class UsersController : ControllerBase
             request.Role,
             request.PhoneNumber,
             request.RollNumber,
-            request.AcademicFields);
+            request.AcademicFields,
+            Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!));
         var result = await _updateUserHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)
         {
             return NotFound(new { message = "User not found." });
+        }
+
+        if (result.CannotChangeSelfRole)
+        {
+            return Conflict(new { message = "You cannot change your own role." });
         }
 
         if (result.EmailAlreadyExists)

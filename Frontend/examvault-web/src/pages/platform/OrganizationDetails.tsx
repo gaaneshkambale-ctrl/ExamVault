@@ -1338,7 +1338,11 @@ export default function OrganizationDetails() {
                   Change Plan / Upgrade
                 </Button>
                 {tenant.isActive ? (
-                  <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />
+                  <DeactivateTenantButton
+                    tenantId={tenant.id}
+                    tenantName={tenant.name}
+                    isPlatformTenant={tenant.slug === 'platform'}
+                  />
                 ) : (
                   <ReactivateTenantButton tenantId={tenant.id} />
                 )}
@@ -1359,7 +1363,13 @@ export default function OrganizationDetails() {
                 <Button variant="outline-secondary" size="sm" onClick={() => setTab('Activity Log')}>
                   View Activity Log
                 </Button>
-                <Button variant="outline-danger" size="sm" onClick={openDeleteOrg}>
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  disabled={tenant.slug === 'platform'}
+                  title={tenant.slug === 'platform' ? 'The platform tenant cannot be deleted.' : undefined}
+                  onClick={openDeleteOrg}
+                >
                   Delete Organization
                 </Button>
               </div>

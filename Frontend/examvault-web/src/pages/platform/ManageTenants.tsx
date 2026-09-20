@@ -265,7 +265,11 @@ export default function ManageTenants({ statusFilter }: ManageTenantsProps) {
                           </svg>
                         </Link>
                         {tenant.isActive ? (
-                          <DeactivateTenantButton tenantId={tenant.id} tenantName={tenant.name} />
+                          <DeactivateTenantButton
+                            tenantId={tenant.id}
+                            tenantName={tenant.name}
+                            isPlatformTenant={tenant.slug === 'platform'}
+                          />
                         ) : (
                           <ReactivateTenantButton tenantId={tenant.id} />
                         )}

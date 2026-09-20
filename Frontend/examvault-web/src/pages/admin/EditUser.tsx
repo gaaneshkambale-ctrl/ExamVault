@@ -10,11 +10,10 @@ import AcademicHierarchyFields from '../../components/AcademicHierarchyFields';
 import { updateUser } from '../../api/userApi';
 import { getOrganizationBranding } from '../../api/organizationSettingsApi';
 import { useUser } from '../../hooks/useUsers';
+import { useAuth } from '../../hooks/useAuth';
 import type { UpdateUserRequest, UserRole } from '../../types/user';
 import { extractServerError } from '../../utils/apiError';
 import { getStudentFieldsForType, getRollNumberLabelForType } from '../../constants/organizationTypeFieldCatalog';
-
-const USER_ERROR_OVERRIDES = { 409: 'A user with this email already exists.' };
 
 function UserIcon() {
   return (
@@ -69,6 +68,8 @@ export default function EditUser() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
+  const isEditingSelf = !!currentUser && currentUser.id === id;
   const { data: user, isLoading, isError } = useUser(id);
   const { data: branding } = useQuery({ queryKey: ['organization-branding'], queryFn: getOrganizationBranding });
   const studentFields = getStudentFieldsForType(branding?.organizationType);
@@ -140,7 +141,7 @@ export default function EditUser() {
       queryClient.invalidateQueries({ queryKey: ['users', id] });
       navigate('/admin/users');
     },
-    onError: (error) => setServerError(extractServerError(error, USER_ERROR_OVERRIDES)),
+    onError: (error) => setServerError(extractServerError(error)),
   });
 
   const handleSubmit = (e: FormEvent) => {
@@ -250,10 +251,16 @@ export default function EditUser() {
                     <Form.Select
                       value={form.role}
                       onChange={(e) => updateRole(e.target.value as UserRole)}
+                      disabled={isEditingSelf}
                     >
                       <option value="Student">Student</option>
                       <option value="Admin">Admin</option>
                     </Form.Select>
+                    {isEditingSelf && (
+                      <Form.Text className="text-muted">
+                        You can't change your own role - it could lock you out of Admin access. Ask another Admin to change it.
+                      </Form.Text>
+                    )}
                   </Form.Group>
                 </Col>
                 <Col md={6}>

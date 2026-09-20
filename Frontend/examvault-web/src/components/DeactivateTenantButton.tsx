@@ -6,9 +6,15 @@ import { deactivateTenant } from '../api/tenantsApi';
 interface DeactivateTenantButtonProps {
   tenantId: string;
   tenantName: string;
+  // True for the reserved "Platform" tenant Super Admin accounts live in -
+  // the backend already rejects deactivating it (would stop its own
+  // subdomain resolving and lock out every Super Admin, including whoever
+  // clicked the button), so this disables the control up front instead of
+  // making them find that out from a failed request.
+  isPlatformTenant?: boolean;
 }
 
-export default function DeactivateTenantButton({ tenantId, tenantName }: DeactivateTenantButtonProps) {
+export default function DeactivateTenantButton({ tenantId, tenantName, isPlatformTenant }: DeactivateTenantButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const queryClient = useQueryClient();
 
@@ -19,6 +25,14 @@ export default function DeactivateTenantButton({ tenantId, tenantName }: Deactiv
       setShowConfirm(false);
     },
   });
+
+  if (isPlatformTenant) {
+    return (
+      <Button variant="outline-danger" size="sm" disabled title="The platform tenant cannot be deactivated.">
+        Deactivate
+      </Button>
+    );
+  }
 
   return (
     <>

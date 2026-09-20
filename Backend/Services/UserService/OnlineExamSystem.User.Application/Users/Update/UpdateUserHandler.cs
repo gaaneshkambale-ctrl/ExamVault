@@ -33,6 +33,11 @@ public class UpdateUserHandler
             return UpdateUserResult.NotFound();
         }
 
+        if (command.CallerUserId == user.Id && !string.Equals(user.Role.ToString(), command.Role, StringComparison.OrdinalIgnoreCase))
+        {
+            return UpdateUserResult.SelfRoleChangeBlocked();
+        }
+
         var existingUser = await _userRepository.GetByEmailAsync(command.Email, user.TenantId, cancellationToken);
         if (existingUser is not null && existingUser.Id != command.Id)
         {

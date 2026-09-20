@@ -8,6 +8,7 @@ import UserAvatar from '../../components/UserAvatar';
 import DeleteUserButton from '../../components/DeleteUserButton';
 import { DownloadIcon, EditIcon, PlusIcon, ShieldIcon, UsersIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { useUsers } from '../../hooks/useUsers';
+import { useAuth } from '../../hooks/useAuth';
 import { activateUser, deactivateUser, deleteUser } from '../../api/userApi';
 import { extractServerError } from '../../utils/apiError';
 import { bucketByDay } from '../../utils/dateRange';
@@ -181,6 +182,7 @@ const PAGE_SIZE_OPTIONS = [8, 25, 50];
 
 export default function ManageUsers() {
   const { data: users, isLoading, isError } = useUsers();
+  const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState('');
   const [roleFilter, setRoleFilter] = useState<'All' | UserRole>('All');
@@ -536,7 +538,12 @@ export default function ManageUsers() {
                             </Dropdown.Toggle>
                             <Dropdown.Menu align="end">
                               <Dropdown.Item
-                                disabled={toggleActiveMutation.isPending}
+                                disabled={toggleActiveMutation.isPending || (user.isActive && user.id === currentUser?.id)}
+                                title={
+                                  user.isActive && user.id === currentUser?.id
+                                    ? 'You cannot deactivate your own account.'
+                                    : undefined
+                                }
                                 onClick={() =>
                                   toggleActiveMutation.mutate({ id: user.id, activate: !user.isActive })
                                 }

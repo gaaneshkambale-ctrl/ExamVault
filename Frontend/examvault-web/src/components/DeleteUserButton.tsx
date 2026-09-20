@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { deleteUser } from '../api/userApi';
 import { TrashIcon } from './icons/ActionIcons';
+import { useAuth } from '../hooks/useAuth';
 
 interface DeleteUserButtonProps {
   userId: string;
@@ -18,6 +19,8 @@ interface DeleteUserButtonProps {
 export default function DeleteUserButton({ userId, onDeleted, iconOnly = false, userName }: DeleteUserButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
+  const isSelf = currentUser?.id === userId;
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteUser(userId),
@@ -31,6 +34,30 @@ export default function DeleteUserButton({ userId, onDeleted, iconOnly = false, 
   const errorMessage = isAxiosError(deleteMutation.error)
     ? (deleteMutation.error.response?.data as { message?: string } | undefined)?.message
     : undefined;
+
+  // Same self-lockout protection the backend already enforces ("You cannot
+  // delete your own account.") - disabled here too instead of letting the
+  // click fail with a modal error.
+  if (isSelf) {
+    const title = 'You cannot delete your own account.';
+    return iconOnly ? (
+      <Button
+        variant="outline-danger"
+        size="sm"
+        className="d-inline-flex align-items-center justify-content-center"
+        style={{ width: 32, height: 32 }}
+        disabled
+        title={title}
+        aria-label={title}
+      >
+        <TrashIcon />
+      </Button>
+    ) : (
+      <Button variant="outline-danger" size="sm" disabled title={title}>
+        Delete
+      </Button>
+    );
+  }
 
   return (
     <>

@@ -135,6 +135,11 @@ public class TenantsController : ControllerBase
             new SetTenantActiveStatusCommand(id, false),
             cancellationToken);
 
+        if (result.CannotDeactivatePlatformTenant)
+        {
+            return BadRequest(new { message = "The platform tenant cannot be deactivated." });
+        }
+
         if (result.IsNotFound)
         {
             return NotFound(new { message = "Tenant not found." });
