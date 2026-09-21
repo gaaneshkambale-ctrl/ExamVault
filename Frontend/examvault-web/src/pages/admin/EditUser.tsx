@@ -254,11 +254,20 @@ export default function EditUser() {
                       disabled={isEditingSelf}
                     >
                       <option value="Student">Student</option>
-                      <option value="Admin">Admin</option>
+                      {/* Only offered when this user is already Admin - stays
+                          selectable/demotable for them, but a tenant Admin can
+                          never promote someone else into Admin from here; only
+                          a Super Admin creates additional Admins for a tenant. */}
+                      {user.role === 'Admin' && <option value="Admin">Admin</option>}
                     </Form.Select>
                     {isEditingSelf && (
                       <Form.Text className="text-muted">
                         You can't change your own role - it could lock you out of Admin access. Ask another Admin to change it.
+                      </Form.Text>
+                    )}
+                    {!isEditingSelf && user.role !== 'Admin' && (
+                      <Form.Text className="text-muted">
+                        Only a Super Admin can promote a user to Admin.
                       </Form.Text>
                     )}
                   </Form.Group>

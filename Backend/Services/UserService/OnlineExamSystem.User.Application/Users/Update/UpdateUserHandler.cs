@@ -33,9 +33,21 @@ public class UpdateUserHandler
             return UpdateUserResult.NotFound();
         }
 
-        if (command.CallerUserId == user.Id && !string.Equals(user.Role.ToString(), command.Role, StringComparison.OrdinalIgnoreCase))
+        var roleIsChanging = !string.Equals(user.Role.ToString(), command.Role, StringComparison.OrdinalIgnoreCase);
+
+        if (command.CallerUserId == user.Id && roleIsChanging)
         {
             return UpdateUserResult.SelfRoleChangeBlocked();
+        }
+
+        // Only a Super Admin creates additional Admins for a tenant (see
+        // RolePermissionCatalog.UserCreatableRoles) - a tenant Admin editing
+        // someone else can still change roles among Student/Instructor/
+        // Admin freely EXCEPT promoting into Admin. An already-Admin user's
+        // other fields stay fully editable since the role isn't changing.
+        if (roleIsChanging && string.Equals(command.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+        {
+            return UpdateUserResult.AdminRoleAssignmentBlocked();
         }
 
         var existingUser = await _userRepository.GetByEmailAsync(command.Email, user.TenantId, cancellationToken);

@@ -48,6 +48,22 @@ public static class RolePermissionCatalog
         "Student",
     ];
 
+    // The roles a tenant's own Admin may freely hand a user via Create User
+    // or an Update User role change (see CreateUserValidator,
+    // UpdateUserHandler's promotion guard) - deliberately excludes "Admin"
+    // itself. Only a Super Admin creates additional Admins for a tenant
+    // (Platform Admin -> Organization Details -> Admins tab), so a tenant
+    // Admin can never hand themselves or anyone else that role from inside
+    // their own console. Distinct from TenantAssignableRoles above, which
+    // still includes "Admin" for the Roles & Permissions template feature -
+    // configuring what the Admin role's permission set looks like is a
+    // separate concern from who gets to assign that role to a person.
+    public static readonly IReadOnlyList<string> UserCreatableRoles =
+    [
+        "Instructor",
+        "Student",
+    ];
+
     public static readonly IReadOnlyList<string> Permissions =
     [
         "Dashboard - View",

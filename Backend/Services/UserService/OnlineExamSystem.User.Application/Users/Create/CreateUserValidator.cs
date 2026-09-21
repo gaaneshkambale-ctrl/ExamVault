@@ -27,10 +27,12 @@ public class CreateUserValidator : AbstractValidator<CreateUserCommand>
         // "SuperAdmin", letting a tenant's own Admin (who reaches this via
         // [Authorize(Roles="Admin")] + Policy=UsersEdit) hand themselves or
         // any other user in their tenant the platform-level SuperAdmin role.
-        // Only the 3 real tenant-assignable roles may ever be set here.
+        // Also excludes "Admin" itself (UserCreatableRoles, not the wider
+        // TenantAssignableRoles) - only a Super Admin creates additional
+        // Admins for a tenant, never a tenant Admin creating a fresh user.
         RuleFor(x => x.Role)
             .NotEmpty()
-            .Must(role => RolePermissionCatalog.TenantAssignableRoles
+            .Must(role => RolePermissionCatalog.UserCreatableRoles
                 .Any(r => string.Equals(r, role, StringComparison.OrdinalIgnoreCase)))
             .WithMessage("Unknown role.");
 

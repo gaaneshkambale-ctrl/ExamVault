@@ -14,8 +14,11 @@ public class CreateUserValidatorTests
         PhoneNumber: "+91 98765 43210",
         RollNumber: "R-001");
 
-    private static CreateUserCommand ValidAdminCommand() => new(
-        Guid.NewGuid(), "Jane Doe", "jane@example.com", "Admin",
+    // A tenant Admin can never assign the Admin role itself (only a Super
+    // Admin can) - use Instructor as the non-Student baseline for the
+    // shared field-validation tests below.
+    private static CreateUserCommand ValidInstructorCommand() => new(
+        Guid.NewGuid(), "Jane Doe", "jane@example.com", "Instructor",
         PhoneNumber: "+91 98765 43210");
 
     [Fact]
@@ -30,9 +33,9 @@ public class CreateUserValidatorTests
     }
 
     [Fact]
-    public void Rejects_missing_phone_number_for_admin()
+    public void Rejects_missing_phone_number_for_instructor()
     {
-        var command = ValidAdminCommand() with { PhoneNumber = null };
+        var command = ValidInstructorCommand() with { PhoneNumber = null };
 
         var result = _validator.Validate(command);
 
@@ -43,7 +46,7 @@ public class CreateUserValidatorTests
     [Fact]
     public void Rejects_malformed_phone_number()
     {
-        var command = ValidAdminCommand() with { PhoneNumber = "not-a-phone!!" };
+        var command = ValidInstructorCommand() with { PhoneNumber = "not-a-phone!!" };
 
         var result = _validator.Validate(command);
 
@@ -63,9 +66,9 @@ public class CreateUserValidatorTests
     }
 
     [Fact]
-    public void Does_not_require_roll_number_for_admin()
+    public void Does_not_require_roll_number_for_instructor()
     {
-        var command = ValidAdminCommand() with { RollNumber = null };
+        var command = ValidInstructorCommand() with { RollNumber = null };
 
         var result = _validator.Validate(command);
 
@@ -81,11 +84,22 @@ public class CreateUserValidatorTests
     }
 
     [Fact]
-    public void Accepts_valid_admin_command()
+    public void Accepts_valid_instructor_command()
     {
-        var result = _validator.Validate(ValidAdminCommand());
+        var result = _validator.Validate(ValidInstructorCommand());
 
         Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Rejects_admin_role_since_only_a_super_admin_can_assign_it()
+    {
+        var command = ValidInstructorCommand() with { Role = "Admin" };
+
+        var result = _validator.Validate(command);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == nameof(CreateUserCommand.Role));
     }
 
     [Theory]
@@ -95,7 +109,7 @@ public class CreateUserValidatorTests
     [InlineData("!!!")]
     public void Rejects_invalid_full_name(string fullName)
     {
-        var command = ValidAdminCommand() with { FullName = fullName };
+        var command = ValidInstructorCommand() with { FullName = fullName };
 
         var result = _validator.Validate(command);
 
@@ -110,7 +124,7 @@ public class CreateUserValidatorTests
     [InlineData("Priya Sharma")]
     public void Accepts_valid_full_name(string fullName)
     {
-        var command = ValidAdminCommand() with { FullName = fullName };
+        var command = ValidInstructorCommand() with { FullName = fullName };
 
         var result = _validator.Validate(command);
 

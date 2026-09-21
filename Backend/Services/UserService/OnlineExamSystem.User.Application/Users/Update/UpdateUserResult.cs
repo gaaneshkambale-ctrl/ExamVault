@@ -8,6 +8,7 @@ public class UpdateUserResult
     public bool IsNotFound { get; init; }
     public bool EmailAlreadyExists { get; init; }
     public bool CannotChangeSelfRole { get; init; }
+    public bool CannotAssignAdminRole { get; init; }
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
     public AppUser? User { get; init; }
 
@@ -21,4 +22,6 @@ public class UpdateUserResult
     public static UpdateUserResult Conflict() => new() { Success = false, EmailAlreadyExists = true };
 
     public static UpdateUserResult SelfRoleChangeBlocked() => new() { Success = false, CannotChangeSelfRole = true };
+
+    public static UpdateUserResult AdminRoleAssignmentBlocked() => new() { Success = false, CannotAssignAdminRole = true };
 }

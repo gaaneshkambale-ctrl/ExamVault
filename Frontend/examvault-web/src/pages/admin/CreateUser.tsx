@@ -464,7 +464,6 @@ export default function CreateUser() {
                       <Form.Label className="fw-bold">Select Role</Form.Label>
                       <Form.Select value={form.role} onChange={(e) => updateRole(e.target.value as UserRole)}>
                         <option value="Student">Student</option>
-                        <option value="Admin">Admin</option>
                         <option value="Instructor">Instructor</option>
                         {COSMETIC_ROLES.map((r) => (
                           <option key={r} value={r} disabled>

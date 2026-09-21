@@ -390,6 +390,11 @@ public class UsersController : ControllerBase
             return Conflict(new { message = "You cannot change your own role." });
         }
 
+        if (result.CannotAssignAdminRole)
+        {
+            return Conflict(new { message = "Only a Super Admin can assign the Admin role." });
+        }
+
         if (result.EmailAlreadyExists)
         {
             return Conflict(new { message = "A user with this email already exists." });
