@@ -57,7 +57,8 @@ public class CreateExamHandler
         // AssignPlanToTenantHandler there), but the actual count-then-insert
         // race is local to this service's own database, so it's the local
         // Serializable transaction below - not the cross-service call - that
-        // has to close it. See IUnitOfWorkTransaction's own comment.
+        // has to close it. See IExamRepository.ExecuteInSerializableTransactionAsync's
+        // own comment.
         TenantLimits? limits = null;
         if (_currentTenant.IsAuthenticated && !_currentTenant.IsSuperAdmin)
         {
@@ -113,25 +114,33 @@ public class CreateExamHandler
         };
         exam.ExamCode = GenerateExamCode(command.Category, exam.Id);
 
-        await using var transaction = await _examRepository.BeginSerializableTransactionAsync(cancellationToken);
+        CreateExamResult? blockedResult;
         try
         {
-            if (limits?.MaxExams is not null)
+            blockedResult = await _examRepository.ExecuteInSerializableTransactionAsync<CreateExamResult?>(async ct =>
             {
-                var currentExamCount = await _examRepository.CountByTenantAsync(_currentTenant.TenantId, cancellationToken);
-                if (currentExamCount >= limits.MaxExams)
+                if (limits?.MaxExams is not null)
                 {
-                    return CreateExamResult.Invalid([$"This organization has reached its limit of {limits.MaxExams} exams."]);
+                    var currentExamCount = await _examRepository.CountByTenantAsync(_currentTenant.TenantId, ct);
+                    if (currentExamCount >= limits.MaxExams)
+                    {
+                        return CreateExamResult.Invalid([$"This organization has reached its limit of {limits.MaxExams} exams."]);
+                    }
                 }
-            }
 
-            await _examRepository.AddAsync(exam, cancellationToken);
-            await _examRepository.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+                await _examRepository.AddAsync(exam, ct);
+                await _examRepository.SaveChangesAsync(ct);
+                return null;
+            }, cancellationToken);
         }
         catch (TransientConcurrencyException ex)
         {
             return CreateExamResult.Invalid([ex.Message]);
+        }
+
+        if (blockedResult is not null)
+        {
+            return blockedResult;
         }
 
         return CreateExamResult.Ok(exam);

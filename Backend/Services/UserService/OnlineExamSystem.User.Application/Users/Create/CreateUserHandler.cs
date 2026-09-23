@@ -82,48 +82,66 @@ public class CreateUserHandler
         // (Tenant Settings > Default Limits, unchanged) plus real per-role
         // checks against MaxStudents/MaxAdmins/MaxInstructors (seeded from
         // the tenant's assigned Plan - see CreateTenantHandler/
-        // AssignPlanToTenantHandler). Wrapped in a Serializable transaction
-        // so two concurrent requests can never both pass the same count
-        // check before either commits - see IUnitOfWorkTransaction's own
-        // comment. Null limit (the common case) means unlimited, same as
-        // before this existed. A rare TransientConcurrencyException (the
-        // losing side of a genuine race) surfaces as a clean, retryable
-        // validation error rather than a 500.
-        await using var transaction = await _userRepository.BeginSerializableTransactionAsync(cancellationToken);
+        // AssignPlanToTenantHandler). The whole count-check-then-insert
+        // sequence runs as one delegate inside a Serializable transaction so
+        // two concurrent requests can never both pass the same count check
+        // before either commits - see IUserRepository.ExecuteInSerializableTransactionAsync's
+        // own comment for why this has to be a single delegate rather than a
+        // manually begin/commit transaction handle. Null limit (the common
+        // case) means unlimited, same as before this existed. A rare
+        // TransientConcurrencyException (the losing side of a genuine race)
+        // surfaces as a clean, retryable validation error rather than a 500.
+        CreateUserResult? blockedResult;
         try
         {
-            if (owningTenant?.MaxUsers is not null)
+            blockedResult = await _userRepository.ExecuteInSerializableTransactionAsync<CreateUserResult?>(async ct =>
             {
-                var currentUserCount = await _userRepository.CountByTenantAsync(command.TenantId, cancellationToken);
-                if (currentUserCount >= owningTenant.MaxUsers)
+                if (owningTenant?.MaxUsers is not null)
                 {
-                    return CreateUserResult.Invalid([$"This organization has reached its limit of {owningTenant.MaxUsers} users."]);
+                    var currentUserCount = await _userRepository.CountByTenantAsync(command.TenantId, ct);
+                    if (currentUserCount >= owningTenant.MaxUsers)
+                    {
+                        return CreateUserResult.Invalid([$"This organization has reached its limit of {owningTenant.MaxUsers} users."]);
+                    }
                 }
-            }
 
-            var roleLimit = role switch
-            {
-                UserRole.Student => owningTenant?.MaxStudents,
-                UserRole.Admin => owningTenant?.MaxAdmins,
-                UserRole.Instructor => owningTenant?.MaxInstructors,
-                _ => null,
-            };
-            if (roleLimit is not null)
-            {
-                var currentRoleCount = await _userRepository.CountByTenantAndRoleAsync(command.TenantId, role, cancellationToken);
-                if (currentRoleCount >= roleLimit)
+                var roleLimit = role switch
                 {
-                    return CreateUserResult.Invalid([$"This organization has reached its limit of {roleLimit} {role.ToString().ToLowerInvariant()}s."]);
+                    UserRole.Student => owningTenant?.MaxStudents,
+                    UserRole.Admin => owningTenant?.MaxAdmins,
+                    UserRole.Instructor => owningTenant?.MaxInstructors,
+                    _ => null,
+                };
+                if (roleLimit is not null)
+                {
+                    var currentRoleCount = await _userRepository.CountByTenantAndRoleAsync(command.TenantId, role, ct);
+                    if (currentRoleCount >= roleLimit)
+                    {
+                        return CreateUserResult.Invalid([$"This organization has reached its limit of {roleLimit} {role.ToString().ToLowerInvariant()}s."]);
+                    }
                 }
-            }
 
-            await _userRepository.AddAsync(user, cancellationToken);
-            await _userRepository.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+                await _userRepository.AddAsync(user, ct);
+                await _userRepository.SaveChangesAsync(ct);
+                return null;
+            }, cancellationToken);
         }
         catch (TransientConcurrencyException ex)
         {
             return CreateUserResult.Invalid([ex.Message]);
+        }
+        catch (DuplicateKeyException)
+        {
+            // The existingUser check above runs before this transaction even
+            // opens (it only protects the Max* count checks), so it has the
+            // same race window as RegisterUserHandler - see DuplicateKeyException's
+            // own comment.
+            return CreateUserResult.Conflict();
+        }
+
+        if (blockedResult is not null)
+        {
+            return blockedResult;
         }
 
         var loginUrl = _tenantUrlBuilder.GetLoginUrl(owningTenant?.Slug, owningTenant?.IsActive ?? true);

@@ -1,4 +1,5 @@
 using System.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Exam.Application.Assignments;
 using OnlineExamSystem.Exam.Application.Interfaces;
@@ -33,10 +34,51 @@ public class ExamRepository : IExamRepository
     public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
         _dbContext.Exams.CountAsync(e => e.TenantId == tenantId, cancellationToken);
 
-    public async Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default)
+    // SQL Server's "deadlock victim" error - the one real failure mode a
+    // Serializable transaction can hit (the other outcome, a concurrent
+    // transaction's count query blocking until this one commits, isn't an
+    // exception at all - it's just a wait, the whole point of this
+    // isolation level).
+    private const int DeadlockVictimErrorNumber = 1205;
+
+    public async Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default)
     {
-        var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        return new EfUnitOfWorkTransaction(transaction);
+        // ExamDbContext has EnableRetryOnFailure() on (Program.cs). EF Core
+        // requires the WHOLE unit of work - begin, every operation run
+        // against the transaction, commit - to run inside one
+        // CreateExecutionStrategy().ExecuteAsync delegate once a retrying
+        // strategy is active; wrapping only the BeginTransactionAsync call
+        // (an earlier, incomplete version of this fix) satisfies that check
+        // for the begin call but NOT the SaveChangesAsync call the caller's
+        // operation makes afterward - confirmed live on UserService's
+        // identical method: Add User crashed with "does not support
+        // user-initiated transactions" on every call until operation()
+        // moved inside this same delegate. See this method's own interface
+        // doc-comment (IExamRepository) for the full story.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                var result = await operation(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: DeadlockVictimErrorNumber })
+            {
+                throw new TransientConcurrencyException(
+                    "This request lost a race with a concurrent one over the same limit check. Please try again.", ex);
+            }
+            catch (SqlException ex) when (ex.Number == DeadlockVictimErrorNumber)
+            {
+                throw new TransientConcurrencyException(
+                    "This request lost a race with a concurrent one over the same limit check. Please try again.", ex);
+            }
+        });
     }
 
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)

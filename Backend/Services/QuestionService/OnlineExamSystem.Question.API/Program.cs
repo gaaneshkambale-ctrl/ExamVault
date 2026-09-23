@@ -44,7 +44,12 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<QuestionDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("QuestionDb")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("QuestionDb"),
+                // Same transient-failure resiliency as every other service's
+                // DbContext registration - see ExamService's Program.cs for
+                // the real incident that prompted this across all of them.
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<QuestionDbContext>("database");
         builder.Services.AddScoped<IQuestionRepository, QuestionRepository>();

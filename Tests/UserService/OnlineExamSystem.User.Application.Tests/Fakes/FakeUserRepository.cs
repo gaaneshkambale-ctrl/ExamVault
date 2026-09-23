@@ -14,6 +14,14 @@ public class FakeUserRepository : IUserRepository
     public IReadOnlyList<RefreshToken> RefreshTokens => _refreshTokens;
     public IReadOnlyList<PasswordResetToken> PasswordResetTokens => _passwordResetTokens;
 
+    // Test seam for simulating the real UserRepository's translated
+    // DuplicateKeyException (a unique-index violation surfaced from the
+    // real SQL Server database) - lets handler tests exercise the "lost
+    // the race against a concurrent duplicate" fallback path without a
+    // real database. Consumed once, then resets itself, so a test only
+    // affects the one SaveChangesAsync call it targets.
+    public bool ThrowDuplicateKeyOnNextSaveChanges { get; set; }
+
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Id == id));
 
@@ -40,18 +48,14 @@ public class FakeUserRepository : IUserRepository
     public Task<int> CountByTenantAndRoleAsync(Guid tenantId, UserRole role, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.Count(u => u.TenantId == tenantId && u.Role == role));
 
-    // No real database to isolate here - the fake's in-memory list is never touched
-    // concurrently in a test, so a no-op transaction that always commits is enough
-    // to satisfy the interface.
-    public Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IUnitOfWorkTransaction>(new NoOpUnitOfWorkTransaction());
-
-    private sealed class NoOpUnitOfWorkTransaction : IUnitOfWorkTransaction
-    {
-        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-    }
+    // No real database to isolate here - the fake's in-memory list is never
+    // touched concurrently in a test, so just running the operation directly
+    // (no real transaction, nothing to retry) is enough to satisfy the
+    // interface.
+    public Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default) =>
+        operation(cancellationToken);
 
     public Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default)
     {
@@ -128,5 +132,16 @@ public class FakeUserRepository : IUserRepository
         return Task.FromResult(preferences);
     }
 
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        if (ThrowDuplicateKeyOnNextSaveChanges)
+        {
+            ThrowDuplicateKeyOnNextSaveChanges = false;
+            throw new DuplicateKeyException(
+                "This request lost a race with a concurrent one over the same uniqueness check. Please try again.",
+                new InvalidOperationException("simulated unique-index violation"));
+        }
+
+        return Task.CompletedTask;
+    }
 }

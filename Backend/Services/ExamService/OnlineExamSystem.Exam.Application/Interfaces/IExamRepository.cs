@@ -15,17 +15,36 @@ public interface IExamRepository
     /// <summary>Real Tenant Settings > Default Limits "Max Exams" enforcement point -
     /// CreateExamHandler checks this against the tenant's own MaxExams (fetched
     /// cross-service from UserService) before creating a new exam. Always called
-    /// inside the transaction BeginSerializableTransactionAsync opens, so the count
-    /// is race-safe against a concurrent request creating an exam for the same
-    /// tenant.</summary>
+    /// inside the transaction ExecuteInSerializableTransactionAsync opens, so the
+    /// count is race-safe against a concurrent request creating an exam for the
+    /// same tenant.</summary>
     Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
 
-    /// <summary>Opens a Serializable-isolation transaction - wrap a count-then-insert
-    /// sequence in it (count, compare to MaxExams, AddAsync, SaveChangesAsync, then
-    /// CommitAsync) so two concurrent requests can never both pass the same limit
-    /// check before either commits. See IUnitOfWorkTransaction's own comment for why
-    /// this isolation level specifically.</summary>
-    Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default);
+    /// <summary>Runs <paramref name="operation"/> inside a Serializable-isolation
+    /// transaction - wrap a count-then-insert sequence in it (count, compare to
+    /// MaxExams, AddAsync, SaveChangesAsync) so two concurrent requests can never
+    /// both pass the same limit check before either commits; the transaction
+    /// commits automatically once <paramref name="operation"/> returns without
+    /// throwing (returning early, e.g. because MaxExams was hit, without calling
+    /// AddAsync/SaveChangesAsync is safe - there's simply nothing to commit).
+    /// Throws <see cref="TransientConcurrencyException"/> if SQL Server picked
+    /// this transaction as a deadlock victim.
+    ///
+    /// Deliberately NOT a "begin transaction, hand the caller an
+    /// IUnitOfWorkTransaction to commit later" API (an earlier version of this
+    /// method was exactly that, and briefly shipped, before being replaced) -
+    /// ExamDbContext has EnableRetryOnFailure() on (Program.cs), and EF Core
+    /// throws "does not support user-initiated transactions" the moment ANY
+    /// database operation (not just BeginTransactionAsync - SaveChangesAsync
+    /// too) runs against a manually-opened transaction while a retrying
+    /// execution strategy is active, unless the ENTIRE unit of work - begin,
+    /// every operation, commit - runs inside one
+    /// Database.CreateExecutionStrategy().ExecuteAsync(...) delegate. See the
+    /// identical fix on IUserRepository for the live incident that proved
+    /// wrapping only the begin call isn't enough.</summary>
+    Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default);
 
     Task AddSectionAsync(Section section, CancellationToken cancellationToken = default);
     Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default);

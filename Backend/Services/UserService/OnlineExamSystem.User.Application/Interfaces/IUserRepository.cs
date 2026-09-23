@@ -32,16 +32,41 @@ public interface IUserRepository
 
     /// <summary>Per-role count, for the real MaxStudents/MaxAdmins/MaxInstructors
     /// enforcement in CreateUserHandler - always called inside the transaction
-    /// BeginSerializableTransactionAsync opens, so the count is race-safe against
-    /// a concurrent request creating a user of the same role for the same tenant.</summary>
+    /// ExecuteInSerializableTransactionAsync opens, so the count is race-safe
+    /// against a concurrent request creating a user of the same role for the
+    /// same tenant.</summary>
     Task<int> CountByTenantAndRoleAsync(Guid tenantId, UserRole role, CancellationToken cancellationToken = default);
 
-    /// <summary>Opens a Serializable-isolation transaction - wrap a count-then-insert
-    /// sequence in it (count, compare to the Max* limit, AddAsync, SaveChangesAsync,
-    /// then CommitAsync) so two concurrent requests can never both pass the same
-    /// limit check before either commits. See IUnitOfWorkTransaction's own comment
-    /// for why this isolation level specifically.</summary>
-    Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default);
+    /// <summary>Runs <paramref name="operation"/> inside a Serializable-isolation
+    /// transaction - wrap a count-then-insert sequence in it (count, compare to
+    /// the Max* limit, AddAsync, SaveChangesAsync) so two concurrent requests can
+    /// never both pass the same limit check before either commits; the
+    /// transaction commits automatically once <paramref name="operation"/>
+    /// returns without throwing (returning early, e.g. because a Max* limit was
+    /// hit, without calling AddAsync/SaveChangesAsync is safe - there's simply
+    /// nothing to commit). Throws <see cref="TransientConcurrencyException"/> if
+    /// SQL Server picked this transaction as a deadlock victim.
+    ///
+    /// Deliberately NOT a "begin transaction, hand the caller an
+    /// IUnitOfWorkTransaction to commit later" API (an earlier version of this
+    /// method was exactly that, and briefly shipped, before being replaced) -
+    /// UserDbContext has EnableRetryOnFailure() on (Program.cs), and EF Core
+    /// throws "does not support user-initiated transactions" the moment ANY
+    /// database operation (not just BeginTransactionAsync - SaveChangesAsync
+    /// too) runs against a manually-opened transaction while a retrying
+    /// execution strategy is active, unless the ENTIRE unit of work - begin,
+    /// every operation, commit - runs inside one
+    /// Database.CreateExecutionStrategy().ExecuteAsync(...) delegate. Wrapping
+    /// only BeginTransactionAsync itself (not the operations run against it)
+    /// satisfies that check for the begin call but not the later
+    /// SaveChangesAsync call - confirmed live: CreateUserHandler's Add User
+    /// crashed with exactly that InvalidOperationException on every call.
+    /// Passing the whole operation in as a delegate is what makes the complete
+    /// sequence retriable and keeps every call safely inside the strategy's
+    /// scope.</summary>
+    Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default);
 
     Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default);
     Task AddAsync(AppUser user, CancellationToken cancellationToken = default);
@@ -69,5 +94,13 @@ public interface IUserRepository
     /// with the entity's own defaults if it doesn't exist yet.</summary>
     Task<UserPreferences> GetOrCreateUserPreferencesAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Throws <see cref="DuplicateKeyException"/> (instead of a raw,
+    /// provider-specific exception) if the write violated a unique index - e.g.
+    /// two concurrent requests both passed a "does this email already exist"
+    /// check before either committed. Callers with that exact check-then-write
+    /// shape (RegisterUserHandler, CreateUserHandler, UpdateUserHandler,
+    /// CreateTenantAdminHandler) should catch it as a fallback and return their
+    /// existing Conflict/AlreadyExists result for that rare race, rather than
+    /// let it surface as an unhandled 500.</summary>
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

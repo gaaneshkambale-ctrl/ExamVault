@@ -70,7 +70,17 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<ExamDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("ExamDb")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("ExamDb"),
+                // Retries a handful of transient failures (brief connection
+                // drops, deadlocks) with backoff before giving up - this is
+                // literally what surfaced as an unhandled
+                // InvalidOperationException in ExamReminderCheckService's
+                // background poll (the exception message names this exact
+                // fix). The poll loop already retries on its own 5-minute
+                // cadence either way, but this stops a one-off blip from
+                // needing that full extra cycle.
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<ExamDbContext>("database");
         builder.Services.AddScoped<IExamRepository, ExamRepository>();

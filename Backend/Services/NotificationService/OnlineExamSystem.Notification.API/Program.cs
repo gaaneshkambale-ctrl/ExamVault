@@ -56,7 +56,12 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<NotificationDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationDb")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("NotificationDb"),
+                // Same transient-failure resiliency as every other service's
+                // DbContext registration - see ExamService's Program.cs for
+                // the real incident that prompted this across all of them.
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<NotificationDbContext>("database");
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
