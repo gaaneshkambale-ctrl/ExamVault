@@ -67,7 +67,18 @@ public class RegisterUserHandler
         user.PasswordHash = _passwordHasher.HashPassword(user, command.Password);
 
         await _userRepository.AddAsync(user, cancellationToken);
-        await _userRepository.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _userRepository.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateKeyException)
+        {
+            // The existingUser check above isn't inside a transaction - two
+            // concurrent registrations for the same email (e.g. a double-
+            // submitted form) can both pass it before either commits. The
+            // loser lands here instead of surfacing as an unhandled 500.
+            return RegisterUserResult.Conflict();
+        }
 
         await _eventPublisher.PublishAsync(
             new UserRegisteredEvent { TenantId = user.TenantId, UserId = user.Id, Email = user.Email, FullName = user.FullName },

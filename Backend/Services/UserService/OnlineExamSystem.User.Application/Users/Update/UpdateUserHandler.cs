@@ -66,7 +66,17 @@ public class UpdateUserHandler
             user.AcademicFieldsJson = command.AcademicFields.Count > 0 ? JsonSerializer.Serialize(command.AcademicFields) : null;
         }
 
-        await _userRepository.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _userRepository.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateKeyException)
+        {
+            // The existingUser check above has the same check-then-write race
+            // window as RegisterUserHandler/CreateUserHandler - see
+            // DuplicateKeyException's own comment.
+            return UpdateUserResult.Conflict();
+        }
 
         return UpdateUserResult.Ok(user);
     }

@@ -81,6 +81,23 @@ public class RegisterUserHandlerTests
     }
 
     [Fact]
+    public async Task Concurrent_duplicate_registration_returns_conflict_instead_of_throwing()
+    {
+        // Simulates two requests for the same email racing past the
+        // existingUser pre-check before either commits - the loser should
+        // still get a clean Conflict result, not an unhandled 500 (the
+        // real bug this regression test guards against).
+        var repository = new FakeUserRepository { ThrowDuplicateKeyOnNextSaveChanges = true };
+        var handler = CreateHandler(repository);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.True(result.EmailAlreadyExists);
+    }
+
+    [Fact]
     public async Task Registration_is_rejected_when_self_registration_is_disabled()
     {
         var repository = new FakeUserRepository();

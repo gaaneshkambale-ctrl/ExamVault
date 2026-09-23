@@ -75,4 +75,21 @@ public class UpdateUserHandlerTests
         Assert.True(result.Success);
         Assert.Equal(UserRole.Instructor, result.User!.Role);
     }
+
+    [Fact]
+    public async Task Concurrent_duplicate_email_update_returns_conflict_instead_of_throwing()
+    {
+        // Simulates two concurrent Update requests racing the existingUser
+        // pre-check onto the same new email - the loser should still get a
+        // clean Conflict result, not an unhandled 500.
+        var repository = new FakeUserRepository { ThrowDuplicateKeyOnNextSaveChanges = true };
+        var user = new AppUser { FullName = "Jane Doe", Email = "jane@example.com", Role = UserRole.Student };
+        await repository.AddAsync(user);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(CommandFor(user, "Student", callerUserId: Guid.NewGuid()));
+
+        Assert.False(result.Success);
+        Assert.True(result.EmailAlreadyExists);
+    }
 }

@@ -80,7 +80,16 @@ public class CreateTenantAdminHandler
         user.PasswordHash = _passwordHasher.HashPassword(user, temporaryPassword);
 
         await _userRepository.AddAsync(user, cancellationToken);
-        await _userRepository.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _userRepository.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateKeyException)
+        {
+            // Same check-then-write race window as RegisterUserHandler /
+            // CreateUserHandler - see DuplicateKeyException's own comment.
+            return CreateTenantAdminResult.Conflict();
+        }
 
         var loginUrl = _tenantUrlBuilder.GetLoginUrl(tenant.Slug, tenant.IsActive);
 
