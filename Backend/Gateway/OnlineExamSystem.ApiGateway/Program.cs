@@ -165,6 +165,19 @@ public class Program
 
         app.UseHttpsRedirection();
 
+        // Every public API response goes through here - Traefik (the
+        // production TLS-terminating proxy) doesn't add these on its own,
+        // and unlike the frontend's nginx.conf this is a pure JSON API, so
+        // no Content-Security-Policy (nothing here renders HTML for a CSP
+        // to protect).
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+            context.Response.Headers.Append("X-Frame-Options", "DENY");
+            context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+            await next();
+        });
+
         app.UseCors(frontendCorsPolicy);
 
         app.UseMiddleware<TenantResolutionMiddleware>();

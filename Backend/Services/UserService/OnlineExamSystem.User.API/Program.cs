@@ -1,10 +1,12 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -303,6 +305,28 @@ public class Program
             options.AddPermissionPolicies();
         });
 
+        // Throttles the unauthenticated, abuse-prone entry points
+        // (Register/Login/ForgotPassword all reach here before any JWT
+        // exists) - Login already has its own per-account lockout
+        // (LoginUserHandler's FailedLoginAttempts), but nothing previously
+        // stopped high-volume credential-stuffing or account-enumeration
+        // traffic hitting these three at all. Partitioned per client IP so
+        // one abusive caller doesn't throttle everyone else; QueueLimit 0
+        // means an over-limit request is rejected immediately (429) rather
+        // than held and retried server-side.
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
+        });
+
         var app = builder.Build();
 
         using (var scope = app.Services.CreateScope())
@@ -361,6 +385,7 @@ public class Program
 
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
 
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealthCheckResponse });
         app.MapControllers();

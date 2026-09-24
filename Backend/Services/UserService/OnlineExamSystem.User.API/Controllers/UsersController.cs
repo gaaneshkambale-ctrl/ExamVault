@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
@@ -129,6 +130,7 @@ public class UsersController : ControllerBase
         _logger = logger;
     }
 
+    [EnableRateLimiting("auth")]
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterUserRequest request, CancellationToken cancellationToken)
     {
@@ -160,6 +162,7 @@ public class UsersController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, response);
     }
 
+    [EnableRateLimiting("auth")]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginUserRequest request, CancellationToken cancellationToken)
     {
@@ -212,6 +215,7 @@ public class UsersController : ControllerBase
         return Ok(response);
     }
 
+    [EnableRateLimiting("auth")]
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
     {
