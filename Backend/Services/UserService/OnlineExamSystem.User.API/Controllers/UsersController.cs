@@ -7,6 +7,7 @@ using OnlineExamSystem.Shared.Contracts.Requests.User;
 using OnlineExamSystem.Shared.Contracts.Responses.User;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
+using OnlineExamSystem.User.Application.Users.ConfirmEmail;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
 using OnlineExamSystem.User.Application.Users.ForgotPassword;
@@ -20,6 +21,7 @@ using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
 using OnlineExamSystem.User.Application.Users.ResetPasswordWithToken;
+using OnlineExamSystem.User.Application.Users.ResendConfirmationEmail;
 using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
 using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
@@ -48,6 +50,8 @@ public class UsersController : ControllerBase
     private readonly ResetPasswordHandler _resetPasswordHandler;
     private readonly ForgotPasswordHandler _forgotPasswordHandler;
     private readonly ResetPasswordWithTokenHandler _resetPasswordWithTokenHandler;
+    private readonly ConfirmEmailHandler _confirmEmailHandler;
+    private readonly ResendConfirmationEmailHandler _resendConfirmationEmailHandler;
     private readonly ChangePasswordHandler _changePasswordHandler;
     private readonly LoginUserHandler _loginUserHandler;
     private readonly RefreshTokenHandler _refreshTokenHandler;
@@ -85,6 +89,8 @@ public class UsersController : ControllerBase
         ResetPasswordHandler resetPasswordHandler,
         ForgotPasswordHandler forgotPasswordHandler,
         ResetPasswordWithTokenHandler resetPasswordWithTokenHandler,
+        ConfirmEmailHandler confirmEmailHandler,
+        ResendConfirmationEmailHandler resendConfirmationEmailHandler,
         ChangePasswordHandler changePasswordHandler,
         LoginUserHandler loginUserHandler,
         RefreshTokenHandler refreshTokenHandler,
@@ -112,6 +118,8 @@ public class UsersController : ControllerBase
         _resetPasswordHandler = resetPasswordHandler;
         _forgotPasswordHandler = forgotPasswordHandler;
         _resetPasswordWithTokenHandler = resetPasswordWithTokenHandler;
+        _confirmEmailHandler = confirmEmailHandler;
+        _resendConfirmationEmailHandler = resendConfirmationEmailHandler;
         _changePasswordHandler = changePasswordHandler;
         _loginUserHandler = loginUserHandler;
         _refreshTokenHandler = refreshTokenHandler;
@@ -202,6 +210,26 @@ public class UsersController : ControllerBase
                 new { message = "The platform is currently undergoing maintenance. Please try again shortly." });
         }
 
+        if (result.IsEmailNotConfirmed)
+        {
+            _logger.LogWarning("Login blocked for {Email} - email not yet confirmed.", request.Email);
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message = "Please confirm your email before logging in. Check your inbox for the confirmation link.",
+                    emailNotConfirmed = true,
+                });
+        }
+
+        if (result.IsSelfRegistrationDisabled)
+        {
+            _logger.LogWarning("Login blocked for {Email} - self-registered accounts are disabled.", request.Email);
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = "Self-registered accounts are currently disabled. Please contact an administrator." });
+        }
+
         if (!result.Success)
         {
             _logger.LogWarning("Login failed for email {Email}.", request.Email);
@@ -260,6 +288,57 @@ public class UsersController : ControllerBase
         }
 
         return Ok(new { message = "Your password has been reset. You can now log in with your new password." });
+    }
+
+    [EnableRateLimiting("auth")]
+    [HttpPost("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail(ConfirmEmailRequest request, CancellationToken cancellationToken)
+    {
+        var command = new ConfirmEmailCommand(request.Token);
+        var result = await _confirmEmailHandler.HandleAsync(command, cancellationToken);
+
+        if (result.IsInvalidOrExpiredToken)
+        {
+            return BadRequest(new { message = "This confirmation link is invalid or has expired. Please request a new one." });
+        }
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        return Ok(new
+        {
+            message = result.AlreadyConfirmed
+                ? "Your email is already confirmed. You can log in."
+                : "Your email has been confirmed. You can now log in.",
+        });
+    }
+
+    [EnableRateLimiting("auth")]
+    [HttpPost("resend-confirmation-email")]
+    public async Task<IActionResult> ResendConfirmationEmail(ResendConfirmationEmailRequest request, CancellationToken cancellationToken)
+    {
+        var command = new ResendConfirmationEmailCommand(request.Email);
+        var result = await _resendConfirmationEmailHandler.HandleAsync(command, cancellationToken);
+
+        if (!result.Success)
+        {
+            return ValidationProblem(new ValidationProblemDetails(
+                result.ValidationErrors
+                    .Select((error, index) => (error, index))
+                    .GroupBy(_ => "request")
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.error).ToArray())));
+        }
+
+        // Always this same generic message - see ResendConfirmationEmailHandler's
+        // own comment for why the response can never differ based on whether the
+        // email actually exists or is already confirmed.
+        return Ok(new { message = "If an unconfirmed account exists for this email, we've sent a new confirmation link." });
     }
 
     [HttpPost("refresh-token")]

@@ -6,6 +6,7 @@ import Contact from '../pages/Contact';
 import Profile from '../pages/Profile';
 import ChangePassword from '../pages/ChangePassword';
 import ResetPasswordWithToken from '../pages/ResetPassword';
+import ConfirmEmail from '../pages/ConfirmEmail';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import ManageUsers from '../pages/admin/ManageUsers';
 import CreateUser from '../pages/admin/CreateUser';
@@ -135,6 +136,7 @@ export default function AppRoutes() {
       <Route path="/register" element={<Home />} />
       <Route path="/forgot-password" element={<Home />} />
       <Route path="/reset-password" element={<ResetPasswordWithToken />} />
+      <Route path="/confirm-email" element={<ConfirmEmail />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/about" element={<About />} />
       <Route path="/contact" element={<Contact />} />

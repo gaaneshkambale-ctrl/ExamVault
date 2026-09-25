@@ -1,3 +1,4 @@
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Application.Tests.Fakes;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Domain.Entities;
@@ -10,22 +11,29 @@ public class RefreshTokenHandlerTests
 {
     private static readonly JwtTokenService Jwt = JwtTestHelper.CreateService();
 
-    private static RefreshTokenHandler CreateHandler(FakeUserRepository repository) =>
+    private static RefreshTokenHandler CreateHandler(
+        FakeUserRepository repository,
+        FakePlatformSettingsRepository? platformSettingsRepository = null) =>
         new(
             repository,
             new FakeTenantRepository(),
             new FakePlanRepository(),
             new FakeRolePermissionRepository(),
-            new FakePlatformSettingsRepository(),
+            platformSettingsRepository ?? new FakePlatformSettingsRepository(),
             Jwt);
 
     private static async Task<(AppUser User, string RawToken)> SeedUserWithRefreshToken(
         FakeUserRepository repository,
         DateTime? expiresAtUtc = null,
         DateTime? revokedAtUtc = null,
-        bool isActive = true)
+        bool isActive = true,
+        Guid? tenantId = null)
     {
         var user = new AppUser { FullName = "Jane Doe", Email = "jane@example.com", IsActive = isActive };
+        if (tenantId is not null)
+        {
+            user.TenantId = tenantId.Value;
+        }
         await repository.AddAsync(user);
 
         var rawToken = Jwt.GenerateRefreshToken();
@@ -113,5 +121,43 @@ public class RefreshTokenHandlerTests
         var result = await handler.HandleAsync(new RefreshTokenCommand("not-a-real-token"));
 
         Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task Disabling_self_registration_rejects_an_already_logged_in_self_registered_users_refresh()
+    {
+        // Real bug, hit live: a refresh only mints a new access token from
+        // an existing valid refresh token - it never re-runs the full login
+        // flow, so without this check an already-logged-in self-registered
+        // user stayed silently logged in (via this endpoint) regardless of
+        // the AllowSelfRegistration toggle, even though a brand-new login
+        // attempt was correctly blocked.
+        var repository = new FakeUserRepository();
+        var (_, rawToken) = await SeedUserWithRefreshToken(repository, tenantId: TenantConstants.DefaultTenantId);
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { AllowSelfRegistration = false },
+        };
+        var handler = CreateHandler(repository, platformSettings);
+
+        var result = await handler.HandleAsync(new RefreshTokenCommand(rawToken));
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task Disabling_self_registration_does_not_reject_a_regular_org_users_refresh()
+    {
+        var repository = new FakeUserRepository();
+        var (_, rawToken) = await SeedUserWithRefreshToken(repository, tenantId: Guid.NewGuid());
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { AllowSelfRegistration = false },
+        };
+        var handler = CreateHandler(repository, platformSettings);
+
+        var result = await handler.HandleAsync(new RefreshTokenCommand(rawToken));
+
+        Assert.True(result.Success);
     }
 }

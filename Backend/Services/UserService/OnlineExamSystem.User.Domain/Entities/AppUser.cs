@@ -18,6 +18,17 @@ public class AppUser : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public UserRole Role { get; set; } = UserRole.Student;
     public bool IsActive { get; set; } = true;
+
+    // Independent of IsActive (which is Admin-controlled: deactivated, or
+    // "not yet set its own password" for CreateUserHandler's flow) - this
+    // is the self-service email-ownership check instead. Defaults true so
+    // every creation path an Admin/Super Admin drives (CreateUserHandler,
+    // CreateTenantAdminHandler, the bootstrap Super Admin) needs no code
+    // change - a human already vetted that email by typing it in
+    // themselves. Only RegisterUserHandler (public self-registration, no
+    // human vetting it) explicitly sets this false and requires the
+    // ConfirmEmail flow before LoginUserHandler will issue a token.
+    public bool EmailConfirmed { get; set; } = true;
     public string? PhoneNumber { get; set; }
     public bool MustChangePassword { get; set; }
     public byte[]? PhotoData { get; set; }

@@ -90,7 +90,9 @@ export default function RegisterForm() {
   if (status === 'success') {
     return (
       <Alert variant="success">
-        Account created successfully. You can now <Link to="/login">log in</Link>.
+        Account created! Check your email for a confirmation link before you{' '}
+        <Link to="/login">log in</Link>. Didn't get it?{' '}
+        <Link to="/confirm-email">Resend confirmation email</Link>.
       </Alert>
     );
   }

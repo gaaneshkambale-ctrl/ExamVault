@@ -59,6 +59,9 @@ public class UserRepository : IUserRepository
         return query.FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<AppUser>> GetAllByEmailAsync(string email, CancellationToken cancellationToken = default) =>
+        await _dbContext.Users.Where(u => u.Email == email).ToListAsync(cancellationToken);
+
     // Was previously completely unscoped - any Admin's "Manage Users"
     // list returned every user across every tenant, not just their own.
     // IsSuperAdmin bypass lets the new Super Admin "All Users" view see
@@ -184,6 +187,14 @@ public class UserRepository : IUserRepository
         string tokenHash,
         CancellationToken cancellationToken = default) =>
         _dbContext.PasswordResetTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
+    public Task AddEmailConfirmationTokenAsync(EmailConfirmationToken token, CancellationToken cancellationToken = default) =>
+        _dbContext.EmailConfirmationTokens.AddAsync(token, cancellationToken).AsTask();
+
+    public Task<EmailConfirmationToken?> GetEmailConfirmationTokenByHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.EmailConfirmationTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
 
     public async Task<UserPreferences> GetOrCreateUserPreferencesAsync(
         Guid userId,

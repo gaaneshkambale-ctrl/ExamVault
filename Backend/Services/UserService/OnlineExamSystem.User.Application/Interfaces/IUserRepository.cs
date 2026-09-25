@@ -22,6 +22,18 @@ public interface IUserRepository
     /// null only where the caller doesn't yet know the tenant (e.g. Login, before
     /// Phase 3 subdomain resolution exists), which can match across tenants.</summary>
     Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Every user with this email across every tenant - since uniqueness is
+    /// only enforced per-tenant (see GetByEmailAsync), the same real person can
+    /// legitimately hold a Student account at one org AND a Super Admin/self-registered
+    /// Default-tenant account at the same time. LoginUserHandler's bare-domain path uses
+    /// this (not GetByEmailAsync) specifically so it can pick the ONE candidate actually
+    /// eligible for bare-domain access, rather than an arbitrary one a plain single-result
+    /// lookup would return - confirmed live: a real user with both a regular tenant
+    /// account and a Default-tenant self-registration got logged into the wrong one
+    /// before this existed.</summary>
+    Task<IReadOnlyList<AppUser>> GetAllByEmailAsync(string email, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AppUser>> GetByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default);
 
@@ -89,6 +101,14 @@ public interface IUserRepository
     /// themselves so an expired/used token gives a real "link expired" message instead
     /// of collapsing into the same "not found" case as a token that never existed.</summary>
     Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+
+    Task AddEmailConfirmationTokenAsync(EmailConfirmationToken token, CancellationToken cancellationToken = default);
+
+    /// <summary>Looks up an email confirmation token by its hash - the raw token is
+    /// never stored, same reasoning as <see cref="GetPasswordResetTokenByHashAsync"/>.
+    /// Returns it regardless of whether it's still valid; callers check
+    /// <see cref="EmailConfirmationToken.IsValid"/> themselves.</summary>
+    Task<EmailConfirmationToken?> GetEmailConfirmationTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the given user's single UserPreferences row, creating it
     /// with the entity's own defaults if it doesn't exist yet.</summary>

@@ -18,6 +18,9 @@ public class TenantUrlBuilder : ITenantUrlBuilder
     public string GetResetPasswordUrl(string? tenantSlug, bool isActive, string token) =>
         BuildTenantUrl(tenantSlug, isActive, $"/reset-password?token={Uri.EscapeDataString(token)}");
 
+    public string GetConfirmEmailUrl(string? tenantSlug, bool isActive, string token) =>
+        BuildTenantUrl(tenantSlug, isActive, $"/confirm-email?token={Uri.EscapeDataString(token)}");
+
     private string BuildTenantUrl(string? tenantSlug, bool isActive, string path)
     {
         if (string.IsNullOrWhiteSpace(tenantSlug) ||

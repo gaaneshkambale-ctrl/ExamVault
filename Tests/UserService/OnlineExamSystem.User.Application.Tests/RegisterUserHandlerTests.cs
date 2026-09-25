@@ -12,13 +12,18 @@ public class RegisterUserHandlerTests
     private static RegisterUserHandler CreateHandler(
         FakeUserRepository repository,
         FakeEventPublisher? eventPublisher = null,
-        FakePlatformSettingsRepository? platformSettingsRepository = null) =>
+        FakePlatformSettingsRepository? platformSettingsRepository = null,
+        FakeEmailDispatcher? emailDispatcher = null) =>
         new(
             repository,
             new RegisterUserValidator(new FakePasswordPolicyProvider()),
             new PasswordHasher<AppUser>(),
             eventPublisher ?? new FakeEventPublisher(),
-            platformSettingsRepository ?? new FakePlatformSettingsRepository());
+            platformSettingsRepository ?? new FakePlatformSettingsRepository(),
+            JwtTestHelper.CreateService(),
+            emailDispatcher ?? new FakeEmailDispatcher(),
+            new FakeTenantUrlBuilder(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<RegisterUserHandler>.Instance);
 
     [Fact]
     public async Task Valid_registration_creates_user_with_hashed_password()
@@ -33,6 +38,29 @@ public class RegisterUserHandlerTests
         Assert.NotNull(result.User);
         Assert.Equal("jane@example.com", result.User!.Email);
         Assert.NotEqual("Passw0rd!", result.User!.PasswordHash);
+    }
+
+    [Fact]
+    public async Task Valid_registration_leaves_email_unconfirmed_and_sends_a_confirmation_email()
+    {
+        // Unlike CreateUserHandler/CreateTenantAdminHandler (an Admin
+        // already vetted the email by typing it in), nobody vetted this one
+        // - LoginUserHandler must keep this account locked out until the
+        // ConfirmEmail link is used.
+        var repository = new FakeUserRepository();
+        var emailDispatcher = new FakeEmailDispatcher();
+        var handler = CreateHandler(repository, emailDispatcher: emailDispatcher);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.User!.EmailConfirmed);
+        var sent = Assert.Single(emailDispatcher.SentEmails);
+        Assert.Equal("jane@example.com", sent.ToEmail);
+        Assert.Contains("confirm-email?token=", sent.Body);
+        var token = Assert.Single(repository.EmailConfirmationTokens);
+        Assert.Equal(result.User!.Id, token.UserId);
+        Assert.True(token.IsValid);
     }
 
     [Fact]

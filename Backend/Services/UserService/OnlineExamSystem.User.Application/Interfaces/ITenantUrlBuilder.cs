@@ -13,4 +13,11 @@ public interface ITenantUrlBuilder
     /// same tenant-subdomain-vs-apex logic as <see cref="GetLoginUrl"/>, with the raw
     /// (unhashed) token appended as a query parameter.</summary>
     string GetResetPasswordUrl(string? tenantSlug, bool isActive, string token);
+
+    /// <summary>Builds the confirm-email link sent after self-registration - same
+    /// tenant-subdomain-vs-apex logic as <see cref="GetLoginUrl"/>. Self-registered
+    /// users always land in the Default tenant (no subdomain yet, see
+    /// RegisterUserHandler), so in practice this always resolves to the apex URL,
+    /// same as GetResetPasswordUrl's Default-tenant case.</summary>
+    string GetConfirmEmailUrl(string? tenantSlug, bool isActive, string token);
 }

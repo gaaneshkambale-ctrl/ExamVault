@@ -9,6 +9,8 @@ public class LoginUserResult
     public bool IsAccountLocked { get; init; }
     public DateTime? LockoutEndUtc { get; init; }
     public bool IsMaintenanceMode { get; init; }
+    public bool IsEmailNotConfirmed { get; init; }
+    public bool IsSelfRegistrationDisabled { get; init; }
     public AppUser? User { get; init; }
     public string? AccessToken { get; init; }
     public string? RefreshToken { get; init; }
@@ -20,8 +22,12 @@ public class LoginUserResult
 
     public static LoginUserResult AccountDeactivated() => new() { Success = false, IsAccountDeactivated = true };
 
+    public static LoginUserResult EmailNotConfirmed() => new() { Success = false, IsEmailNotConfirmed = true };
+
     public static LoginUserResult AccountLocked(DateTime lockoutEndUtc) =>
         new() { Success = false, IsAccountLocked = true, LockoutEndUtc = lockoutEndUtc };
 
     public static LoginUserResult MaintenanceMode() => new() { Success = false, IsMaintenanceMode = true };
+
+    public static LoginUserResult SelfRegistrationDisabled() => new() { Success = false, IsSelfRegistrationDisabled = true };
 }

@@ -1,6 +1,7 @@
 import apiClient, { getRefreshToken } from './axiosClient';
 import type {
   ChangePasswordRequest,
+  ConfirmEmailRequest,
   CreateUserRequest,
   ForgotPasswordRequest,
   LoginRequest,
@@ -8,6 +9,7 @@ import type {
   RefreshTokenResponse,
   RegisterRequest,
   RegisterResponse,
+  ResendConfirmationEmailRequest,
   ResetPasswordRequest,
   ResetPasswordWithTokenRequest,
   PlatformUserListItem,
@@ -36,6 +38,14 @@ export async function forgotPassword(request: ForgotPasswordRequest): Promise<vo
 
 export async function resetPasswordWithToken(request: ResetPasswordWithTokenRequest): Promise<void> {
   await apiClient.post('/api/users/reset-password-with-token', request);
+}
+
+export async function confirmEmail(request: ConfirmEmailRequest): Promise<void> {
+  await apiClient.post('/api/users/confirm-email', request);
+}
+
+export async function resendConfirmationEmail(request: ResendConfirmationEmailRequest): Promise<void> {
+  await apiClient.post('/api/users/resend-confirmation-email', request);
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<RefreshTokenResponse> {

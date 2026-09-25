@@ -10,9 +10,11 @@ public class FakeUserRepository : IUserRepository
     private readonly List<RefreshToken> _refreshTokens = [];
     private readonly List<UserPreferences> _userPreferences = [];
     private readonly List<PasswordResetToken> _passwordResetTokens = [];
+    private readonly List<EmailConfirmationToken> _emailConfirmationTokens = [];
 
     public IReadOnlyList<RefreshToken> RefreshTokens => _refreshTokens;
     public IReadOnlyList<PasswordResetToken> PasswordResetTokens => _passwordResetTokens;
+    public IReadOnlyList<EmailConfirmationToken> EmailConfirmationTokens => _emailConfirmationTokens;
 
     // Test seam for simulating the real UserRepository's translated
     // DuplicateKeyException (a unique-index violation surfaced from the
@@ -35,6 +37,9 @@ public class FakeUserRepository : IUserRepository
 
     public Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Email == email && (tenantId is null || u.TenantId == tenantId)));
+
+    public Task<IReadOnlyList<AppUser>> GetAllByEmailAsync(string email, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AppUser>>(_users.Where(u => u.Email == email).ToList());
 
     public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AppUser>>(_users.ToList());
@@ -120,6 +125,15 @@ public class FakeUserRepository : IUserRepository
 
     public Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
         Task.FromResult(_passwordResetTokens.FirstOrDefault(t => t.TokenHash == tokenHash));
+
+    public Task AddEmailConfirmationTokenAsync(EmailConfirmationToken token, CancellationToken cancellationToken = default)
+    {
+        _emailConfirmationTokens.Add(token);
+        return Task.CompletedTask;
+    }
+
+    public Task<EmailConfirmationToken?> GetEmailConfirmationTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_emailConfirmationTokens.FirstOrDefault(t => t.TokenHash == tokenHash));
 
     public Task<UserPreferences> GetOrCreateUserPreferencesAsync(Guid userId, CancellationToken cancellationToken = default)
     {

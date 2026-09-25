@@ -77,6 +77,14 @@ export interface ResetPasswordWithTokenRequest {
   newPassword: string;
 }
 
+export interface ConfirmEmailRequest {
+  token: string;
+}
+
+export interface ResendConfirmationEmailRequest {
+  email: string;
+}
+
 export interface LoginResponse {
   user: UserProfile;
   accessToken: string;

@@ -1,7 +1,9 @@
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.Common;
 using OnlineExamSystem.User.Application.Users.RolePermissions;
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 
 namespace OnlineExamSystem.User.Application.Users.TokenRefresh;
 
@@ -47,6 +49,28 @@ public class RefreshTokenHandler
             return RefreshTokenResult.Invalid();
         }
 
+        // Fetched here (not further down where it was previously only
+        // needed for SessionTimeoutMinutes) so the AllowSelfRegistration
+        // check below can run before this refresh is allowed to succeed.
+        var platformSettings = await _platformSettingsRepository.GetAsync(cancellationToken);
+
+        // Same check LoginUserHandler makes for a brand-new login (see its
+        // own comment) - without this, an already-logged-in self-registered
+        // user would keep silently refreshing their session forever after a
+        // Super Admin turns self-registration off, since a refresh only
+        // fetches a NEW access token from an existing valid refresh token
+        // rather than re-running the full login flow. Confirmed live: this
+        // is exactly what let a real self-registered session stay logged
+        // in through both settings states before this check existed. Not
+        // revoking the stored refresh token here (same as the IsActive
+        // check above) - if self-registration is turned back on later, the
+        // same token should work again without forcing a fresh login.
+        if (platformSettings is not null && !platformSettings.AllowSelfRegistration
+            && user.TenantId == TenantConstants.DefaultTenantId && user.Role != UserRole.SuperAdmin)
+        {
+            return RefreshTokenResult.Invalid();
+        }
+
         storedToken.RevokedAtUtc = DateTime.UtcNow;
 
         // Re-resolved fresh on every refresh (not carried over from the old
@@ -57,7 +81,6 @@ public class RefreshTokenHandler
         var grantedPermissions = await _rolePermissionRepository.GetForRoleAsync(
             user.TenantId, RolePermissionCatalog.CatalogRoleName(user.Role), cancellationToken);
         var tenant = await _tenantRepository.GetByIdAsync(user.TenantId, cancellationToken);
-        var platformSettings = await _platformSettingsRepository.GetAsync(cancellationToken);
         var newAccessToken = _jwtTokenService.GenerateAccessToken(
             user, enabledFeatures, grantedPermissions, tenant?.PermissionVersion ?? 0, platformSettings?.SessionTimeoutMinutes);
         var newRefreshToken = _jwtTokenService.GenerateRefreshToken();

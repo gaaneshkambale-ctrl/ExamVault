@@ -18,6 +18,7 @@ public class UserDbContext : DbContext
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<EmailConfirmationToken> EmailConfirmationTokens => Set<EmailConfirmationToken>();
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
@@ -150,6 +151,12 @@ public class UserDbContext : DbContext
             entity.HasIndex(u => new { u.TenantId, u.Email }).IsUnique();
             entity.Property(u => u.PasswordHash).IsRequired();
             entity.Property(u => u.IsActive).HasDefaultValue(true);
+            // Every existing row predates this column and was created
+            // through a human-vetted path (an Admin typed the email in
+            // themselves) - only RegisterUserHandler's self-registration
+            // explicitly overrides this to false on insert. See AppUser's
+            // own comment.
+            entity.Property(u => u.EmailConfirmed).HasDefaultValue(true);
             entity.Property(u => u.PhoneNumber).HasMaxLength(20);
             entity.Property(u => u.PhotoContentType).HasMaxLength(100);
             entity.Property(u => u.Username).HasMaxLength(100);
@@ -179,6 +186,17 @@ public class UserDbContext : DbContext
         });
 
         modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(256);
+            entity.HasIndex(t => t.TokenHash).IsUnique();
+            entity.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmailConfirmationToken>(entity =>
         {
             entity.HasKey(t => t.Id);
             entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(256);

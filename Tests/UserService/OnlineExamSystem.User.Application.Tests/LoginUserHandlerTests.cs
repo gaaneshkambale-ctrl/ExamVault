@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Application.Tests.Fakes;
 using OnlineExamSystem.User.Application.Users.Login;
 using OnlineExamSystem.User.Domain.Entities;
@@ -32,7 +33,8 @@ public class LoginUserHandlerTests
         bool isActive = true,
         bool mustChangePassword = false,
         Guid? tenantId = null,
-        UserRole role = UserRole.Student)
+        UserRole role = UserRole.Student,
+        bool emailConfirmed = true)
     {
         var user = new AppUser
         {
@@ -41,6 +43,7 @@ public class LoginUserHandlerTests
             IsActive = isActive,
             MustChangePassword = mustChangePassword,
             Role = role,
+            EmailConfirmed = emailConfirmed,
         };
         if (tenantId is not null)
         {
@@ -123,6 +126,22 @@ public class LoginUserHandlerTests
     }
 
     [Fact]
+    public async Task Unconfirmed_email_with_correct_credentials_is_rejected_as_email_not_confirmed()
+    {
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
+        var repository = new FakeUserRepository();
+        await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id, emailConfirmed: false);
+        var handler = CreateHandler(repository, tenantRepository);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsEmailNotConfirmed);
+        Assert.Null(result.AccessToken);
+    }
+
+    [Fact]
     public async Task Inactive_user_who_still_must_change_password_can_log_in_to_reach_the_reset_screen()
     {
         var tenantRepository = new FakeTenantRepository();
@@ -136,6 +155,56 @@ public class LoginUserHandlerTests
         Assert.True(result.Success);
         Assert.Equal(user.Id, result.User!.Id);
         Assert.False(string.IsNullOrEmpty(result.AccessToken));
+    }
+
+    [Fact]
+    public async Task Bare_domain_login_succeeds_for_a_confirmed_self_registered_user_in_the_Default_tenant()
+    {
+        // Self-registered users (RegisterUserHandler) always land in the
+        // Default tenant, which - like Platform - never gets a subdomain
+        // URL from TenantUrlBuilder, so they can only ever reach the
+        // bare/apex domain. Default is always IsActive=true, so without
+        // the Default-tenant exception in LoginUserHandler this would be
+        // rejected exactly like Bare_domain_login_is_rejected_for_a_regular_tenant_user
+        // below - confirmed live before this exception existed.
+        var repository = new FakeUserRepository();
+        await SeedUser(
+            repository, "jane@example.com", "Passw0rd!",
+            tenantId: TenantConstants.DefaultTenantId, emailConfirmed: true);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!"));
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task Bare_domain_login_resolves_to_the_Default_tenant_account_even_when_the_same_email_also_has_a_regular_org_account()
+    {
+        // Real bug, hit live: email uniqueness is only enforced per-tenant
+        // (see IUserRepository.GetByEmailAsync's own comment), so the same
+        // person can hold a Student account at a regular, active org AND
+        // separately self-register into the Default tenant with the same
+        // email. A plain single-result "find by email, no tenant filter"
+        // lookup can return either one - it returned the org account here,
+        // which then failed the bare-domain eligibility check and
+        // permanently blocked this real, confirmed self-registration from
+        // ever logging in. ResolveBareDomainUserAsync must pick the
+        // Default-tenant account specifically, not whichever one a plain
+        // lookup happens to return first.
+        var tenantRepository = new FakeTenantRepository();
+        var orgTenant = await SeedTenant(tenantRepository, slug: "acmecorp");
+        var repository = new FakeUserRepository();
+        await SeedUser(repository, "jane@example.com", "OrgPassword1", tenantId: orgTenant.Id, role: UserRole.Student);
+        var defaultTenantUser = await SeedUser(
+            repository, "jane@example.com", "Passw0rd!",
+            tenantId: TenantConstants.DefaultTenantId, emailConfirmed: true);
+        var handler = CreateHandler(repository, tenantRepository);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!"));
+
+        Assert.True(result.Success);
+        Assert.Equal(defaultTenantUser.Id, result.User!.Id);
     }
 
     [Fact]
@@ -349,5 +418,52 @@ public class LoginUserHandlerTests
         var superAdminResult = await handler.HandleAsync(new LoginUserCommand("superadmin@examvault.local", "Passw0rd!"));
         Assert.True(superAdminResult.Success);
         Assert.Equal(superAdmin.Id, superAdminResult.User!.Id);
+    }
+
+    [Fact]
+    public async Task Disabling_self_registration_blocks_an_existing_self_registered_user_from_logging_in()
+    {
+        // AllowSelfRegistration off is a deliberate "shut the self-service
+        // signup door" decision - extending it to also lock out everyone
+        // who already walked through that door (every Default-tenant
+        // account) is what a Super Admin reasonably expects "off" to mean.
+        var repository = new FakeUserRepository();
+        await SeedUser(
+            repository, "jane@example.com", "Passw0rd!",
+            tenantId: TenantConstants.DefaultTenantId, emailConfirmed: true);
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { AllowSelfRegistration = false },
+        };
+        var handler = CreateHandler(repository, platformSettingsRepository: platformSettings);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!"));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsSelfRegistrationDisabled);
+        Assert.Null(result.AccessToken);
+    }
+
+    [Fact]
+    public async Task Disabling_self_registration_does_not_block_a_regular_org_users_login()
+    {
+        // Only ever governed the public self-registration door - never
+        // affects users an Admin provisioned directly (CreateUserHandler/
+        // CreateTenantAdminHandler), which don't live in the Default
+        // tenant.
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id);
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { AllowSelfRegistration = false },
+        };
+        var handler = CreateHandler(repository, tenantRepository, platformSettings);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
+
+        Assert.True(result.Success);
+        Assert.Equal(user.Id, result.User!.Id);
     }
 }

@@ -9,4 +9,7 @@ public class FakeTenantUrlBuilder : ITenantUrlBuilder
 
     public string GetResetPasswordUrl(string? tenantSlug, bool isActive, string token) =>
         $"http://{tenantSlug ?? "app"}.example.test/reset-password?token={token}";
+
+    public string GetConfirmEmailUrl(string? tenantSlug, bool isActive, string token) =>
+        $"http://{tenantSlug ?? "app"}.example.test/confirm-email?token={token}";
 }
