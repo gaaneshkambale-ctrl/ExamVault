@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Card, Col, Form, Pagination, ProgressBar, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../../layouts/AdminLayout';
+import RoleAwareLayout from '../../../layouts/RoleAwareLayout';
 import UserAvatar from '../../../components/UserAvatar';
 import { ViewIcon } from '../../../components/icons/ActionIcons';
 import { useExams } from '../../../hooks/useExams';
-import { useUsers } from '../../../hooks/useUsers';
+import { useStudents } from '../../../hooks/useUsers';
 import { useQuestionCountsByExam } from '../../../hooks/useQuestions';
 import { useAttemptsWithAnswersByExam } from '../../../hooks/useSubmissions';
 import { attemptViolationCount, getRiskLevel, type RiskLevel } from '../../../utils/proctoring';
+import { getPaginationRange } from '../../../utils/paginationRange';
 import type { ExamResponse } from '../../../types/exam';
 import type { AttemptStatus } from '../../../types/submission';
 
 // "Live monitoring" - same polling mechanism Active Exams uses.
 const POLL_INTERVAL_MS = 15000;
-const PAGE_SIZE = 8;
+const PAGE_SIZE_OPTIONS = [8, 25, 50];
 
 const riskVariant: Record<RiskLevel, string> = {
   Low: 'success',
@@ -43,12 +44,13 @@ interface AttemptRow {
 
 export default function StudentAttempts() {
   const { data: exams, isLoading: isLoadingExams, isError: isExamsError } = useExams();
-  const { data: users } = useUsers();
+  const { data: users } = useStudents();
   const [searchText, setSearchText] = useState('');
   const [riskOnly, setRiskOnly] = useState(false);
   const [examFilter, setExamFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Completed'>('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [now, setNow] = useState(() => Date.now());
 
   // Drives the Time Remaining column's live countdown - one shared ticking
@@ -143,16 +145,16 @@ export default function StudentAttempts() {
     setPage(1);
   }, [searchText, riskOnly, examFilter, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredRows.length);
+  const pagedRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredRows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredRows.length);
 
   const loading = isLoadingExams || isLoadingAttempts;
 
   return (
-    <AdminLayout active="Student Attempts">
+    <RoleAwareLayout active="Student Attempts">
       <h1 className="h4 fw-bold mb-1 text-primary">Student Attempts</h1>
       <p className="text-muted mb-4">Monitor students who are currently taking exams.</p>
 
@@ -267,7 +269,7 @@ export default function StudentAttempts() {
 
           {!loading && !isExamsError && pagedRows.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Student</th>
                   <th>Exam</th>
@@ -349,20 +351,40 @@ export default function StudentAttempts() {
           <div className="text-muted small">
             Showing {rangeStart} to {rangeEnd} of {filteredRows.length} entries
           </div>
-          <Pagination className="mb-0">
-            <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                {p}
-              </Pagination.Item>
-            ))}
-            <Pagination.Next
-              disabled={currentPage === totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            />
-          </Pagination>
+          <div className="d-flex align-items-center gap-3">
+            <Pagination className="mb-0">
+              <Pagination.First disabled={currentPage === 1} onClick={() => setPage(1)} />
+              <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+              {getPaginationRange(currentPage, totalPages).map((p, i) =>
+                p === 'ellipsis' ? (
+                  <Pagination.Ellipsis key={`ellipsis-${i}`} disabled />
+                ) : (
+                  <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                    {p}
+                  </Pagination.Item>
+                ),
+              )}
+              <Pagination.Next
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              />
+              <Pagination.Last disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} />
+            </Pagination>
+            <Form.Select
+              size="sm"
+              style={{ width: 100 }}
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </Form.Select>
+          </div>
         </div>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

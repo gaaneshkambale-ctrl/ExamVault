@@ -5,6 +5,7 @@ public class CreateNotificationResult
     public bool Success { get; init; }
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
     public bool IsNoRecipients { get; init; }
+    public bool IsForbidden { get; init; }
     public Guid BatchId { get; init; }
     public int RecipientCount { get; init; }
 
@@ -15,4 +16,6 @@ public class CreateNotificationResult
         new() { ValidationErrors = errors };
 
     public static CreateNotificationResult NoRecipients() => new() { IsNoRecipients = true };
+
+    public static CreateNotificationResult Forbidden() => new() { IsForbidden = true };
 }

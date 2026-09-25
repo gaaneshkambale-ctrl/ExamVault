@@ -1,0 +1,78 @@
+using OnlineExamSystem.User.Application.Users.Create;
+using OnlineExamSystem.User.Application.Users.Update;
+using Xunit;
+
+namespace OnlineExamSystem.User.Application.Tests;
+
+// Guards the privilege-escalation fix: a tenant Admin (who reaches both
+// Create/Update via [Authorize(Roles="Admin")] + Policy=UsersEdit) must
+// never be able to set a user's role to the platform-level SuperAdmin -
+// only the tenant-assignable roles are accepted. Create is further
+// restricted to RolePermissionCatalog.UserCreatableRoles (no "Admin") -
+// only a Super Admin creates additional Admins for a tenant; Update still
+// accepts "Admin" at the validator level so an existing Admin's other
+// fields stay editable (the promotion-into-Admin block lives in
+// UpdateUserHandler instead, see UpdateUserHandlerTests).
+public class UserRoleValidationTests
+{
+    private readonly CreateUserValidator _createValidator = new();
+    private readonly UpdateUserValidator _updateValidator = new();
+
+    [Theory]
+    [InlineData("Instructor")]
+    [InlineData("Student")]
+    public void Create_accepts_user_creatable_roles(string role)
+    {
+        var command = new CreateUserCommand(
+            Guid.NewGuid(), "Jane Doe", "jane@example.com", role,
+            PhoneNumber: "+91 98765 43210",
+            RollNumber: role == "Student" ? "R-001" : null);
+
+        var result = _createValidator.Validate(command);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Theory]
+    [InlineData("Admin")]
+    [InlineData("SuperAdmin")]
+    [InlineData("Super Admin")]
+    [InlineData("Viewer")]
+    [InlineData("NotARole")]
+    public void Create_rejects_non_user_creatable_roles(string role)
+    {
+        var command = new CreateUserCommand(
+            Guid.NewGuid(), "Jane Doe", "jane@example.com", role,
+            PhoneNumber: "+91 98765 43210");
+
+        var result = _createValidator.Validate(command);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Theory]
+    [InlineData("Admin")]
+    [InlineData("Instructor")]
+    [InlineData("Student")]
+    public void Update_accepts_tenant_assignable_roles(string role)
+    {
+        var command = new UpdateUserCommand(Guid.NewGuid(), "Jane Doe", "jane@example.com", role);
+
+        var result = _updateValidator.Validate(command);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Theory]
+    [InlineData("SuperAdmin")]
+    [InlineData("Super Admin")]
+    [InlineData("Viewer")]
+    public void Update_rejects_non_tenant_assignable_roles(string role)
+    {
+        var command = new UpdateUserCommand(Guid.NewGuid(), "Jane Doe", "jane@example.com", role);
+
+        var result = _updateValidator.Validate(command);
+
+        Assert.False(result.IsValid);
+    }
+}

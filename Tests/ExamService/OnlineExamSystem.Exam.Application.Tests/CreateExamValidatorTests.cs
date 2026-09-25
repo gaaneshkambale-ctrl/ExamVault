@@ -18,7 +18,8 @@ public class CreateExamValidatorTests
             50,
             25,
             "Answer all questions.",
-            Guid.NewGuid());
+            Guid.NewGuid(),
+            ExamTypeId: Guid.NewGuid());
 
     [Fact]
     public void Valid_command_passes()
@@ -64,6 +65,16 @@ public class CreateExamValidatorTests
     public void Passing_marks_above_total_marks_fails()
     {
         var command = ValidCommand() with { TotalMarks = 50, PassingMarks = 60 };
+
+        var result = _validator.Validate(command);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public void Null_exam_type_fails()
+    {
+        var command = ValidCommand() with { ExamTypeId = null };
 
         var result = _validator.Validate(command);
 

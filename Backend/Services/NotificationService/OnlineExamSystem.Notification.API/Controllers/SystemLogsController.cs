@@ -45,7 +45,8 @@ public class SystemLogsController : ControllerBase
             request.StackTrace,
             request.RequestPath,
             request.RequestMethod,
-            request.TenantId);
+            request.TenantId,
+            request.IpAddress);
 
         await _recordHandler.HandleAsync(command, cancellationToken);
         return NoContent();
@@ -95,5 +96,6 @@ public class SystemLogsController : ControllerBase
         log.TenantId,
         log.IsResolved,
         log.ResolvedAtUtc,
-        log.ResolvedByUserId);
+        log.ResolvedByUserId,
+        log.IpAddress);
 }

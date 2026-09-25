@@ -1,0 +1,3 @@
+namespace OnlineExamSystem.User.Application.Tenants.GetOrganizationAcademicConfig;
+
+public record GetOrganizationAcademicConfigQuery(Guid TenantId);

@@ -14,4 +14,6 @@ public record RecordSystemErrorLogRequest(
     string? StackTrace,
     string? RequestPath,
     string? RequestMethod,
-    Guid? TenantId);
+    Guid? TenantId,
+    // Trailing and optional: background jobs (no request) leave it null.
+    string? IpAddress = null);

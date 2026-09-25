@@ -52,6 +52,26 @@ public class UpdateExamHandlerTests
         Assert.False(result.Exam!.ShuffleQuestions);
         Assert.True(result.Exam!.NegativeMarkingEnabled);
         Assert.Equal(0.25m, result.Exam!.NegativeMarks);
+        // Not set explicitly by CommandFor - defaults to off/80, same as a
+        // brand-new exam that predates this feature.
+        Assert.False(result.Exam!.CertificateEnabled);
+        Assert.Equal(80, result.Exam!.MinimumCertificateScorePercent);
+    }
+
+    [Fact]
+    public async Task Certificate_generation_and_its_minimum_score_can_be_turned_on_per_exam()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals" };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository);
+        var command = CommandFor(exam.Id) with { CertificateEnabled = true, MinimumCertificateScorePercent = 70 };
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.True(result.Exam!.CertificateEnabled);
+        Assert.Equal(70, result.Exam!.MinimumCertificateScorePercent);
     }
 
     [Fact]
@@ -79,6 +99,38 @@ public class UpdateExamHandlerTests
 
         Assert.False(result.Success);
         Assert.NotEmpty(result.ValidationErrors);
+        Assert.Equal("C# Fundamentals", exam.Title);
+    }
+
+    [Fact]
+    public async Task Owner_can_update_their_own_exam()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals", CreatedByUserId = ownerId };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository);
+        var command = CommandFor(exam.Id) with { OwnerUserId = ownerId };
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.Equal("C# Fundamentals (Updated)", result.Exam!.Title);
+    }
+
+    [Fact]
+    public async Task Non_owner_cannot_update_another_instructors_exam()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals", CreatedByUserId = Guid.NewGuid() };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository);
+        var command = CommandFor(exam.Id) with { OwnerUserId = Guid.NewGuid() };
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsForbidden);
         Assert.Equal("C# Fundamentals", exam.Title);
     }
 }

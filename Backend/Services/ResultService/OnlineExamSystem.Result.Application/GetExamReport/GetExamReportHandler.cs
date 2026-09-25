@@ -52,7 +52,7 @@ public class GetExamReportHandler
             var sections = await _examLookupClient.GetSectionsAsync(query.ExamId, query.BearerToken, cancellationToken);
             var sectionsById = sections.ToDictionary(s => s.Id);
 
-            var attemptResults = attempts.Select(attempt =>
+            var scoredAttempts = attempts.Select(attempt =>
             {
                 var answersByQuestionId = attempt.Answers.ToDictionary(a => a.QuestionId);
                 var (totalScore, questionResults, hasPendingGrading) = AttemptScorer.Score(
@@ -61,24 +61,45 @@ public class GetExamReportHandler
                     sectionsById,
                     exam.NegativeMarkingEnabled,
                     exam.NegativeMarks);
+                return (attempt, totalScore, questionResults, hasPendingGrading, summary: QuestionResultScoring.Summarize(questionResults));
+            }).ToList();
 
+            // Rank/Percentile only attach to each user's own LATEST attempt
+            // (the explicit product decision - see ExamRankingCalculator) -
+            // an older, superseded attempt from the same student stays
+            // unranked rather than showing a stale standing.
+            var rankings = ExamRankingCalculator.Compute(
+                scoredAttempts
+                    .Select(s => new RankableAttempt(s.attempt.AttemptId, s.attempt.UserId, s.attempt.SubmittedAtUtc ?? DateTime.UtcNow, s.totalScore))
+                    .ToList());
+
+            var attemptResults = scoredAttempts.Select(s =>
+            {
+                rankings.TryGetValue(s.attempt.AttemptId, out var ranking);
                 return new AdminAttemptResult
                 {
-                    AttemptId = attempt.AttemptId,
-                    UserId = attempt.UserId,
-                    TotalScore = totalScore,
-                    Passed = totalScore >= exam.PassingMarks,
-                    SubmittedAtUtc = attempt.SubmittedAtUtc ?? DateTime.UtcNow,
-                    Questions = questionResults,
-                    HasPendingGrading = hasPendingGrading,
-                    FullscreenExitCount = attempt.FullscreenExitCount,
-                    NoFaceDetectedCount = attempt.NoFaceDetectedCount,
-                    MultipleFacesDetectedCount = attempt.MultipleFacesDetectedCount,
-                    TabSwitchCount = attempt.TabSwitchCount,
-                    MultipleTabsCount = attempt.MultipleTabsCount,
-                    CopyPasteCount = attempt.CopyPasteCount,
-                    RightClickCount = attempt.RightClickCount,
-                    MultipleMonitorsCount = attempt.MultipleMonitorsCount,
+                    AttemptId = s.attempt.AttemptId,
+                    UserId = s.attempt.UserId,
+                    TotalScore = s.totalScore,
+                    Passed = s.totalScore >= exam.PassingMarks,
+                    SubmittedAtUtc = s.attempt.SubmittedAtUtc ?? DateTime.UtcNow,
+                    Questions = s.questionResults,
+                    HasPendingGrading = s.hasPendingGrading,
+                    FullscreenExitCount = s.attempt.FullscreenExitCount,
+                    NoFaceDetectedCount = s.attempt.NoFaceDetectedCount,
+                    MultipleFacesDetectedCount = s.attempt.MultipleFacesDetectedCount,
+                    TabSwitchCount = s.attempt.TabSwitchCount,
+                    MultipleTabsCount = s.attempt.MultipleTabsCount,
+                    CopyPasteCount = s.attempt.CopyPasteCount,
+                    RightClickCount = s.attempt.RightClickCount,
+                    MultipleMonitorsCount = s.attempt.MultipleMonitorsCount,
+                    CorrectCount = s.summary.CorrectCount,
+                    IncorrectCount = s.summary.IncorrectCount,
+                    SkippedCount = s.summary.SkippedCount,
+                    Accuracy = s.summary.Accuracy,
+                    Rank = ranking?.Rank,
+                    Percentile = ranking?.Percentile,
+                    TotalParticipants = ranking?.TotalParticipants,
                 };
             }).ToList();
 

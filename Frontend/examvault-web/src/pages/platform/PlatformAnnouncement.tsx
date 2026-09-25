@@ -24,7 +24,7 @@ import { listAllUsers } from '../../api/userApi';
 // state) - shown as "-". "Audience" from the mockup is replaced with
 // "Organization" (the real tenant a batch's recipients belong to), since no
 // audience label is stored per batch.
-const PAGE_SIZE = 5;
+const PAGE_SIZE_OPTIONS = [5, 25, 50];
 
 export default function PlatformAnnouncement() {
   const { data, isLoading, isError } = useQuery({
@@ -35,6 +35,7 @@ export default function PlatformAnnouncement() {
   const { data: users } = useQuery({ queryKey: ['platform-users'], queryFn: listAllUsers });
 
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const tenantNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -53,8 +54,8 @@ export default function PlatformAnnouncement() {
   const sentCount = allBatches.filter((b) => b.status === 'Delivered').length;
   const scheduledCount = allBatches.filter((b) => b.status === 'Scheduled').length;
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const pageItems = allBatches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const pageItems = allBatches.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <PlatformLayout active="notif-announcement">
@@ -69,7 +70,7 @@ export default function PlatformAnnouncement() {
         </Button>
       </div>
 
-      <div className="border rounded-3 bg-white p-3 mb-3 text-muted small">
+      <div className="border rounded-3 bg-body p-3 mb-3 text-muted small">
         This table shows real announcement history across every organization. "New Announcement" is disabled - sending
         to every organization at once isn't supported by the backend yet (today's send action only reaches one
         organization's own users).
@@ -100,7 +101,7 @@ export default function PlatformAnnouncement() {
 
           {!isLoading && !isError && pageItems.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Announcement</th>
                   <th>Type</th>
@@ -153,10 +154,16 @@ export default function PlatformAnnouncement() {
       <TablePagination
         page={page}
         totalPages={totalPages}
-        rangeStart={totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
-        rangeEnd={Math.min(page * PAGE_SIZE, totalCount)}
+        rangeStart={totalCount === 0 ? 0 : (page - 1) * pageSize + 1}
+        rangeEnd={Math.min(page * pageSize, totalCount)}
         totalCount={totalCount}
         onPageChange={setPage}
+        pageSize={pageSize}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
       />
     </PlatformLayout>
   );

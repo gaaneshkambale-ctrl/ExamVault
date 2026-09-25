@@ -7,6 +7,7 @@ public class FakeSubmissionLookupClient : ISubmissionLookupClient
     private readonly SubmissionLookupResult? _result;
     private readonly IReadOnlyList<SubmissionLookupResult>? _attemptsByExam;
     private readonly Exception? _exceptionToThrow;
+    private readonly Exception? _attemptsByExamException;
 
     public FakeSubmissionLookupClient(SubmissionLookupResult? result, Exception? exceptionToThrow = null)
     {
@@ -20,6 +21,20 @@ public class FakeSubmissionLookupClient : ISubmissionLookupClient
     {
         _attemptsByExam = attemptsByExam;
         _exceptionToThrow = exceptionToThrow;
+    }
+
+    // Used by GetResultHandlerTests' ranking scenarios, which need
+    // GetMyAttemptAsync (the caller's own attempt) and GetAttemptsByExamAsync
+    // (the full cohort, fetched separately via the system token) to return
+    // different, independently-controllable data in the same test.
+    public FakeSubmissionLookupClient(
+        SubmissionLookupResult? myAttempt,
+        IReadOnlyList<SubmissionLookupResult> attemptsByExam,
+        Exception? attemptsByExamException = null)
+    {
+        _result = myAttempt;
+        _attemptsByExam = attemptsByExam;
+        _attemptsByExamException = attemptsByExamException;
     }
 
     public Task<SubmissionLookupResult?> GetMyAttemptAsync(
@@ -40,6 +55,10 @@ public class FakeSubmissionLookupClient : ISubmissionLookupClient
         string bearerToken,
         CancellationToken cancellationToken = default)
     {
+        if (_attemptsByExamException is not null)
+        {
+            throw _attemptsByExamException;
+        }
         if (_exceptionToThrow is not null)
         {
             throw _exceptionToThrow;

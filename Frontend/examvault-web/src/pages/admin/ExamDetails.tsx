@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import SectionHeader from '../../components/SectionHeader';
 import DeleteAssignmentButton from '../../components/DeleteAssignmentButton';
 import { EditIcon } from '../../components/icons/ActionIcons';
+import { UserCheckIcon } from '../../components/reports/ReportIcons';
 import { archiveExam, publishExam, unpublishExam } from '../../api/examApi';
 import { getOrCreateDefaultSection } from '../../api/sectionApi';
 import { useExam } from '../../hooks/useExams';
@@ -12,6 +14,8 @@ import { useQuestions } from '../../hooks/useQuestions';
 import { useAssignmentsForExam } from '../../hooks/useAssignments';
 import { useGroups } from '../../hooks/useGroups';
 import { useUngradedAnswers } from '../../hooks/useSubmissions';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { CreationMethod, ExamStatus } from '../../types/exam';
 import { getAssignmentStatus, type AssignmentStatus } from '../../types/assignment';
 import { extractServerError } from '../../utils/apiError';
@@ -51,6 +55,10 @@ export default function ExamDetails() {
   const { data: assignments, isLoading: isLoadingAssignments } = useAssignmentsForExam(id);
   const { data: groups } = useGroups();
   const { data: ungradedAnswers } = useUngradedAnswers(id);
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canEditExams = user?.role !== 'Instructor' || hasPermission('Exams - Edit');
+  const canCreateQuestions = user?.role !== 'Instructor' || hasPermission('Questions - Create');
   const [statusError, setStatusError] = useState('');
 
   const groupNameById = useMemo(() => {
@@ -107,7 +115,7 @@ export default function ExamDetails() {
     publishMutation.isPending || unpublishMutation.isPending || archiveMutation.isPending;
 
   return (
-    <AdminLayout active="Exams">
+    <RoleAwareLayout active="Exams">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">Exam Review &amp; Publish</h1>
         <div className="d-flex gap-2">
@@ -138,7 +146,7 @@ export default function ExamDetails() {
               {manageQuestionsMutation.isPending ? 'Loading...' : 'Manage Questions'}
             </Button>
           )}
-          {id && exam?.creationMethod === 'AiGenerated' && (
+          {id && exam?.creationMethod === 'AiGenerated' && canCreateQuestions && (
             <Link to={`/admin/exams/${id}/questions/ai-generate`} className="btn btn-outline-primary">
               Generate Questions with AI
             </Link>
@@ -148,7 +156,7 @@ export default function ExamDetails() {
               Grade Code Answers <Badge bg="warning" text="dark">{ungradedAnswers.length}</Badge>
             </Link>
           )}
-          {id && (
+          {id && canEditExams && (
             <Link to={`/admin/exams/${id}/edit`} className="btn btn-primary">
               Edit
             </Link>
@@ -243,7 +251,10 @@ export default function ExamDetails() {
       {exam && (
         <Card className="border-0 shadow-sm mt-4">
           <Card.Body className="p-4">
-            <h3 className="h6 fw-bold mb-3">Assigned Students ({assignments?.length ?? 0})</h3>
+            <SectionHeader
+              icon={<span style={{ color: '#4f46e5' }}><UserCheckIcon /></span>}
+              title={`Assigned Students (${assignments?.length ?? 0})`}
+            />
 
             {isLoadingAssignments && (
               <div className="d-flex justify-content-center py-4">
@@ -259,7 +270,7 @@ export default function ExamDetails() {
 
             {!isLoadingAssignments && assignments && assignments.length > 0 && (
               <Table responsive hover className="align-middle mb-0">
-                <thead className="text-muted small text-uppercase table-light">
+                <thead className="text-muted small text-uppercase bg-body-tertiary">
                   <tr>
                     <th>Assignment ID</th>
                     <th>Assigned To</th>
@@ -310,6 +321,6 @@ export default function ExamDetails() {
           </Card.Body>
         </Card>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

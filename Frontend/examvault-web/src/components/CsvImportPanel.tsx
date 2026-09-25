@@ -1,8 +1,15 @@
 import { useRef, useState } from 'react';
 import { Alert, Badge, Button, Form, Table } from 'react-bootstrap';
 import { createQuestion } from '../api/questionApi';
-import { buildCsvTemplate, parseQuestionImportCsv } from '../utils/csvQuestionImport';
+import {
+  buildCodeCsvTemplate,
+  buildCsvTemplate,
+  parseCodeQuestionImportCsv,
+  parseQuestionImportCsv,
+} from '../utils/csvQuestionImport';
+import type { CsvCodeImportRow, CsvImportRow } from '../utils/csvQuestionImport';
 import { extractServerError } from '../utils/apiError';
+import { PROGRAMMING_LANGUAGES } from '../types/question';
 import type { QuestionResponse, QuestionType } from '../types/question';
 
 const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
@@ -12,17 +19,33 @@ const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   CodeProgram: 'Code / Programming',
 };
 
+const PROGRAMMING_LANGUAGE_LABELS = Object.fromEntries(PROGRAMMING_LANGUAGES.map((l) => [l.value, l.label]));
+
+type ImportKind = 'standard' | 'code';
+
+// Code/Programming questions have an entirely different field set (no
+// Options/Correct Answer - a programming language, starter code, reference
+// solution, and an optional function signature/test cases instead), so they
+// need their own template rather than trying to force both shapes into one
+// generic CSV - see CsvCodeImportRow's own comment for the signature fields'
+// encoding and what's still deliberately left out (Sql setup scripts).
+type AnyRow =
+  | { kind: 'standard'; row: CsvImportRow }
+  | { kind: 'code'; row: CsvCodeImportRow };
+
 interface CsvImportPanelProps {
   examId: string;
   onImported: (questions: QuestionResponse[]) => void;
 }
 
-function downloadTemplate() {
-  const blob = new Blob([buildCsvTemplate()], { type: 'text/csv;charset=utf-8;' });
+function downloadTemplate(kind: ImportKind) {
+  const content = kind === 'code' ? buildCodeCsvTemplate() : buildCsvTemplate();
+  const filename = kind === 'code' ? 'code-question-import-template.csv' : 'question-import-template.csv';
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'question-import-template.csv';
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -31,14 +54,24 @@ function downloadTemplate() {
 
 export default function CsvImportPanel({ examId, onImported }: CsvImportPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importKind, setImportKind] = useState<ImportKind>('standard');
   const [fileName, setFileName] = useState('');
-  const [rows, setRows] = useState<ReturnType<typeof parseQuestionImportCsv>>([]);
+  const [rows, setRows] = useState<AnyRow[]>([]);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
 
-  const validCount = rows.filter((r) => r.error === null).length;
+  const validCount = rows.filter((r) => r.row.error === null).length;
   const invalidCount = rows.length - validCount;
+
+  const changeImportKind = (kind: ImportKind) => {
+    setImportKind(kind);
+    setFileName('');
+    setRows([]);
+    setSelectedRows(new Set());
+    setImportError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -47,10 +80,18 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
     setImportError('');
     setFileName(file.name);
     const text = await file.text();
-    const parsed = parseQuestionImportCsv(text);
+    const parsed: AnyRow[] =
+      importKind === 'code'
+        ? parseCodeQuestionImportCsv(text).map((row) => ({ kind: 'code' as const, row }))
+        : parseQuestionImportCsv(text).map((row) => ({ kind: 'standard' as const, row }));
     setRows(parsed);
-    setSelectedRows(new Set(parsed.filter((r) => r.error === null).map((r) => r.rowNumber)));
+    setSelectedRows(new Set(parsed.filter((r) => r.row.error === null).map((r) => r.row.rowNumber)));
   };
+
+  const selectAllValid = () =>
+    setSelectedRows(new Set(rows.filter((r) => r.row.error === null).map((r) => r.row.rowNumber)));
+
+  const clearAllSelected = () => setSelectedRows(new Set());
 
   const toggleRow = (rowNumber: number) => {
     setSelectedRows((prev) => {
@@ -65,23 +106,45 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
   };
 
   const handleImport = async () => {
-    const toImport = rows.filter((r) => r.error === null && selectedRows.has(r.rowNumber));
+    const toImport = rows.filter((r) => r.row.error === null && selectedRows.has(r.row.rowNumber));
     if (toImport.length === 0) return;
 
     setImporting(true);
     setImportError('');
 
     const results = await Promise.allSettled(
-      toImport.map((row) =>
-        createQuestion({
-          examId,
-          questionType: row.questionType,
-          questionText: row.questionText,
-          marks: row.marks,
-          difficulty: row.difficulty,
-          shuffleOptions: row.shuffleOptions,
-          options: row.options,
-        }),
+      toImport.map((entry) =>
+        entry.kind === 'code'
+          ? createQuestion({
+              examId,
+              questionType: 'CodeProgram',
+              questionText: entry.row.questionText,
+              marks: entry.row.marks,
+              difficulty: entry.row.difficulty,
+              shuffleOptions: false,
+              options: [],
+              starterCode: entry.row.starterCode || null,
+              programmingLanguage: entry.row.programmingLanguage,
+              allowLanguageChange: entry.row.allowLanguageChange,
+              sampleAnswer: entry.row.sampleAnswer || null,
+              functionName: entry.row.functionName || null,
+              returnType: entry.row.returnType,
+              parameters: entry.row.parameters,
+              testCases: entry.row.testCases,
+              sqlTestCases: entry.row.sqlTestCases,
+              sampleInput: entry.row.sampleInput || null,
+              sampleOutput: entry.row.sampleOutput || null,
+              constraints: entry.row.constraints || null,
+            })
+          : createQuestion({
+              examId,
+              questionType: entry.row.questionType,
+              questionText: entry.row.questionText,
+              marks: entry.row.marks,
+              difficulty: entry.row.difficulty,
+              shuffleOptions: entry.row.shuffleOptions,
+              options: entry.row.options,
+            }),
       ),
     );
 
@@ -106,15 +169,57 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
 
   return (
     <div>
+      <Form.Group className="mb-3">
+        <Form.Label className="fw-bold mb-1">Question Format</Form.Label>
+        <div className="d-flex gap-3">
+          <Form.Check
+            type="radio"
+            id="importKindStandard"
+            name="importKind"
+            label="Standard (Single/Multiple Choice, True-False)"
+            checked={importKind === 'standard'}
+            onChange={() => changeImportKind('standard')}
+          />
+          <Form.Check
+            type="radio"
+            id="importKindCode"
+            name="importKind"
+            label="Code / Programming"
+            checked={importKind === 'code'}
+            onChange={() => changeImportKind('code')}
+          />
+        </div>
+      </Form.Group>
+
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
           <Form.Label className="fw-bold mb-1">Upload CSV</Form.Label>
           <div className="text-muted small">
-            Header row required: Question Text, Type, Difficulty, Marks, Option A-D, Correct
-            Answer, Shuffle Options.
+            {importKind === 'code' ? (
+              <>
+                Header row required: Question Text, Difficulty, Marks, Programming Language, Starter Code, Sample
+                Answer / Reference Query, Allow Language Change, Function Name, Return Type, Parameters, Test Cases,
+                Sql Test Cases. Function Name/Return Type/Parameters/Test Cases are for auto-grading C#, Java,
+                Python, C++, or JavaScript (leave all blank for a manually graded question); Sql Test Cases is for
+                SQL questions instead - the other four don't apply there, and vice versa.
+                Parameters: <code>name:type</code> pairs separated by <code>;</code> (e.g.{' '}
+                <code>arr:IntArray;target:Int</code>). Test Cases: one argument per parameter separated by{' '}
+                <code>|</code>, then <code>=&gt;</code> and the expected output, multiple cases separated by{' '}
+                <code>;</code> (e.g. <code>2|3=&gt;5;10|20=&gt;30</code>); array arguments are comma-separated (e.g.{' '}
+                <code>1,2,3</code>). Sql Test Cases: one Setup SQL script per test case (
+                <code>CREATE TABLE ...; INSERT INTO ...;</code>) - Expected Output is computed automatically from
+                the Reference Query, never entered by hand; multiple test cases are separated by a line containing
+                only <code>---</code>. Only the first Setup SQL block is shown to students, as the schema above the
+                editor and as the query result they see after running - any later blocks are hidden checks that
+                only ever show up as an extra Passed/Failed count, never their own schema or data.
+              </>
+            ) : (
+              'Header row required: Question Text, Type, Difficulty, Marks, Option A, Option B, ... (add as many ' +
+              'Option <letter> columns as you need - not limited to four), Correct Answer, Shuffle Options.'
+            )}
           </div>
         </div>
-        <Button variant="outline-secondary" size="sm" onClick={downloadTemplate}>
+        <Button variant="outline-secondary" size="sm" onClick={() => downloadTemplate(importKind)}>
           Download Template
         </Button>
       </div>
@@ -138,37 +243,59 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
             <div className="fw-bold">{fileName}</div>
             <Badge bg="success">{validCount} valid</Badge>
             {invalidCount > 0 && <Badge bg="danger">{invalidCount} invalid</Badge>}
+            <div className="ms-auto d-flex gap-2">
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                disabled={selectedRows.size === validCount}
+                onClick={selectAllValid}
+              >
+                Select All
+              </Button>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                disabled={selectedRows.size === 0}
+                onClick={clearAllSelected}
+              >
+                Clear All
+              </Button>
+            </div>
           </div>
 
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
             <Table size="sm" hover className="align-middle mb-0">
-              <thead className="text-muted small text-uppercase table-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th style={{ width: 32 }}></th>
                   <th>#</th>
                   <th>Question</th>
-                  <th>Type</th>
+                  <th>{importKind === 'code' ? 'Language' : 'Type'}</th>
                   <th>Marks</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.rowNumber} className={row.error ? 'table-danger' : undefined}>
+                {rows.map((entry) => (
+                  <tr key={entry.row.rowNumber} className={entry.row.error ? 'table-danger' : undefined}>
                     <td>
                       <Form.Check
                         type="checkbox"
-                        disabled={!!row.error}
-                        checked={selectedRows.has(row.rowNumber)}
-                        onChange={() => toggleRow(row.rowNumber)}
+                        disabled={!!entry.row.error}
+                        checked={selectedRows.has(entry.row.rowNumber)}
+                        onChange={() => toggleRow(entry.row.rowNumber)}
                       />
                     </td>
-                    <td>{row.rowNumber}</td>
+                    <td>{entry.row.rowNumber}</td>
                     <td>
-                      {row.questionText || <span className="text-muted">(no text)</span>}
-                      {row.error && <div className="text-danger small">{row.error}</div>}
+                      {entry.row.questionText || <span className="text-muted">(no text)</span>}
+                      {entry.row.error && <div className="text-danger small">{entry.row.error}</div>}
                     </td>
-                    <td>{QUESTION_TYPE_LABELS[row.questionType]}</td>
-                    <td>{row.marks}</td>
+                    <td>
+                      {entry.kind === 'code'
+                        ? (entry.row.programmingLanguage && PROGRAMMING_LANGUAGE_LABELS[entry.row.programmingLanguage]) || '—'
+                        : QUESTION_TYPE_LABELS[entry.row.questionType]}
+                    </td>
+                    <td>{entry.row.marks}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1,7 +1,10 @@
+using System.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 using OnlineExamSystem.User.Infrastructure.Persistence;
 
 namespace OnlineExamSystem.User.Infrastructure.Repositories;
@@ -56,6 +59,9 @@ public class UserRepository : IUserRepository
         return query.FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<AppUser>> GetAllByEmailAsync(string email, CancellationToken cancellationToken = default) =>
+        await _dbContext.Users.Where(u => u.Email == email).ToListAsync(cancellationToken);
+
     // Was previously completely unscoped - any Admin's "Manage Users"
     // list returned every user across every tenant, not just their own.
     // IsSuperAdmin bypass lets the new Super Admin "All Users" view see
@@ -65,6 +71,62 @@ public class UserRepository : IUserRepository
             .Where(u => _currentTenant.IsSuperAdmin || u.TenantId == _currentTenant.TenantId)
             .OrderByDescending(u => u.CreatedAtUtc)
             .ToListAsync(cancellationToken);
+
+    // Explicit tenantId, not ICurrentTenant - CreateUserHandler's quota check
+    // runs for the tenant the new user is being created in, which may differ
+    // from the caller's own ambient tenant context (or have none at all).
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        _dbContext.Users.CountAsync(u => u.TenantId == tenantId, cancellationToken);
+
+    public Task<int> CountByTenantAndRoleAsync(Guid tenantId, UserRole role, CancellationToken cancellationToken = default) =>
+        _dbContext.Users.CountAsync(u => u.TenantId == tenantId && u.Role == role, cancellationToken);
+
+    // SQL Server's "deadlock victim" error - the one real failure mode a
+    // Serializable transaction can hit (the other outcome, a concurrent
+    // transaction's count query blocking until this one commits, isn't an
+    // exception at all - it's just a wait, the whole point of this
+    // isolation level).
+    private const int DeadlockVictimErrorNumber = 1205;
+
+    public async Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default)
+    {
+        // UserDbContext has EnableRetryOnFailure() on (Program.cs). EF Core
+        // requires the WHOLE unit of work - begin, every operation run
+        // against the transaction, commit - to run inside one
+        // CreateExecutionStrategy().ExecuteAsync delegate once a retrying
+        // strategy is active; wrapping only the BeginTransactionAsync call
+        // (an earlier, incomplete version of this fix) satisfies that check
+        // for the begin call but NOT the SaveChangesAsync call the caller's
+        // operation makes afterward - confirmed live: Add User crashed with
+        // "does not support user-initiated transactions" on every call
+        // until operation() moved inside this same delegate. See this
+        // method's own interface doc-comment (IUserRepository) for the full
+        // story. Same fix applied to ExamRepository's identical method.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                var result = await operation(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: DeadlockVictimErrorNumber })
+            {
+                throw new TransientConcurrencyException(
+                    "This request lost a race with a concurrent one over the same limit check. Please try again.", ex);
+            }
+            catch (SqlException ex) when (ex.Number == DeadlockVictimErrorNumber)
+            {
+                throw new TransientConcurrencyException(
+                    "This request lost a race with a concurrent one over the same limit check. Please try again.", ex);
+            }
+        });
+    }
 
     public async Task<IReadOnlyList<AppUser>> GetByIdsAsync(
         IReadOnlyList<Guid> ids,
@@ -118,6 +180,22 @@ public class UserRepository : IUserRepository
             .OrderByDescending(t => t.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken = default) =>
+        _dbContext.PasswordResetTokens.AddAsync(token, cancellationToken).AsTask();
+
+    public Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.PasswordResetTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
+    public Task AddEmailConfirmationTokenAsync(EmailConfirmationToken token, CancellationToken cancellationToken = default) =>
+        _dbContext.EmailConfirmationTokens.AddAsync(token, cancellationToken).AsTask();
+
+    public Task<EmailConfirmationToken?> GetEmailConfirmationTokenByHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.EmailConfirmationTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
     public async Task<UserPreferences> GetOrCreateUserPreferencesAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -133,6 +211,31 @@ public class UserRepository : IUserRepository
         return preferences;
     }
 
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
-        _dbContext.SaveChangesAsync(cancellationToken);
+    // SQL Server's two "duplicate key" error numbers - 2601 for a unique
+    // INDEX (what every .HasIndex(...).IsUnique() in UserDbContext creates,
+    // e.g. the (TenantId, Email) index), 2627 for a unique CONSTRAINT
+    // (covered too in case that ever changes). The real trigger this exists
+    // for: RegisterUserHandler/CreateUserHandler/UpdateUserHandler/
+    // CreateTenantAdminHandler all check "does this email already exist"
+    // before writing, but that check isn't inside a transaction - two
+    // concurrent requests for the same email can both pass it, and the
+    // loser hits this constraint instead of the handler's own friendly
+    // Conflict() check (this is exactly what surfaced as an unhandled 500
+    // on POST /api/users/register in production).
+    private const int UniqueIndexViolationErrorNumber = 2601;
+    private const int UniqueConstraintViolationErrorNumber = 2627;
+
+    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException
+            { Number: UniqueIndexViolationErrorNumber or UniqueConstraintViolationErrorNumber })
+        {
+            throw new DuplicateKeyException(
+                "This request lost a race with a concurrent one over the same uniqueness check. Please try again.", ex);
+        }
+    }
 }

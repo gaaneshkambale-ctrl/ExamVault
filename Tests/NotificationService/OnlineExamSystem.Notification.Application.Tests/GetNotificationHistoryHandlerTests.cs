@@ -25,7 +25,7 @@ public class GetNotificationHistoryHandlerTests
                 CreatedByAdminUserId = admin,
             });
         }
-        var handler = new GetNotificationHistoryHandler(repository);
+        var handler = new GetNotificationHistoryHandler(repository, new FakeExamLookupClient(null));
 
         var (items, totalCount) = await handler.HandleAsync(new GetNotificationHistoryQuery(null, 1, 20));
 
@@ -48,7 +48,7 @@ public class GetNotificationHistoryHandlerTests
             BatchId = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = NotificationType.Account,
             Title = "Batch 2", Message = "...",
         });
-        var handler = new GetNotificationHistoryHandler(repository);
+        var handler = new GetNotificationHistoryHandler(repository, new FakeExamLookupClient(null));
 
         var (items, totalCount) = await handler.HandleAsync(new GetNotificationHistoryQuery(null, 1, 20));
 
@@ -70,12 +70,44 @@ public class GetNotificationHistoryHandlerTests
             BatchId = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = NotificationType.Account,
             Title = "Account Batch", Message = "...",
         });
-        var handler = new GetNotificationHistoryHandler(repository);
+        var handler = new GetNotificationHistoryHandler(repository, new FakeExamLookupClient(null));
 
         var (items, totalCount) = await handler.HandleAsync(
             new GetNotificationHistoryQuery(NotificationType.Exam, 1, 20));
 
         Assert.Equal(1, totalCount);
         Assert.Equal("Exam Batch", items[0].Title);
+    }
+
+    [Fact]
+    public async Task Owner_filter_only_returns_batches_for_owned_exams_and_excludes_examless_batches()
+    {
+        var repository = new FakeNotificationRepository();
+        var ownedExamId = Guid.NewGuid();
+        var otherExamId = Guid.NewGuid();
+        repository.Seed(new NotificationEntity
+        {
+            BatchId = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = NotificationType.Exam,
+            Title = "My Exam Batch", Message = "...", RelatedExamId = ownedExamId,
+        });
+        repository.Seed(new NotificationEntity
+        {
+            BatchId = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = NotificationType.Exam,
+            Title = "Someone Else's Exam Batch", Message = "...", RelatedExamId = otherExamId,
+        });
+        repository.Seed(new NotificationEntity
+        {
+            BatchId = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = NotificationType.System,
+            Title = "Tenant-Wide Broadcast", Message = "...", RelatedExamId = null,
+        });
+        var examLookupClient = new FakeExamLookupClient(null, ownedExamIds: [ownedExamId]);
+        var handler = new GetNotificationHistoryHandler(repository, examLookupClient);
+        var ownerUserId = Guid.NewGuid();
+
+        var (items, totalCount) = await handler.HandleAsync(
+            new GetNotificationHistoryQuery(null, 1, 20, OwnerUserId: ownerUserId, BearerToken: "test-token"));
+
+        Assert.Equal(1, totalCount);
+        Assert.Equal("My Exam Batch", items[0].Title);
     }
 }

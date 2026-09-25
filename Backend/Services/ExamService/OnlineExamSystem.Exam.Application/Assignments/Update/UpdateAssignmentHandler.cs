@@ -36,6 +36,15 @@ public class UpdateAssignmentHandler
             return UpdateAssignmentResult.NotFound();
         }
 
+        if (command.OwnerUserId is { } ownerUserId)
+        {
+            var exam = await _examRepository.GetByIdAsync(assignment.ExamId, cancellationToken);
+            if (exam is null || exam.CreatedByUserId != ownerUserId)
+            {
+                return UpdateAssignmentResult.Forbidden();
+            }
+        }
+
         var targetType = Enum.Parse<AssignmentTargetType>(command.TargetType, ignoreCase: true);
         IReadOnlyList<Guid> targetUserIds;
         Guid? groupId = null;
@@ -64,6 +73,16 @@ public class UpdateAssignmentHandler
             case AssignmentTargetType.Students:
             default:
                 targetUserIds = command.UserIds!;
+                // Ids come straight from the request body - only accept Students
+                // of the caller's own tenant (see IUserLookupClient).
+                var tenantStudentIds = await _userLookupClient.GetTenantStudentIdsAmongAsync(
+                    targetUserIds,
+                    command.BearerToken,
+                    cancellationToken);
+                if (tenantStudentIds.Count != targetUserIds.Distinct().Count())
+                {
+                    return UpdateAssignmentResult.Invalid(["One or more selected students were not found."]);
+                }
                 break;
         }
 

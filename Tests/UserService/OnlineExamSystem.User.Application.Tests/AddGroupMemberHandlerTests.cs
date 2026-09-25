@@ -26,6 +26,30 @@ public class AddGroupMemberHandlerTests
     }
 
     [Fact]
+    public async Task Student_from_another_tenant_is_treated_as_not_found()
+    {
+        var groupRepository = new FakeGroupRepository();
+        var userRepository = new FakeUserRepository { CurrentTenantId = Guid.NewGuid() };
+        var group = new Group { Name = "Batch 2026" };
+        var otherTenantStudent = new AppUser
+        {
+            FullName = "Bob",
+            Email = "bob@other.test",
+            Role = UserRole.Student,
+            TenantId = Guid.NewGuid(),
+        };
+        await groupRepository.AddAsync(group);
+        await userRepository.AddAsync(otherTenantStudent);
+        var handler = new AddGroupMemberHandler(groupRepository, userRepository);
+
+        var result = await handler.HandleAsync(new AddGroupMemberCommand(group.Id, otherTenantStudent.Id));
+
+        Assert.False(result.Success);
+        Assert.True(result.IsUserNotFound);
+        Assert.Empty(groupRepository.Members);
+    }
+
+    [Fact]
     public async Task Unknown_group_returns_not_found()
     {
         var groupRepository = new FakeGroupRepository();

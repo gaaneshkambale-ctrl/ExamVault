@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { isAxiosError } from 'axios';
 import { Alert, Button, Form, InputGroup, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { extractServerError } from '../../utils/apiError';
+import { dashboardPathForRole } from '../../utils/roleRouting';
 
 export default function LoginForm() {
   const navigate = useNavigate();
@@ -14,6 +16,7 @@ export default function LoginForm() {
   const [rememberMe, setRememberMe] = useState(true);
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -21,29 +24,40 @@ export default function LoginForm() {
     if (!email.trim() || !password) {
       setStatus('error');
       setErrorMessage('Email and password are required.');
+      setEmailNotConfirmed(false);
       return;
     }
 
     setStatus('loading');
     setErrorMessage('');
+    setEmailNotConfirmed(false);
     try {
       const profile = await login(email, password, rememberMe);
       if (profile.mustChangePassword) {
         navigate('/change-password', { state: { forced: true } });
-      } else if (profile.role === 'SuperAdmin') {
-        navigate('/platform/dashboard');
       } else {
-        navigate(profile.role === 'Admin' ? '/admin/dashboard' : '/dashboard');
+        navigate(dashboardPathForRole(profile.role));
       }
     } catch (error) {
       setStatus('error');
       setErrorMessage(extractServerError(error));
+      setEmailNotConfirmed(isAxiosError(error) && error.response?.data?.emailNotConfirmed === true);
     }
   };
 
   return (
     <>
-      {status === 'error' && <Alert variant="danger">{errorMessage}</Alert>}
+      {status === 'error' && (
+        <Alert variant="danger">
+          {errorMessage}
+          {emailNotConfirmed && (
+            <>
+              {' '}
+              <Link to="/confirm-email">Resend confirmation email</Link>
+            </>
+          )}
+        </Alert>
+      )}
       <Form noValidate onSubmit={handleSubmit}>
         <Form.Group className="mb-3" controlId="loginEmail">
           <Form.Label className="fw-medium">Email</Form.Label>
@@ -67,9 +81,9 @@ export default function LoginForm() {
         <Form.Group className="mb-3" controlId="loginPassword">
           <div className="d-flex justify-content-between">
             <Form.Label className="fw-medium">Password</Form.Label>
-            <span className="small text-primary" style={{ cursor: 'default' }}>
+            <Link to="/forgot-password" className="small">
               Forgot Password?
-            </span>
+            </Link>
           </div>
           <InputGroup>
             <InputGroup.Text className="bg-white">

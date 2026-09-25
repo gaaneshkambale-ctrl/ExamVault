@@ -17,11 +17,19 @@ public class UserDbContext : DbContext
 
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<EmailConfirmationToken> EmailConfirmationTokens => Set<EmailConfirmationToken>();
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Plan> Plans => Set<Plan>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    public DbSet<EmailDeliveryLog> EmailDeliveryLogs => Set<EmailDeliveryLog>();
+    public DbSet<OrganizationType> OrganizationTypes => Set<OrganizationType>();
+    public DbSet<OrganizationAcademicConfig> OrganizationAcademicConfigs => Set<OrganizationAcademicConfig>();
+    public DbSet<AcademicListItem> AcademicListItems => Set<AcademicListItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -87,6 +95,9 @@ public class UserDbContext : DbContext
                 .HasConversion(featuresConverter, featuresComparer)
                 .HasMaxLength(200);
 
+            entity.Property(p => p.MonthlyPrice).HasColumnType("decimal(10,2)");
+            entity.Property(p => p.AnnualPrice).HasColumnType("decimal(10,2)");
+
             // Every Tenant seeded above (and every one that existed before
             // subscription plans shipped) points at this - full access,
             // nothing silently locked out on migration day.
@@ -101,6 +112,34 @@ public class UserDbContext : DbContext
             });
         });
 
+        modelBuilder.Entity<OrganizationType>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).IsRequired().HasMaxLength(100);
+            entity.HasIndex(t => t.Name).IsUnique();
+
+            // Seeded with the initial 8 options so the "Institution Type"
+            // dropdown isn't empty on day one - Super Admin can add, rename,
+            // reorder or deactivate any of these afterwards.
+            entity.HasData(
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000001"), Name = "College", SortOrder = 0, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000002"), Name = "University", SortOrder = 1, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000003"), Name = "School", SortOrder = 2, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000004"), Name = "Coaching Institute", SortOrder = 3, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000005"), Name = "Training Institute", SortOrder = 4, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000006"), Name = "Corporate / L&D", SortOrder = 5, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000007"), Name = "Certification Institute", SortOrder = 6, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) },
+                new OrganizationType { Id = new Guid("9c1a1e10-0001-4a00-8000-000000000008"), Name = "Recruitment / Hiring", SortOrder = 7, CreatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc), UpdatedAtUtc = new DateTime(2026, 9, 13, 0, 0, 0, DateTimeKind.Utc) });
+        });
+
+        modelBuilder.Entity<OrganizationAcademicConfig>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.HasIndex(c => c.TenantId).IsUnique();
+            entity.Property(c => c.AcademicFieldsJson).IsRequired();
+            entity.Property(c => c.ResultFieldsJson).IsRequired();
+        });
+
         modelBuilder.Entity<AppUser>(entity =>
         {
             entity.HasKey(u => u.Id);
@@ -112,6 +151,12 @@ public class UserDbContext : DbContext
             entity.HasIndex(u => new { u.TenantId, u.Email }).IsUnique();
             entity.Property(u => u.PasswordHash).IsRequired();
             entity.Property(u => u.IsActive).HasDefaultValue(true);
+            // Every existing row predates this column and was created
+            // through a human-vetted path (an Admin typed the email in
+            // themselves) - only RegisterUserHandler's self-registration
+            // explicitly overrides this to false on insert. See AppUser's
+            // own comment.
+            entity.Property(u => u.EmailConfirmed).HasDefaultValue(true);
             entity.Property(u => u.PhoneNumber).HasMaxLength(20);
             entity.Property(u => u.PhotoContentType).HasMaxLength(100);
             entity.Property(u => u.Username).HasMaxLength(100);
@@ -133,6 +178,28 @@ public class UserDbContext : DbContext
             entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(256);
             entity.Property(t => t.DeviceLabel).HasMaxLength(100);
             entity.Property(t => t.IpAddress).HasMaxLength(64);
+            entity.HasIndex(t => t.TokenHash).IsUnique();
+            entity.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(256);
+            entity.HasIndex(t => t.TokenHash).IsUnique();
+            entity.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmailConfirmationToken>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.TokenHash).IsRequired().HasMaxLength(256);
             entity.HasIndex(t => t.TokenHash).IsUnique();
             entity.HasOne<AppUser>()
                 .WithMany()
@@ -181,6 +248,62 @@ public class UserDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(m => m.GroupId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // One row per Program/Department/Semester/Division value a tenant
+        // has defined (see AcademicListItem's own doc comment). Self-
+        // referencing ParentId kept Restrict, not Cascade - SQL Server
+        // rejects cascade delete on a self-referencing FK, so
+        // DeleteAcademicListItemHandler walks and removes descendants in
+        // application code instead. Same tenant guardrail as Group above -
+        // only ever touched by an authenticated Admin.
+        modelBuilder.Entity<AcademicListItem>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ListType).IsRequired().HasMaxLength(50);
+            entity.Property(x => x.Value).IsRequired().HasMaxLength(200);
+            entity.HasIndex(x => new { x.TenantId, x.ListType, x.ParentId });
+            entity.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AcademicListItem>()
+                .WithMany()
+                .HasForeignKey(x => x.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(x =>
+                _currentTenant.IsSuperAdmin || (_currentTenant.IsAuthenticated && x.TenantId == _currentTenant.TenantId));
+        });
+
+        // One row per (tenant, role, permission) granted - purely a
+        // persisted preview for the admin Roles & Permissions page, not
+        // enforced by any [Authorize] check. Same tenant guardrail as
+        // Group above - only ever touched by an authenticated Admin.
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.HasKey(rp => rp.Id);
+            entity.Property(rp => rp.Role).IsRequired().HasMaxLength(100);
+            entity.Property(rp => rp.PermissionKey).IsRequired().HasMaxLength(100);
+            entity.HasIndex(rp => new { rp.TenantId, rp.Role, rp.PermissionKey }).IsUnique();
+            entity.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(rp => rp.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(rp =>
+                _currentTenant.IsSuperAdmin || (_currentTenant.IsAuthenticated && rp.TenantId == _currentTenant.TenantId));
+        });
+
+        // No HasQueryFilter - a platform-wide operational log, same reasoning
+        // as PlatformSettings/SystemErrorLog, not per-organization data.
+        modelBuilder.Entity<EmailDeliveryLog>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+            entity.HasIndex(l => l.CreatedAtUtc);
+            entity.Property(l => l.ToEmail).IsRequired().HasMaxLength(320);
+            entity.Property(l => l.Subject).IsRequired().HasMaxLength(200);
+            entity.Property(l => l.ErrorMessage).HasMaxLength(1000);
         });
     }
 }

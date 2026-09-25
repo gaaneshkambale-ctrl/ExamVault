@@ -1,0 +1,187 @@
+CI/CD - HOW IT WORKS (explained using ExamVault's own pipeline)
+=================================================================
+
+ExamVault already has a real CI/CD pipeline running on GitHub Actions:
+  .github/workflows/ci.yml           -> CI
+  .github/workflows/cd-hostinger.yml -> CD
+
+Everything below explains CI and CD one by one, using these two files
+as the running example so it maps directly to what's actually in this
+repo.
+
+
+1. WHAT "CI/CD" MEANS
+----------------------
+CI = Continuous Integration  -> build + test the code automatically.
+CD = Continuous Deployment   -> ship the code that passed CI to a
+                                 real server automatically.
+
+They are two separate stages joined into one pipeline:
+
+    You push code
+          |
+          v
+    [ CI ]  build + test
+          |
+          v   (only if CI succeeded)
+    [ CD ]  deploy to the VPS
+
+If CI fails, CD never runs. That's the whole point: broken code never
+reaches the live server.
+
+
+2. CONTINUOUS INTEGRATION (CI) - ci.yml
+-----------------------------------------
+Trigger (the "on:" block):
+    on:
+      push:         branches: [dev]
+      pull_request:  branches: [dev]
+
+  This means CI runs automatically every time someone pushes a commit
+  to the "dev" branch, or opens/updates a pull request targeting "dev".
+  No one has to click a button - GitHub does it the moment the push
+  arrives.
+
+  CI runs two jobs IN PARALLEL, because they don't depend on each
+  other and this keeps the total time short:
+
+  Job 1 - Backend (.NET):
+    1. actions/checkout@v4      -> clone the repo onto a fresh Ubuntu
+                                    runner (a throwaway cloud VM).
+    2. actions/setup-dotnet@v4  -> install .NET 8 SDK on that VM.
+    3. dotnet restore ExamVault.sln  -> download all NuGet packages
+                                    for every microservice in the
+                                    solution (UserService, ExamService,
+                                    etc).
+    4. dotnet build ... --configuration Release
+                                 -> compile everything. If any service
+                                    has a compile error, this step
+                                    fails and the job stops here.
+    5. dotnet test ...           -> run every xUnit test project
+                                    under Tests/ (e.g.
+                                    OnlineExamSystem.User.Application.Tests).
+                                    If a single test fails, the job
+                                    fails.
+
+  Job 2 - Frontend (React):
+    1. checkout
+    2. actions/setup-node@v4    -> install Node 22, with npm's cache
+                                    keyed off package-lock.json so
+                                    repeat runs are faster.
+    3. npm ci                   -> install dependencies from the lock
+                                    file exactly (not "npm install" -
+                                    ci is stricter and reproducible).
+    4. npm run build             -> run Vite's production build
+                                    (this is also where a TypeScript
+                                    type error would surface).
+    5. npm test --if-present     -> run the Vitest suite if a test
+                                    script exists.
+
+  Result: a green check on the commit/PR means "the whole solution
+  compiles and every existing test still passes." A red X means CD
+  never fires for that push.
+
+  This is exactly the same local pipeline used throughout this
+  session's fixes: dotnet build -> dotnet test -> npm run build ->
+  npx vitest run, just running on GitHub's servers instead of your
+  machine, automatically, on every push.
+
+
+3. CONTINUOUS DEPLOYMENT (CD) - cd-hostinger.yml
+---------------------------------------------------
+Trigger:
+    on:
+      workflow_run:
+        workflows: ["CI"]
+        types: [completed]
+        branches: [dev]
+
+  Instead of triggering on push directly, CD triggers on another
+  workflow finishing ("workflow_run"). This is deliberate: it means
+  CD only ever fires AFTER the CI workflow above has completely
+  finished on "dev" - never in parallel with it, never before it, so
+  a build can't get deployed ahead of its own test results.
+
+  Then there's a gate:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+  Even though CD "runs" whenever CI finishes, the deploy job only
+  actually executes its steps if CI's conclusion was "success". If CI
+  failed, this condition is false, the job is skipped, and nothing
+  gets deployed. This is the literal mechanism behind "if CI fails,
+  CD never runs" from section 1.
+
+  What the deploy job does, step by step:
+
+  Step 1 - Decode deploy key
+    The SSH private key used to log into the Hostinger VPS is stored
+    as a GitHub secret (VPS_SSH_PRIVATE_KEY), base64-encoded. This
+    step decodes it back into a real key file inside the runner's
+    workspace. (It's stored base64 instead of as a raw multi-line key
+    because pasting a real multi-line PEM into GitHub's secret box
+    kept getting corrupted - base64 has no newlines to lose.)
+
+  Step 2 - Deploy over SSH (appleboy/ssh-action)
+    The runner SSHes into the VPS using that key and runs a shell
+    script ON THE SERVER:
+      cd ~/ExamVault
+      git pull
+      docker compose -f docker-compose.yml \
+                      -f docker-compose.prod.yml \
+                      -f docker-compose.traefik.yml \
+                      up -d --build
+      docker image prune -f
+
+    In plain terms:
+      - git pull            : the VPS grabs the same commit that just
+                               passed CI on "dev".
+      - docker compose up
+        -d --build           : rebuild any Docker image whose source
+                               changed, and restart only those
+                               containers (thanks to normal Docker
+                               layer caching - Compose "Bake" mode is
+                               explicitly disabled here because it
+                               ignored that caching and rebuilt every
+                               service regardless of what changed).
+      - docker image prune -f : delete now-unused old images so the
+                               VPS disk doesn't fill up over time.
+
+  End result: within minutes of a successful push to "dev", the same
+  code is running live on the Hostinger VPS, with zero manual steps.
+
+
+4. THE FULL PICTURE, END TO END
+---------------------------------
+  1. Developer pushes a commit (or merges a PR) into "dev".
+  2. GitHub Actions starts the "CI" workflow automatically.
+  3. CI builds + tests the backend (.NET) and frontend (React) in
+     parallel.
+  4. If both jobs succeed, CI reports "success".
+  5. That success event triggers the "CD - Hostinger VPS" workflow.
+  6. CD's `if` check passes, so it SSHes into the VPS.
+  7. The VPS pulls the latest code and rebuilds/restarts only the
+     Docker containers that changed.
+  8. The live site at examvaults.in is now running the new code -
+     no one had to manually build, copy files, or restart anything.
+
+  If step 3/4 fails (a broken test, a compile error), the chain stops
+  at step 4 and steps 5-8 never happen - the live server keeps running
+  whatever code last passed CI.
+
+
+5. WHY THIS MATTERS IN PRACTICE (this repo specifically)
+------------------------------------------------------------
+  - Every fix pushed to "dev" this session (self-lockout protection,
+    the Admin-role-assignment restriction, etc.) goes through this
+    same pipeline once pushed: CI re-runs the full test suite
+    (currently 145 backend + 221 frontend tests), and only if that's
+    green does the Hostinger VPS actually get updated.
+  - This is why local verification (dotnet test, npx vitest run)
+    before pushing still matters even though CI does it too - CI is
+    the final safety net, not a replacement for checking locally
+    first; catching a failure locally is much faster than waiting for
+    a GitHub Actions run.
+  - This repo is on a multi-tenant subdomain setup (see the
+    "Multi-tenant SaaS plan" notes) - CD deploying to the VPS updates
+    every tenant subdomain at once, since they all share the same
+    running containers.

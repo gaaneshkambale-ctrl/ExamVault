@@ -6,6 +6,7 @@ public class UpdateQuestionResult
 {
     public bool Success { get; init; }
     public bool IsNotFound { get; init; }
+    public bool IsForbidden { get; init; }
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
     public ExamQuestion? Question { get; init; }
     public IReadOnlyList<QuestionOption> Options { get; init; } = Array.Empty<QuestionOption>();
@@ -33,4 +34,6 @@ public class UpdateQuestionResult
         new() { Success = false, ValidationErrors = errors };
 
     public static UpdateQuestionResult NotFound() => new() { Success = false, IsNotFound = true };
+
+    public static UpdateQuestionResult Forbidden() => new() { Success = false, IsForbidden = true };
 }

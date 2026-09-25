@@ -14,8 +14,10 @@ using OnlineExamSystem.Question.Application.Interfaces;
 using OnlineExamSystem.Question.Application.Questions.BulkAssignSection;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
+using OnlineExamSystem.Question.Application.Questions.DeleteForExam;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
+using OnlineExamSystem.Question.Application.Questions.ListAll;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Infrastructure.Clients;
@@ -32,6 +34,26 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // Real client IP: every request arrives via a proxy (Traefik -> Gateway ->
+        // service), so Connection.RemoteIpAddress is otherwise the proxy container's
+        // Docker IP (172.18.x.x) - which is what audit logs, sessions, System Logs
+        // and the per-IP auth rate limiter were all recording/keying on. Only the
+        // last hop is honoured (ForwardLimit 1), and only when that hop is a
+        // private-network proxy: Traefik appends the real client IP last, so any
+        // X-Forwarded-For a client sends itself is never the value used (prod only
+        // exposes the Gateway through Traefik).
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Clear();
+            foreach (var (prefix, length) in new[] { ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16), ("127.0.0.0", 8) })
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse(prefix), length));
+            }
+        });
+
         // Add services to the container.
 
         builder.Services.AddControllers();
@@ -42,7 +64,12 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<QuestionDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("QuestionDb")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("QuestionDb"),
+                // Same transient-failure resiliency as every other service's
+                // DbContext registration - see ExamService's Program.cs for
+                // the real incident that prompted this across all of them.
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<QuestionDbContext>("database");
         builder.Services.AddScoped<IQuestionRepository, QuestionRepository>();
@@ -51,21 +78,54 @@ public class Program
         builder.Services.AddScoped<CreateQuestionHandler>();
         builder.Services.AddScoped<GetQuestionHandler>();
         builder.Services.AddScoped<ListQuestionsHandler>();
+        builder.Services.AddScoped<ListAllQuestionsHandler>();
         builder.Services.AddScoped<IValidator<UpdateQuestionCommand>, UpdateQuestionValidator>();
         builder.Services.AddScoped<UpdateQuestionHandler>();
         builder.Services.AddScoped<DeleteQuestionHandler>();
         builder.Services.AddScoped<BulkAssignSectionHandler>();
         builder.Services.AddScoped<UnassignSectionHandler>();
+        builder.Services.AddScoped<DeleteForExamHandler>();
 
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
-            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            // Fire-and-forget audit write must fail fast, not hang on the default
+            // 100s HttpClient timeout - a down NotificationService would otherwise
+            // make every audited business action (exam/question/user create, etc.)
+            // multi-second-to-100s slow instead of merely un-audited. Same value
+            // as the "system-logs" client below.
+            client.Timeout = TimeSpan.FromSeconds(3);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            // HttpClient.Timeout alone measured ~7-12s against a stopped
+            // container in this environment (DNS-resolution-to-a-torn-down-
+            // endpoint overhead sits partly outside that timeout's reach).
+            // ConnectTimeout bounds the DNS+TCP-connect phase specifically,
+            // giving the fast-fail this client actually needs.
+            ConnectTimeout = TimeSpan.FromSeconds(2),
+        });
         builder.Services.AddHttpClient("system-logs", client =>
         {
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
         });
+
+        var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+
+        var executionServiceBaseUrl = builder.Configuration["Services:ExecutionServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:ExecutionServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<ISqlExpectedOutputClient, SqlExpectedOutputClient>(client =>
+            client.BaseAddress = new Uri(executionServiceBaseUrl.TrimEnd('/') + "/"));
+
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
@@ -89,9 +149,14 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
+        app.UseForwardedHeaders();
 
         using (var scope = app.Services.CreateScope())
         {
@@ -148,7 +213,8 @@ public class Program
                 exception.StackTrace,
                 context.Request.Path,
                 context.Request.Method,
-                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null);
+                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null,
+                IpAddress: context.Connection.RemoteIpAddress?.ToString());
 
             var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("system-logs");
             await client.PostAsJsonAsync("api/system-logs", request);

@@ -9,4 +9,6 @@ public record UpdateExamDefaultsCommand(
     bool AutoSaveEnabled,
     bool AutoSubmitEnabled,
     string QuestionNavigationMode,
-    string ResultPublishingMode);
+    string ResultPublishingMode,
+    bool CertificateEnabled = false,
+    int MinimumCertificateScorePercent = 80);

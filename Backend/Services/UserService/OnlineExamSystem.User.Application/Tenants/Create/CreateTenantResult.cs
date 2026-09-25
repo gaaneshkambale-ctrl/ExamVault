@@ -6,6 +6,7 @@ public class CreateTenantResult
 {
     public bool Success { get; init; }
     public bool SlugAlreadyExists { get; init; }
+    public bool NameAlreadyExists { get; init; }
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
     public Tenant? Tenant { get; init; }
 
@@ -15,4 +16,6 @@ public class CreateTenantResult
         new() { ValidationErrors = errors };
 
     public static CreateTenantResult Conflict() => new() { SlugAlreadyExists = true };
+
+    public static CreateTenantResult NameConflict() => new() { NameAlreadyExists = true };
 }

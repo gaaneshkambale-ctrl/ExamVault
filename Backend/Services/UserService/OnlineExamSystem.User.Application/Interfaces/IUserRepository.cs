@@ -1,4 +1,5 @@
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 
 namespace OnlineExamSystem.User.Application.Interfaces;
 
@@ -21,8 +22,64 @@ public interface IUserRepository
     /// null only where the caller doesn't yet know the tenant (e.g. Login, before
     /// Phase 3 subdomain resolution exists), which can match across tenants.</summary>
     Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Every user with this email across every tenant - since uniqueness is
+    /// only enforced per-tenant (see GetByEmailAsync), the same real person can
+    /// legitimately hold a Student account at one org AND a Super Admin/self-registered
+    /// Default-tenant account at the same time. LoginUserHandler's bare-domain path uses
+    /// this (not GetByEmailAsync) specifically so it can pick the ONE candidate actually
+    /// eligible for bare-domain access, rather than an arbitrary one a plain single-result
+    /// lookup would return - confirmed live: a real user with both a regular tenant
+    /// account and a Default-tenant self-registration got logged into the wrong one
+    /// before this existed.</summary>
+    Task<IReadOnlyList<AppUser>> GetAllByEmailAsync(string email, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AppUser>> GetByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>Real Tenant Settings > Default Limits "Max Users" enforcement point -
+    /// CreateUserHandler checks this against Tenant.MaxUsers before creating a new
+    /// user for that tenant.</summary>
+    Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
+
+    /// <summary>Per-role count, for the real MaxStudents/MaxAdmins/MaxInstructors
+    /// enforcement in CreateUserHandler - always called inside the transaction
+    /// ExecuteInSerializableTransactionAsync opens, so the count is race-safe
+    /// against a concurrent request creating a user of the same role for the
+    /// same tenant.</summary>
+    Task<int> CountByTenantAndRoleAsync(Guid tenantId, UserRole role, CancellationToken cancellationToken = default);
+
+    /// <summary>Runs <paramref name="operation"/> inside a Serializable-isolation
+    /// transaction - wrap a count-then-insert sequence in it (count, compare to
+    /// the Max* limit, AddAsync, SaveChangesAsync) so two concurrent requests can
+    /// never both pass the same limit check before either commits; the
+    /// transaction commits automatically once <paramref name="operation"/>
+    /// returns without throwing (returning early, e.g. because a Max* limit was
+    /// hit, without calling AddAsync/SaveChangesAsync is safe - there's simply
+    /// nothing to commit). Throws <see cref="TransientConcurrencyException"/> if
+    /// SQL Server picked this transaction as a deadlock victim.
+    ///
+    /// Deliberately NOT a "begin transaction, hand the caller an
+    /// IUnitOfWorkTransaction to commit later" API (an earlier version of this
+    /// method was exactly that, and briefly shipped, before being replaced) -
+    /// UserDbContext has EnableRetryOnFailure() on (Program.cs), and EF Core
+    /// throws "does not support user-initiated transactions" the moment ANY
+    /// database operation (not just BeginTransactionAsync - SaveChangesAsync
+    /// too) runs against a manually-opened transaction while a retrying
+    /// execution strategy is active, unless the ENTIRE unit of work - begin,
+    /// every operation, commit - runs inside one
+    /// Database.CreateExecutionStrategy().ExecuteAsync(...) delegate. Wrapping
+    /// only BeginTransactionAsync itself (not the operations run against it)
+    /// satisfies that check for the begin call but not the later
+    /// SaveChangesAsync call - confirmed live: CreateUserHandler's Add User
+    /// crashed with exactly that InvalidOperationException on every call.
+    /// Passing the whole operation in as a delegate is what makes the complete
+    /// sequence retriable and keeps every call safely inside the strategy's
+    /// scope.</summary>
+    Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default);
+
     Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default);
     Task AddAsync(AppUser user, CancellationToken cancellationToken = default);
     Task AddRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken = default);
@@ -36,9 +93,34 @@ public interface IUserRepository
     Task<bool> RevokeRefreshTokenByIdAsync(Guid userId, Guid tokenId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RefreshToken>> GetRefreshTokensByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken = default);
+
+    /// <summary>Looks up a password reset token by its hash - the raw token is never
+    /// stored, same as RefreshToken.TokenHash. Returns it regardless of whether it's
+    /// still valid (unused/unexpired) - callers check <see cref="PasswordResetToken.IsValid"/>
+    /// themselves so an expired/used token gives a real "link expired" message instead
+    /// of collapsing into the same "not found" case as a token that never existed.</summary>
+    Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+
+    Task AddEmailConfirmationTokenAsync(EmailConfirmationToken token, CancellationToken cancellationToken = default);
+
+    /// <summary>Looks up an email confirmation token by its hash - the raw token is
+    /// never stored, same reasoning as <see cref="GetPasswordResetTokenByHashAsync"/>.
+    /// Returns it regardless of whether it's still valid; callers check
+    /// <see cref="EmailConfirmationToken.IsValid"/> themselves.</summary>
+    Task<EmailConfirmationToken?> GetEmailConfirmationTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+
     /// <summary>Returns the given user's single UserPreferences row, creating it
     /// with the entity's own defaults if it doesn't exist yet.</summary>
     Task<UserPreferences> GetOrCreateUserPreferencesAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Throws <see cref="DuplicateKeyException"/> (instead of a raw,
+    /// provider-specific exception) if the write violated a unique index - e.g.
+    /// two concurrent requests both passed a "does this email already exist"
+    /// check before either committed. Callers with that exact check-then-write
+    /// shape (RegisterUserHandler, CreateUserHandler, UpdateUserHandler,
+    /// CreateTenantAdminHandler) should catch it as a fallback and return their
+    /// existing Conflict/AlreadyExists result for that rare race, rather than
+    /// let it surface as an unhandled 500.</summary>
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

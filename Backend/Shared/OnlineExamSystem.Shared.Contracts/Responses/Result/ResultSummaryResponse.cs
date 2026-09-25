@@ -25,4 +25,12 @@ public record ResultSummaryResponse(
     bool Passed,
     DateTime SubmittedAtUtc,
     IReadOnlyList<QuestionResultResponse>? Questions,
-    bool HasPendingGrading = false);
+    bool HasPendingGrading = false,
+    int CorrectCount = 0,
+    int IncorrectCount = 0,
+    int SkippedCount = 0,
+    double Accuracy = 0,
+    int? Rank = null,
+    double? Percentile = null,
+    int? TotalParticipants = null,
+    double? AverageAccuracy = null);

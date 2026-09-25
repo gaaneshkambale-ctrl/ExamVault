@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Notification.Application.Interfaces;
 using OnlineExamSystem.Notification.Domain.Enums;
-using OnlineExamSystem.Notification.Infrastructure.Email;
 using NotificationEntity = OnlineExamSystem.Notification.Domain.Entities.Notification;
 
 namespace OnlineExamSystem.Notification.Infrastructure.Persistence;
@@ -9,12 +8,12 @@ namespace OnlineExamSystem.Notification.Infrastructure.Persistence;
 public class NotificationPersistenceService : INotificationPersistenceService
 {
     private readonly NotificationDbContext _dbContext;
-    private readonly IEmailDispatcher _emailDispatcher;
+    private readonly INotificationDispatchQueue _dispatchQueue;
 
-    public NotificationPersistenceService(NotificationDbContext dbContext, IEmailDispatcher emailDispatcher)
+    public NotificationPersistenceService(NotificationDbContext dbContext, INotificationDispatchQueue dispatchQueue)
     {
         _dbContext = dbContext;
-        _emailDispatcher = emailDispatcher;
+        _dispatchQueue = dispatchQueue;
     }
 
     public async Task<IReadOnlyList<NotificationEntity>> CreateNotificationsAsync(
@@ -80,35 +79,46 @@ public class NotificationPersistenceService : INotificationPersistenceService
             {
                 entity.EmailStatus = EmailStatus.Skipped;
             }
-            else if (isDue)
+            else if (isDue && !emailEnabled)
             {
-                if (emailEnabled)
-                {
-                    var delivered = await _emailDispatcher.SendAsync(
-                        recipient.Email,
-                        recipient.FullName,
-                        recipientTitle,
-                        recipientMessage,
-                        type.ToString(),
-                        entity.Id,
-                        cancellationToken);
-                    entity.EmailStatus = delivered ? EmailStatus.Delivered : EmailStatus.Failed;
-                }
-                else
-                {
-                    // In-app delivery is instant and unconditional - a recipient
-                    // with Email off for this type still counts as Delivered.
-                    entity.EmailStatus = EmailStatus.Delivered;
-                }
+                // In-app delivery is instant and unconditional - a recipient
+                // with Email off for this type still counts as Delivered.
+                entity.EmailStatus = EmailStatus.Delivered;
             }
-            // Scheduled-for-later batches are store-only: EmailStatus stays
-            // Pending forever, no dispatcher is ever attempted for them.
+            // Otherwise (isDue && emailEnabled, or scheduled-for-later)
+            // EmailStatus stays Pending - the actual email send for a due,
+            // enabled recipient is queued below rather than awaited here.
 
             entities.Add(entity);
         }
 
         _dbContext.Notifications.AddRange(entities);
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Only now, after every row for this batch is safely persisted, hand
+        // the slow part (a real per-recipient outbound email call) to the
+        // background dispatcher. Sending inline here - as this method used
+        // to - meant a large batch could run long enough for the caller's
+        // HTTP request to be cancelled (e.g. an API gateway timeout) before
+        // SaveChangesAsync was ever reached, silently discarding the whole
+        // batch even though some emails had already gone out for real.
+        for (var i = 0; i < entities.Count; i++)
+        {
+            var entity = entities[i];
+            if (entity.EmailStatus != EmailStatus.Pending || !isDue)
+            {
+                continue;
+            }
+
+            var recipient = recipients[i];
+            _dispatchQueue.Enqueue(new NotificationDispatchItem(
+                entity.Id,
+                recipient.Email,
+                recipient.FullName,
+                entity.Title,
+                entity.Message,
+                type.ToString()));
+        }
 
         return entities;
     }

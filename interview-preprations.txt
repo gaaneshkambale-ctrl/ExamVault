@@ -1,0 +1,611 @@
+EXAMVAULT - TOPIC-WISE INTERVIEW PREP
+=========================================
+For every topic: common interview questions, WHERE it's used in this
+project (real file references), and WHY it was needed there. This is
+built from the actual ExamVault codebase, not generic theory.
+
+
+===========================================================
+1. C#
+===========================================================
+Q&A - things you should be able to explain:
+  Q: What's the difference between a class and a record?
+  A: A record gives value-based equality and a built-in `with`
+     expression for non-destructive copies. Used for every
+     Application-layer Command/Result type in this project, e.g.
+     UpdateUserCommand (Backend/Services/UserService/
+     OnlineExamSystem.User.Application/Users/Update/UpdateUserCommand.cs)
+     is a `record` - immutable input data flowing from controller to
+     handler, and `with { ... }` is used constantly in tests to build
+     variant commands from a base one (see
+     CreateUserValidatorTests.cs's `ValidInstructorCommand() with {
+     PhoneNumber = null }`).
+
+  Q: Nullable reference types - why bother?
+  A: Catches "forgot to null-check" bugs at compile time instead of
+     runtime NullReferenceExceptions. `Guid? CallerUserId = null` on
+     UpdateUserCommand is explicit about "this can legitimately be
+     absent" vs. a required Guid.
+
+  Q: Pattern matching / switch expressions?
+  A: Used throughout result-mapping in controllers, e.g.
+     UsersController.Update maps UpdateUserResult's bool flags
+     (IsNotFound, CannotChangeSelfRole, CannotAssignAdminRole,
+     EmailAlreadyExists) to the right HTTP status one branch at a
+     time - a real "map a domain result to an HTTP response" pattern
+     interviewers ask about constantly.
+
+  Q: Static factory methods vs. public constructors?
+  A: UpdateUserResult never exposes a public constructor - only named
+     static factories (Ok(user), NotFound(), Conflict(),
+     SelfRoleChangeBlocked(), AdminRoleAssignmentBlocked()). Makes
+     every possible outcome a self-documenting call site instead of
+     `new UpdateUserResult(true, false, false, ...)` with no way to
+     tell which bool means what.
+
+Where used: every Application-layer Command/Result/Handler in every
+microservice (UserService, ExamService, SubmissionService, etc).
+Why: strong typing + explicit outcomes catch bugs at compile time and
+make handler code self-documenting instead of relying on magic
+booleans or exceptions for control flow.
+
+
+===========================================================
+2. LINQ
+===========================================================
+Q&A:
+  Q: Difference between IEnumerable and IQueryable, and why does it
+     matter for EF Core?
+  A: IQueryable defers execution and translates the expression tree
+     to SQL; IEnumerable pulls everything into memory first. Getting
+     this wrong (e.g. calling .ToList() too early then filtering)
+     silently downloads the whole table before filtering - a real
+     performance bug interviewers probe for.
+
+  Q: Deferred vs immediate execution?
+  A: A LINQ query only runs when enumerated (foreach, .ToList(),
+     .First(), etc). UserRepository.GetAllAsync builds up
+     `.Where(...).OrderByDescending(...)` (UserRepository.cs:67-68)
+     and only executes when awaited - EF Core translates that whole
+     chain into one SQL query, not one round-trip per operator.
+
+Where used (real project examples):
+  - UserRepository.cs:67 -
+    `.Where(u => _currentTenant.IsSuperAdmin || u.TenantId ==
+    _currentTenant.TenantId).OrderByDescending(u =>
+    u.CreatedAtUtc)` - tenant-scoped listing with a SuperAdmin
+    bypass, all pushed down to SQL by EF Core's LINQ provider.
+  - FakeUserRepository (test double) reimplements the same queries
+    with LINQ-to-Objects (`_users.FirstOrDefault(u => u.Id == id)`)
+    - the exact same LINQ syntax works against an in-memory List<T>
+    for tests and a real DbSet<T> for production, which is why the
+    repository interface abstraction is valuable.
+Why: LINQ lets the same query syntax work against an in-memory
+collection in unit tests and a live SQL Server table in production,
+and expresses "which rows, in what order" declaratively instead of
+imperative loops.
+
+
+===========================================================
+3. ASYNC/AWAIT
+===========================================================
+Q&A:
+  Q: Why async all the way down instead of sync-over-async?
+  A: Blocking a thread waiting on I/O (a DB call, an HTTP call)
+     starves the ASP.NET Core thread pool under load. Every handler
+     in this project - CreateUserHandler.HandleAsync,
+     UpdateUserHandler.HandleAsync, every repository method - is
+     async Task<T> end to end, always passing CancellationToken
+     through so a cancelled HTTP request actually cancels the DB
+     query instead of running it to completion anyway.
+
+  Q: What does `await using` do?
+  A: Awaits the async disposal (IAsyncDisposable.DisposeAsync)
+     instead of a sync Dispose. Used for the Serializable transaction
+     scope: `await using var transaction = await
+     _userRepository.BeginSerializableTransactionAsync(...)` in
+     CreateUserHandler.cs:92 - guarantees the DB transaction is
+     released (commit or rollback) even if an exception is thrown
+     partway through.
+
+  Q: What's a common async pitfall you've actually hit?
+  A: Forgetting to pass CancellationToken through a new method
+     signature, or awaiting inside a loop when the calls could run
+     concurrently with Task.WhenAll. In this codebase every
+     Handle/repository method takes `CancellationToken
+     cancellationToken = default` specifically so callers can cancel.
+Where used: every single Application handler and Infrastructure
+repository method in the solution - this is a fully async codebase,
+no `.Result` or `.Wait()` blocking calls.
+Why: the API needs to stay responsive under concurrent load (multiple
+tenants hitting the same UserService pod at once) - blocking threads
+on I/O would exhaust the thread pool far sooner than the DB itself
+becomes the bottleneck.
+
+
+===========================================================
+4. DEPENDENCY INJECTION (DI)
+===========================================================
+Q&A:
+  Q: Scoped vs Singleton vs Transient - give a real example of when
+     you'd pick each.
+  A: - Scoped: DbContext and anything that touches per-request state
+       (ICurrentTenant, every repository, every handler) - one
+       instance per HTTP request, so a UserDbContext's change
+       tracker doesn't leak between unrelated requests.
+     - Singleton: ITenantUrlBuilder and IEventPublisher
+       (RabbitMqEventPublisher/ServiceBusEventPublisher) - stateless
+       or hold a single long-lived connection, safe to reuse across
+       every request.
+     - Transient: rare in this codebase; most things either need
+       per-request isolation (Scoped) or are cheap/stateless
+       (Singleton).
+
+  Q: Why constructor injection over a service locator?
+  A: Constructor injection makes a class's dependencies visible in
+     its signature and testable by hand - see
+     UpdateUserHandlerTests.cs, which constructs a real
+     UpdateUserHandler with a FakeUserRepository and a real
+     UpdateUserValidator, no mocking framework needed, because the
+     handler only ever asks for interfaces via its constructor.
+
+Where used: Backend/Services/UserService/OnlineExamSystem.User.API/
+Program.cs registers 100+ services this way - every Handler,
+Validator, Repository, and cross-cutting concern (ICurrentTenant,
+IJwtTokenService, IPasswordHasher) is composed at startup, not
+newed-up inline anywhere in application code.
+Why: keeps handlers unit-testable (swap FakeUserRepository for
+UserRepository) and keeps infrastructure choices (which messaging
+provider, which DB) out of business logic entirely.
+
+
+===========================================================
+5. ASP.NET CORE
+===========================================================
+Q&A:
+  Q: What's the request pipeline / middleware order, and why does
+     order matter?
+  A: Authentication must run before Authorization, which must run
+     before the endpoint. In this project, tenant resolution
+     middleware also has to run before ICurrentTenant is read by
+     anything downstream (repositories' query filters depend on it),
+     so tenant-context middleware sits early in the pipeline.
+
+  Q: Attribute routing vs conventional routing?
+  A: Every controller here uses attribute routing
+     ([Route("api/[controller]")] + [HttpGet]/[HttpPost] etc on each
+     action) - explicit and co-located with the action, easier to
+     see the full contract of a controller like UsersController.cs
+     at a glance.
+
+  Q: [Authorize(Roles=...)] vs policy-based [Authorize(Policy=...)] -
+     when do you need policies instead of roles?
+  A: Roles answer "what type of user is this" (Admin, SuperAdmin,
+     Student). Policies answer finer-grained questions a role alone
+     can't - PermissionPolicies.cs's UsersEdit policy checks
+     `context.User.IsInRole("SuperAdmin") ||
+     context.User.HasClaim(PermissionClaimTypes.Permission, "Users -
+     Edit")`, because a tenant can customize which permissions its
+     own Admin role actually has (Roles & Permissions template
+     feature) - a bare role check couldn't express that.
+
+  Q: Model validation - where does it happen here?
+  A: Not via [ApiController] data annotations - via FluentValidation
+     validators (CreateUserValidator, UpdateUserValidator) run
+     explicitly inside each Handler before any DB work, so validation
+     rules can reference other services/config, not just the shape of
+     the DTO.
+
+Where used: every *.API project (UserService, ExamService,
+SubmissionService, QuestionService, ResultService, NotificationService,
+AiService, ExecutionService) plus the Gateway
+(Backend/Gateway/OnlineExamSystem.ApiGateway).
+Why: this is the actual web framework serving every HTTP endpoint in
+the platform - controllers, [Authorize], middleware, health checks
+(`AddDbContextCheck<UserDbContext>("database")`) all come from it.
+
+
+===========================================================
+6. EF CORE
+===========================================================
+Q&A:
+  Q: How do you enforce multi-tenancy at the data layer so a bug in
+     one handler can't leak another tenant's data?
+  A: EF Core global query filters. UserDbContext.cs:218-219 (and
+     again at 257-258, 276-277) applies:
+       entity.HasQueryFilter(g =>
+         _currentTenant.IsSuperAdmin ||
+         (_currentTenant.IsAuthenticated && g.TenantId ==
+         _currentTenant.TenantId));
+     This filter is applied to EVERY query against that DbSet
+     automatically - a developer would have to go out of their way
+     (IgnoreQueryFilters()) to accidentally cross tenants, rather
+     than having to remember a WHERE TenantId = @tenantId on every
+     single query by hand.
+
+  Q: Fluent API vs Data Annotations for entity configuration?
+  A: This project uses Fluent API (OnModelCreating with
+     entity.HasQueryFilter, HasIndex, etc) rather than attributes on
+     entities - keeps the Domain entities themselves persistence-
+     ignorant, and keeps all the EF-specific config in one
+     Infrastructure-layer file (UserDbContext.cs).
+
+  Q: How do migrations work, and what's a risk with them?
+  A: `dotnet ef migrations add` generates a Migration class with
+     Up()/Down(); `dotnet ef database update` (or
+     `Database.Migrate()` at startup) applies pending ones. Risk:
+     adding a NOT NULL column to a large existing table needs a
+     backfill strategy, not a naive migration, or it fails/locks in
+     production.
+
+  Q: Why a repository interface (IUserRepository) instead of exposing
+     DbContext/DbSet directly to handlers?
+  A: Lets FakeUserRepository stand in for tests (see
+     UpdateUserHandlerTests.cs, SetUserActiveStatusHandlerTests.cs) -
+     handler tests run with zero real database, fast and
+     deterministic, while still exercising the exact same interface
+     production code depends on.
+
+Where used: every *.Infrastructure project's own DbContext
+(UserDbContext, ExamDbContext, SubmissionDbContext, etc) and every
+*Repository.cs implementation.
+Why: EF Core is the ORM for every microservice's own database
+(database-per-service, see System Design below) - it's how C# domain
+objects get persisted to and loaded from SQL Server without hand-
+written ADO.NET/SqlCommand code everywhere.
+
+
+===========================================================
+7. SQL
+===========================================================
+Q&A:
+  Q: What isolation level did you use for a race condition, and why
+     that one specifically over the default?
+  A: Serializable, for a count-then-insert sequence (see Concurrency
+     section below) - the default Read Committed would let two
+     concurrent transactions each read the same "count so far" before
+     either commits its insert, both passing a Max Users limit check
+     that should have only let one of them through.
+
+  Q: Why does multi-tenancy here use one shared database with a
+     TenantId column, rather than one database per tenant?
+  A: Simpler operations (one schema, one migration to run) at the
+     cost of relying on the EF Core query filter (see above) being
+     correct everywhere - a real "single-tenant DB vs. shared DB with
+     a discriminator column" tradeoff interviewers ask about.
+
+  Q: How would you verify a fix actually changed the right row in the
+     database, independent of what the API claims?
+  A: Direct sqlcmd query against the container -
+     `docker compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd
+     -C -S localhost -U sa -P '...' -d <DbName> -Q "SELECT
+     IsActive FROM Users WHERE Id = '...'"` - used throughout this
+     project's own bug-verification workflow to confirm a Deactivate
+     click actually didn't flip IsActive when it was supposed to be
+     blocked, rather than trusting the UI alone.
+
+Where used: SQL Server is the database engine behind every service's
+EF Core DbContext; raw SQL / sqlcmd used directly for verification
+during debugging sessions.
+Why: SQL fundamentals (isolation levels, indexes, constraints) are
+what EF Core's abstractions sit on top of - understanding what SQL
+actually gets generated (and run with what locking behavior) is what
+lets you diagnose issues EF Core's abstraction alone can't explain.
+
+
+===========================================================
+8. JWT / RBAC
+===========================================================
+Q&A:
+  Q: What claims does your JWT carry, and why those specifically?
+  A: See JwtTokenService.cs:29-53 - Sub/NameIdentifier (user id),
+     Email, Name (for audit logs to show a real name, not just an
+     email), Role, a custom TenantId claim (TenantClaimTypes.TenantId
+     - this is how multi-tenancy is threaded through the whole
+     request, from ICurrentTenant down to EF Core's query filters), a
+     PermissionVersion claim (so a stale token can be detected after
+     an Admin's permissions change), one claim per enabled Plan
+     Feature, and one claim per granted RolePermission - all baked in
+     at login so authorization checks never need an extra DB round-
+     trip per request.
+
+  Q: Symmetric vs asymmetric signing - which did you use and why?
+  A: HMAC-SHA256 (`SigningCredentials(key, SecurityAlgorithms
+     .HmacSha256)`) with a shared SymmetricSecurityKey - simpler to
+     operate than RSA/ECDSA key pairs, acceptable because every
+     service that validates the token is inside the same trust
+     boundary (not handing the public key out to a third party).
+
+  Q: How is RBAC layered here - is it just [Authorize(Roles=...)]?
+  A: Two layers, deliberately combined with AND not OR (see
+     PermissionPolicies.cs's own comment): a coarse role check
+     ([Authorize(Roles = "Admin")] on GroupsController) plus a fine-
+     grained claims-based policy ([Authorize(Policy = UsersEdit)])
+     that checks a "Permission:Users-Edit" claim the JWT carries -
+     SuperAdmin always bypasses the fine-grained check
+     (`context.User.IsInRole("SuperAdmin") || ...`), because
+     SuperAdmin's authority isn't tied to any one tenant's
+     customizable Roles & Permissions template.
+
+  Q: Access token vs refresh token - how does rotation work here?
+  A: Short-lived JWT access token (AccessTokenMinutes, overridable
+     per-tenant from Security Settings > Session Timeout) plus a
+     long-lived opaque refresh token
+     (`RandomNumberGenerator.GetBytes(64)`, stored server-side only as
+     a SHA-256 hash via HashToken - the raw token is never persisted,
+     same principle as password hashing). RefreshTokenHandler issues a
+     new access token and rotates the refresh token; revoking one
+     session (RevokeSessionHandler) or all-but-current
+     (RevokeOtherSessionsHandler) marks the stored hash rows
+     RevokedAtUtc rather than deleting them, for audit history.
+
+  Q: Real-world authorization bug you fixed using this system?
+  A: The self-lockout / privilege-escalation fixes from this session:
+     UsersController.Update/Delete/Deactivate check the caller's own
+     NameIdentifier claim against the target user id to block self-
+     deactivation and self-role-change, and UpdateUserHandler now
+     blocks a tenant Admin (who only ever reaches these endpoints
+     because of the class-level [Authorize(Roles="Admin")]) from
+     promoting anyone - including themselves - into Admin, since only
+     a SuperAdmin's separate CreateTenantAdminHandler flow is allowed
+     to grant that role.
+
+Where used: JwtTokenService (UserService), every [Authorize] attribute
+and policy across every microservice's controllers, HttpContextCurrent
+Tenant (reads the TenantId/Role claims).
+Why: stateless auth that scales horizontally across multiple service
+instances without a shared session store, while still supporting
+per-tenant customizable permissions on top of fixed roles.
+
+
+===========================================================
+9. MULTI-TENANCY
+===========================================================
+Q&A:
+  Q: How is a tenant resolved from an incoming request?
+  A: Subdomain-based - `<slug>.examvaults.in` (or
+     `<slug>.localhost:5173` locally) resolves to a tenant slug on the
+     frontend (extractTenantSlug() in utils/tenant.ts), and the
+     backend resolves TenantId from the JWT's TenantId claim
+     (populated at login by looking up the tenant the user belongs
+     to) rather than trusting anything client-supplied per-request.
+
+  Q: How do you stop tenant A's data ever leaking into tenant B's
+     response, structurally - not just "we remembered to add a
+     WHERE clause"?
+  A: EF Core global query filters (UserDbContext.cs, see EF Core
+     section) applied at the DbContext level, so every LINQ query
+     against a tenant-scoped DbSet is automatically constrained -
+     this was literally how a real cross-tenant User Service data
+     leak was found and fixed earlier in this project (see project
+     memory: "Super Admin panel" work).
+
+  Q: What's the one hard-coded exception to normal tenant rules here?
+  A: The Platform tenant itself
+     (TenantConstants.PlatformTenantId/PlatformTenantSlug) - it's the
+     tenant the SuperAdmin's own console operates under, and it has
+     its own protections layered on top of normal tenant rules (e.g.
+     SetTenantActiveStatusHandler explicitly blocks deactivating the
+     Platform tenant - Backend/Services/UserService/
+     OnlineExamSystem.User.Application/Tenants/SetActiveStatus/
+     SetTenantActiveStatusHandler.cs).
+
+  Q: How does a SuperAdmin see across all tenants when everyone else
+     is scoped to one?
+  A: `_currentTenant.IsSuperAdmin` short-circuits every query filter
+     (`IsSuperAdmin || (...)`) - one boolean, read from the Role claim
+     in the JWT, bypasses tenant scoping everywhere consistently,
+     rather than SuperAdmin-only code paths needing their own
+     separate unscoped queries.
+
+Where used: TenantConstants (Shared.Common), ICurrentTenant/
+HttpContextCurrentTenant (implemented once per service - User, Exam,
+Submission, Question, Notification), every DbContext's
+HasQueryFilter calls, JwtTokenService's TenantId claim.
+Why: ExamVault is a single-deployment SaaS platform serving many
+organizations (colleges, coaching institutes, corporate L&D) from
+one set of running containers - multi-tenancy is the mechanism that
+keeps them logically isolated without needing separate deployments
+per customer.
+
+
+===========================================================
+10. CONCURRENCY
+===========================================================
+Q&A:
+  Q: Give a real race condition you had to design around.
+  A: Enforcing a tenant's Max Users / Max Admins / Max Students limit
+     (Tenant.MaxUsers, checked in CreateUserHandler). A naive
+     "count existing users, compare to limit, then insert" has a
+     classic TOCTOU (time-of-check-to-time-of-use) race: two
+     concurrent Add User requests can both count N users (under the
+     limit), both decide it's safe, and both insert - now there are
+     N+2 users against a limit of N+1.
+
+  Q: How did you actually prevent it?
+  A: `BeginSerializableTransactionAsync` (UserRepository.cs:80-82,
+     mirrored in ExamRepository.cs) opens a transaction at
+     IsolationLevel.Serializable, and CreateUserHandler.cs:92 wraps
+     the whole count -> compare -> insert -> SaveChanges -> commit
+     sequence inside it. Serializable isolation forces SQL Server to
+     treat the two concurrent transactions as if one ran completely
+     before the other started - the second transaction's read is
+     blocked/rolled back rather than seeing a stale count, so only
+     one of the two concurrent requests can ever pass the limit
+     check. See the doc-comment on
+     IUserRepository.CountByTenantAndRoleAsync explaining exactly
+     this.
+
+  Q: Why Serializable and not a simpler approach like a unique
+     constraint or optimistic concurrency (a RowVersion column)?
+  A: A unique constraint can't express "no more than N rows" (that's
+     an aggregate condition, not a per-row uniqueness rule), and
+     optimistic concurrency (compare-and-swap on a version column)
+     protects a single row's own update, not a count computed across
+     many rows. A pessimistic Serializable transaction is the correct
+     tool specifically because the invariant being protected is
+     itself an aggregate ("total rows for this tenant+role").
+
+  Q: Any concurrency-adjacent frontend bug from this project?
+  A: The self-lockout bugs fixed this session were arguably a
+     concurrency-adjacent design gap too - the same protection that
+     existed for Delete/Deactivate was missing from the sibling
+     action (Deactivate had it, but the Platform-tenant-deactivate
+     path and a third page, UserDetails.tsx, didn't share it) - a
+     reminder that consistency guarantees need to be enforced at
+     every entry point, not just the one you tested first.
+
+Where used: CreateUserHandler.cs, CreateExamHandler.cs (and their
+repositories' BeginSerializableTransactionAsync).
+Why: limits like Max Users are a real product feature (subscription
+plan enforcement) - getting the race wrong means a tenant on a
+2-user plan could silently end up with 5 users under concurrent
+signups.
+
+
+===========================================================
+11. SYSTEM DESIGN
+===========================================================
+Q&A:
+  Q: Describe the overall architecture.
+  A: Microservices, one .NET 8 service per bounded context - User,
+     Exam, Question, Submission, Result, Notification, AI,
+     Execution - each with its own Domain/Application/Infrastructure/
+     API layering (Clean/Onion architecture) and, per the
+     database-per-service pattern, its own DbContext/database. A
+     single ApiGateway (Backend/Gateway/OnlineExamSystem.ApiGateway)
+     is the one public entry point the frontend talks to, routing to
+     the right backend service.
+
+  Q: How do services talk to each other - synchronously or
+     asynchronously?
+  A: Both, depending on the need. Synchronous: direct HTTP through
+     the Gateway for request/response flows (e.g. Gateway's
+     MonitoringController calling UserService directly - see
+     Program.cs:393's comment "Gateway's MonitoringController is the
+     only consumer"). Asynchronous: IEventPublisher
+     (Shared.Events) for cross-service events, implemented by either
+     RabbitMqEventPublisher or ServiceBusEventPublisher depending on
+     environment (see Azure section) - decouples services so, e.g.,
+     NotificationService doesn't need User/ExamService to be up and
+     responsive at the exact moment an event fires.
+
+  Q: Why Clean Architecture (Domain/Application/Infrastructure/API)
+     per service instead of one layered monolith?
+  A: Each service's Application layer (handlers, validators) depends
+     only on its own Domain and on interfaces (IUserRepository,
+     IJwtTokenService) - Infrastructure implements those interfaces
+     with EF Core/RabbitMQ/etc, and API just wires HTTP to handlers.
+     This is exactly what makes FakeUserRepository-based unit tests
+     possible (UpdateUserHandlerTests.cs) without spinning up SQL
+     Server, and lets a service's storage or messaging technology
+     change without touching business logic.
+
+  Q: How would you explain the CI/CD pipeline as a system design
+     concern?
+  A: Two GitHub Actions workflows (ci.yml, cd-hostinger.yml, see
+     cicd_info.txt in this repo) - CI builds+tests backend and
+     frontend in parallel on every push to dev; CD only fires after
+     CI succeeds (`workflow_run` + a conclusion=='success' gate) and
+     SSHes into the Hostinger VPS to `git pull` + `docker compose up
+     -d --build`, rebuilding only the containers whose image
+     actually changed.
+
+  Q: What's a scaling/reliability tradeoff you're aware of in this
+     design?
+  A: Single shared SQL Server instance across all tenants (see
+     Multi-tenancy) is simpler operationally but is the one shared
+     bottleneck/single point of failure across every tenant at once -
+     a true database-per-tenant design would isolate blast radius at
+     the cost of much higher operational complexity (migrations,
+     backups, connection management multiplied by tenant count).
+
+Where used: the whole Backend/Services/* + Backend/Gateway
+directory structure; docker-compose.yml/.prod.yml/.traefik.yml
+orchestrate all of it together.
+Why: microservices let each domain (exams, submissions, grading,
+notifications) evolve, deploy, and scale somewhat independently,
+while Clean Architecture inside each one keeps business logic
+testable and decoupled from any specific database or message broker
+choice.
+
+
+===========================================================
+12. AZURE
+===========================================================
+Q&A:
+  Q: Was this project on Azure? What's there now?
+  A: Yes, originally - the platform ran on Azure (App Services +
+     Azure Service Bus for messaging) before a deliberate full
+     migration off Azure to a Hostinger VPS running Docker + Traefik
+     (see project memory: "Hostinger VPS migration" and
+     hostinger_vps_setup.txt at repo root). The real domain
+     examvaults.in is on GoDaddy DNS pointing at the VPS now, not
+     an Azure App Service.
+
+  Q: What Azure-specific code is still in the codebase, and why keep
+     it?
+  A: ServiceBusEventPublisher (alongside RabbitMqEventPublisher) in
+     every service's Infrastructure/Messaging folder, selected at
+     startup by a config switch:
+       if (builder.Configuration["Messaging:Provider"] ==
+       "ServiceBus") -> ServiceBusEventPublisher
+       else -> RabbitMqEventPublisher
+     This is a live example of the Strategy pattern driven by
+     config, kept specifically so the same codebase can still target
+     either environment without a code change - relevant if the
+     project ever needs Azure again for a specific deployment, and a
+     good concrete answer to "show me a time you abstracted an
+     infrastructure dependency behind an interface.".
+
+  Q: What would you tell an interviewer went wrong or was learned
+     from the Azure period?
+  A: Per project memory ("live outage postmortem" from the
+     multi-tenant SaaS work) - real production issues were hit and
+     documented around subdomain/DNS configuration during the Azure
+     period, which directly informed the more careful "three config
+     targets" discipline used later (a recurring bug class where a
+     new Program.cs config setting needs updating in appsettings AND
+     bicep AND the live deployed value, across every backend service
+     that has it - missed 6 of 9 services once before catching the
+     pattern).
+
+  Q: Why move off Azure at all if it was already working?
+  A: Cost and operational simplicity for this project's actual scale
+     - a single Hostinger VPS running docker compose is cheaper and
+     simpler to reason about than several Azure App Services + a
+     managed Service Bus namespace, for a platform that doesn't yet
+     need Azure-scale elasticity.
+
+Where used (still in codebase): IEventPublisher's ServiceBusEventPublisher
+implementations, ServiceBusSettings config classes, the
+Messaging:Provider config switch in each service's Program.cs.
+Why (historically): Azure was the original cloud host; understanding
+both the Service Bus integration that's still in the code AND the
+reasoning for migrating off it is a genuinely good system-design
+story for an interview, not just theory.
+
+
+===========================================================
+QUICK CROSS-TOPIC STORY (good for "tell me about a bug you fixed")
+===========================================================
+The self-lockout / privilege-escalation fix from this project ties
+almost every topic above together in one story:
+  - JWT/RBAC: UsersController reads the caller's own id from the
+    NameIdentifier claim to compare against the target user.
+  - C#: UpdateUserResult's static factories express every outcome
+    (SelfRoleChangeBlocked, AdminRoleAssignmentBlocked) explicitly.
+  - ASP.NET Core: the controller maps each new result flag to the
+    right HTTP status (409 Conflict) with a specific message.
+  - EF Core / Multi-tenancy: GetByIdForTenantAsync still respects
+    the tenant query filter even for this self-check.
+  - async/await: the whole check-then-update flow is async end to
+    end, cancellable via CancellationToken.
+  - Testing/DI: verified with FakeUserRepository-based handler tests
+    (UpdateUserHandlerTests.cs) with zero real database, then
+    confirmed live via Docker rebuild + browser verification.
+  - CI/CD: the fix only reached the live Hostinger VPS after CI's
+    145 backend + 221 frontend tests passed and CD's success gate
+    let the deploy proceed.
+That's a genuinely strong, specific answer if asked "walk me through
+a real bug end to end."

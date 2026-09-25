@@ -54,6 +54,7 @@ export default function RegisterForm() {
   const [form, setForm] = useState<FormState>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [requiresEmailConfirmation, setRequiresEmailConfirmation] = useState(true);
   const [serverError, setServerError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -74,11 +75,12 @@ export default function RegisterForm() {
     setStatus('loading');
     setServerError('');
     try {
-      await registerUser({
+      const response = await registerUser({
         fullName: form.fullName,
         email: form.email,
         password: form.password,
       });
+      setRequiresEmailConfirmation(response.requiresEmailConfirmation !== false);
       setStatus('success');
       setForm(initialFormState);
     } catch (error) {
@@ -87,10 +89,20 @@ export default function RegisterForm() {
     }
   };
 
+  if (status === 'success' && !requiresEmailConfirmation) {
+    return (
+      <Alert variant="success">
+        Account created! You can <Link to="/login">log in</Link> now.
+      </Alert>
+    );
+  }
+
   if (status === 'success') {
     return (
       <Alert variant="success">
-        Account created successfully. You can now <Link to="/login">log in</Link>.
+        Account created! Check your email for a confirmation link before you{' '}
+        <Link to="/login">log in</Link>. Didn't get it?{' '}
+        <Link to="/confirm-email">Resend confirmation email</Link>.
       </Alert>
     );
   }

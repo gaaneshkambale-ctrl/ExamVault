@@ -17,6 +17,9 @@ public class SystemErrorLog : BaseEntity
     public string? RequestPath { get; set; }
     public string? RequestMethod { get; set; }
     public Guid? TenantId { get; set; }
+    // Client IP of the request that failed (real client, via each service's
+    // UseForwardedHeaders); null for background-job errors with no request.
+    public string? IpAddress { get; set; }
     public bool IsResolved { get; set; }
     public DateTime? ResolvedAtUtc { get; set; }
     public Guid? ResolvedByUserId { get; set; }

@@ -62,6 +62,9 @@ public class FakeQuestionRepository : IQuestionRepository
             query.OrderByDescending(q => q.CreatedAtUtc).ToList());
     }
 
+    public Task<IReadOnlyList<ExamQuestion>> GetAllQuestionsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ExamQuestion>>(_questions.OrderByDescending(q => q.CreatedAtUtc).ToList());
+
     public Task BulkSetSectionIdAsync(
         Guid? sectionId,
         IReadOnlyList<Guid> questionIds,
@@ -80,6 +83,21 @@ public class FakeQuestionRepository : IQuestionRepository
         foreach (var question in _questions.Where(q => q.SectionId == sectionId))
         {
             question.SectionId = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAllQuestionsForExamAsync(Guid examId, CancellationToken cancellationToken = default)
+    {
+        var toRemove = _questions.Where(q => q.ExamId == examId).ToList();
+        foreach (var question in toRemove)
+        {
+            _questions.Remove(question);
+            _options.RemoveAll(o => o.QuestionId == question.Id);
+            _parameters.RemoveAll(p => p.QuestionId == question.Id);
+            _testCases.RemoveAll(t => t.QuestionId == question.Id);
+            _sqlTestCases.RemoveAll(t => t.QuestionId == question.Id);
         }
 
         return Task.CompletedTask;

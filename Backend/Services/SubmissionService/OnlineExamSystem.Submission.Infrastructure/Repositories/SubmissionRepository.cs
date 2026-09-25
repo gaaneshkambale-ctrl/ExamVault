@@ -57,6 +57,11 @@ public class SubmissionRepository : ISubmissionRepository
             .OrderByDescending(a => a.StartedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<ExamAttempt>> GetAllAttemptsAsync(CancellationToken cancellationToken = default) =>
+        await _dbContext.ExamAttempts
+            .OrderByDescending(a => a.StartedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<AttemptAnswer>> GetAnswersByAttemptIdAsync(
         Guid attemptId,
         CancellationToken cancellationToken = default) =>
@@ -89,8 +94,64 @@ public class SubmissionRepository : ISubmissionRepository
         return answers.ToLookup(a => a.AttemptId);
     }
 
-    public async Task AddAnswerAsync(AttemptAnswer answer, CancellationToken cancellationToken = default) =>
+    public async Task<AttemptAnswer> UpsertAnswerAsync(
+        Guid attemptId,
+        Guid questionId,
+        Guid? selectedOptionId,
+        string? selectedOptionIdsJson,
+        bool isMarkedForReview,
+        string? answerText,
+        DateTime answeredAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await GetAnswerAsync(attemptId, questionId, cancellationToken);
+        if (existing is not null)
+        {
+            existing.SelectedOptionId = selectedOptionId;
+            existing.SelectedOptionIdsJson = selectedOptionIdsJson;
+            existing.IsMarkedForReview = isMarkedForReview;
+            existing.AnsweredAtUtc = answeredAtUtc;
+            existing.AnswerText = answerText;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return existing;
+        }
+
+        var answer = new AttemptAnswer
+        {
+            AttemptId = attemptId,
+            QuestionId = questionId,
+            SelectedOptionId = selectedOptionId,
+            SelectedOptionIdsJson = selectedOptionIdsJson,
+            IsMarkedForReview = isMarkedForReview,
+            AnsweredAtUtc = answeredAtUtc,
+            AnswerText = answerText,
+        };
         await _dbContext.AttemptAnswers.AddAsync(answer, cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return answer;
+        }
+        catch (DbUpdateException)
+        {
+            // Another concurrent save for the same question (autosave racing
+            // "Save & Next") won the race on the unique (AttemptId,
+            // QuestionId) index and inserted first - this insert can never
+            // succeed now. Detach it (still tracked as Added) and fall back
+            // to updating the row that won, so this save isn't lost.
+            _dbContext.Entry(answer).State = EntityState.Detached;
+            var concurrent = await GetAnswerAsync(attemptId, questionId, cancellationToken)
+                ?? throw new InvalidOperationException(
+                    $"Answer insert for attempt {attemptId}, question {questionId} failed but no conflicting row was found.");
+            concurrent.SelectedOptionId = selectedOptionId;
+            concurrent.SelectedOptionIdsJson = selectedOptionIdsJson;
+            concurrent.IsMarkedForReview = isMarkedForReview;
+            concurrent.AnsweredAtUtc = answeredAtUtc;
+            concurrent.AnswerText = answerText;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return concurrent;
+        }
+    }
 
     public Task<AttemptSectionState?> GetSectionStateAsync(
         Guid attemptId,

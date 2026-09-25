@@ -23,5 +23,6 @@ public class UpdateMyProfileValidator : AbstractValidator<UpdateMyProfileCommand
             .When(x => !string.IsNullOrWhiteSpace(x.Gender));
         RuleFor(x => x.Location).MaximumLength(200);
         RuleFor(x => x.Department).MaximumLength(100);
+        RuleFor(x => x.Designation).MaximumLength(100);
     }
 }

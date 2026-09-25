@@ -27,6 +27,9 @@ public class QuestionDbContext : TenantScopedDbContext
             entity.Property(q => q.ProgrammingLanguage).HasMaxLength(50);
             entity.Property(q => q.SampleAnswer).HasMaxLength(4000);
             entity.Property(q => q.FunctionName).HasMaxLength(200);
+            entity.Property(q => q.SampleInput).HasMaxLength(2000);
+            entity.Property(q => q.SampleOutput).HasMaxLength(2000);
+            entity.Property(q => q.Constraints).HasMaxLength(2000);
             entity.HasIndex(q => q.TenantId);
             entity.HasQueryFilter(q =>
                 CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && q.TenantId == CurrentTenant.TenantId));

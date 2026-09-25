@@ -19,15 +19,17 @@ public class CreateNotificationHandlerTests
 
     private static CreateNotificationHandler CreateHandler(
         FakeNotificationPersistenceService persistenceService,
-        IReadOnlyList<Guid>? examCandidateIds = null) =>
+        IReadOnlyList<Guid>? examCandidateIds = null,
+        ExamLookupResult? exam = null) =>
         new(
             new FakeUserDirectoryClient(AllUsers),
             new FakeExamAssignmentLookupClient(examCandidateIds ?? []),
+            new FakeExamLookupClient(exam),
             persistenceService,
             new CreateNotificationValidator());
 
     private static CreateNotificationCommand Command(
-        string sendTo, IReadOnlyList<Guid>? userIds = null, Guid? relatedExamId = null) => new(
+        string sendTo, IReadOnlyList<Guid>? userIds = null, Guid? relatedExamId = null, Guid? ownerUserId = null) => new(
         TenantId: Guid.NewGuid(),
         Title: "Title",
         Message: "Message",
@@ -38,7 +40,8 @@ public class CreateNotificationHandlerTests
         SendNow: true,
         ScheduledAtUtc: null,
         AdminUserId: Guid.NewGuid(),
-        BearerToken: "test-token");
+        BearerToken: "test-token",
+        OwnerUserId: ownerUserId);
 
     [Fact]
     public async Task AllStudents_resolves_only_student_role_users()
@@ -128,5 +131,65 @@ public class CreateNotificationHandlerTests
         var result = await handler.HandleAsync(Command("SelectedStudents", userIds: []));
 
         Assert.NotEmpty(result.ValidationErrors);
+    }
+
+    [Fact]
+    public async Task Instructor_without_a_related_exam_is_forbidden()
+    {
+        var persistenceService = new FakeNotificationPersistenceService();
+        var handler = CreateHandler(persistenceService);
+        var ownerUserId = Guid.NewGuid();
+
+        var result = await handler.HandleAsync(Command("AllStudents", ownerUserId: ownerUserId));
+
+        Assert.True(result.IsForbidden);
+        Assert.Empty(persistenceService.Calls);
+    }
+
+    [Fact]
+    public async Task Instructor_notifying_about_an_exam_they_do_not_own_is_forbidden()
+    {
+        var persistenceService = new FakeNotificationPersistenceService();
+        var examId = Guid.NewGuid();
+        var handler = CreateHandler(persistenceService, exam: new ExamLookupResult(examId, Guid.NewGuid()));
+        var ownerUserId = Guid.NewGuid();
+
+        var result = await handler.HandleAsync(Command("AllStudents", relatedExamId: examId, ownerUserId: ownerUserId));
+
+        Assert.True(result.IsForbidden);
+        Assert.Empty(persistenceService.Calls);
+    }
+
+    [Fact]
+    public async Task Instructor_notifying_candidates_of_their_own_exam_succeeds()
+    {
+        var persistenceService = new FakeNotificationPersistenceService();
+        var examId = Guid.NewGuid();
+        var ownerUserId = Guid.NewGuid();
+        var handler = CreateHandler(
+            persistenceService,
+            examCandidateIds: [StudentA, StudentB],
+            exam: new ExamLookupResult(examId, ownerUserId));
+
+        var result = await handler.HandleAsync(Command("ExamCandidates", relatedExamId: examId, ownerUserId: ownerUserId));
+
+        Assert.True(result.Success);
+        Assert.Equal(2, result.RecipientCount);
+        var recipientIds = persistenceService.Calls.Single().Recipients.Select(r => r.UserId).ToHashSet();
+        Assert.Equal(new HashSet<Guid> { StudentA, StudentB }, recipientIds);
+    }
+
+    [Fact]
+    public async Task Instructor_cannot_broadcast_to_all_students_even_naming_an_owned_exam()
+    {
+        var persistenceService = new FakeNotificationPersistenceService();
+        var examId = Guid.NewGuid();
+        var ownerUserId = Guid.NewGuid();
+        var handler = CreateHandler(persistenceService, exam: new ExamLookupResult(examId, ownerUserId));
+
+        var result = await handler.HandleAsync(Command("AllStudents", relatedExamId: examId, ownerUserId: ownerUserId));
+
+        Assert.True(result.IsForbidden);
+        Assert.Empty(persistenceService.Calls);
     }
 }

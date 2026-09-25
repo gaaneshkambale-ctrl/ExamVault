@@ -40,6 +40,9 @@ public class UpdateExamValidator : AbstractValidator<UpdateExamCommand>
         RuleFor(x => x.NegativeMarks)
             .GreaterThanOrEqualTo(0);
 
+        RuleFor(x => x.MinimumCertificateScorePercent)
+            .InclusiveBetween(0, 100);
+
         RuleFor(x => x.EndAtUtc)
             .GreaterThan(x => x.StartAtUtc)
             .When(x => x.StartAtUtc.HasValue && x.EndAtUtc.HasValue)

@@ -1,4 +1,6 @@
 using OnlineExamSystem.Notification.Application.Interfaces;
+using OnlineExamSystem.Notification.Application.SystemLogs.RecordSystemErrorLog;
+using OnlineExamSystem.Notification.Domain.Enums;
 
 namespace OnlineExamSystem.Notification.API.Jobs;
 
@@ -34,8 +36,36 @@ public class SystemErrorLogRetentionCleanupService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "System error log retention cleanup failed.");
+                await ReportSystemErrorAsync(ex, stoppingToken);
             }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    // Lives in the same service that hosts SystemLogsController, so this can
+    // call the handler directly instead of the HTTP round-trip every other
+    // service's background jobs need.
+    private async Task ReportSystemErrorAsync(Exception exception, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var recordHandler = scope.ServiceProvider.GetRequiredService<RecordSystemErrorLogHandler>();
+            await recordHandler.HandleAsync(
+                new RecordSystemErrorLogCommand(
+                    "Notification Service",
+                    SystemLogLevel.Error,
+                    exception.Message,
+                    exception.GetType().FullName,
+                    exception.StackTrace,
+                    null,
+                    null,
+                    null),
+                cancellationToken);
+        }
+        catch
+        {
+            // Best-effort only.
+        }
     }
 
     private async Task CleanupOnceAsync(CancellationToken cancellationToken)

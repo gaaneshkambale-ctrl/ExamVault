@@ -12,8 +12,11 @@ public record QuestionTestCaseResponse(
     int DisplayOrder);
 
 // Sql questions only - always unmasked (setup SQL isn't the secret, only
-// the Reference Query held in SampleAnswer is).
-public record QuestionSqlTestCaseResponse(string SetupSql, int DisplayOrder);
+// the Reference Query held in SampleAnswer is). ExpectedOutput is
+// precomputed when the admin saves the question (see
+// QuestionSqlTestCase.ExpectedOutput) - null when it hasn't been computed
+// yet or the reference query failed to run.
+public record QuestionSqlTestCaseResponse(string SetupSql, int DisplayOrder, string? ExpectedOutput = null);
 
 public record QuestionResponse(
     Guid Id,
@@ -39,4 +42,10 @@ public record QuestionResponse(
     string? ReturnType = null,
     IReadOnlyList<QuestionParameterResponse>? Parameters = null,
     IReadOnlyList<QuestionTestCaseResponse>? TestCases = null,
-    IReadOnlyList<QuestionSqlTestCaseResponse>? SqlTestCases = null);
+    IReadOnlyList<QuestionSqlTestCaseResponse>? SqlTestCases = null,
+    // Illustrative example + notes shown to the student alongside the
+    // problem statement - unmasked for every caller, same visibility as
+    // FunctionName (unlike SampleAnswer, which is admin-only).
+    string? SampleInput = null,
+    string? SampleOutput = null,
+    string? Constraints = null);

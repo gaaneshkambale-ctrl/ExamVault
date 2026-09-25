@@ -83,6 +83,7 @@ public class StartAttemptHandler
             UserId = command.UserId,
             AttemptNumber = attemptCount + 1,
             StartedAtUtc = now,
+            ExpiresAtUtc = now.AddMinutes(exam.DurationMinutes),
             Status = AttemptStatus.InProgress,
         };
 

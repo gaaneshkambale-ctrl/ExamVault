@@ -36,7 +36,7 @@ public class ExamServiceClient : IExamLookupClient
         var exam = await response.Content.ReadFromJsonAsync<ExamApiResponse>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("Empty response from Exam Service.");
 
-        return new ExamLookupResult(exam.Id, exam.Status, exam.MaxAttempts, exam.StartAtUtc, exam.EndAtUtc);
+        return new ExamLookupResult(exam.Id, exam.Status, exam.MaxAttempts, exam.StartAtUtc, exam.EndAtUtc, exam.DurationMinutes, exam.CreatedByUserId);
     }
 
     public async Task<IReadOnlyList<SectionLookupResult>> GetSectionsAsync(
@@ -80,6 +80,8 @@ public class ExamServiceClient : IExamLookupClient
         public int MaxAttempts { get; init; }
         public DateTime? StartAtUtc { get; init; }
         public DateTime? EndAtUtc { get; init; }
+        public int DurationMinutes { get; init; }
+        public Guid? CreatedByUserId { get; init; }
     }
 
     private sealed class SectionApiResponse
