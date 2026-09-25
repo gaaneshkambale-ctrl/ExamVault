@@ -16643,3 +16643,76 @@ Login Activity shows the real client IP. Open follow-ups: AI generation vs
 Cloudflare 100 s timeout; HSTS header on API responses; periodic check of
 cloudflare.com/ips-v4 against the VPS firewall; Traefik aliasHeadersStrategy
 / encoded-characters warnings.
+
+========================================================================
+PLAN (2026-09-25) - Tenant isolation (BOLA) audit, all services
+========================================================================
+Goal: prove no tenant's user can read/modify another tenant's data, and
+fix anything that can. Mechanism today: TenantScopedEntity + per-DbContext
+HasQueryFilter (SuperAdmin || (IsAuthenticated && TenantId == claim)) +
+TenantScopedDbContext stamping TenantId on insert.
+
+A. Inventory (DONE while planning):
+ - Every TenantScopedEntity has a query filter: Exam 9/9, Notification
+   4/4, Question 2/2, Submission 4/4, User 3/3 (Group, AcademicListItem,
+   RolePermission). Result/Ai/Execution have no DbContext.
+ - Anonymous surface: controllers without class [Authorize] =
+   AuditLogs, SystemLogs, Contact, Newsletter, Users (per-action) +
+   Internal* (routes "internal/...", not under /api -> never routed by
+   the Gateway; prod publishes no service ports). The anonymous
+   POST /api/audit-logs and POST /api/system-logs writes (accept a
+   client TenantId / IsSuperAdminActor) are blocked at the Gateway:
+   those routes are Methods ["GET"] -> verified 405 locally AND on
+   api.examvaults.in. OK.
+B. User Service AppUser is deliberately NOT query-filtered -> every
+   handler touching users must scope by TenantId itself. Review every
+   IUserRepository method + caller, esp. anything taking a user id from
+   the route/body (get/update/delete/activate/reset-password/sessions/
+   photo/group membership).
+C. Review all 29 IgnoreQueryFilters call sites - each must be
+   SuperAdmin-only, internal-only, or explicitly re-scoped.
+D. Request contracts carrying TenantId/IsSuperAdmin from the client on
+   non-SuperAdmin endpoints.
+E. Non-tenant-scoped entities reachable by id: RefreshToken (sessions),
+   UserPreferences, Tenant, uploaded assets/photos.
+F. Cross-service id trust: public endpoints that pass ids to another
+   service - confirm the forwarded JWT keeps the callee's filter active.
+G. Live cross-tenant probe on the LOCAL stack: sign short-lived test JWTs
+   with the local dev signing key for a tenant-A Admin/Teacher/Student,
+   call every id-taking endpoint with tenant-B ids -> expect 403/404,
+   never data. (Local only; no production tokens, no passwords.)
+Output: findings table (endpoint, risk, verdict), fixes for confirmed
+issues with regression tests, then deploy.
+RESULTS (2026-09-25):
+ B/C/D/E: User Service - all 8 Admin by-id user routes (update, delete,
+  activate, deactivate, reset-password, get, photo, sessions) use
+  GetByIdForTenantAsync; GetAllAsync is scoped; "me" endpoints use the JWT
+  NameIdentifier; CreateUser + role permissions take TenantId from the JWT
+  claim; the 20 IgnoreQueryFilters sites are background jobs (reminders,
+  dispatch, retention cleanup), SuperAdmin tenant delete, or role
+  permissions keyed by the caller's own claim. RevokeSession is keyed by
+  (JWT userId, tokenId). OK.
+ F: Submission StartAttempt validates exam + assignment via the Exam
+  Service with the student's own bearer token (query filter applies). OK.
+ FINDING 1 (Medium, FIXED): AddGroupMemberHandler loaded the student with
+  the UNSCOPED GetByIdAsync -> an Admin could add another tenant's student
+  (by id) to their group and see their name/email in the member list.
+  Now GetByIdForTenantAsync (-> UserNotFound).
+ FINDING 2 (Medium, FIXED): Create/UpdateAssignmentHandler "Students"
+  target used request-body user ids unchecked; Create then resolved them
+  via the UNSCOPED internal/users/by-ids lookup and published
+  ExamAssignedEvent with their emails -> another tenant's students could
+  be emailed an assignment. Now IUserLookupClient.GetTenantStudentIdsAmongAsync
+  (GET api/users/students with the caller's token) must return every
+  requested id, else 400 "One or more selected students were not found."
+  - nothing saved, no event.
+ FINDING 3 (Low, NOT fixed): CreateQuestion doesn't validate ExamId
+  belongs to the caller's tenant; the question is stamped with the
+  caller's tenant, so it is invisible to the other tenant (junk data only).
+ Tests: +3 regression tests (Create/Update assignment foreign student,
+  AddGroupMember foreign student); FakeUserRepository.CurrentTenantId and
+  FakeUserLookupClient foreignUserIds added. Verified the 3 tests FAIL
+  with the fixes reverted and PASS with them. Full .sln 0 errors / 0
+  warnings; all test projects green (Exam 139, User 200).
+ G (live cross-tenant probe with locally minted JWTs): not done - unit
+  regression tests cover both findings; optional follow-up.

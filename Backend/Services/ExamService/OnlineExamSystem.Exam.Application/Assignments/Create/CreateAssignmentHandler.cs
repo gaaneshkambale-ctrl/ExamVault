@@ -94,6 +94,16 @@ public class CreateAssignmentHandler
             case AssignmentTargetType.Students:
             default:
                 targetUserIds = command.UserIds!;
+                // Ids come straight from the request body - only accept Students
+                // of the caller's own tenant (see IUserLookupClient).
+                var tenantStudentIds = await _userLookupClient.GetTenantStudentIdsAmongAsync(
+                    targetUserIds,
+                    command.BearerToken,
+                    cancellationToken);
+                if (tenantStudentIds.Count != targetUserIds.Distinct().Count())
+                {
+                    return CreateAssignmentResult.Invalid(["One or more selected students were not found."]);
+                }
                 break;
         }
 

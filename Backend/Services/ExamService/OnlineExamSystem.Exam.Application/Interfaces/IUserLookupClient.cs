@@ -26,6 +26,18 @@ public interface IUserLookupClient
         string bearerToken,
         CancellationToken cancellationToken = default);
 
+    // The subset of userIds that are Students of the CALLER's own tenant
+    // (GET /api/users/students with the forwarded bearer token, which the
+    // User Service scopes to that tenant). Guards the "Students" assignment
+    // target, whose ids come straight from the request body - without it an
+    // Admin/Instructor could target another tenant's users by id, and
+    // CreateAssignmentHandler's unscoped internal lookup would then email
+    // them the assignment.
+    Task<IReadOnlyList<Guid>> GetTenantStudentIdsAmongAsync(
+        IReadOnlyList<Guid> userIds,
+        string bearerToken,
+        CancellationToken cancellationToken = default);
+
     // Backs the eligibility check in CreateAssignmentHandler. Reuses
     // GET /api/users/students - the same endpoint GetAllStudentUserIdsAsync
     // already calls with the caller's own forwarded bearer token - since it

@@ -32,8 +32,13 @@ public class FakeUserRepository : IUserRepository
     // real adversarial requests, same as every other service). Delegates
     // to the same lookup as GetByIdAsync so handler tests using this fake
     // keep working unchanged.
+    // Mirrors the real repository's tenant scope when set (null = unscoped,
+    // like a Super Admin caller) so handlers that must use the scoped lookup
+    // can be regression-tested for it.
+    public Guid? CurrentTenantId { get; set; }
+
     public Task<AppUser?> GetByIdForTenantAsync(Guid id, CancellationToken cancellationToken = default) =>
-        GetByIdAsync(id, cancellationToken);
+        Task.FromResult(_users.FirstOrDefault(u => u.Id == id && (CurrentTenantId is null || u.TenantId == CurrentTenantId)));
 
     public Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Email == email && (tenantId is null || u.TenantId == tenantId)));

@@ -47,6 +47,15 @@ public class UserServiceClient : IUserLookupClient
         return students.Select(s => s.Id).ToList();
     }
 
+    public async Task<IReadOnlyList<Guid>> GetTenantStudentIdsAmongAsync(
+        IReadOnlyList<Guid> userIds,
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        var tenantStudentIds = (await GetAllStudentUserIdsAsync(bearerToken, cancellationToken)).ToHashSet();
+        return userIds.Where(tenantStudentIds.Contains).ToList();
+    }
+
     public async Task<IReadOnlyList<StudentAcademicScope>> GetStudentAcademicScopesAsync(
         IReadOnlyList<Guid> userIds,
         string bearerToken,

@@ -62,6 +62,32 @@ public class CreateAssignmentHandlerTests
     }
 
     [Fact]
+    public async Task Students_from_another_tenant_are_rejected_and_nobody_is_emailed()
+    {
+        // Regression: the Students target took ids straight from the body, and
+        // the unscoped internal lookup then emailed the assignment to another
+        // tenant's users.
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
+        await repository.AddAsync(exam);
+        var ownStudent = Guid.NewGuid();
+        var otherTenantStudent = Guid.NewGuid();
+        var eventPublisher = new FakeEventPublisher();
+        var handler = CreateHandler(
+            repository,
+            new FakeUserLookupClient(result: null, foreignUserIds: new HashSet<Guid> { otherTenantStudent }),
+            eventPublisher);
+
+        var result = await handler.HandleAsync(StudentsCommand(exam.Id, ownStudent, otherTenantStudent));
+
+        Assert.False(result.Success);
+        Assert.NotEmpty(result.ValidationErrors);
+        Assert.Empty(repository.Assignments);
+        Assert.Empty(repository.Targets);
+        Assert.Empty(eventPublisher.PublishedEvents);
+    }
+
+    [Fact]
     public async Task Valid_batch_request_assigns_every_group_member()
     {
         var repository = new FakeExamRepository();
