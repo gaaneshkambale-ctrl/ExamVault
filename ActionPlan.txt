@@ -16331,3 +16331,135 @@ response; all 9 exception handlers pass Connection.RemoteIpAddress; UI column
 Verified: ExamVault.sln 0 errors / 0 warnings, all dotnet tests green
 (Notification 32), npm run build OK, vitest 221/221. Live check pending.
 Not yet committed.
+
+========================================================================
+PLAN (2026-09-25) - Put examvaults.in behind Cloudflare (proxy + WAF)
+========================================================================
+Goal: Cloudflare in front of the Hostinger VPS for DDoS protection, WAF,
+edge rate limiting and hiding the origin IP - without losing the real
+client IP fixed in 1033324, breaking wildcard tenant subdomains, or
+breaking certificate renewal.
+
+FACTS THIS PLAN DEPENDS ON (checked 2026-09-25):
+- Traefik v3.7 runs as Hostinger's "Docker and Traefik" app
+  (traefik-traefik-1), network_mode: host. Its STATIC config (entrypoints,
+  certresolver, ACME provider) lives in that Docker Manager app on the
+  VPS, NOT in this repo. Only routing labels are here
+  (docker-compose.traefik.yml).
+- Certificates: resolver "letsencrypt", DNS-01 via HOSTINGER_API_TOKEN,
+  one wildcard cert for examvaults.in + *.examvaults.in. => Moving DNS
+  to Cloudflare BREAKS RENEWAL unless the resolver is switched to
+  Cloudflare's DNS provider. This is the main trap.
+- Prod publishes no container ports (docker-compose.prod.yml
+  `ports: !reset []` on sqlserver/rabbitmq/piston/all APIs/gateway);
+  only Traefik listens publicly (80/443). No Redis in this stack.
+- No WebSockets/SignalR. Uploads are capped at 2 MB (well under
+  Cloudflare's 100 MB). AI question generation calls n8n with
+  HttpClient's default 100 s timeout = Cloudflare free plan's 100 s
+  origin timeout -> slow generations would surface as Cloudflare 524.
+- Client-IP chain today: client -> Traefik (host mode, sees real IP,
+  appends it to X-Forwarded-For) -> Gateway (ForwardLimit 1, trusts
+  private nets) -> YARP sets X-Forwarded-For -> services.
+  With Cloudflare proxying, Traefik's peer becomes a Cloudflare edge,
+  so the last X-Forwarded-For hop = Cloudflare's IP, not the user's.
+  Every IP (audit, Login Activity, System Logs) and the per-IP auth
+  rate limiter would silently key on Cloudflare edge IPs.
+
+DESIGN - client IP behind Cloudflare:
+Gateway reads CF-Connecting-IP (a single value Cloudflare always
+overwrites with the real client IP) instead of X-Forwarded-For, made
+configurable so local dev is unchanged:
+- New config key ForwardedHeaders:ClientIpHeader (default
+  "X-Forwarded-For"); Gateway's ForwardedHeadersOptions uses it as
+  ForwardedForHeaderName. Downstream services unchanged (YARP still
+  sets X-Forwarded-For to the resolved IP).
+- Only safe if nobody can reach the origin except via Cloudflare
+  (otherwise CF-Connecting-IP is spoofable) -> ORIGIN LOCK below is
+  mandatory, not optional.
+- Config targets: appsettings default + docker-compose.prod.yml env
+  (ForwardedHeaders__ClientIpHeader=CF-Connecting-IP). Grep for any
+  other deploy target before shipping ("three config targets" lesson).
+
+PHASES (each independently verifiable, rollback noted):
+
+Phase 0 - Inventory (no changes)
+ - Export every DNS record for examvaults.in from the current DNS host
+   (registrar GoDaddy; confirm whether nameservers point at Hostinger).
+ - Flag records that must stay DNS-only (grey cloud) and would reveal the
+   VPS IP: mail (MX/SPF/DKIM hosts), ftp, any direct-IP A record. If mail
+   is hosted on the VPS itself, the origin IP is public anyway - decide
+   before continuing.
+ - Lower TTLs to 300 s a day ahead.
+ - Measure worst-case AI generation time in prod logs (vs 100 s).
+
+Phase 1 - Code (ship first; no behaviour change while value stays
+X-Forwarded-For)
+ - Gateway: configurable ClientIpHeader as designed above + unit/
+   integration check; full .sln build + tests; deploy via CI/CD.
+
+Phase 2 - Move DNS to Cloudflare, proxy OFF
+ - Cloudflare free plan: add examvaults.in, import records, ALL grey
+   cloud. Wildcard *.examvaults.in record included.
+ - Change nameservers at GoDaddy to Cloudflare's pair.
+ - Verify: examvaults.in, api., one tenant subdomain, email links.
+ - Immediately (same session): switch Traefik ACME DNS-01 provider from
+   Hostinger to Cloudflare in the Docker Manager app - CF_DNS_API_TOKEN
+   scoped to Zone:DNS:Edit on examvaults.in only. Force/observe one
+   renewal in Traefik's log before moving on. Existing cert stays valid
+   meanwhile, but the next renewal fails without this.
+ - Rollback: nameservers back to previous host.
+
+Phase 3 - Turn the proxy on (one maintenance window)
+ - SSL/TLS mode: Full (strict) (origin already has a valid LE cert).
+   Never "Flexible" (redirect loop with the app's HTTPS redirect/HSTS).
+ - Always Use HTTPS on, minimum TLS 1.2. Leave Rocket Loader, Auto
+   Minify, Email Obfuscation, Bot Fight Mode OFF initially (they rewrite
+   HTML/JS or challenge API clients).
+ - Orange-cloud: examvaults.in, *.examvaults.in, api.examvaults.in.
+ - Same deploy: set ForwardedHeaders__ClientIpHeader=CF-Connecting-IP.
+ - Rollback: grey-cloud the records (instant) + revert the env var.
+
+Phase 4 - Origin lock (makes CF-Connecting-IP trustworthy)
+ - Hostinger firewall: 80/443 allowed ONLY from Cloudflare's published
+   ranges (cloudflare.com/ips, v4+v6); SSH 22 key-only, ideally from
+   own IP. Everything else denied.
+ - Verify: direct https://<VPS-IP> with Host: examvaults.in times out.
+ - Note: ranges change rarely; re-check periodically.
+ - Rollback: remove the source-IP restriction.
+
+Phase 5 - Verify end to end
+ - Login Activity / Security Audit Logs / sessions show the real public
+   IP (not Cloudflare, not 172.x).
+ - Auth rate limiter per real IP (11 bad logins -> 429 for that IP only).
+ - Create a new tenant -> its subdomain resolves + valid cert.
+ - AI generation, PDF/report downloads, 2 MB uploads, confirmation /
+   reset email links, CORS preflight to api.examvaults.in.
+
+Phase 6 - Edge protection
+ - Cloudflare free WAF managed rules on; one rate-limiting rule on
+   /api/users/login|register|forgot-password (edge layer; the app's own
+   limiter stays as the second layer).
+ - Later: Security Level tuning, bot rules, alerting.
+
+OUT OF SCOPE here: SSH hardening and VPS firewall review beyond the
+origin lock (separate checklist), JWT/refresh-token review, tenant/BOLA
+test pass.
+Status: PLANNED - awaiting user OK. Phases 0 and 2-4 need the user's
+access to GoDaddy, Cloudflare and the Hostinger panel; Claude does
+Phase 1 code and guides/verifies the rest.
+
+2026-09-25 - Cloudflare plan Phase 1 DONE (user approved "start phase 1").
+Gateway Program.cs: ForwardedHeaders:ClientIpHeader (appsettings.json
+default "X-Forwarded-For") -> ForwardedHeadersOptions.ForwardedForHeaderName.
+Config targets checked: appsettings.json (default), appsettings.Docker/
+Development.json (no override), docker-compose.prod.yml (Phase 3 adds
+`ForwardedHeaders__ClientIpHeader: CF-Connecting-IP` under gateway
+environment). Infra/*.bicep is legacy Azure - no workflow deploys it.
+Verified: ExamVault.sln 0 errors/0 warnings, all 8 test projects green.
+Live (local gateway): default mode - 11 bad logins from XFF A -> 429,
+XFF B still 401 (unchanged). CF mode (temp override) - 11 bad logins
+with the same CF-Connecting-IP but a different X-Forwarded-For each
+time -> 429 (XFF ignored), a different CF-Connecting-IP -> 401. Local
+gateway restored to default afterwards. No gateway test project exists,
+so this was verified live rather than by unit test.
+Safe to deploy now: prod keeps the default until Phase 3.

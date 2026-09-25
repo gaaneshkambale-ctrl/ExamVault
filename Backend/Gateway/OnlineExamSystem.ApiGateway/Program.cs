@@ -23,9 +23,22 @@ public class Program
         // private-network proxy: Traefik appends the real client IP last, so any
         // X-Forwarded-For a client sends itself is never the value used (prod only
         // exposes the Gateway through Traefik).
+        //
+        // ForwardedHeaders:ClientIpHeader picks which header carries that IP.
+        // Behind Cloudflare the last X-Forwarded-For hop is a Cloudflare edge,
+        // so prod switches this to "CF-Connecting-IP" (a single value Cloudflare
+        // always overwrites) - only safe once the origin firewall admits
+        // Cloudflare's ranges alone (ActionPlan.txt, Cloudflare plan Phase 4).
+        // Gateway-only: YARP still sends the resolved IP downstream as
+        // X-Forwarded-For, so the services' own config never changes.
+        var clientIpHeader = builder.Configuration["ForwardedHeaders:ClientIpHeader"];
         builder.Services.Configure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            if (!string.IsNullOrWhiteSpace(clientIpHeader))
+            {
+                options.ForwardedForHeaderName = clientIpHeader;
+            }
             options.ForwardLimit = 1;
             options.KnownProxies.Clear();
             options.KnownNetworks.Clear();
