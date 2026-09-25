@@ -61,6 +61,13 @@ services:
 
   gateway:
     ports: !reset []
+    environment:
+      # Behind the Cloudflare proxy the last X-Forwarded-For hop is a
+      # Cloudflare edge, so the real client IP comes from CF-Connecting-IP
+      # (see Gateway Program.cs). Only trustworthy because the VPS firewall
+      # admits 443 from Cloudflare's ranges alone - drop this line if the
+      # proxy is ever turned off (records back to "DNS only").
+      ForwardedHeaders__ClientIpHeader: CF-Connecting-IP
 
   frontend:
     ports: !reset []
