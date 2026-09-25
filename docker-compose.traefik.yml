@@ -53,6 +53,14 @@ services:
       traefik.http.routers.examvault-api.entrypoints: "websecure"
       traefik.http.routers.examvault-api.tls.certresolver: "letsencrypt"
       traefik.http.services.examvault-api.loadbalancer.server.port: "8080"
+      # TEMPORARY (remove after one successful deploy): proves Traefik can
+      # issue certs via Cloudflare DNS-01 after the DNS move. The two-level
+      # name isn't covered by the *.examvaults.in wildcard, so Traefik must
+      # request a fresh cert; no DNS record is needed for DNS-01.
+      traefik.http.routers.examvault-cfcheck.rule: "Host(`cf-check.test.examvaults.in`)"
+      traefik.http.routers.examvault-cfcheck.entrypoints: "websecure"
+      traefik.http.routers.examvault-cfcheck.tls.certresolver: "letsencrypt"
+      traefik.http.routers.examvault-cfcheck.service: "examvault-api"
 
   frontend:
     labels:

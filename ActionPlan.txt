@@ -16463,3 +16463,72 @@ time -> 429 (XFF ignored), a different CF-Connecting-IP -> 401. Local
 gateway restored to default afterwards. No gateway test project exists,
 so this was verified live rather than by unit test.
 Safe to deploy now: prod keeps the default until Phase 3.
+
+2026-09-25 - Cloudflare Phase 0 findings (public DNS lookups via 8.8.8.8;
+panel export still needed for anything not guessable):
+- Nameservers: aurora/nebula.dns-parking.com = HOSTINGER DNS (registrar
+  GoDaddy). Traefik's DNS-01 Hostinger API works because of this; it
+  stops working the moment NS moves to Cloudflare (Phase 2 trap confirmed).
+- examvaults.in A 187.127.174.163 (VPS). www CNAME examvaults.in.
+- WILDCARD *.examvaults.in -> 187.127.174.163: every unknown name resolves
+  to the VPS, incl. mail/smtp/webmail/ftp/cpanel/autodiscover/admin/
+  traefik (none are real VPS services). Needed for tenant subdomains; when
+  proxied, Cloudflare serves them all through the proxy - fine.
+- Mail is GoDaddy (Microsoft 365 via secureserver): MX smtp.secureserver.net
+  (0) / mailstore1.secureserver.net (10); email CNAME email.secureserver.net;
+  SPF "v=spf1 include:secureserver.net -all"; DMARC p=reject. None point
+  at the VPS -> NO origin-IP leak via mail. Keep all mail records DNS-only.
+  GAP: autodiscover.examvaults.in currently falls through the wildcard to
+  the VPS instead of GoDaddy - Outlook auto-setup likely broken today;
+  add the proper autodiscover CNAME (GoDaddy's value) during the move.
+- TXT "T7398490" (a verification token - keep as-is).
+- No CAA record (fine; add "letsencrypt.org" later if wanted).
+- Origin IP 187.127.174.163 has been public in DNS since launch, so
+  passive DNS history already has it - hiding it is not enough; Phase 4
+  origin lock (80/443 from Cloudflare ranges only) is what protects it.
+- Open question for user: where is n8n hosted? Not in repo config
+  (webhook URL lives in DB PlatformSettings.N8nWebhookUrl). If it is on
+  this VPS behind its own subdomain, that record must be listed
+  explicitly and its webhook timeouts checked against Cloudflare's 100 s.
+
+2026-09-25 - Cloudflare Phase 2 progress: Cloudflare zone created (free),
+9 records imported, ALL DNS-only (grey): A @ + A * -> 187.127.174.163,
+CNAME www -> examvaults.in, CNAME email -> email.secureserver.net, 2x MX
+(secureserver), SPF, DMARC, TXT T7398490. Verified every record directly
+against amber/michael.ns.cloudflare.com == Hostinger's answers. DNSSEC was
+off (no DS/DNSKEY). Nameservers changed at GoDaddy to
+amber.ns.cloudflare.com + michael.ns.cloudflare.com; .in registry (RDAP)
+showed them at 19:11 IST. Public resolvers still cached dns-parking at
+that point (TTL) - site/api/tenant subdomain all 200 throughout.
+Current certs: examvaults.in + api.examvaults.in (Let's Encrypt, to
+2026-11-28) and wildcard *.examvaults.in + apex (to 2026-11-29) ->
+Traefik renews ~2026-10-29; Step 4 (Traefik DNS-01 provider hostinger ->
+cloudflare, CF_DNS_API_TOKEN) must be done before then.
+Rollback: GoDaddy nameservers back to aurora/nebula.dns-parking.com.
+
+2026-09-25 - Cloudflare Phase 2 Step 4 DONE: Traefik (Docker Manager app
+"traefik", v3.7.13) switched to dnschallenge.provider=cloudflare with
+CF_DNS_API_TOKEN (Zone:DNS:Edit, examvaults.in only). Redeploy log: static
+config shows provider "cloudflare"; existing certs (examvaults.in,
+api.examvaults.in, *.examvaults.in) reloaded from acme.json; "No ACME
+certificate generation required"; no ERR lines. Externally: all three
+hosts 200 with the same certs. 8.8.8.8 + 1.1.1.1 now return the Cloudflare
+NS. Hostinger API token "examvault-ssl" was exposed in a screenshot -
+user told to delete it (no longer needed); first Cloudflare token was
+also exposed and rolled.
+Prod Docker network is 172.16.0.x (Traefik log backend URLs) - inside the
+172.16.0.0/12 KnownNetworks of the forwarded-headers fix, so it applies.
+
+PLAN - one-off DNS-01 proof via Cloudflare (instead of waiting for the
+~2026-10-29 renewal to find out if the token works):
+- Temporary gateway router label examvault-cfcheck, rule
+  Host(`cf-check.test.examvaults.in`), tls.certresolver letsencrypt.
+  Two-level name, so the existing *.examvaults.in wildcard does NOT cover
+  it -> Traefik must obtain a new cert via Cloudflare DNS-01. No DNS
+  record needed (DNS-01 only writes _acme-challenge TXT via the API).
+- Deploy via normal push (CD applies docker-compose.traefik.yml).
+- Pass = Traefik log shows the cert obtained for cf-check.test.examvaults.in
+  (and Cloudflare created/removed the _acme-challenge TXT); fail = lego
+  Cloudflare auth/zone error in the log.
+- Then remove the router label in a follow-up commit (stops renewals of
+  the test cert; the stored cert in acme.json is harmless).
