@@ -16541,3 +16541,30 @@ header comment updated (DNS-01 is Cloudflare now, not Hostinger).
 Cloudflare Phase 2 COMPLETE. Next: Phase 3 (orange-cloud + Full (strict)
 + ForwardedHeaders__ClientIpHeader=CF-Connecting-IP in one window), then
 Phase 4 origin lock - these two ship together/back-to-back.
+
+2026-09-25 - Cloudflare Phases 3 + 4 DONE.
+Phase 3: *, @ and www orange-clouded (email/MX/TXT stay DNS-only);
+13c46b0 set ForwardedHeaders__ClientIpHeader=CF-Connecting-IP for the
+prod gateway (deployed, CI 36153220096 / CD 36153333976). Verified: all
+hosts 200 via Cloudflare (Server: cloudflare, CF-RAY), no redirect loop,
+http -> 301 https, API login POST 401 + CORS preflight 204 through CF.
+Phase 4: Hostinger VPS firewall "cloudflare-only" (Hostinger's firewall
+drops all unmatched inbound by default): Accept TCP 22 from Any (GitHub
+Actions CD deploys over SSH from changing IPs - must stay open, key-only),
+Accept TCP 443 from each of Cloudflare's 15 IPv4 ranges (no AAAA record,
+so IPv4 only), everything else dropped (port 80 closed; Cloudflare does
+HTTP->HTTPS). Verified: direct 187.127.174.163:443 and :80 blocked, a
+direct request with a spoofed CF-Connecting-IP never connects, :22 open.
+INCIDENT during Phase 4 (~20:54-20:58 IST, ~4 min): the firewall was
+activated with only Hostinger's default "Drop Any" rule -> site, API and
+SSH all unreachable. Fixed by adding the accept rules + Synchronize.
+Lesson: on Hostinger, add + review all Accept rules BEFORE activating /
+synchronizing a new firewall.
+Maintenance: Cloudflare's ranges (cloudflare.com/ips-v4) change rarely -
+re-check periodically; a new range missing from the firewall would make
+that part of Cloudflare's network fail to reach the origin.
+Still open: user to confirm SSL/TLS mode is "Full (strict)" (externally
+indistinguishable from "Full"); user to delete Hostinger API token
+"examvault-ssl"; user to confirm Login Activity shows their real public
+IP; Phase 6 (WAF managed rules + edge rate limit on login/register/
+forgot-password); AI generation vs Cloudflare's 100 s origin timeout.
