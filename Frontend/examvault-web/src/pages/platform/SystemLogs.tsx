@@ -118,7 +118,8 @@ export default function SystemLogs() {
     return (
       log.message.toLowerCase().includes(searchQuery) ||
       log.service.toLowerCase().includes(searchQuery) ||
-      (log.exceptionType ?? '').toLowerCase().includes(searchQuery)
+      (log.exceptionType ?? '').toLowerCase().includes(searchQuery) ||
+      (log.ipAddress ?? '').toLowerCase().includes(searchQuery)
     );
   });
 
@@ -329,6 +330,7 @@ export default function SystemLogs() {
                   <th>Severity</th>
                   <th>Message</th>
                   <th>Details</th>
+                  <th>IP Address</th>
                   <th>Status</th>
                   <th className="pe-4">Actions</th>
                 </tr>
@@ -355,6 +357,9 @@ export default function SystemLogs() {
                       {log.requestMethod && log.requestPath
                         ? `${log.requestMethod} ${log.requestPath}`
                         : (log.exceptionType ?? '—')}
+                    </td>
+                    <td className="text-muted text-nowrap" style={{ fontSize: 13 }}>
+                      {log.ipAddress ?? '—'}
                     </td>
                     <td>
                       <Badge bg={log.isResolved ? 'success' : 'secondary'}>{log.isResolved ? 'Resolved' : 'Open'}</Badge>
@@ -422,6 +427,12 @@ export default function SystemLogs() {
               <>
                 {' '}
                 &middot; {detailsLog.requestMethod} {detailsLog.requestPath}
+              </>
+            )}
+            {detailsLog?.ipAddress && (
+              <>
+                {' '}
+                &middot; IP {detailsLog.ipAddress}
               </>
             )}
           </div>

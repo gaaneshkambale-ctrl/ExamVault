@@ -16267,3 +16267,67 @@ TenantsController create endpoints are [Authorize(Roles="SuperAdmin")];
 public site only has a Contact form), so approval has nothing to gate.
 Build it together with a future public "Register your organization" flow
 + pending-approval queue. `npm run build` OK. Not yet committed.
+
+========================================================================
+PLAN (2026-09-25) - IP address on Super Admin > System Logs
+========================================================================
+Ask: show the client IP for each System Logs row.
+System Logs = SystemErrorLog (unhandled exceptions), NOT the audit log.
+Each service's global exception handler POSTs RecordSystemErrorLogRequest
+to NotificationService; 9 HTTP senders (Gateway + User/Exam/Question/
+Submission/Result/Ai/Execution API Program.cs) + Notification's own
+Program.cs:189 (records directly) + 3 background jobs (ExamReminderCheck,
+TrialExpiryCheck, SystemErrorLogRetentionCleanup - no request, IP null).
+
+PREREQUISITE BUG FOUND WHILE PLANNING: no service calls
+UseForwardedHeaders (repo-wide grep: zero hits). Every service sits
+behind the YARP gateway (and Traefik in prod), so
+HttpContext.Connection.RemoteIpAddress is the gateway/proxy container IP,
+not the user's. Consequences today, not just for this feature:
+ - Login Activity / Security Audit Logs / sessions IPs are the gateway's
+   internal IP (to verify against real rows before fixing).
+ - 9adbbda's "auth" rate limiter partitions by that IP -> ALL users share
+   ONE bucket: 10 register/login/forgot-password calls per minute
+   site-wide, then everyone gets 429.
+
+Step 1 - real client IP everywhere (shared helper, all services):
+ - Shared extension: AddForwardedHeaders config (XForwardedFor|Proto),
+   trust the Docker/private networks (KnownNetworks 10/8, 172.16/12,
+   192.168/16) - only private-network proxies are trusted, so a public
+   client can't spoof X-Forwarded-For. ForwardLimit sized for
+   Traefik -> Gateway -> service (2 hops).
+ - app.UseForwardedHeaders() first in the pipeline of Gateway + all 8
+   APIs (grep every Program.cs - "three config targets" lesson).
+ - Confirm YARP appends X-Forwarded-For (default on) and Traefik sets it.
+
+Step 2 - IP on System Logs:
+ - SystemErrorLog.IpAddress (string?, max 45) + EF migration
+   (Notification DB; nullable, no backfill - old rows show "-").
+ - RecordSystemErrorLogRequest/Command: trailing `string? IpAddress = null`
+   (non-breaking for the 3 background jobs, which keep null).
+ - Every HTTP exception handler passes
+   context.Connection.RemoteIpAddress?.ToString().
+ - SystemErrorLogResponse + SystemLogsController mapping.
+ - Frontend: types/systemLog.ts ipAddress; SystemLogs.tsx new "IP
+   Address" column + include IP in the existing search box and the
+   Details modal. Background-job rows show "-".
+
+Verify: full ExamVault.sln build + dotnet test; npm run build + vitest;
+redeploy; trigger a real error through the gateway and confirm the row
+shows the host IP (not 172.x); confirm Login Activity now shows the real
+IP; confirm rate limiter no longer shared (11th login from a 2nd client
+not blocked). Status: IMPLEMENTED 2026-09-25 (user approved "go ahead").
+Verified the prerequisite bug against real data first: every IpAddress in
+NotificationDb.AuditLogs (2,572 rows) and UserDb.RefreshTokens (357) is a
+172.18.0.x Docker address (current gateway = 172.18.0.7) - zero real IPs.
+Step 1: ForwardedHeadersOptions (XForwardedFor, ForwardLimit 1, private
+nets + loopback) + app.UseForwardedHeaders() in all 9 Program.cs (Gateway +
+8 APIs); written inline per Program.cs (Shared.Common has no ASP.NET ref,
+and the exception handler is already per-Program.cs).
+Step 2: SystemErrorLog.IpAddress nvarchar(45) + migration
+AddIpAddressToSystemErrorLog; trailing optional IpAddress on request/command/
+response; all 9 exception handlers pass Connection.RemoteIpAddress; UI column
++ search + details line. New tests: RecordSystemErrorLogHandlerTests (2).
+Verified: ExamVault.sln 0 errors / 0 warnings, all dotnet tests green
+(Notification 32), npm run build OK, vitest 221/221. Live check pending.
+Not yet committed.

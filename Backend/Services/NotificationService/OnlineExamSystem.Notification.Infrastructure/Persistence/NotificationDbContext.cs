@@ -96,6 +96,7 @@ public class NotificationDbContext : TenantScopedDbContext
             entity.Property(e => e.StackTrace).HasMaxLength(4000);
             entity.Property(e => e.RequestPath).HasMaxLength(500);
             entity.Property(e => e.RequestMethod).HasMaxLength(16);
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
             // No HasQueryFilter - deliberately cross-tenant, see SystemErrorLog's own comment.
         });
 
