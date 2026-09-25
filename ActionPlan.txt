@@ -16568,3 +16568,56 @@ indistinguishable from "Full"); user to delete Hostinger API token
 "examvault-ssl"; user to confirm Login Activity shows their real public
 IP; Phase 6 (WAF managed rules + edge rate limit on login/register/
 forgot-password); AI generation vs Cloudflare's 100 s origin timeout.
+
+========================================================================
+PLAN (2026-09-25) - Auth rate limiter: per account, not per college lab
+========================================================================
+Problem: now that the app sees real client IPs (1033324 + Cloudflare
+CF-Connecting-IP), the "auth" limiter (UserService Program.cs:
+FixedWindow 10 req/min, partitioned by client IP) applies per IP. A college
+lab / hostel / mobile-carrier NAT puts many students behind ONE public IP,
+so ~50 students logging in at exam start from one lab -> most get 429.
+(Before today the whole site shared one bucket, which was worse - so this
+is not a regression, but it is now a realistic per-college failure.)
+Endpoints on the policy: POST /api/users/register, login,
+forgot-password, confirm-email, resend-confirmation-email.
+
+Design - two layers instead of one IP bucket:
+1. "auth" policy partitions by client IP + normalized email (trim,
+   lower-case) from the JSON body: 10 req/min per (IP, email). Stops rapid
+   guessing against one account from one source; different students from
+   the same lab never share a bucket. Account lockout (MaxLoginAttempts /
+   LockoutMinutes in LoginUserHandler) stays the per-account backstop
+   across IPs.
+   - Email extraction: small middleware, only for POST on the five auth
+     paths, runs BEFORE UseRateLimiter: Request.EnableBuffering(), read at
+     most 8 KB, JsonDocument -> "email" (case-insensitive), rewind the
+     body, store in HttpContext.Items. Malformed/missing email (and
+     confirm-email, which only has a token) -> key falls back to IP only,
+     i.e. today's behaviour.
+   - Pure function for the key (path + body bytes + IP -> key) so it is
+     unit-testable without a web host.
+2. Per-IP ceiling on the same five paths (GlobalLimiter, NoLimiter for
+   every other path): FixedWindow 300 req/min per IP. Stops one source
+   spraying many accounts (password spraying) while leaving room for a
+   large lab. Cloudflare's edge rule (30 req / 10 s per IP) sits in front.
+
+Not in scope: reset-password-with-token (not rate limited today; token is
+single-use + expiring) - note only.
+
+Verify: unit tests for the key function (email present / different case
++ spaces / missing / malformed JSON / oversize body / non-auth path);
+full .sln build + dotnet test; live on local stack: 11 bad logins from
+one IP with 11 DIFFERENT emails -> none 429; 11 with the SAME email ->
+11th 429; 301 with different emails from one IP -> 301st 429.
+Deploy via CI/CD; re-check login works through Cloudflare.
+Status: PLANNED - awaiting user OK.
+IMPLEMENTED 2026-09-25 (user approved): AuthRateLimitKey (User.Application/
+Security - pure, unit-tested) + Program.cs: "auth" policy keyed IP+email,
+GlobalLimiter 300/min per IP on the 5 auth paths, body-peek middleware
+before UseRateLimiter. Tests: AuthRateLimitKeyTests (23 cases). Full .sln
+0 errors / 0 warnings; all test projects green (User 199).
+Live (local, fake emails -> no DB writes; 401 proves the body still binds):
+one IP + 11 different emails -> all 401; one IP + same email x11 -> 11th
+429 (also for "  SAME@Example.TEST " - normalization works); one IP + 301
+different emails -> 300 accepted, 1 blocked (per-IP ceiling).

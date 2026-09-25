@@ -336,21 +336,40 @@ public class Program
         // exists) - Login already has its own per-account lockout
         // (LoginUserHandler's FailedLoginAttempts), but nothing previously
         // stopped high-volume credential-stuffing or account-enumeration
-        // traffic hitting these three at all. Partitioned per client IP so
-        // one abusive caller doesn't throttle everyone else; QueueLimit 0
-        // means an over-limit request is rejected immediately (429) rather
-        // than held and retried server-side.
+        // traffic hitting these three at all. QueueLimit 0 means an
+        // over-limit request is rejected immediately (429) rather than held
+        // and retried server-side.
+        //
+        // Two layers, because a college lab / hostel puts many students
+        // behind ONE public IP (real client IPs since the forwarded-headers +
+        // Cloudflare work): the "auth" policy is per IP + email being tried
+        // (AuthRateLimitKey), so classmates never share a bucket; the global
+        // limiter caps each IP across ALL of these endpoints so one source
+        // still can't spray many accounts.
         builder.Services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                partitionKey: AuthRateLimitKey.PartitionKey(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    httpContext.Items[AuthRateLimitKey.EmailItemKey] as string),
                 factory: _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 10,
                     Window = TimeSpan.FromMinutes(1),
                     QueueLimit = 0,
                 }));
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+                AuthRateLimitKey.IsAuthRequest(httpContext.Request.Method, httpContext.Request.Path.Value)
+                    ? RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 300,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        })
+                    : RateLimitPartition.GetNoLimiter("not-auth"));
         });
 
         var app = builder.Build();
@@ -412,6 +431,30 @@ public class Program
 
         app.UseAuthentication();
         app.UseAuthorization();
+
+        // Feeds the "auth" rate-limit key: peeks at the email in the JSON
+        // body of the auth endpoints only (buffered, capped, then rewound so
+        // model binding still reads it). Must run before UseRateLimiter.
+        app.Use(async (context, next) =>
+        {
+            if (AuthRateLimitKey.IsAuthRequest(context.Request.Method, context.Request.Path.Value)
+                && context.Request.ContentLength is null or <= AuthRateLimitKey.MaxBodyBytes)
+            {
+                context.Request.EnableBuffering();
+                var buffer = new byte[AuthRateLimitKey.MaxBodyBytes + 1];
+                var read = 0;
+                int count;
+                while (read < buffer.Length
+                    && (count = await context.Request.Body.ReadAsync(buffer.AsMemory(read), context.RequestAborted)) > 0)
+                {
+                    read += count;
+                }
+                context.Request.Body.Position = 0;
+                context.Items[AuthRateLimitKey.EmailItemKey] = AuthRateLimitKey.ExtractEmail(buffer.AsSpan(0, read));
+            }
+
+            await next();
+        });
         app.UseRateLimiter();
 
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealthCheckResponse });
