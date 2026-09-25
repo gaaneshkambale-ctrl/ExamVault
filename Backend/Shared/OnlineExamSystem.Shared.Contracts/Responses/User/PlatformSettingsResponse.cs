@@ -22,4 +22,5 @@ public record PlatformSettingsResponse(
     bool DefaultEmailNotificationsEnabled,
     DateTime UpdatedAtUtc,
     Guid? UpdatedByUserId = null,
-    string? UpdatedByName = null);
+    string? UpdatedByName = null,
+    bool RequireEmailVerification = true);

@@ -2,6 +2,7 @@ export interface PlatformSettings {
   platformName: string;
   platformTagline: string;
   allowSelfRegistration: boolean;
+  requireEmailVerification: boolean;
   maintenanceModeEnabled: boolean;
   passwordMinLength: number;
   passwordRequireUppercase: boolean;

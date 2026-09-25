@@ -144,8 +144,11 @@ public class LoginUserHandler
         // Admin already vetted that email. Checked after the correct
         // password, same as IsActive above, so a wrong-password attempt
         // against an unconfirmed account still looks like an ordinary
-        // failed login rather than confirming the account exists.
-        if (!user.EmailConfirmed)
+        // failed login rather than confirming the account exists. Only
+        // while Platform Settings > "Require Email Verification" is on
+        // (no settings row yet = on, the entity default) - turning it off
+        // lets accounts still sitting unconfirmed log in.
+        if (!user.EmailConfirmed && (platformSettings?.RequireEmailVerification ?? true))
         {
             await RecordLoginAuditAsync(user, "Failed login", command.IpAddress, cancellationToken);
             return LoginUserResult.EmailNotConfirmed();

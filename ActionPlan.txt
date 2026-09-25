@@ -16209,3 +16209,61 @@ Exam Name, Exam Date, and Duration all together, with no separate
 "Exam Information" box anywhere on the page.
 
 Not yet committed - awaiting explicit user instruction to commit.
+
+========================================================================
+PLAN (2026-09-25) - Make "Require Email Verification" a real toggle
+========================================================================
+Problem: Platform Settings > System Preferences > "Require Email
+Verification" is a dead placeholder (no backend field, no onChange).
+Since 397c0fb, email confirmation is ALWAYS enforced for self-registered
+users regardless of what the toggle shows - the UI misleads.
+
+Backend (UserService):
+1. PlatformSettings entity: add `bool RequireEmailVerification = true`.
+   Default true = today's behaviour stays unchanged after deploy.
+2. EF migration AddRequireEmailVerification (bit, NOT NULL, default 1)
+   so the existing settings row keeps enforcement on.
+3. Contracts: PlatformSettingsResponse gets the field;
+   UpdatePlatformSettingsRequest/Command get a trailing
+   `bool? RequireEmailVerification = null` (null = keep current value,
+   so an older cached frontend's PUT can't silently switch it off).
+   UpdatePlatformSettingsHandler + controller mapping.
+4. LoginUserHandler: the EmailNotConfirmed block only applies when
+   RequireEmailVerification is on (null settings row = on).
+5. RegisterUserHandler: when off -> create user EmailConfirmed=true and
+   skip the confirmation token + email. When on -> unchanged.
+   RegisterUserResponse gets `RequiresEmailConfirmation` so the UI
+   shows the right success message.
+   Semantics: turning it OFF lets existing unconfirmed users log in;
+   turning it back ON blocks only users still unconfirmed (they can
+   use Resend confirmation). Users who registered while OFF stay
+   confirmed - not retroactively re-challenged.
+
+Frontend:
+6. types/platformSettings.ts + PlatformSettings.tsx: wire the toggle
+   (checked/onChange/disabled=false); update the disclosure text
+   (only Registration Approval remains a placeholder).
+7. RegisterForm.tsx: success message branches on
+   requiresEmailConfirmation ("check your email" vs "you can log in").
+
+Tests: login allows unconfirmed user when off / blocks when on;
+register off -> confirmed + no email sent; update handler persists
+value and null keeps existing. Verify with full .sln build + tests and
+`npm run build` + vitest (CI scope).
+
+Browser check after deploy: toggle off -> register -> immediate login;
+toggle on -> register -> blocked until confirmed.
+Status: IMPLEMENTED 2026-09-25 (user approved). Migration
+20260925095600_AddRequireEmailVerification hand-edited to defaultValue: true
+(EF scaffolded false - same AddColumn<bool> trap as ProctoringSettings).
+Verified: full ExamVault.sln build 0 errors; dotnet test all green (User
+176 incl. 4 new); npm run build OK; vitest 221/221. Browser check pending.
+Not yet committed.
+
+2026-09-25 - Platform Settings "Enable Registration Approval" relabelled
+"(Coming soon)" (label + page disclosure + file comment) per user request.
+Reason: organizations are only ever created by Super Admin today (all
+TenantsController create endpoints are [Authorize(Roles="SuperAdmin")];
+public site only has a Contact form), so approval has nothing to gate.
+Build it together with a future public "Register your organization" flow
++ pending-approval queue. `npm run build` OK. Not yet committed.

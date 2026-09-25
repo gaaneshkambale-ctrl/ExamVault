@@ -54,6 +54,7 @@ export default function RegisterForm() {
   const [form, setForm] = useState<FormState>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [requiresEmailConfirmation, setRequiresEmailConfirmation] = useState(true);
   const [serverError, setServerError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -74,11 +75,12 @@ export default function RegisterForm() {
     setStatus('loading');
     setServerError('');
     try {
-      await registerUser({
+      const response = await registerUser({
         fullName: form.fullName,
         email: form.email,
         password: form.password,
       });
+      setRequiresEmailConfirmation(response.requiresEmailConfirmation !== false);
       setStatus('success');
       setForm(initialFormState);
     } catch (error) {
@@ -86,6 +88,14 @@ export default function RegisterForm() {
       setServerError(extractServerError(error, REGISTER_ERROR_OVERRIDES));
     }
   };
+
+  if (status === 'success' && !requiresEmailConfirmation) {
+    return (
+      <Alert variant="success">
+        Account created! You can <Link to="/login">log in</Link> now.
+      </Alert>
+    );
+  }
 
   if (status === 'success') {
     return (

@@ -73,6 +73,10 @@ public class RegisterUserHandler
             return RegisterUserResult.Conflict();
         }
 
+        // Platform Settings > "Require Email Verification" (no settings row
+        // yet = on, the entity default).
+        var requireEmailVerification = platformSettings?.RequireEmailVerification ?? true;
+
         var user = new AppUser
         {
             TenantId = TenantConstants.DefaultTenantId,
@@ -81,8 +85,11 @@ public class RegisterUserHandler
             // Nobody vetted this email by typing it in themselves (unlike
             // CreateUserHandler/CreateTenantAdminHandler, where an Admin
             // did) - login stays blocked (see LoginUserHandler) until the
-            // ConfirmEmail link below is used.
-            EmailConfirmed = false,
+            // ConfirmEmail link below is used. With verification off the
+            // account starts confirmed, so turning the setting back on
+            // later never retroactively locks out someone who registered
+            // while it was off.
+            EmailConfirmed = !requireEmailVerification,
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, command.Password);
 
@@ -103,6 +110,11 @@ public class RegisterUserHandler
         await _eventPublisher.PublishAsync(
             new UserRegisteredEvent { TenantId = user.TenantId, UserId = user.Id, Email = user.Email, FullName = user.FullName },
             cancellationToken);
+
+        if (!requireEmailVerification)
+        {
+            return RegisterUserResult.Ok(user);
+        }
 
         // Same token-issuing shape ForgotPasswordHandler uses for its own
         // reset link (and ResendConfirmationEmailHandler reuses for a

@@ -141,4 +141,24 @@ public class RegisterUserHandlerTests
         Assert.False(result.Success);
         Assert.Null(await repository.GetByEmailAsync("jane@example.com"));
     }
+
+    [Fact]
+    public async Task Registration_with_email_verification_off_starts_confirmed_and_sends_no_email()
+    {
+        var repository = new FakeUserRepository();
+        var emailDispatcher = new FakeEmailDispatcher();
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { RequireEmailVerification = false },
+        };
+        var handler = CreateHandler(repository, platformSettingsRepository: platformSettings, emailDispatcher: emailDispatcher);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.True(result.User!.EmailConfirmed);
+        Assert.Empty(emailDispatcher.SentEmails);
+        Assert.Empty(repository.EmailConfirmationTokens);
+    }
 }

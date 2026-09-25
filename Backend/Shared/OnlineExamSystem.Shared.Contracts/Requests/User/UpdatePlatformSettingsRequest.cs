@@ -19,4 +19,8 @@ public record UpdatePlatformSettingsRequest(
     int? DefaultMaxStudents,
     string? N8nWebhookUrl,
     bool DefaultInAppNotificationsEnabled,
-    bool DefaultEmailNotificationsEnabled);
+    bool DefaultEmailNotificationsEnabled,
+    // Nullable and trailing: a client that predates this field (an already-
+    // open settings page) omits it, and null keeps the stored value rather
+    // than silently switching verification off.
+    bool? RequireEmailVerification = null);

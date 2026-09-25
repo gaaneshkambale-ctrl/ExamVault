@@ -12,15 +12,17 @@ import { extractServerError } from '../../utils/apiError';
 import type { PlatformSettings as PlatformSettingsType, UpdatePlatformSettingsRequest } from '../../types/platformSettings';
 
 // Matches setting.png's Platform Settings screen. General tab is now real -
-// Platform Name/Tagline, Allow Self Registration, and Maintenance Mode are
-// all backed by the new PlatformSettings entity and actually enforced
-// (RegisterUserHandler for self-registration, LoginUserHandler for
-// maintenance mode - see PlatformSettingsController.cs). Security
+// Platform Name/Tagline, Allow Self Registration, Require Email
+// Verification, and Maintenance Mode are all backed by the PlatformSettings
+// entity and actually enforced (RegisterUserHandler for self-registration,
+// RegisterUserHandler/LoginUserHandler for email verification,
+// LoginUserHandler for maintenance mode - see PlatformSettingsController.cs). Security
 // Preferences here mirrors Security Settings' own Password
 // Policy/Session Management fields (same underlying row, no drift between
-// the two pages). Require Email Verification/Registration Approval stay
-// honest placeholders - each needs a real new flow (an email-confirm link,
-// or an approval queue + pending-user status) this pass doesn't build.
+// the two pages). Registration Approval is labelled "Coming soon" - it only
+// means something once organizations can sign themselves up (today only
+// Super Admin creates them), so it ships with that public sign-up flow plus
+// an approval queue, not before.
 // Default Time Zone/Language stay as-is - only one option exists in either
 // dropdown today, so there's nothing real to switch between yet. Every
 // other tab stays "Not connected yet" - no fields were ever defined for
@@ -84,7 +86,7 @@ export default function PlatformSettings() {
       <h1 className="h4 fw-bold mb-1 text-primary">Platform Settings</h1>
       <p className="text-muted mb-3">Configure global platform settings that apply to all organizations.</p>
 
-      <SettingsDisclosure text="Platform Name/Tagline, Allow Self Registration, Maintenance Mode, and Security Preferences below are real and enforced. Require Email Verification and Registration Approval remain a visual reference - each needs a real new flow this pass doesn't build." />
+      <SettingsDisclosure text="Platform Name/Tagline, Allow Self Registration, Require Email Verification, Maintenance Mode, and Security Preferences below are real and enforced. Registration Approval is coming soon - it needs a public organization sign-up flow, which doesn't exist yet (organizations are only created by Super Admin today)." />
 
       <Row className="g-3">
         <Col lg={2}>
@@ -159,7 +161,10 @@ export default function PlatformSettings() {
                         />
                         <ToggleRow
                           label="Require Email Verification"
-                          description="Users must verify their email address"
+                          description="Self-registered users must confirm their email before logging in"
+                          checked={draft.requireEmailVerification}
+                          onChange={(v) => update('requireEmailVerification', v)}
+                          disabled={false}
                         />
                         <ToggleRow
                           label="Maintenance Mode"
@@ -169,7 +174,7 @@ export default function PlatformSettings() {
                           disabled={false}
                         />
                         <ToggleRow
-                          label="Enable Registration Approval"
+                          label="Enable Registration Approval (Coming soon)"
                           description="New organizations require approval by Super Admin"
                         />
                       </Card.Body>

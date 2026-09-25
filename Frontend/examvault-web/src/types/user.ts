@@ -8,6 +8,9 @@ export interface RegisterResponse {
   id: string;
   fullName: string;
   email: string;
+  // False when Platform Settings > Require Email Verification is off - the
+  // account is already confirmed and can log in straight away.
+  requiresEmailConfirmation: boolean;
 }
 
 export type Gender = 'Male' | 'Female' | 'Other' | 'PreferNotToSay';

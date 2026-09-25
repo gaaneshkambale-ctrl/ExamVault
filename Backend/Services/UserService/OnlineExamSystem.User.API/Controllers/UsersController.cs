@@ -166,7 +166,7 @@ public class UsersController : ControllerBase
 
         var user = result.User!;
         _logger.LogInformation("User {UserId} registered successfully.", user.Id);
-        var response = new RegisterUserResponse(user.Id, user.FullName, user.Email);
+        var response = new RegisterUserResponse(user.Id, user.FullName, user.Email, RequiresEmailConfirmation: !user.EmailConfirmed);
         return StatusCode(StatusCodes.Status201Created, response);
     }
 

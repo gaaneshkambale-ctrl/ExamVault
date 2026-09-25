@@ -20,4 +20,5 @@ public record UpdatePlatformSettingsCommand(
     string? N8nWebhookUrl,
     bool DefaultInAppNotificationsEnabled,
     bool DefaultEmailNotificationsEnabled,
-    Guid UpdatedByUserId);
+    Guid UpdatedByUserId,
+    bool? RequireEmailVerification = null);

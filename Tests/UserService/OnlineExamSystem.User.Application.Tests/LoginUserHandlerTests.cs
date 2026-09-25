@@ -142,6 +142,27 @@ public class LoginUserHandlerTests
     }
 
     [Fact]
+    public async Task Unconfirmed_email_can_log_in_when_email_verification_is_turned_off()
+    {
+        // Accounts left unconfirmed while verification was on stop being
+        // locked out the moment a Super Admin turns it off.
+        var tenantRepository = new FakeTenantRepository();
+        var tenant = await SeedTenant(tenantRepository);
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(repository, "jane@example.com", "Passw0rd!", tenantId: tenant.Id, emailConfirmed: false);
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { RequireEmailVerification = false },
+        };
+        var handler = CreateHandler(repository, tenantRepository, platformSettings);
+
+        var result = await handler.HandleAsync(new LoginUserCommand("jane@example.com", "Passw0rd!", TenantSlug: tenant.Slug));
+
+        Assert.True(result.Success);
+        Assert.Equal(user.Id, result.User!.Id);
+    }
+
+    [Fact]
     public async Task Inactive_user_who_still_must_change_password_can_log_in_to_reach_the_reset_screen()
     {
         var tenantRepository = new FakeTenantRepository();

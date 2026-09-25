@@ -98,7 +98,8 @@ public class PlatformSettingsController : ControllerBase
             request.N8nWebhookUrl,
             request.DefaultInAppNotificationsEnabled,
             request.DefaultEmailNotificationsEnabled,
-            updatedByUserId);
+            updatedByUserId,
+            request.RequireEmailVerification);
 
         var result = await _updateHandler.HandleAsync(command, cancellationToken);
         if (!result.Success)
@@ -185,5 +186,6 @@ public class PlatformSettingsController : ControllerBase
             settings.DefaultEmailNotificationsEnabled,
             settings.UpdatedAtUtc,
             settings.UpdatedByUserId,
-            updatedByName);
+            updatedByName,
+            settings.RequireEmailVerification);
 }

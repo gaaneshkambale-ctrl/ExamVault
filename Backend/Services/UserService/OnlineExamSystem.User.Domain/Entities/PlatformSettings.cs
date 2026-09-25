@@ -11,6 +11,7 @@ namespace OnlineExamSystem.User.Domain.Entities;
 /// enforced somewhere (password policy by the 3 password validators, lockout by
 /// LoginUserHandler, session timeout by JwtTokenService via LoginUserHandler,
 /// maintenance mode by LoginUserHandler, self-registration by RegisterUserHandler,
+/// email verification by LoginUserHandler/RegisterUserHandler,
 /// tenant defaults by CreateTenantHandler/StartTrialButton, N8n webhook by
 /// N8nEmailDispatcher, notification defaults by NotificationService's
 /// UserRegisteredEvent handler) - nothing here is stored-and-ignored.</summary>
@@ -20,6 +21,11 @@ public class PlatformSettings : BaseEntity
     public string PlatformTagline { get; set; } = string.Empty;
 
     public bool AllowSelfRegistration { get; set; } = true;
+    // Enforced by LoginUserHandler (unconfirmed self-registered accounts
+    // blocked only while on) and RegisterUserHandler (off = account starts
+    // confirmed, no confirmation email). Defaults on - the behaviour
+    // self-registration had before this became a setting.
+    public bool RequireEmailVerification { get; set; } = true;
     public bool MaintenanceModeEnabled { get; set; }
 
     public int PasswordMinLength { get; set; } = 8;

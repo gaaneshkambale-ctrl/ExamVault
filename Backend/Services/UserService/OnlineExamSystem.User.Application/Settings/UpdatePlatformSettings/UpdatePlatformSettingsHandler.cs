@@ -29,6 +29,10 @@ public class UpdatePlatformSettingsHandler
         settings.PlatformTagline = command.PlatformTagline.Trim();
         settings.AllowSelfRegistration = command.AllowSelfRegistration;
         settings.MaintenanceModeEnabled = command.MaintenanceModeEnabled;
+        if (command.RequireEmailVerification is { } requireEmailVerification)
+        {
+            settings.RequireEmailVerification = requireEmailVerification;
+        }
         settings.PasswordMinLength = command.PasswordMinLength;
         settings.PasswordRequireUppercase = command.PasswordRequireUppercase;
         settings.PasswordRequireLowercase = command.PasswordRequireLowercase;
