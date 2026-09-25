@@ -78,16 +78,24 @@ public class MonitoringController : ControllerBase
         });
     }
 
-    private sealed record ServiceHealthProbe(string Name, string Status, int? ResponseTimeMs, bool DatabaseHealthy);
+    internal sealed record ServiceHealthProbe(string Name, string Status, int? ResponseTimeMs, bool DatabaseHealthy);
 
-    private async Task<List<ServiceHealthProbe>> ProbeAllAsync(CancellationToken cancellationToken)
+    private Task<List<ServiceHealthProbe>> ProbeAllAsync(CancellationToken cancellationToken) =>
+        ProbeAllAsync(_httpClientFactory, _configuration, cancellationToken);
+
+    // Shared with the anonymous HealthController (public uptime check), so
+    // both report on exactly the same probes.
+    internal static async Task<List<ServiceHealthProbe>> ProbeAllAsync(
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
     {
-        var client = _httpClientFactory.CreateClient("monitoring");
+        var client = httpClientFactory.CreateClient("monitoring");
         client.Timeout = TimeSpan.FromSeconds(3);
 
         var probes = await Task.WhenAll(Services.Select(async svc =>
         {
-            var baseUrl = _configuration[svc.ConfigKey];
+            var baseUrl = configuration[svc.ConfigKey];
             if (string.IsNullOrWhiteSpace(baseUrl))
             {
                 return new ServiceHealthProbe(svc.Name, "Offline", null, false);

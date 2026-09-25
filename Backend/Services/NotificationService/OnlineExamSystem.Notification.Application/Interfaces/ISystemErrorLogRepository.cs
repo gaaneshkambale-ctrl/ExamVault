@@ -22,5 +22,9 @@ public interface ISystemErrorLogRepository
     /// 30-day retention cleanup job's write. Returns the number of rows removed.</summary>
     Task<int> DeleteOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>Unresolved rows logged at or after sinceUtc - the error-spike
+    /// alert job's read.</summary>
+    Task<int> CountUnresolvedSinceAsync(DateTime sinceUtc, CancellationToken cancellationToken = default);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

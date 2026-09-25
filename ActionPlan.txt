@@ -16889,3 +16889,65 @@ IMPLEMENTED 2026-09-26 (user approved):
     on a sample High row.
  5. .github/dependabot.yml: weekly grouped PRs to dev for nuget, npm,
     docker (all Dockerfiles), github-actions.
+
+========================================================================
+PLAN (2026-09-26) - Monitoring & alerting
+========================================================================
+Today: every API service maps /health (internal only - the Gateway never
+routes it; api.examvaults.in/health = 404). Gateway MonitoringController
+aggregates them for Super Admin > System Monitoring (SuperAdmin-only,
+pull-only). System Logs record errors. NOTHING pushes an alert anywhere:
+an outage is only discovered when users complain.
+
+Goal: be told within minutes when (1) the site/API is down, (2) errors
+spike, (3) the origin certificate is about to expire / disk fills /
+containers die - without the alerting depending on the VPS it watches.
+
+A. Public aggregated health endpoint (code): Gateway GET /api/health ->
+   calls every service's /health in parallel (reuse MonitoringController's
+   logic, 3 s timeout), returns 200 {"status":"ok"} or 503
+   {"status":"degraded"} - no per-service detail (no info disclosure).
+   Cached ~30 s so it can't be used to hammer the services.
+B. External uptime monitor (user sets up; free tier of UptimeRobot or
+   Better Stack - an EXTERNAL service, so it still alerts when the whole
+   VPS is down): monitors on https://examvaults.in, https://api.examvaults.in/api/health
+   and one tenant subdomain, every 5 min; alerts by email + phone app.
+   Claude writes the exact monitor settings; account creation is the
+   user's.
+C. Error-spike alert (code): Notification Service background job every
+   5 min: >= 10 new unresolved System Log errors in the last 15 min ->
+   email every Super Admin via the existing email dispatcher (n8n), with
+   a 1-hour cooldown so an ongoing incident doesn't flood the inbox.
+D. Daily infra check (GitHub Actions scheduled workflow, reuses the CD
+   SSH secret): on the VPS check the origin TLS cert (Traefik/Let's
+   Encrypt) has > 21 days left, disk usage < 85 %, and every expected
+   container is running. Any failure fails the workflow -> GitHub emails
+   the repo owner. Catches a broken cert renewal ~3 weeks before
+   Cloudflare (Full strict) would start returning 526.
+E. Confirm GitHub is set to email on failed workflow runs (covers failed
+   CI and deploys) - user checks Settings > Notifications.
+Optional: Cloudflare Notifications (free plan alerts, e.g. origin
+unreachable) as a second signal.
+Status: PLANNED - awaiting user OK.
+IMPLEMENTED 2026-09-26 (user approved A-D):
+ A. Gateway HealthController GET /api/health [AllowAnonymous]: runs the
+    same probes as MonitoringController (ProbeAllAsync made internal
+    static, shared), returns 200 {"status":"ok"} / 503 {"status":"degraded"}
+    only; 30 s IMemoryCache; logs which services failed (server log only).
+    Local: stable 200 across 5 cache windows. Right after a gateway restart
+    the first probes can report degraded while connections warm up ->
+    uptime monitor must alert only after 2 consecutive failures.
+    /api/monitoring/* still SuperAdmin-only (401 anonymous).
+ C. Notification Service: ErrorSpikeCheck (Application, unit-tested: >= 10
+    unresolved errors in 15 min, 1 h cooldown) + ErrorSpikeAlertService
+    (every 5 min) emailing Alerts:Email (default support@examvaults.in,
+    same inbox as the Contact form - no User Service dependency, so it
+    still works when that service is down). Repo gains
+    CountUnresolvedSinceAsync. Not live-fired locally (would send a real
+    email); job starts cleanly.
+ D. .github/workflows/infra-health.yml: daily 02:30 UTC + manual; over the
+    CD SSH secret checks origin certs (examvaults.in, api., wildcard via
+    healthcheck.examvaults.in on 127.0.0.1:443) > 21 days, / disk < 85 %,
+    all compose services + traefik running. Failure -> GitHub emails.
+ Tests: +6 ErrorSpikeCheckTests.
+ B (external uptime monitor) and E (GitHub failure emails) are user steps.

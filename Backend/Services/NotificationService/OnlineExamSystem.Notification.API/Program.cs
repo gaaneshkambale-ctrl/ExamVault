@@ -27,6 +27,7 @@ using OnlineExamSystem.Notification.Application.Notifications.Mine.GetUnreadCoun
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAllAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.Preferences;
+using OnlineExamSystem.Notification.Application.SystemLogs.ErrorSpike;
 using OnlineExamSystem.Notification.Application.SystemLogs.ListSystemErrorLogs;
 using OnlineExamSystem.Notification.Application.SystemLogs.RecordSystemErrorLog;
 using OnlineExamSystem.Notification.Application.SystemLogs.ResolveSystemErrorLog;
@@ -96,6 +97,8 @@ public class Program
         builder.Services.AddScoped<ListSystemErrorLogsHandler>();
         builder.Services.AddScoped<ResolveSystemErrorLogHandler>();
         builder.Services.AddHostedService<SystemErrorLogRetentionCleanupService>();
+        builder.Services.AddScoped<ErrorSpikeCheck>();
+        builder.Services.AddHostedService<ErrorSpikeAlertService>();
 
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();

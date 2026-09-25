@@ -30,5 +30,8 @@ public class FakeSystemErrorLogRepository : ISystemErrorLogRepository
     public Task<int> DeleteOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default) =>
         Task.FromResult(0);
 
+    public Task<int> CountUnresolvedSinceAsync(DateTime sinceUtc, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Entries.Count(e => !e.IsResolved && e.CreatedAtUtc >= sinceUtc));
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
