@@ -16621,3 +16621,25 @@ Live (local, fake emails -> no DB writes; 401 proves the body still binds):
 one IP + 11 different emails -> all 401; one IP + same email x11 -> 11th
 429 (also for "  SAME@Example.TEST " - normalization works); one IP + 301
 different emails -> 300 accepted, 1 blocked (per-IP ceiling).
+
+2026-09-25 - Cloudflare Phase 6 DONE (Security -> Security rules, new UI).
+- Custom rule "Block scanners" (Block): path contains .php | /wp- | /.env
+  | /.git. Verified: /wp-login.php, /.env, /.git/config, /index.php,
+  /wp-admin/ and api.examvaults.in/.env -> 403 from Cloudflare; /, /login,
+  /pricing and the API -> 200. (Before it, those paths returned 200 only
+  because nginx's SPA fallback serves index.html - no real file exposed.)
+- Rate limiting rule "Auth endpoints flood" (free plan: 1 rule): POST to
+  api.examvaults.in /api/users/{login,register,forgot-password,
+  confirm-email,resend-confirmation-email}, per IP, 30 / 10 s, Block 10 s.
+  Verified: 40 parallel logins (different emails, so the app's own limits
+  don't trigger) -> 31 x 401, 9 x 429 with Server: cloudflare and
+  Retry-After; recovered after the block window; other endpoints
+  unaffected.
+- Managed rules: full ruleset needs a paid plan; free-plan baseline
+  protection is applied automatically.
+Cloudflare migration (Phases 0-6) COMPLETE. Remaining user confirmations:
+SSL/TLS mode "Full (strict)", Hostinger token "examvault-ssl" deleted,
+Login Activity shows the real client IP. Open follow-ups: AI generation vs
+Cloudflare 100 s timeout; HSTS header on API responses; periodic check of
+cloudflare.com/ips-v4 against the VPS firewall; Traefik aliasHeadersStrategy
+/ encoded-characters warnings.
