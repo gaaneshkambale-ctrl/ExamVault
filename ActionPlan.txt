@@ -16716,3 +16716,86 @@ RESULTS (2026-09-25):
   warnings; all test projects green (Exam 139, User 200).
  G (live cross-tenant probe with locally minted JWTs): not done - unit
   regression tests cover both findings; optional follow-up.
+
+========================================================================
+PLAN (2026-09-25) - Session / token hardening
+========================================================================
+Current state (checked):
+- Access token: HS256 JWT, SessionTimeoutMinutes (15), kept in memory only
+  on the frontend (not storage). All 9 services validate issuer, audience,
+  lifetime, signing key; ClockSkew zero. Local key 55 chars; .NET rejects
+  <256-bit HS256 keys. (Prod key lives in secrets - not inspected.)
+- Refresh token: 64 random bytes, stored SHA-256 hashed, 7-day expiry,
+  ROTATED on every refresh (old one revoked). Frontend keeps it in
+  localStorage (remember me) / sessionStorage, cached per tab on purpose
+  (prevents the cross-tab account swap). Refreshes de-duplicated per tab.
+- Logout revokes; forgot-password reset + user deactivation revoke all.
+- Frontend sends a strict CSP (script-src 'self', frame-ancestors 'none'),
+  which is the main XSS mitigation for a storage-held refresh token.
+
+Gaps -> fix:
+1. [HIGH] Deactivated ORGANIZATION stays logged in: login checks
+   tenant.IsActive, RefreshTokenHandler does not, and deactivating a tenant
+   revokes nothing -> a suspended org's users keep refreshing for as long
+   as they stay active. Fix: refresh rejects when the user's tenant is
+   inactive (Super Admin exempt); SetTenantActiveStatus(false) revokes every
+   active refresh token of that tenant's users.
+2. [MEDIUM] Changing your own password leaves other sessions alive (a
+   stolen session survives the password change). Fix: ChangePassword
+   revokes all of the user's OTHER refresh tokens (keep the current one if
+   the client identifies it, otherwise revoke all and the UI re-logs in).
+3. [MEDIUM] Admin "reset password" for a user doesn't sign that user out.
+   Fix: revoke all of the target user's refresh tokens (same as the
+   forgot-password path already does).
+4. [MEDIUM] No absolute session lifetime: every refresh issues a fresh
+   7-day expiry, so a session used at least weekly never ends. Fix:
+   RefreshToken.SessionStartedAtUtc carried across rotations; refresh
+   refused after 30 days -> fresh login. (Migration; existing rows
+   backfilled to their CreatedAtUtc.)
+5. [LOW, optional] Maintenance Mode is only checked at login; refresh
+   ignores it, so logged-in users continue. Fix: refresh rejects non-Super
+   Admin during maintenance (users drop within one 15-min access-token
+   cycle).
+
+Considered, NOT doing (and why):
+- Refresh-token reuse detection (revoke the whole family when a rotated
+  token is replayed): each tab deliberately caches its own refresh token,
+  so a second tab legitimately replays a stale token after the first tab
+  rotated it -> would log users out of EVERY session in normal multi-tab
+  use. Needs a frontend redesign first.
+- Moving the refresh token to an httpOnly cookie: strongest XSS defence,
+  but cross-subdomain cookies (examvaults.in + tenant subdomains +
+  api.examvaults.in), SameSite/CSRF handling and the per-tab session model
+  make it a larger project; the strict CSP already blocks injected script.
+- Minor: prod CSP connect-src still lists http://localhost:5000 (harmless,
+  tidy later).
+Verify: unit tests per fix (refresh rejects inactive tenant / expired
+session age / maintenance; tenant deactivation, change-password and admin
+reset revoke tokens); full .sln + tests; deploy; live login/refresh smoke.
+Status: PLANNED - awaiting user OK.
+IMPLEMENTED 2026-09-25 (user approved 1-5):
+ 1. RefreshTokenHandler rejects when the user's tenant is missing/inactive
+    (exempt: SuperAdmin, and MustChangePassword - a new org's admin whose
+    org only activates after the forced first password change). DEVIATION
+    from plan: no token revocation at deactivation - the refresh check
+    covers every deactivation path (SetTenantActiveStatus, TrialExpiry-
+    CheckService, future ones) and lets sessions resume on reactivation
+    (same design as AllowSelfRegistration). Users drop within one
+    access-token lifetime (15 min).
+ 2. ChangePasswordRequest/Command gain optional RefreshToken; handler
+    revokes every OTHER refresh token (RevokeOtherRefreshTokensForUserAsync)
+    or all of them if none given. Frontend changeMyPassword sends this
+    tab's getRefreshToken().
+ 3. Admin ResetPasswordHandler revokes all of the target user's tokens.
+ 4. RefreshToken.SessionStartedAtUtc (migration
+    AddSessionStartedAtUtcToRefreshToken, hand-edited backfill
+    SessionStartedAtUtc = CreatedAtUtc - the scaffolded year-1 default
+    would have logged everyone out on deploy); carried across rotation;
+    refresh refused after RefreshTokenHandler.MaxSessionAge = 30 days.
+ 5. Refresh rejects non-SuperAdmin while MaintenanceModeEnabled (no revoke).
+ Tests (+8): refresh inactive org / MustChangePassword exception / session
+ age / session start carried on rotation / maintenance; ChangePassword
+ keeps caller + revokes others, revokes all without token; admin reset
+ revokes all. Existing refresh tests now seed an active tenant per user.
+ Full .sln 0 errors / 0 warnings; all tests green (User 208); npm run
+ build OK; vitest 221/221.

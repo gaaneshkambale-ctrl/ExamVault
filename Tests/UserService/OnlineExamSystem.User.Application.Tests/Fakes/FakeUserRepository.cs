@@ -12,6 +12,7 @@ public class FakeUserRepository : IUserRepository
     private readonly List<PasswordResetToken> _passwordResetTokens = [];
     private readonly List<EmailConfirmationToken> _emailConfirmationTokens = [];
 
+    public IReadOnlyList<AppUser> Users => _users;
     public IReadOnlyList<RefreshToken> RefreshTokens => _refreshTokens;
     public IReadOnlyList<PasswordResetToken> PasswordResetTokens => _passwordResetTokens;
     public IReadOnlyList<EmailConfirmationToken> EmailConfirmationTokens => _emailConfirmationTokens;

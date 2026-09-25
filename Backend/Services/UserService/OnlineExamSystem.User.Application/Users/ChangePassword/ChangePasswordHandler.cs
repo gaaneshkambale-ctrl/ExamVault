@@ -12,17 +12,20 @@ public class ChangePasswordHandler
     private readonly ITenantRepository _tenantRepository;
     private readonly IValidator<ChangePasswordCommand> _validator;
     private readonly IPasswordHasher<AppUser> _passwordHasher;
+    private readonly IJwtTokenService _jwtTokenService;
 
     public ChangePasswordHandler(
         IUserRepository userRepository,
         ITenantRepository tenantRepository,
         IValidator<ChangePasswordCommand> validator,
-        IPasswordHasher<AppUser> passwordHasher)
+        IPasswordHasher<AppUser> passwordHasher,
+        IJwtTokenService jwtTokenService)
     {
         _userRepository = userRepository;
         _tenantRepository = tenantRepository;
         _validator = validator;
         _passwordHasher = passwordHasher;
+        _jwtTokenService = jwtTokenService;
     }
 
     public async Task<ChangePasswordResult> HandleAsync(
@@ -66,6 +69,19 @@ public class ChangePasswordHandler
         }
 
         await _userRepository.SaveChangesAsync(cancellationToken);
+
+        // A password change should lock out anyone else holding a session
+        // (eg. a stolen one) - keep only the caller's own session when the
+        // client identifies it, otherwise end them all.
+        if (string.IsNullOrWhiteSpace(command.CurrentRefreshToken))
+        {
+            await _userRepository.RevokeAllRefreshTokensForUserAsync(user.Id, cancellationToken);
+        }
+        else
+        {
+            await _userRepository.RevokeOtherRefreshTokensForUserAsync(
+                user.Id, _jwtTokenService.HashToken(command.CurrentRefreshToken), cancellationToken);
+        }
 
         return ChangePasswordResult.Ok();
     }

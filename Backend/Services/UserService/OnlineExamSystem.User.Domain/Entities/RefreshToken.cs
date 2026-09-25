@@ -11,5 +11,11 @@ public class RefreshToken : BaseEntity
     public string? DeviceLabel { get; set; }
     public string? IpAddress { get; set; }
 
+    // When the login that started this session happened - copied onto every
+    // rotated refresh token (RefreshTokenHandler), so the session's age is
+    // known no matter how often it refreshes. Refresh is refused once it is
+    // older than RefreshTokenHandler.MaxSessionAge, forcing a fresh login.
+    public DateTime SessionStartedAtUtc { get; set; } = DateTime.UtcNow;
+
     public bool IsActive => RevokedAtUtc is null && ExpiresAtUtc > DateTime.UtcNow;
 }

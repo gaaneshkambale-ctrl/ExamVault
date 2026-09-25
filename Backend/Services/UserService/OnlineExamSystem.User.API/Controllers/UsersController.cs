@@ -622,7 +622,7 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> ChangeMyPassword(ChangePasswordRequest request, CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var command = new ChangePasswordCommand(userId, request.CurrentPassword, request.NewPassword);
+        var command = new ChangePasswordCommand(userId, request.CurrentPassword, request.NewPassword, request.RefreshToken);
         var result = await _changePasswordHandler.HandleAsync(command, cancellationToken);
 
         if (result.IsNotFound)

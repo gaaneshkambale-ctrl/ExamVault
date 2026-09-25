@@ -158,7 +158,9 @@ export async function resetUserPassword(id: string, request: ResetPasswordReques
 }
 
 export async function changeMyPassword(request: ChangePasswordRequest): Promise<void> {
-  await apiClient.put('/api/users/me/password', request);
+  // This tab's own refresh token lets the server keep THIS session while
+  // signing out every other one after the password change.
+  await apiClient.put('/api/users/me/password', { ...request, refreshToken: getRefreshToken() });
 }
 
 export async function deleteUser(id: string): Promise<void> {

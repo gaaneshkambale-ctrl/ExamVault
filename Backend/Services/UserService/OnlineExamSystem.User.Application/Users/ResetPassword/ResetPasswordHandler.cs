@@ -40,6 +40,9 @@ public class ResetPasswordHandler
 
         user.PasswordHash = _passwordHasher.HashPassword(user, command.NewPassword);
         await _userRepository.SaveChangesAsync(cancellationToken);
+        // An Admin resetting someone's password (eg. a suspected compromise)
+        // should end every existing session, like the forgot-password path.
+        await _userRepository.RevokeAllRefreshTokensForUserAsync(user.Id, cancellationToken);
 
         return ResetPasswordResult.Ok();
     }

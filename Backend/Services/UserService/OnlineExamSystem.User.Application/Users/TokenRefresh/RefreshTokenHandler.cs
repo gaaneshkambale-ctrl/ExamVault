@@ -9,6 +9,11 @@ namespace OnlineExamSystem.User.Application.Users.TokenRefresh;
 
 public class RefreshTokenHandler
 {
+    // Absolute session lifetime: every refresh extends the refresh token's
+    // own expiry, so without this cap a session used at least weekly would
+    // never end.
+    public static readonly TimeSpan MaxSessionAge = TimeSpan.FromDays(30);
+
     private readonly IUserRepository _userRepository;
     private readonly ITenantRepository _tenantRepository;
     private readonly IPlanRepository _planRepository;
@@ -49,6 +54,25 @@ public class RefreshTokenHandler
             return RefreshTokenResult.Invalid();
         }
 
+        if (DateTime.UtcNow - storedToken.SessionStartedAtUtc > MaxSessionAge)
+        {
+            return RefreshTokenResult.Invalid();
+        }
+
+        // Login refuses a deactivated organization, but a refresh previously
+        // didn't - so a suspended org (manual deactivation or TrialExpiryCheck-
+        // Service) kept working for as long as its users stayed active. Checked
+        // here rather than revoking tokens at deactivation time so it covers
+        // every deactivation path, and reactivating the org lets sessions
+        // resume. Same exceptions as login: Super Admin, and a new org's admin
+        // still completing the forced first password change (the org only
+        // becomes active once they do - see ChangePasswordHandler).
+        var tenant = await _tenantRepository.GetByIdAsync(user.TenantId, cancellationToken);
+        if (user.Role != UserRole.SuperAdmin && !user.MustChangePassword && (tenant is null || !tenant.IsActive))
+        {
+            return RefreshTokenResult.Invalid();
+        }
+
         // Fetched here (not further down where it was previously only
         // needed for SessionTimeoutMinutes) so the AllowSelfRegistration
         // check below can run before this refresh is allowed to succeed.
@@ -71,6 +95,14 @@ public class RefreshTokenHandler
             return RefreshTokenResult.Invalid();
         }
 
+        // Maintenance Mode was login-only, so already-signed-in users carried
+        // on; now they drop within one access-token lifetime. Not revoking -
+        // the same session works again once maintenance ends.
+        if (platformSettings is not null && platformSettings.MaintenanceModeEnabled && user.Role != UserRole.SuperAdmin)
+        {
+            return RefreshTokenResult.Invalid();
+        }
+
         storedToken.RevokedAtUtc = DateTime.UtcNow;
 
         // Re-resolved fresh on every refresh (not carried over from the old
@@ -80,7 +112,6 @@ public class RefreshTokenHandler
         var enabledFeatures = await _planRepository.GetFeaturesForTenantAsync(user.TenantId, cancellationToken);
         var grantedPermissions = await _rolePermissionRepository.GetForRoleAsync(
             user.TenantId, RolePermissionCatalog.CatalogRoleName(user.Role), cancellationToken);
-        var tenant = await _tenantRepository.GetByIdAsync(user.TenantId, cancellationToken);
         var newAccessToken = _jwtTokenService.GenerateAccessToken(
             user, enabledFeatures, grantedPermissions, tenant?.PermissionVersion ?? 0, platformSettings?.SessionTimeoutMinutes);
         var newRefreshToken = _jwtTokenService.GenerateRefreshToken();
@@ -92,6 +123,7 @@ public class RefreshTokenHandler
             ExpiresAtUtc = _jwtTokenService.GetRefreshTokenExpiry(),
             DeviceLabel = UserAgentDeviceParser.Describe(command.UserAgent),
             IpAddress = command.IpAddress,
+            SessionStartedAtUtc = storedToken.SessionStartedAtUtc,
         }, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
