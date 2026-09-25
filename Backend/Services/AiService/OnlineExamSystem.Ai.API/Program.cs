@@ -51,7 +51,15 @@ public class Program
         // No DbContext/repository registrations here - AI Service owns no database.
         builder.Services.AddHealthChecks();
 
-        builder.Services.AddHttpClient<IAiQuestionGenerator, N8nQuestionGenerator>();
+        // Below Cloudflare's 100 s origin timeout (the default HttpClient
+        // timeout is exactly 100 s): a hung n8n call now fails here first, so
+        // GenerateQuestionsHandler returns its friendly "please try again"
+        // instead of the user seeing Cloudflare's raw 524 page. Normal
+        // generations take ~14-18 s.
+        builder.Services.AddHttpClient<IAiQuestionGenerator, N8nQuestionGenerator>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(80);
+        });
         builder.Services.AddScoped<IValidator<GenerateQuestionsRequest>, GenerateQuestionsValidator>();
         builder.Services.AddScoped<GenerateQuestionsHandler>();
 

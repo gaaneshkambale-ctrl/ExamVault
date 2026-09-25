@@ -16799,3 +16799,30 @@ IMPLEMENTED 2026-09-25 (user approved 1-5):
  revokes all. Existing refresh tests now seed an active tenant per user.
  Full .sln 0 errors / 0 warnings; all tests green (User 208); npm run
  build OK; vitest 221/221.
+
+========================================================================
+PLAN + DONE (2026-09-25) - Quick fixes after the Cloudflare/security work
+========================================================================
+1. HSTS on API responses: nginx (frontend) sends it; the Gateway's header
+   middleware (9adbbda) only added nosniff / X-Frame-Options /
+   Referrer-Policy. Add Strict-Transport-Security (max-age=31536000;
+   includeSubDomains) there. Browsers ignore HSTS on plain-http responses,
+   so local http://localhost:5000 is unaffected.
+2. AI generation vs Cloudflare's 100 s origin timeout: n8n calls normally
+   take 14-18 s and failures already map to a friendly 502, but
+   N8nQuestionGenerator's HttpClient kept the default 100 s timeout, so a
+   HUNG n8n call would be cut by Cloudflare first (raw 524 page). Set an
+   explicit 80 s timeout -> handler's existing catch returns the friendly
+   "Failed to generate questions. Please try again." before Cloudflare.
+3. Traefik warnings (VPS-side config, not in repo) - checked against the
+   v3.7 migration docs:
+   - encodedCharacters.*: defaults (allow) kept; tightening could break
+     legitimate encoded URLs; the log line is advisory.
+   - aliasHeadersStrategy (keep|delete|reject): only matters for backends
+     that alias X_Header to X-Header (PHP/CGI/WSGI/nginx vars). .NET does
+     not, and nginx drops underscore headers by default. Optional
+     hardening: --entryPoints.websecure.http.aliasHeadersStrategy=delete
+     (and the same for web) in the Docker Manager "traefik" app.
+4. Not changing: prod CSP connect-src also lists http://localhost:5000
+   (same nginx.conf ships to both images). Harmless - nothing on the live
+   site can reach it; templating it would change the frontend build.

@@ -210,6 +210,9 @@ public class Program
             context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
             context.Response.Headers.Append("X-Frame-Options", "DENY");
             context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+            // Same policy the frontend's nginx.conf sends; browsers ignore it
+            // on plain-http responses, so local http://localhost:5000 is fine.
+            context.Response.Headers.Append("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
             await next();
         });
 
