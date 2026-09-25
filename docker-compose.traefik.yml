@@ -13,7 +13,12 @@
 #     a container's bridge-network IP directly.
 #   - certresolver name: "letsencrypt" (confirmed, matches this file)
 #   - entrypoint for HTTPS: "websecure" (confirmed, matches this file)
-#   - challenge type: DNS-01 via HOSTINGER_API_TOKEN (switched from HTTP-01
+#   - challenge type: DNS-01 via Cloudflare (provider=cloudflare,
+#     CF_DNS_API_TOKEN scoped to Zone:DNS:Edit on examvaults.in) since
+#     2026-09-25, when DNS moved from Hostinger to Cloudflare - proven by a
+#     one-off cert for cf-check.test.examvaults.in. Previously Hostinger
+#     (HOSTINGER_API_TOKEN), which only worked while Hostinger hosted the
+#     DNS. Originally switched to DNS-01 from HTTP-01
 #     - HTTP-01 only requests certs for domains Traefik can extract
 #     literally from a Host() rule; it cannot enumerate a HostRegexp()
 #     pattern into concrete domains, so a brand-new tenant subdomain never
@@ -53,14 +58,6 @@ services:
       traefik.http.routers.examvault-api.entrypoints: "websecure"
       traefik.http.routers.examvault-api.tls.certresolver: "letsencrypt"
       traefik.http.services.examvault-api.loadbalancer.server.port: "8080"
-      # TEMPORARY (remove after one successful deploy): proves Traefik can
-      # issue certs via Cloudflare DNS-01 after the DNS move. The two-level
-      # name isn't covered by the *.examvaults.in wildcard, so Traefik must
-      # request a fresh cert; no DNS record is needed for DNS-01.
-      traefik.http.routers.examvault-cfcheck.rule: "Host(`cf-check.test.examvaults.in`)"
-      traefik.http.routers.examvault-cfcheck.entrypoints: "websecure"
-      traefik.http.routers.examvault-cfcheck.tls.certresolver: "letsencrypt"
-      traefik.http.routers.examvault-cfcheck.service: "examvault-api"
 
   frontend:
     labels:

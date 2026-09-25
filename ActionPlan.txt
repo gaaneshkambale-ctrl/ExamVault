@@ -16532,3 +16532,12 @@ PLAN - one-off DNS-01 proof via Cloudflare (instead of waiting for the
   Cloudflare auth/zone error in the log.
 - Then remove the router label in a follow-up commit (stops renewals of
   the test cert; the stored cert in acme.json is harmless).
+RESULT (2026-09-25 20:17 IST): PASS. ~30 s after deploy c43d786, Traefik
+served a Let's Encrypt (YR2) cert for cf-check.test.examvaults.in (valid
+to 2026-12-24) - only obtainable via DNS-01 on Cloudflare, now the sole
+authoritative DNS -> the CF token works; ~Oct 29 renewals are safe.
+Test router removed in the follow-up commit; docker-compose.traefik.yml
+header comment updated (DNS-01 is Cloudflare now, not Hostinger).
+Cloudflare Phase 2 COMPLETE. Next: Phase 3 (orange-cloud + Full (strict)
++ ForwardedHeaders__ClientIpHeader=CF-Connecting-IP in one window), then
+Phase 4 origin lock - these two ship together/back-to-back.
