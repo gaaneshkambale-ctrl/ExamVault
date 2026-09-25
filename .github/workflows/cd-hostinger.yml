@@ -44,7 +44,7 @@ jobs:
           # the runner VM is destroyed immediately after this job anyway.
           chmod 644 "${{ github.workspace }}/deploy_key"
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
