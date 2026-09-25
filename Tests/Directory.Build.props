@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    Applies to every test project under Tests/. xunit 2.x pulls in
+    NETStandard.Library 1.6.1, which brings System.Net.Http 4.3.0 and
+    System.Text.RegularExpressions 4.3.0 - both flagged High by
+    `dotnet list package vulnerable`, which CI now fails on. Pinning the
+    patched versions of those exact transitive packages keeps the scan
+    clean without touching test code. Test projects are never shipped.
+  -->
+  <ItemGroup>
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+  </ItemGroup>
+</Project>

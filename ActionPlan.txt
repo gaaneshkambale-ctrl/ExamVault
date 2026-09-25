@@ -16826,3 +16826,66 @@ PLAN + DONE (2026-09-25) - Quick fixes after the Cloudflare/security work
 4. Not changing: prod CSP connect-src also lists http://localhost:5000
    (same nginx.conf ships to both images). Harmless - nothing on the live
    site can reach it; templating it would change the frontend build.
+
+========================================================================
+PLAN (2026-09-25) - Dependency vulnerability scanning in CI
+========================================================================
+Baseline scan today:
+- dotnet list package --vulnerable --include-transitive: only the 8 TEST
+  projects - System.Net.Http 4.3.0 + System.Text.RegularExpressions 4.3.0
+  (High), pulled via xunit 2.5.3 -> NETStandard.Library 1.6.1. No
+  production project affected. Test projects are never shipped.
+- npm audit: node-fetch 2.1.2 (High) via face-api.js -> tfjs-core 1.7
+  (node-fetch is only used when tfjs runs under Node; browser uses
+  window.fetch); dompurify <=3.4.12 (Moderate) via monaco-editor 0.56 -
+  the exam code editor, runs in students' browsers; vitest (Moderate,
+  dev-only test runner). npm's own fixes are breaking (face-api.js
+  downgrade, monaco major).
+
+Fix the baseline (so CI starts green):
+1. Tests/Directory.Build.props: pin System.Net.Http 4.3.4 and
+   System.Text.RegularExpressions 4.3.1 for every test project (patched
+   versions of the exact transitive packages; no test code change).
+2. package.json "overrides": dompurify -> 3.4.16 (patch-level within the
+   3.x line monaco already uses), node-fetch -> ^2.7.0 (API-compatible
+   2.x). vitest -> latest 4.x patch (dev-only).
+   Verify: npm run build, vitest, and a browser check that the exam code
+   editor (Monaco) and proctoring face detection still load.
+
+CI gates (new steps in ci.yml):
+3. Backend: fail when `dotnet list package --vulnerable
+   --include-transitive` reports any High/Critical package.
+4. Frontend: `npm audit --omit=dev --audit-level=high` (production
+   dependencies only, High and Critical fail the build).
+   Note: CD deploys only after CI passes, so a NEW advisory can block
+   deploys until fixed - intended for High/Critical; Moderate/Low stay
+   report-only.
+5. .github/dependabot.yml: weekly update PRs for nuget, npm, docker base
+   images and github-actions (grouped, limited open PRs).
+Later (not now): container image scanning (Trivy) - heavier, noisier.
+Status: PLANNED - awaiting user OK.
+IMPLEMENTED 2026-09-26 (user approved):
+ 1. Tests/Directory.Build.props pins System.Net.Http 4.3.4 +
+    System.Text.RegularExpressions 4.3.1 for all test projects ->
+    `dotnet list package --vulnerable --include-transitive`: 0 projects.
+ 2. package.json overrides dompurify 3.4.16 (incl. monaco's nested copy,
+    was 3.4.8) and node-fetch ^2.7.0 (was 2.1.2) - lockfile diff 56 lines,
+    nothing else drifted. npm audit: 0 high/critical, 0 in production deps;
+    only vitest/@vitest/mocker (moderate, dev-only) remain.
+    NOT done: vitest bump to 4.1.11 - npm (9.1.3 locally, and npm@10 via
+    npx) crashes with "Cannot read properties of null (reading
+    'edgesOut')" in peer-set resolution for that bump (reproduced with
+    overrides removed from the equation). Dev-only + not gated; Dependabot
+    will propose it. Install note: the overrides install needed npm@10
+    (`npx -y npm@10 install`); local npm 9.1.3 hits the same crash.
+    npm run build OK; vitest 221/221. Browser check of the exam code
+    editor (Monaco) + proctoring face detection NOT done by Claude - both
+    only render on the student TakeExam page (needs a student login) -
+    left to the user; risk low (dompurify patch-level; node-fetch unused
+    in browsers).
+ 3. ci.yml backend: "Vulnerable NuGet packages (High/Critical fail)".
+ 4. ci.yml frontend: npm audit --omit=dev --audit-level=high.
+    Both gates dry-run locally: pass today; backend gate verified to trip
+    on a sample High row.
+ 5. .github/dependabot.yml: weekly grouped PRs to dev for nuget, npm,
+    docker (all Dockerfiles), github-actions.
