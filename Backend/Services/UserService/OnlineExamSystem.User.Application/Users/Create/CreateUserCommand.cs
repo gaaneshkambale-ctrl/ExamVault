@@ -5,6 +5,7 @@ public record CreateUserCommand(
     string FullName,
     string Email,
     string Role,
-    bool IsActive = true,
     string? PhoneNumber = null,
-    string? RollNumber = null);
+    string? RollNumber = null,
+    Guid? CreatedByUserId = null,
+    Dictionary<string, string>? AcademicFields = null);

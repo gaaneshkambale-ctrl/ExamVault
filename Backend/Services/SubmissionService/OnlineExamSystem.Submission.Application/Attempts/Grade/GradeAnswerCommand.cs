@@ -4,4 +4,6 @@ public record GradeAnswerCommand(
     Guid AttemptId,
     Guid QuestionId,
     int MarksAwarded,
-    Guid GradedByUserId);
+    Guid GradedByUserId,
+    Guid? OwnerUserId = null,
+    string BearerToken = "");

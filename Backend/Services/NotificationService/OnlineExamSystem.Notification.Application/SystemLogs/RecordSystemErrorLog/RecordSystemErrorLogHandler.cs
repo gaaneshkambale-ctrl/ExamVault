@@ -27,6 +27,7 @@ public class RecordSystemErrorLogHandler
             RequestPath = command.RequestPath,
             RequestMethod = command.RequestMethod,
             TenantId = command.TenantId,
+            IpAddress = command.IpAddress,
         };
 
         await _repository.AddAsync(entry, cancellationToken);

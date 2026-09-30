@@ -10,25 +10,5 @@ export interface PlatformComingSoonRoute {
 }
 
 export const platformComingSoonRoutes: PlatformComingSoonRoute[] = [
-  { path: '/platform/organizations/trial', active: 'org-trial', parent: 'Organizations', title: 'Trial Organizations' },
-  { path: '/platform/organizations/details', active: 'org-details', parent: 'Organizations', title: 'Organization Details' },
-
-  { path: '/platform/users/roles', active: 'users-roles', parent: 'Users', title: 'Roles & Permissions' },
-
-  { path: '/platform/exams', active: 'exams-all', parent: 'Exams', title: 'All Exams' },
-  { path: '/platform/exams/categories', active: 'exams-categories', parent: 'Exams', title: 'Exam Categories' },
-  { path: '/platform/exams/sections', active: 'exams-sections', parent: 'Exams', title: 'Sections' },
-  { path: '/platform/exams/question-bank', active: 'exams-question-bank', parent: 'Exams', title: 'Question Bank' },
-  { path: '/platform/exams/tags', active: 'exams-tags', parent: 'Exams', title: 'Tags' },
-
-  { path: '/platform/questions', active: 'questions', parent: 'Platform Admin', title: 'Questions' },
-  { path: '/platform/submissions', active: 'submissions', parent: 'Platform Admin', title: 'Submissions' },
-
-  { path: '/platform/subscriptions/history', active: 'subs-history', parent: 'Subscriptions', title: 'Subscription History' },
-
   { path: '/platform/monitoring/api-health', active: 'mon-api-health', parent: 'System Monitoring', title: 'API Health' },
-
-  { path: '/platform/security', active: 'sec-events', parent: 'Security', title: 'Security Events' },
-  { path: '/platform/security/events', active: 'sec-events', parent: 'Security', title: 'Security Events' },
-  { path: '/platform/security/failed-logins', active: 'sec-failed-logins', parent: 'Security', title: 'Failed Login Attempts' },
 ];

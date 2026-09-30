@@ -20,9 +20,22 @@ public class CppDriverGenerator : IDriverGenerator
         // Piston's gcc package renames every submitted file with a
         // language-specific extension and compiles the whole set together via
         // `g++ *.cpp` - true multi-file support, verified against the real
-        // service. Main still needs to #include the Solution file directly
-        // (its class methods are implicitly inline within the class body, so
-        // this doesn't violate one-definition-rule across translation units).
+        // service. Crucially, that means Solution.cpp is ALSO compiled as its
+        // own standalone translation unit (not just pulled in via Main's
+        // #include) - so the includes/using-directive have to live in
+        // Solution.cpp itself, not just in Main.cpp's preamble, or a plain
+        // `vector<int>` in student code fails to compile on its own.
+        // Main still needs to #include the Solution file directly (its class
+        // methods are implicitly inline within the class body, so this
+        // doesn't violate one-definition-rule across translation units).
+        var solutionFile = $"""
+            #include <vector>
+            #include <string>
+            using namespace std;
+
+            {studentCode}
+            """;
+
         var args = string.Join(", ", arguments
             .Zip(parameters, (arg, param) => CppLiteral.Render(arg, param.Type)));
 
@@ -32,6 +45,7 @@ public class CppDriverGenerator : IDriverGenerator
             #include <iostream>
             #include <vector>
             #include <string>
+            using namespace std;
             #include "Solution.cpp"
 
             // No JSON library available without extra dependencies - a plain,
@@ -57,7 +71,7 @@ public class CppDriverGenerator : IDriverGenerator
 
         return
         [
-            new PistonFile("Solution", studentCode),
+            new PistonFile("Solution", solutionFile),
             new PistonFile("Main", driver),
         ];
     }

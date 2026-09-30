@@ -15,6 +15,7 @@ using OnlineExamSystem.Submission.Application.Attempts.EnterSection;
 using OnlineExamSystem.Submission.Application.Attempts.ForceSubmit;
 using OnlineExamSystem.Submission.Application.Attempts.Grade;
 using OnlineExamSystem.Submission.Application.Attempts.JoinRecording;
+using OnlineExamSystem.Submission.Application.Attempts.ListAll;
 using OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 using OnlineExamSystem.Submission.Application.Attempts.ListByUser;
 using OnlineExamSystem.Submission.Application.Attempts.ListLiveByExam;
@@ -46,6 +47,26 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // Real client IP: every request arrives via a proxy (Traefik -> Gateway ->
+        // service), so Connection.RemoteIpAddress is otherwise the proxy container's
+        // Docker IP (172.18.x.x) - which is what audit logs, sessions, System Logs
+        // and the per-IP auth rate limiter were all recording/keying on. Only the
+        // last hop is honoured (ForwardLimit 1), and only when that hop is a
+        // private-network proxy: Traefik appends the real client IP last, so any
+        // X-Forwarded-For a client sends itself is never the value used (prod only
+        // exposes the Gateway through Traefik).
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Clear();
+            foreach (var (prefix, length) in new[] { ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16), ("127.0.0.0", 8) })
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse(prefix), length));
+            }
+        });
+
         // Add services to the container.
 
         builder.Services.AddControllers();
@@ -56,13 +77,26 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<SubmissionDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("SubmissionDb")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("SubmissionDb"),
+                // Same transient-failure resiliency as every other service's
+                // DbContext registration - see ExamService's Program.cs for
+                // the real incident that prompted this across all of them.
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<SubmissionDbContext>("database");
         builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
 
-        builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
-        builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
+        {
+            builder.Services.Configure<ServiceBusSettings>(builder.Configuration.GetSection("ServiceBus"));
+            builder.Services.AddSingleton<IEventPublisher, ServiceBusEventPublisher>();
+        }
+        else
+        {
+            builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMq"));
+            builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        }
 
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
@@ -74,12 +108,40 @@ public class Program
         builder.Services.AddHttpClient<IAssignmentLookupClient, AssignmentServiceClient>(client =>
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
+        var questionServiceBaseUrl = builder.Configuration["Services:QuestionServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:QuestionServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IQuestionLookupClient, QuestionServiceClient>(client =>
+            client.BaseAddress = new Uri(questionServiceBaseUrl.TrimEnd('/') + "/"));
+
+        var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient("system-logs", client =>
         {
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
+        });
+        builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            // Fire-and-forget audit write must fail fast, not hang on the default
+            // 100s HttpClient timeout - a down NotificationService would otherwise
+            // make every audited business action (exam/question/user create, etc.)
+            // multi-second-to-100s slow instead of merely un-audited. Same value
+            // as the "system-logs" client above.
+            client.Timeout = TimeSpan.FromSeconds(3);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            // HttpClient.Timeout alone measured ~7-12s against a stopped
+            // container in this environment (DNS-resolution-to-a-torn-down-
+            // endpoint overhead sits partly outside that timeout's reach).
+            // ConnectTimeout bounds the DNS+TCP-connect phase specifically,
+            // giving the fast-fail this client actually needs.
+            ConnectTimeout = TimeSpan.FromSeconds(2),
         });
 
         // Optional: student exam recording via Metered.ca. Falls back to a
@@ -126,6 +188,7 @@ public class Program
         builder.Services.AddScoped<IValidator<GradeAnswerCommand>, GradeAnswerValidator>();
         builder.Services.AddScoped<GradeAnswerHandler>();
         builder.Services.AddScoped<ListUngradedAnswersByExamHandler>();
+        builder.Services.AddScoped<ListAllAttemptsHandler>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
@@ -149,9 +212,14 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
+        app.UseForwardedHeaders();
 
         using (var scope = app.Services.CreateScope())
         {
@@ -208,7 +276,8 @@ public class Program
                 exception.StackTrace,
                 context.Request.Path,
                 context.Request.Method,
-                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null);
+                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null,
+                IpAddress: context.Connection.RemoteIpAddress?.ToString());
 
             var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("system-logs");
             await client.PostAsJsonAsync("api/system-logs", request);

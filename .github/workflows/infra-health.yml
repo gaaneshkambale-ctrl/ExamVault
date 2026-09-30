@@ -1,0 +1,80 @@
+name: Infra health (daily)
+
+# Daily check of things no uptime monitor can see from outside, run ON the
+# VPS over the same SSH access the CD workflow uses. Any problem fails this
+# workflow, and GitHub emails the repo owner about failed scheduled runs.
+# - Origin TLS certs (Traefik / Let's Encrypt): > 21 days left. Cloudflare is
+#   in Full (strict) mode, so an expired origin cert means a 526 outage - this
+#   catches a broken auto-renewal about three weeks before that.
+# - Disk usage of / below 85 %.
+# - Every compose service, and Traefik itself, running.
+on:
+  schedule:
+    - cron: "30 2 * * *" # 02:30 UTC = 08:00 IST
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decode deploy key
+        run: |
+          echo "${{ secrets.VPS_SSH_PRIVATE_KEY }}" | base64 -d > "${{ github.workspace }}/deploy_key"
+          chmod 644 "${{ github.workspace }}/deploy_key"
+
+      - name: Run checks over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key_path: ${{ github.workspace }}/deploy_key
+          command_timeout: 5m
+          script: |
+            fail=0
+            MIN_CERT_DAYS=21
+            MAX_DISK_PCT=85
+
+            echo "== Origin certificates (min ${MIN_CERT_DAYS} days)"
+            # healthcheck.examvaults.in exercises the *.examvaults.in wildcard
+            # cert that every tenant subdomain uses.
+            for host in examvaults.in api.examvaults.in healthcheck.examvaults.in; do
+              end=$(echo | openssl s_client -connect 127.0.0.1:443 -servername "$host" 2>/dev/null \
+                | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+              if [ -z "$end" ]; then
+                echo "FAIL  $host: could not read a certificate"; fail=1; continue
+              fi
+              days=$(( ( $(date -d "$end" +%s) - $(date +%s) ) / 86400 ))
+              if [ "$days" -lt "$MIN_CERT_DAYS" ]; then
+                echo "FAIL  $host: expires in $days days ($end)"; fail=1
+              else
+                echo "ok    $host: $days days left"
+              fi
+            done
+
+            echo "== Disk (max ${MAX_DISK_PCT}%)"
+            used=$(df --output=pcent / | tail -1 | tr -dc '0-9')
+            if [ "$used" -ge "$MAX_DISK_PCT" ]; then
+              echo "FAIL  / is ${used}% full"; fail=1
+            else
+              echo "ok    / is ${used}% full"
+            fi
+
+            echo "== Containers"
+            cd ~/ExamVault
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.traefik.yml"
+            $COMPOSE config --services | sort > /tmp/expected-services
+            $COMPOSE ps --status running --services | sort > /tmp/running-services
+            missing=$(comm -23 /tmp/expected-services /tmp/running-services)
+            if [ -n "$missing" ]; then
+              echo "FAIL  not running: $(echo $missing)"; fail=1
+            else
+              echo "ok    all $(wc -l < /tmp/expected-services) services running"
+            fi
+            if [ -z "$(docker ps -q --filter name=traefik --filter status=running)" ]; then
+              echo "FAIL  traefik is not running"; fail=1
+            else
+              echo "ok    traefik running"
+            fi
+
+            exit $fail

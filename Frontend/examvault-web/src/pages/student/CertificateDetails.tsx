@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import StudentLayout from '../../layouts/StudentLayout';
 import { useMyResult } from '../../hooks/useResults';
+import { useExam } from '../../hooks/useExams';
 import { useAuth } from '../../hooks/useAuth';
 import { getGrade } from '../../types/result';
 import CertificatePreview from '../../components/certificate/CertificatePreview';
@@ -22,6 +23,7 @@ export default function CertificateDetails() {
   const { examId } = useParams<{ examId: string }>();
   const { user } = useAuth();
   const { data: result, isLoading, isError } = useMyResult(examId);
+  const { data: exam, isLoading: isLoadingExam } = useExam(examId);
 
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<{ variant: 'success' | 'danger'; text: string } | null>(null);
@@ -103,23 +105,24 @@ export default function CertificateDetails() {
         </Link>
       </div>
 
-      {isLoading && (
+      {(isLoading || isLoadingExam) && (
         <div className="d-flex justify-content-center py-5">
           <Spinner animation="border" />
         </div>
       )}
 
-      {!isLoading && isError && (
+      {!isLoading && !isLoadingExam && isError && (
         <div className="text-center text-danger py-5">Couldn't load this certificate. Please try again.</div>
       )}
 
-      {!isLoading && !isError && (!result || !isCertificateEligible(result)) && (
+      {!isLoading && !isLoadingExam && !isError && (!result || !isCertificateEligible(result, exam)) && (
         <div className="text-center text-muted py-5">
-          No certificate is available for this exam - it requires a score of 80% or above.
+          No certificate is available for this exam - it either doesn't offer one, or your score hasn't cleared its
+          minimum yet.
         </div>
       )}
 
-      {!isLoading && result && isCertificateEligible(result) && user && certificateId && (
+      {!isLoading && !isLoadingExam && result && isCertificateEligible(result, exam) && user && certificateId && (
         <Row className="g-4">
           <Col lg={4} className="d-print-none">
             <Card className="border-0 shadow-sm mb-3">

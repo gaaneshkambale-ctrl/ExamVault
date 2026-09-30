@@ -1,5 +1,6 @@
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Entities;
+using OnlineExamSystem.User.Domain.Enums;
 
 namespace OnlineExamSystem.User.Application.Tests.Fakes;
 
@@ -8,8 +9,21 @@ public class FakeUserRepository : IUserRepository
     private readonly List<AppUser> _users = [];
     private readonly List<RefreshToken> _refreshTokens = [];
     private readonly List<UserPreferences> _userPreferences = [];
+    private readonly List<PasswordResetToken> _passwordResetTokens = [];
+    private readonly List<EmailConfirmationToken> _emailConfirmationTokens = [];
 
+    public IReadOnlyList<AppUser> Users => _users;
     public IReadOnlyList<RefreshToken> RefreshTokens => _refreshTokens;
+    public IReadOnlyList<PasswordResetToken> PasswordResetTokens => _passwordResetTokens;
+    public IReadOnlyList<EmailConfirmationToken> EmailConfirmationTokens => _emailConfirmationTokens;
+
+    // Test seam for simulating the real UserRepository's translated
+    // DuplicateKeyException (a unique-index violation surfaced from the
+    // real SQL Server database) - lets handler tests exercise the "lost
+    // the race against a concurrent duplicate" fallback path without a
+    // real database. Consumed once, then resets itself, so a test only
+    // affects the one SaveChangesAsync call it targets.
+    public bool ThrowDuplicateKeyOnNextSaveChanges { get; set; }
 
     public Task<AppUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Id == id));
@@ -19,17 +33,40 @@ public class FakeUserRepository : IUserRepository
     // real adversarial requests, same as every other service). Delegates
     // to the same lookup as GetByIdAsync so handler tests using this fake
     // keep working unchanged.
+    // Mirrors the real repository's tenant scope when set (null = unscoped,
+    // like a Super Admin caller) so handlers that must use the scoped lookup
+    // can be regression-tested for it.
+    public Guid? CurrentTenantId { get; set; }
+
     public Task<AppUser?> GetByIdForTenantAsync(Guid id, CancellationToken cancellationToken = default) =>
-        GetByIdAsync(id, cancellationToken);
+        Task.FromResult(_users.FirstOrDefault(u => u.Id == id && (CurrentTenantId is null || u.TenantId == CurrentTenantId)));
 
     public Task<AppUser?> GetByEmailAsync(string email, Guid? tenantId = null, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Email == email && (tenantId is null || u.TenantId == tenantId)));
+
+    public Task<IReadOnlyList<AppUser>> GetAllByEmailAsync(string email, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AppUser>>(_users.Where(u => u.Email == email).ToList());
 
     public Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AppUser>>(_users.ToList());
 
     public Task<IReadOnlyList<AppUser>> GetByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AppUser>>(_users.Where(u => ids.Contains(u.Id)).ToList());
+
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.Count(u => u.TenantId == tenantId));
+
+    public Task<int> CountByTenantAndRoleAsync(Guid tenantId, UserRole role, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.Count(u => u.TenantId == tenantId && u.Role == role));
+
+    // No real database to isolate here - the fake's in-memory list is never
+    // touched concurrently in a test, so just running the operation directly
+    // (no real transaction, nothing to retry) is enough to satisfy the
+    // interface.
+    public Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default) =>
+        operation(cancellationToken);
 
     public Task RemoveAsync(AppUser user, CancellationToken cancellationToken = default)
     {
@@ -86,6 +123,24 @@ public class FakeUserRepository : IUserRepository
         Task.FromResult<IReadOnlyList<RefreshToken>>(
             _refreshTokens.Where(t => t.UserId == userId).OrderByDescending(t => t.CreatedAtUtc).ToList());
 
+    public Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken = default)
+    {
+        _passwordResetTokens.Add(token);
+        return Task.CompletedTask;
+    }
+
+    public Task<PasswordResetToken?> GetPasswordResetTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_passwordResetTokens.FirstOrDefault(t => t.TokenHash == tokenHash));
+
+    public Task AddEmailConfirmationTokenAsync(EmailConfirmationToken token, CancellationToken cancellationToken = default)
+    {
+        _emailConfirmationTokens.Add(token);
+        return Task.CompletedTask;
+    }
+
+    public Task<EmailConfirmationToken?> GetEmailConfirmationTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_emailConfirmationTokens.FirstOrDefault(t => t.TokenHash == tokenHash));
+
     public Task<UserPreferences> GetOrCreateUserPreferencesAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var preferences = _userPreferences.FirstOrDefault(p => p.UserId == userId);
@@ -97,5 +152,16 @@ public class FakeUserRepository : IUserRepository
         return Task.FromResult(preferences);
     }
 
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        if (ThrowDuplicateKeyOnNextSaveChanges)
+        {
+            ThrowDuplicateKeyOnNextSaveChanges = false;
+            throw new DuplicateKeyException(
+                "This request lost a race with a concurrent one over the same uniqueness check. Please try again.",
+                new InvalidOperationException("simulated unique-index violation"));
+        }
+
+        return Task.CompletedTask;
+    }
 }

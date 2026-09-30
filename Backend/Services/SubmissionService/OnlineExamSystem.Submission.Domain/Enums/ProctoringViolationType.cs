@@ -9,4 +9,5 @@ public enum ProctoringViolationType
     CopyPaste,
     RightClick,
     MultipleMonitors,
+    FullscreenExit,
 }

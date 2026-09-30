@@ -12,7 +12,14 @@ builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"))
 
 builder.Services.AddScoped<ICurrentTenant, NullCurrentTenant>();
 builder.Services.AddDbContext<NotificationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationDb")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("NotificationDb"),
+        // Same transient-failure resiliency as every other service's
+        // DbContext registration - see ExamService's Program.cs for the
+        // real incident that prompted this across all of them. Especially
+        // relevant here: this Worker runs its own background polling loop,
+        // same shape as ExamReminderCheckService.
+        sqlOptions => sqlOptions.EnableRetryOnFailure()));
 builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
 builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
 

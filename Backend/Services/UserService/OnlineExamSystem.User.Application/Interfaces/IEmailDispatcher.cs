@@ -7,5 +7,7 @@ public interface IEmailDispatcher
         string toName,
         string subject,
         string body,
+        string? loginUrl = null,
+        string? tenantSlug = null,
         CancellationToken cancellationToken = default);
 }

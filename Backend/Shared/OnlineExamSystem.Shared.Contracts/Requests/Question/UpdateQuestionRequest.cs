@@ -15,4 +15,7 @@ public record UpdateQuestionRequest(
     string? ReturnType = null,
     IReadOnlyList<QuestionParameterRequest>? Parameters = null,
     IReadOnlyList<QuestionTestCaseRequest>? TestCases = null,
-    IReadOnlyList<QuestionSqlTestCaseRequest>? SqlTestCases = null);
+    IReadOnlyList<QuestionSqlTestCaseRequest>? SqlTestCases = null,
+    string? SampleInput = null,
+    string? SampleOutput = null,
+    string? Constraints = null);

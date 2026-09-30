@@ -56,6 +56,36 @@ public class SubmitAttemptHandlerTests
     }
 
     [Fact]
+    public async Task Manual_submit_past_expiry_is_reclassified_as_auto_submitted()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = InProgressAttempt();
+        attempt.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        repository.SeedAttempt(attempt);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new SubmitAttemptCommand(attempt.Id, UserId, IsAutoSubmitted: false));
+
+        Assert.True(result.Success);
+        Assert.Equal(AttemptStatus.AutoSubmitted, result.Attempt!.Status);
+    }
+
+    [Fact]
+    public async Task Manual_submit_before_expiry_stays_a_manual_submit()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = InProgressAttempt();
+        attempt.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30);
+        repository.SeedAttempt(attempt);
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new SubmitAttemptCommand(attempt.Id, UserId, IsAutoSubmitted: false));
+
+        Assert.True(result.Success);
+        Assert.Equal(AttemptStatus.Submitted, result.Attempt!.Status);
+    }
+
+    [Fact]
     public async Task Double_submit_is_rejected()
     {
         var repository = new FakeSubmissionRepository();

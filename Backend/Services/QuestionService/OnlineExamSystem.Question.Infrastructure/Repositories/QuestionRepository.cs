@@ -60,6 +60,25 @@ public class QuestionRepository : IQuestionRepository
         return await query.OrderByDescending(q => q.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<TenantQuestionCount>> GetQuestionCountsByTenantAsync(CancellationToken cancellationToken = default)
+    {
+        var exam = await _dbContext.Questions
+            .GroupBy(q => q.TenantId)
+            .Select(g => new { TenantId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        var bank = await _dbContext.BankQuestions
+            .GroupBy(q => q.TenantId)
+            .Select(g => new { TenantId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        var examByTenant = exam.ToDictionary(x => x.TenantId, x => x.Count);
+        var bankByTenant = bank.ToDictionary(x => x.TenantId, x => x.Count);
+        return examByTenant.Keys
+            .Union(bankByTenant.Keys)
+            .Select(id => new TenantQuestionCount(id, examByTenant.GetValueOrDefault(id), bankByTenant.GetValueOrDefault(id)))
+            .ToList();
+    }
+
     public async Task BulkSetSectionIdAsync(
         Guid? sectionId,
         IReadOnlyList<Guid> questionIds,
@@ -77,6 +96,15 @@ public class QuestionRepository : IQuestionRepository
         await _dbContext.Questions
             .Where(q => q.SectionId == sectionId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(q => q.SectionId, (Guid?)null), cancellationToken);
+    }
+
+    public async Task DeleteAllQuestionsForExamAsync(
+        Guid examId,
+        CancellationToken cancellationToken = default)
+    {
+        await _dbContext.Questions
+            .Where(q => q.ExamId == examId)
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdsAsync(

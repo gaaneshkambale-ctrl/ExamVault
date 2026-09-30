@@ -21,6 +21,17 @@ jobs:
       - name: Restore
         run: dotnet restore ExamVault.sln
 
+      # Fails the build (and so blocks the CD deploy) on any NuGet package,
+      # direct or transitive, with a known High/Critical vulnerability.
+      # Moderate/Low are printed but don't fail.
+      - name: Vulnerable NuGet packages (High/Critical fail)
+        run: |
+          dotnet list ExamVault.sln package --vulnerable --include-transitive 2>&1 | tee vulnerable-packages.txt
+          if grep -qE '\b(High|Critical)\b' vulnerable-packages.txt; then
+            echo "::error::NuGet packages with High/Critical vulnerabilities found (see above)."
+            exit 1
+          fi
+
       - name: Build
         run: dotnet build ExamVault.sln --no-restore --configuration Release
 
@@ -45,6 +56,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Production dependencies only (what ships to browsers); High/Critical
+      # fail the build. Dev-only tooling (vitest etc.) is not gated.
+      - name: Audit production dependencies (High/Critical fail)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Build
         run: npm run build

@@ -6,9 +6,12 @@ public class SetTenantActiveStatusResult
 {
     public bool Success { get; init; }
     public bool IsNotFound { get; init; }
+    public bool CannotDeactivatePlatformTenant { get; init; }
     public Tenant? Tenant { get; init; }
 
     public static SetTenantActiveStatusResult Ok(Tenant tenant) => new() { Success = true, Tenant = tenant };
 
     public static SetTenantActiveStatusResult NotFound() => new() { IsNotFound = true };
+
+    public static SetTenantActiveStatusResult Protected() => new() { CannotDeactivatePlatformTenant = true };
 }

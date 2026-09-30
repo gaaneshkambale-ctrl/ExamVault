@@ -1,3 +1,3 @@
 namespace OnlineExamSystem.Shared.Contracts.Responses.User;
 
-public record RegisterUserResponse(Guid Id, string FullName, string Email);
+public record RegisterUserResponse(Guid Id, string FullName, string Email, bool RequiresEmailConfirmation = true);

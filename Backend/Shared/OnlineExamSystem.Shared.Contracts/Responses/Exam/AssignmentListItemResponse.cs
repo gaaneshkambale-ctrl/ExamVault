@@ -10,4 +10,5 @@ public record AssignmentListItemResponse(
     int TargetCount,
     DateTime StartAtUtc,
     DateTime EndAtUtc,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    DateTime? CancelledAtUtc);

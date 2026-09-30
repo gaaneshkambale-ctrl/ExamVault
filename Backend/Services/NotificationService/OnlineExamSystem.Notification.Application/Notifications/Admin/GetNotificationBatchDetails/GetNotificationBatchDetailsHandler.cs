@@ -6,10 +6,12 @@ namespace OnlineExamSystem.Notification.Application.Notifications.Admin.GetNotif
 public class GetNotificationBatchDetailsHandler
 {
     private readonly INotificationRepository _repository;
+    private readonly IExamLookupClient _examLookupClient;
 
-    public GetNotificationBatchDetailsHandler(INotificationRepository repository)
+    public GetNotificationBatchDetailsHandler(INotificationRepository repository, IExamLookupClient examLookupClient)
     {
         _repository = repository;
+        _examLookupClient = examLookupClient;
     }
 
     public async Task<GetNotificationBatchDetailsResult> HandleAsync(
@@ -23,6 +25,23 @@ public class GetNotificationBatchDetailsHandler
         }
 
         var first = rows[0];
+
+        // Instructor is restricted to batches for an exam they own - same
+        // "return not-found" read-path convention used across this session
+        // (GetExamHandler/GetAssignmentHandler) rather than a distinct 403.
+        if (query.OwnerUserId is { } ownerUserId)
+        {
+            if (first.RelatedExamId is not { } relatedExamId)
+            {
+                return GetNotificationBatchDetailsResult.NotFound();
+            }
+
+            var exam = await _examLookupClient.GetExamAsync(relatedExamId, query.BearerToken, cancellationToken);
+            if (exam is null || exam.CreatedByUserId != ownerUserId)
+            {
+                return GetNotificationBatchDetailsResult.NotFound();
+            }
+        }
         var details = new NotificationBatchDetails(
             BatchId: query.BatchId,
             Title: first.Title,

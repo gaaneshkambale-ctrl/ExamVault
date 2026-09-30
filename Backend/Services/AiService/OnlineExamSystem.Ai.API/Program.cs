@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
+using OnlineExamSystem.Ai.API.Authorization;
 using OnlineExamSystem.Ai.Application.Generate;
 using OnlineExamSystem.Ai.Application.Interfaces;
 using OnlineExamSystem.Ai.Infrastructure;
@@ -20,6 +21,26 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // Real client IP: every request arrives via a proxy (Traefik -> Gateway ->
+        // service), so Connection.RemoteIpAddress is otherwise the proxy container's
+        // Docker IP (172.18.x.x) - which is what audit logs, sessions, System Logs
+        // and the per-IP auth rate limiter were all recording/keying on. Only the
+        // last hop is honoured (ForwardLimit 1), and only when that hop is a
+        // private-network proxy: Traefik appends the real client IP last, so any
+        // X-Forwarded-For a client sends itself is never the value used (prod only
+        // exposes the Gateway through Traefik).
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Clear();
+            foreach (var (prefix, length) in new[] { ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16), ("127.0.0.0", 8) })
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse(prefix), length));
+            }
+        });
+
         // Add services to the container.
 
         builder.Services.AddControllers();
@@ -30,7 +51,15 @@ public class Program
         // No DbContext/repository registrations here - AI Service owns no database.
         builder.Services.AddHealthChecks();
 
-        builder.Services.AddHttpClient<IAiQuestionGenerator, N8nQuestionGenerator>();
+        // Below Cloudflare's 100 s origin timeout (the default HttpClient
+        // timeout is exactly 100 s): a hung n8n call now fails here first, so
+        // GenerateQuestionsHandler returns its friendly "please try again"
+        // instead of the user seeing Cloudflare's raw 524 page. Normal
+        // generations take ~14-18 s.
+        builder.Services.AddHttpClient<IAiQuestionGenerator, N8nQuestionGenerator>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(80);
+        });
         builder.Services.AddScoped<IValidator<GenerateQuestionsRequest>, GenerateQuestionsValidator>();
         builder.Services.AddScoped<GenerateQuestionsHandler>();
 
@@ -41,6 +70,13 @@ public class Program
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
         });
+
+        var userServiceBaseUrl = builder.Configuration["Services:UserServiceBaseUrl"]
+            ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var jwtIssuer = builder.Configuration["Jwt:Issuer"]
             ?? throw new InvalidOperationException("Missing \"Jwt:Issuer\" configuration.");
@@ -64,9 +100,10 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
 
         var app = builder.Build();
+        app.UseForwardedHeaders();
 
         // Configure the HTTP request pipeline.
         if (app.Environment.IsDevelopment())
@@ -118,7 +155,8 @@ public class Program
                 exception.StackTrace,
                 context.Request.Path,
                 context.Request.Method,
-                TenantId: null);
+                TenantId: null,
+                IpAddress: context.Connection.RemoteIpAddress?.ToString());
 
             var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("system-logs");
             await client.PostAsJsonAsync("api/system-logs", request);

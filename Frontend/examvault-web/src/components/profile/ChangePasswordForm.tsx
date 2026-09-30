@@ -134,7 +134,7 @@ export default function ChangePasswordForm() {
             autoComplete="new-password"
           />
 
-          <Card body className="bg-light border-0 mb-4">
+          <Card body className="bg-body-tertiary border-0 mb-4">
             <div className="fw-bold small mb-2">Password must contain:</div>
             <ul className="list-unstyled mb-0 small">
               {requirements.map((req) => {

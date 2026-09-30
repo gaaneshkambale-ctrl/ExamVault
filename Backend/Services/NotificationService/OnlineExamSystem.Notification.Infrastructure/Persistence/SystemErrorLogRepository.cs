@@ -61,6 +61,9 @@ public class SystemErrorLogRepository : ISystemErrorLogRepository
             .Where(e => e.CreatedAtUtc < cutoffUtc)
             .ExecuteDeleteAsync(cancellationToken);
 
+    public Task<int> CountUnresolvedSinceAsync(DateTime sinceUtc, CancellationToken cancellationToken = default) =>
+        _dbContext.SystemErrorLogs.CountAsync(e => !e.IsResolved && e.CreatedAtUtc >= sinceUtc, cancellationToken);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

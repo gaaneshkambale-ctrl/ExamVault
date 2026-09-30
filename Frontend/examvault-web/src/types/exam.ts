@@ -22,6 +22,15 @@ export interface CreateExamRequest {
   passingMarks: number;
   instructions: string;
   examTypeId?: string | null;
+  tags?: string;
+  academicFields?: Record<string, string> | null;
+  // "Restrict exam to academic group" (Assign Exam eligibility) - backend
+  // defaults true, so every already-existing College/University exam
+  // behaves as scoped without a backfill; Admin can uncheck it for an exam
+  // like a General Aptitude Test that should be assignable to anyone. Only
+  // meaningful for org types whose EXAM_FIELDS_BY_TYPE actually has
+  // Program/Department/Semester/Division keys - see hasExamAcademicScope.
+  restrictToAcademicScope: boolean;
 }
 
 export interface ExamSettings {
@@ -40,6 +49,14 @@ export interface ExamSettings {
   allowNotes: boolean;
   autoSubmitOnTimeEnd: boolean;
   confirmBeforeSubmit: boolean;
+  // Per-exam certificate gate (Edit Exam's "Certificate Generation" card) -
+  // a student only ever sees/downloads a certificate for THIS exam when
+  // certificateEnabled is true AND their score % is >=
+  // minimumCertificateScorePercent (see certificateId.ts's
+  // isCertificateEligible). Seeded from the tenant's Exam Settings
+  // defaults at creation, then editable per exam.
+  certificateEnabled: boolean;
+  minimumCertificateScorePercent: number;
 }
 
 export interface UpdateExamRequest extends CreateExamRequest, ExamSettings {}
@@ -51,21 +68,53 @@ export interface ExamResponse extends CreateExamRequest, ExamSettings {
   createdOn: string;
   examTypeName?: string | null;
   tenantId: string;
+  tags: string;
+  createdByUserId: string;
+  createdByName: string | null;
 }
 
 // Dynamic, admin-manageable exam-purpose classification (Practice/Mock/
 // Certification/etc.) - distinct from CreationMethod (Manual/AiGenerated) and
 // from Category (free-text subject tag).
+// The six Default*/PassingScorePercent/NegativeMarking* fields are optional
+// per-type overrides of the tenant's global Exam Defaults (Settings > Exam
+// Defaults) - null/undefined means "inherit the tenant default". See
+// CreateExamHandler.cs (backend) for where the two get merged.
 export interface ExamTypeOption {
   id: string;
   name: string;
+  code: string;
+  isActive: boolean;
   purpose: string | null;
   createdAtUtc: string;
+  defaultDurationMinutes?: number | null;
+  passingScorePercent?: number | null;
+  defaultMaxAttempts?: number | null;
+  negativeMarkingEnabled?: boolean | null;
+  negativeMarkingValue?: number | null;
+  autoSubmitEnabled?: boolean | null;
 }
 
 export interface CreateExamTypeRequest {
   name: string;
   purpose?: string | null;
+  defaultDurationMinutes?: number | null;
+  passingScorePercent?: number | null;
+  defaultMaxAttempts?: number | null;
+  negativeMarkingEnabled?: boolean | null;
+  negativeMarkingValue?: number | null;
+  autoSubmitEnabled?: boolean | null;
+}
+
+export interface UpdateExamTypeRequest {
+  name: string;
+  purpose?: string | null;
+  defaultDurationMinutes?: number | null;
+  passingScorePercent?: number | null;
+  defaultMaxAttempts?: number | null;
+  negativeMarkingEnabled?: boolean | null;
+  negativeMarkingValue?: number | null;
+  autoSubmitEnabled?: boolean | null;
 }
 
 export interface ReminderSettingsResponse {
@@ -88,15 +137,6 @@ export interface ProctoringSettingsResponse {
   updatedAtUtc?: string;
 }
 
-export interface GeneralSettingsResponse {
-  organizationName: string;
-  supportEmail: string;
-  language: string;
-  timezone: string;
-  dateFormat: string;
-  updatedAtUtc: string;
-}
-
 export type QuestionNavigationMode = 'Free' | 'Sequential';
 export type ResultPublishingMode = 'Automatic' | 'Manual';
 
@@ -111,4 +151,6 @@ export interface ExamDefaultsResponse {
   questionNavigationMode: QuestionNavigationMode;
   resultPublishingMode: ResultPublishingMode;
   updatedAtUtc: string;
+  certificateEnabled: boolean;
+  minimumCertificateScorePercent: number;
 }

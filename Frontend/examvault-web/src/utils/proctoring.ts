@@ -15,6 +15,7 @@ export const violationLabel: Record<ProctoringViolationType, string> = {
   CopyPaste: 'Copy/Paste',
   RightClick: 'Right-Click',
   MultipleMonitors: 'Multiple Monitors',
+  FullscreenExit: 'Fullscreen Exit',
 };
 
 export const violationDescription: Record<ProctoringViolationType, string> = {
@@ -25,6 +26,7 @@ export const violationDescription: Record<ProctoringViolationType, string> = {
   CopyPaste: 'Copy, cut, or paste action attempted during the exam.',
   RightClick: 'Right-click / context menu attempted during the exam.',
   MultipleMonitors: 'A second display was detected connected to the device.',
+  FullscreenExit: 'Exited fullscreen mode during the exam.',
 };
 
 export const severityVariant: Record<ViolationSeverity, string> = {

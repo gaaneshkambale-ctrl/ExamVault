@@ -7,6 +7,7 @@ public class UpdateAssignmentResult
     public bool Success { get; init; }
     public bool IsNotFound { get; init; }
     public bool IsGroupNotFound { get; init; }
+    public bool IsForbidden { get; init; }
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
     public ExamAssignment? Assignment { get; init; }
     public IReadOnlyList<Guid> TargetUserIds { get; init; } = Array.Empty<Guid>();
@@ -20,4 +21,6 @@ public class UpdateAssignmentResult
     public static UpdateAssignmentResult NotFound() => new() { IsNotFound = true };
 
     public static UpdateAssignmentResult GroupNotFound() => new() { IsGroupNotFound = true };
+
+    public static UpdateAssignmentResult Forbidden() => new() { IsForbidden = true };
 }

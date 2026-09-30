@@ -20,7 +20,6 @@ public class ExamDbContext : TenantScopedDbContext
     public DbSet<ExamReminderLog> ExamReminderLogs => Set<ExamReminderLog>();
     public DbSet<ReminderSettings> ReminderSettings => Set<ReminderSettings>();
     public DbSet<ProctoringSettings> ProctoringSettings => Set<ProctoringSettings>();
-    public DbSet<GeneralSettings> GeneralSettings => Set<GeneralSettings>();
     public DbSet<ExamDefaults> ExamDefaults => Set<ExamDefaults>();
 
     // SQL Server's datetime2 columns don't preserve DateTimeKind, so EF Core
@@ -45,8 +44,10 @@ public class ExamDbContext : TenantScopedDbContext
             entity.Property(e => e.ExamCode).HasMaxLength(40);
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Category).HasMaxLength(100);
+            entity.Property(e => e.Tags).HasMaxLength(500);
             entity.Property(e => e.Instructions).HasMaxLength(2000);
             entity.Property(e => e.NegativeMarks).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.RestrictToAcademicScope).HasDefaultValue(true);
             entity.HasIndex(e => e.TenantId);
             entity.HasOne(e => e.ExamType)
                 .WithMany()
@@ -60,7 +61,13 @@ public class ExamDbContext : TenantScopedDbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Code).IsRequired().HasMaxLength(20);
             entity.Property(e => e.Purpose).HasMaxLength(500);
+            entity.Property(e => e.NegativeMarkingValue).HasColumnType("decimal(5,2)");
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => new { e.TenantId, e.Code }).IsUnique();
+            entity.HasQueryFilter(e =>
+                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && e.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<Section>(entity =>
@@ -97,6 +104,7 @@ public class ExamDbContext : TenantScopedDbContext
         modelBuilder.Entity<ExamAssignmentTarget>(entity =>
         {
             entity.HasKey(t => t.Id);
+            entity.Property(t => t.OverrideReason).HasMaxLength(500);
             entity.HasIndex(t => new { t.ExamAssignmentId, t.UserId }).IsUnique();
             entity.HasOne<ExamAssignment>()
                 .WithMany()
@@ -132,19 +140,6 @@ public class ExamDbContext : TenantScopedDbContext
             entity.HasIndex(r => r.TenantId);
             entity.HasQueryFilter(r =>
                 CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && r.TenantId == CurrentTenant.TenantId));
-        });
-
-        modelBuilder.Entity<GeneralSettings>(entity =>
-        {
-            entity.HasKey(g => g.Id);
-            entity.Property(g => g.OrganizationName).HasMaxLength(200);
-            entity.Property(g => g.SupportEmail).HasMaxLength(200);
-            entity.Property(g => g.Language).HasMaxLength(100);
-            entity.Property(g => g.Timezone).HasMaxLength(100);
-            entity.Property(g => g.DateFormat).HasMaxLength(50);
-            entity.HasIndex(g => g.TenantId);
-            entity.HasQueryFilter(g =>
-                CurrentTenant.IsSuperAdmin || (CurrentTenant.IsAuthenticated && g.TenantId == CurrentTenant.TenantId));
         });
 
         modelBuilder.Entity<ExamDefaults>(entity =>

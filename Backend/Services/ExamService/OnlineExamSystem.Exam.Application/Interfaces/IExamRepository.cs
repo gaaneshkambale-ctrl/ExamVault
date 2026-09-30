@@ -12,9 +12,48 @@ public interface IExamRepository
     Task<IReadOnlyList<ExamPaper>> GetAllAsync(CancellationToken cancellationToken = default);
     Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default);
 
+    /// <summary>Real Tenant Settings > Default Limits "Max Exams" enforcement point -
+    /// CreateExamHandler checks this against the tenant's own MaxExams (fetched
+    /// cross-service from UserService) before creating a new exam. Always called
+    /// inside the transaction ExecuteInSerializableTransactionAsync opens, so the
+    /// count is race-safe against a concurrent request creating an exam for the
+    /// same tenant.</summary>
+    Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
+
+    /// <summary>Runs <paramref name="operation"/> inside a Serializable-isolation
+    /// transaction - wrap a count-then-insert sequence in it (count, compare to
+    /// MaxExams, AddAsync, SaveChangesAsync) so two concurrent requests can never
+    /// both pass the same limit check before either commits; the transaction
+    /// commits automatically once <paramref name="operation"/> returns without
+    /// throwing (returning early, e.g. because MaxExams was hit, without calling
+    /// AddAsync/SaveChangesAsync is safe - there's simply nothing to commit).
+    /// Throws <see cref="TransientConcurrencyException"/> if SQL Server picked
+    /// this transaction as a deadlock victim.
+    ///
+    /// Deliberately NOT a "begin transaction, hand the caller an
+    /// IUnitOfWorkTransaction to commit later" API (an earlier version of this
+    /// method was exactly that, and briefly shipped, before being replaced) -
+    /// ExamDbContext has EnableRetryOnFailure() on (Program.cs), and EF Core
+    /// throws "does not support user-initiated transactions" the moment ANY
+    /// database operation (not just BeginTransactionAsync - SaveChangesAsync
+    /// too) runs against a manually-opened transaction while a retrying
+    /// execution strategy is active, unless the ENTIRE unit of work - begin,
+    /// every operation, commit - runs inside one
+    /// Database.CreateExecutionStrategy().ExecuteAsync(...) delegate. See the
+    /// identical fix on IUserRepository for the live incident that proved
+    /// wrapping only the begin call isn't enough.</summary>
+    Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default);
+
     Task AddSectionAsync(Section section, CancellationToken cancellationToken = default);
     Task<Section?> GetSectionByIdAsync(Guid sectionId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Section>> GetSectionsByExamIdAsync(Guid examId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every section across every tenant, with its exam's title - Super Admin
+    /// platform-wide browse only. Relies on the DbContext's own IsSuperAdmin query-filter
+    /// bypass on Section for cross-tenant scoping, same as GetAllAssignmentsAsync's pattern.</summary>
+    Task<IReadOnlyList<SectionWithExamTitle>> GetAllSectionsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Returns true if the section was found and removed.</summary>
     Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default);
@@ -28,6 +67,12 @@ public interface IExamRepository
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Every exam this tenant's caller created themselves - the Instructor
+    /// ownership scope (Admin/SuperAdmin use GetAllAsync instead, unrestricted).</summary>
+    Task<IReadOnlyList<ExamPaper>> GetOwnedAsync(
+        Guid createdByUserId,
+        CancellationToken cancellationToken = default);
+
     Task<bool> IsUserAssignedAsync(Guid examId, Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>The caller's own assignment for this exam, or null if unassigned. Picks the most
@@ -37,9 +82,15 @@ public interface IExamRepository
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    // overriddenUserIds/overrideReason: the subset of targetUserIds (if any)
+    // that failed the exam's academic-scope eligibility check but were
+    // assigned anyway via an Admin's override - stamped onto only those
+    // targets' rows, one shared reason for the whole request.
     Task AddAssignmentAsync(
         ExamAssignment assignment,
         IReadOnlyList<Guid> targetUserIds,
+        IReadOnlySet<Guid>? overriddenUserIds = null,
+        string? overrideReason = null,
         CancellationToken cancellationToken = default);
 
     Task<ExamAssignment?> GetAssignmentByIdAsync(Guid assignmentId, CancellationToken cancellationToken = default);
@@ -58,7 +109,11 @@ public interface IExamRepository
         Guid examId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Every assignment tenant-wide, with its exam's title - optionally filtered
+    /// to assignments whose exam's CreatedByUserId matches ownerUserId (the Instructor
+    /// ownership scope; null for Admin/SuperAdmin's unrestricted view).</summary>
     Task<IReadOnlyList<AssignmentWithExamTitle>> GetAllAssignmentsAsync(
+        Guid? ownerUserId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Returns true if the assignment was found and removed (its targets cascade with it).</summary>
@@ -101,10 +156,6 @@ public interface IExamRepository
     /// <summary>Returns the single global ProctoringSettings row, creating it with every
     /// detector enabled (the pre-existing default behavior) if it doesn't exist yet.</summary>
     Task<ProctoringSettings> GetOrCreateProctoringSettingsAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>Returns the single global GeneralSettings row, creating it with the
-    /// entity's own defaults if it doesn't exist yet.</summary>
-    Task<GeneralSettings> GetOrCreateGeneralSettingsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Returns the single global ExamDefaults row, creating it with the
     /// entity's own defaults if it doesn't exist yet.</summary>

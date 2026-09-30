@@ -26,4 +26,16 @@ public class AdminAttemptResult
     public int CopyPasteCount { get; init; }
     public int RightClickCount { get; init; }
     public int MultipleMonitorsCount { get; init; }
+
+    public int CorrectCount { get; init; }
+    public int IncorrectCount { get; init; }
+    public int SkippedCount { get; init; }
+    public double Accuracy { get; init; }
+
+    // Null for every attempt except a user's own LATEST submitted attempt on
+    // this exam (see ExamRankingCalculator) - an earlier, superseded attempt
+    // by the same student is still listed here but never ranked.
+    public int? Rank { get; init; }
+    public double? Percentile { get; init; }
+    public int? TotalParticipants { get; init; }
 }

@@ -8,4 +8,5 @@ public record UpdateMyProfileRequest(
     string? Gender = null,
     DateTime? DateOfBirth = null,
     string? Location = null,
-    string? Department = null);
+    string? Department = null,
+    string? Designation = null);

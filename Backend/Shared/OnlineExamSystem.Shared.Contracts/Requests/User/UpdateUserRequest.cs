@@ -5,4 +5,5 @@ public record UpdateUserRequest(
     string Email,
     string Role,
     string? PhoneNumber = null,
-    string? RollNumber = null);
+    string? RollNumber = null,
+    Dictionary<string, string>? AcademicFields = null);

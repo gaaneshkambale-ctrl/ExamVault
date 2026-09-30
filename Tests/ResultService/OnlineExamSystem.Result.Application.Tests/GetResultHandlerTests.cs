@@ -11,6 +11,7 @@ public class GetResultHandlerTests
     private static readonly Guid ExamId = Guid.NewGuid();
     private static readonly Guid AttemptId = Guid.NewGuid();
     private static readonly Guid UserId = Guid.NewGuid();
+    private static readonly Guid TenantId = Guid.NewGuid();
     private static readonly Guid Question1Id = Guid.NewGuid();
     private static readonly Guid Question2Id = Guid.NewGuid();
     private static readonly Guid Question1CorrectOptionId = Guid.NewGuid();
@@ -23,11 +24,16 @@ public class GetResultHandlerTests
         IReadOnlyList<AnswerKeyQuestion> answerKey,
         ExamLookupResult? exam,
         bool showCorrectAnswers = true,
-        Exception? submissionLookupException = null) =>
+        Exception? submissionLookupException = null,
+        IReadOnlyList<SubmissionLookupResult>? attemptsByExam = null,
+        Exception? attemptsByExamException = null) =>
         new(
-            new FakeSubmissionLookupClient(submission, submissionLookupException),
+            attemptsByExam is null && attemptsByExamException is null
+                ? new FakeSubmissionLookupClient(submission, submissionLookupException)
+                : new FakeSubmissionLookupClient(submission, attemptsByExam ?? [], attemptsByExamException),
             new FakeQuestionAnswerKeyClient(answerKey),
             new FakeExamLookupClient(exam, showCorrectAnswers),
+            new FakeSystemTokenProvider(),
             NullLogger<GetResultHandler>.Instance);
 
     private static SubmissionLookupResult Submitted(IReadOnlyList<SubmissionAnswer> answers) =>
@@ -60,7 +66,7 @@ public class GetResultHandlerTests
     {
         var handler = CreateHandler(null, DefaultAnswerKey(), new ExamLookupResult(ExamId, "Test", 2, 1));
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.False(result.Success);
         Assert.True(result.IsNotSubmitted);
@@ -72,7 +78,7 @@ public class GetResultHandlerTests
         var submission = new SubmissionLookupResult(AttemptId, UserId, ExamId, "InProgress", null, [], 0, 0, 0, 0, 0, 0, 0, 0);
         var handler = CreateHandler(submission, DefaultAnswerKey(), new ExamLookupResult(ExamId, "Test", 2, 1));
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.True(result.IsNotSubmitted);
     }
@@ -90,7 +96,7 @@ public class GetResultHandlerTests
             DefaultAnswerKey(),
             new ExamLookupResult(ExamId, "Test Exam", 2, 1));
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.True(result.Success);
         Assert.Equal(2, result.Summary!.TotalScore);
@@ -111,7 +117,7 @@ public class GetResultHandlerTests
             DefaultAnswerKey(),
             new ExamLookupResult(ExamId, "Test Exam", 2, 1));
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.Equal(0, result.Summary!.TotalScore);
         Assert.False(result.Summary.Passed);
@@ -126,7 +132,7 @@ public class GetResultHandlerTests
             DefaultAnswerKey(),
             new ExamLookupResult(ExamId, "Test Exam", 2, 1));
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.Equal(1, result.Summary!.TotalScore);
         Assert.True(result.Summary.Passed);
@@ -140,7 +146,7 @@ public class GetResultHandlerTests
             DefaultAnswerKey(),
             new ExamLookupResult(ExamId, "Test Exam", 2, 1, ShowResult: false));
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.False(result.Success);
         Assert.True(result.IsNotRevealed);
@@ -152,7 +158,7 @@ public class GetResultHandlerTests
     {
         var handler = CreateHandler(Submitted([]), DefaultAnswerKey(), null);
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.True(result.IsExamNotFound);
     }
@@ -171,7 +177,7 @@ public class GetResultHandlerTests
             new ExamLookupResult(ExamId, "Test Exam", 2, 1),
             showCorrectAnswers: true);
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.NotNull(result.Summary!.Questions);
         Assert.Equal(2, result.Summary.Questions!.Count);
@@ -200,7 +206,7 @@ public class GetResultHandlerTests
             new ExamLookupResult(ExamId, "Test Exam", 2, 1),
             showCorrectAnswers: false);
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.Null(result.Summary!.Questions);
         Assert.Equal(1, result.Summary.TotalScore);
@@ -216,11 +222,55 @@ public class GetResultHandlerTests
             new ExamLookupResult(ExamId, "Test", 2, 1),
             submissionLookupException: new HttpRequestException("connection refused"));
 
-        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token"));
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
 
         Assert.False(result.Success);
         Assert.True(result.IsProviderFailure);
         Assert.NotNull(result.ProviderErrorMessage);
         Assert.Null(result.Summary);
+    }
+
+    [Fact]
+    public async Task Rank_and_percentile_are_computed_against_every_other_students_attempt()
+    {
+        var myAnswers = new List<SubmissionAnswer> { new(Question1Id, Question1CorrectOptionId), new(Question2Id, Question2CorrectOptionId) };
+        var myAttempt = new SubmissionLookupResult(AttemptId, UserId, ExamId, "Submitted", DateTime.UtcNow, myAnswers, 0, 0, 0, 0, 0, 0, 0, 0);
+
+        // A second student who scored lower (1/2 vs my 2/2) - fetched only
+        // via the system token, never via my own bearer token.
+        var otherAnswers = new List<SubmissionAnswer> { new(Question1Id, Question1CorrectOptionId), new(Question2Id, Question2WrongOptionId) };
+        var otherAttempt = new SubmissionLookupResult(Guid.NewGuid(), Guid.NewGuid(), ExamId, "Submitted", DateTime.UtcNow, otherAnswers, 0, 0, 0, 0, 0, 0, 0, 0);
+
+        var handler = CreateHandler(
+            myAttempt,
+            DefaultAnswerKey(),
+            new ExamLookupResult(ExamId, "Test Exam", 2, 1),
+            attemptsByExam: [myAttempt, otherAttempt]);
+
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.Summary!.Rank);
+        Assert.Equal(2, result.Summary.TotalParticipants);
+        Assert.Equal(100.0, result.Summary.Percentile);
+    }
+
+    [Fact]
+    public async Task Ranking_failure_never_blocks_the_students_own_result()
+    {
+        var answers = new List<SubmissionAnswer> { new(Question1Id, Question1CorrectOptionId) };
+        var handler = CreateHandler(
+            Submitted(answers),
+            DefaultAnswerKey(),
+            new ExamLookupResult(ExamId, "Test Exam", 2, 1),
+            attemptsByExamException: new HttpRequestException("SubmissionService unreachable"));
+
+        var result = await handler.HandleAsync(new GetResultQuery(ExamId, "token", TenantId));
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.Summary!.TotalScore);
+        Assert.Null(result.Summary.Rank);
+        Assert.Null(result.Summary.Percentile);
+        Assert.Null(result.Summary.TotalParticipants);
     }
 }

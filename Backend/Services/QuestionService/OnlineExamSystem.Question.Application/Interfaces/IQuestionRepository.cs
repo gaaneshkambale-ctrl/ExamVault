@@ -24,6 +24,11 @@ public interface IQuestionRepository
         bool unassignedOnly = false,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Per-tenant question counts (exam questions + Question Bank questions) - Super Admin
+    /// usage view. Relies on QuestionDbContext's own IsSuperAdmin query-filter bypass for
+    /// cross-tenant scoping; returns counts only, never question content.</summary>
+    Task<IReadOnlyList<TenantQuestionCount>> GetQuestionCountsByTenantAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Sets SectionId on every given question. Pass a null sectionId to unassign.</summary>
     Task BulkSetSectionIdAsync(
         Guid? sectionId,
@@ -32,6 +37,14 @@ public interface IQuestionRepository
 
     /// <summary>Clears SectionId back to null on every question currently assigned to this section.</summary>
     Task UnassignAllQuestionsInSectionAsync(Guid sectionId, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes every question belonging to this exam (and, via each question's own
+    /// DB-level cascade, its options/parameters/test cases/SQL test cases) - called when the
+    /// exam itself is deleted in Exam Service. Unlike a Section deletion (which only unassigns,
+    /// since the exam - and thus a place to reassign into - still exists), a question has
+    /// nowhere left to belong once its exam is gone, and ExamQuestion.ExamId is a permanent,
+    /// non-nullable 1:1 ownership (no cross-exam question-bank reuse at the data level).</summary>
+    Task DeleteAllQuestionsForExamAsync(Guid examId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<QuestionOption>> GetOptionsByQuestionIdsAsync(
         IReadOnlyList<Guid> questionIds,
@@ -83,3 +96,5 @@ public interface IQuestionRepository
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }
+
+public record TenantQuestionCount(Guid TenantId, int ExamQuestionCount, int BankQuestionCount);

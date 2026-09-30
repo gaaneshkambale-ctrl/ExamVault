@@ -10,4 +10,5 @@ public record RecordSystemErrorLogCommand(
     string? StackTrace,
     string? RequestPath,
     string? RequestMethod,
-    Guid? TenantId);
+    Guid? TenantId,
+    string? IpAddress = null);

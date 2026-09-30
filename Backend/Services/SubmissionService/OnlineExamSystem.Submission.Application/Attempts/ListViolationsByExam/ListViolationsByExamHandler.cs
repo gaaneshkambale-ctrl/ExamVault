@@ -5,16 +5,28 @@ namespace OnlineExamSystem.Submission.Application.Attempts.ListViolationsByExam;
 public class ListViolationsByExamHandler
 {
     private readonly ISubmissionRepository _repository;
+    private readonly IExamLookupClient _examLookupClient;
 
-    public ListViolationsByExamHandler(ISubmissionRepository repository)
+    public ListViolationsByExamHandler(ISubmissionRepository repository, IExamLookupClient examLookupClient)
     {
         _repository = repository;
+        _examLookupClient = examLookupClient;
     }
 
     public async Task<IReadOnlyList<ViolationEventWithUser>> HandleAsync(
         ListViolationsByExamQuery query,
         CancellationToken cancellationToken = default)
     {
+        // See ListAttemptsByExamHandler's own comment - same ownership scope.
+        if (query.OwnerUserId is { } ownerUserId)
+        {
+            var exam = await _examLookupClient.GetExamAsync(query.ExamId, query.BearerToken, cancellationToken);
+            if (exam is null || exam.CreatedByUserId != ownerUserId)
+            {
+                return [];
+            }
+        }
+
         var attempts = await _repository.GetAllAttemptsByExamIdAsync(query.ExamId, cancellationToken);
         if (attempts.Count == 0)
         {

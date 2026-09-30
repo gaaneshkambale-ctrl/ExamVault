@@ -54,6 +54,6 @@ public class CreateSectionHandler
         await _examRepository.AddSectionAsync(section, cancellationToken);
         await _examRepository.SaveChangesAsync(cancellationToken);
 
-        return CreateSectionResult.Ok(section);
+        return CreateSectionResult.Ok(section, exam.TenantId, exam.Title);
     }
 }

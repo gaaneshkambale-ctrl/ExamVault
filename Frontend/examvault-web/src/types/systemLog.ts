@@ -11,6 +11,8 @@ export interface SystemErrorLog {
   requestPath: string | null;
   requestMethod: string | null;
   tenantId: string | null;
+  // Client IP of the failing request; null for background-job errors.
+  ipAddress: string | null;
   isResolved: boolean;
   resolvedAtUtc: string | null;
   resolvedByUserId: string | null;

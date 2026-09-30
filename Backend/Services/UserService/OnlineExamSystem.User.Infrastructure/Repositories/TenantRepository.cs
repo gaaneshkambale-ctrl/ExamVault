@@ -20,11 +20,42 @@ public class TenantRepository : ITenantRepository
     public Task<Tenant?> GetBySlugAsync(string slug, CancellationToken cancellationToken = default) =>
         _dbContext.Tenants.FirstOrDefaultAsync(t => t.Slug == slug, cancellationToken);
 
+    // Tenants.Name has a unique DB index (UserDbContext.cs), but nothing
+    // checked for a duplicate before this - a repeat name previously fell
+    // through to an unhandled DbUpdateException on SaveChangesAsync (a
+    // generic 500), unlike Slug's clean 409. Relies on the DB's own
+    // collation for case-sensitivity, same as GetBySlugAsync above.
+    public Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default) =>
+        _dbContext.Tenants.FirstOrDefaultAsync(t => t.Name == name, cancellationToken);
+
+    public Task<Tenant?> GetByOrganizationCodeAsync(string organizationCode, CancellationToken cancellationToken = default) =>
+        _dbContext.Tenants.FirstOrDefaultAsync(t => t.OrganizationCode == organizationCode, cancellationToken);
+
     public async Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Tenants.OrderByDescending(t => t.CreatedAtUtc).ToListAsync(cancellationToken);
 
     public Task AddAsync(Tenant tenant, CancellationToken cancellationToken = default) =>
         _dbContext.Tenants.AddAsync(tenant, cancellationToken).AsTask();
+
+    public Task RemoveAsync(Tenant tenant, CancellationToken cancellationToken = default)
+    {
+        _dbContext.Tenants.Remove(tenant);
+        return Task.CompletedTask;
+    }
+
+    public async Task DeleteTenantScopedDataAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        // RolePermission and AcademicListItem also have a Restrict FK to
+        // Tenant (see UserDbContext.cs) - deleting a tenant with either
+        // (eg. one that customized Roles & Permissions, or configured any
+        // Program/Department/Semester/Division list) previously threw an
+        // unhandled DbUpdateException (a generic 500) on SaveChangesAsync,
+        // since only Groups/Users were purged here.
+        await _dbContext.RolePermissions.IgnoreQueryFilters().Where(rp => rp.TenantId == tenantId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.AcademicListItems.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.Groups.IgnoreQueryFilters().Where(g => g.TenantId == tenantId).ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.Users.IgnoreQueryFilters().Where(u => u.TenantId == tenantId).ExecuteDeleteAsync(cancellationToken);
+    }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);

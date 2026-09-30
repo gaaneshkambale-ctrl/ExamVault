@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 using OnlineExamSystem.Ai.Application.Generate;
 using OnlineExamSystem.Ai.Application.Interfaces;
@@ -10,13 +11,6 @@ namespace OnlineExamSystem.Ai.Infrastructure;
 public class N8nQuestionGenerator : IAiQuestionGenerator
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-    private static readonly (string Letter, Func<N8nGeneratedItem, string> Selector)[] OptionSelectors =
-    [
-        ("A", item => item.OptionA),
-        ("B", item => item.OptionB),
-        ("C", item => item.OptionC),
-        ("D", item => item.OptionD),
-    ];
 
     private readonly HttpClient _httpClient;
     private readonly string _webhookUrl;
@@ -28,13 +22,28 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
             ?? throw new InvalidOperationException("Missing \"N8n:WebhookUrl\" configuration.");
     }
 
+    // Cap on how many questions we'll ever ask the n8n workflow to generate in one call,
+    // regardless of how much padding a request needs - keeps prompt/response size and
+    // latency (n8n calls already take 14-18s) from growing unbounded.
+    private const int MaxRequestedCount = 30;
+
     public async Task<IReadOnlyList<DraftQuestion>> GenerateAsync(
         GenerateQuestionsRequest request,
         CancellationToken cancellationToken = default)
     {
+        // The n8n workflow doesn't reliably stick to the requested question type - eg. a
+        // "Multiple Choice" (multi-select) only request can still come back with some
+        // ordinary single-correct-answer items mixed in, which TryBuildDraft correctly
+        // drops below (a multi-select question needs 2+ real correct answers - it can't
+        // be coerced from a single-answer one without fabricating a wrong answer as
+        // "correct"). Asking for more than the admin actually requested compensates for
+        // that drop rate; the result is still trimmed back down to what was requested so
+        // "Number of Questions" stays a meaningful, predictable count.
+        var paddedCount = Math.Min(request.QuestionCount * 2, MaxRequestedCount);
+
         var payload = new
         {
-            questionCount = request.QuestionCount,
+            questionCount = paddedCount,
             complexity = string.Join(", ", request.DifficultyLevels),
             subject = request.Topic,
             questionTypes = string.Join(", ", request.QuestionTypes.Select(FormatQuestionTypeLabel).Distinct()),
@@ -48,61 +57,140 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
 
         var fallbackDifficulty = request.DifficultyLevels.Count > 0 ? request.DifficultyLevels[0] : "Medium";
 
-        // Only produce MultiSelect drafts if the admin actually asked for that type -
-        // if they only requested Single Choice, a model response with several correct
-        // letters still collapses to one (first-listed) correct answer, preserving the
-        // old single-correct behavior for that request.
+        // The n8n workflow doesn't reliably stick to the requested question types on its
+        // own - it can return a True/False-shaped item, a several-correct-letters item,
+        // or a plain single-correct item regardless of what was actually asked for. Each
+        // requested type is gated below so a question can only be classified as a type
+        // that was actually requested; anything that doesn't match ANY requested type is
+        // dropped entirely instead of silently defaulting to MultipleChoice (which used
+        // to leak, say, a Multiple-Choice-shaped item into a "True/False only" request).
+        var allowMultipleChoice = request.QuestionTypes.Contains("MultipleChoice");
         var allowMultiSelect = request.QuestionTypes.Contains("MultiSelect");
+        var allowTrueFalse = request.QuestionTypes.Contains("TrueFalse");
 
-        return items.Select(item =>
-        {
-            // The workflow can return items with several correct letters
-            // (e.g. CorrectOption: ["A","B","D"]) - these become MultiSelect drafts when
-            // requested; otherwise only the first listed correct letter is kept.
-            var correctLetters = ExtractCorrectLetters(item.CorrectOption);
-
-            var rawOptions = OptionSelectors
-                .Select(selector => (selector.Letter, Text: selector.Selector(item)))
-                .Where(option => !string.IsNullOrWhiteSpace(option.Text))
-                .ToList();
-
-            // A True/False question is a two-option item whose option texts are
-            // "true"/"false" (any casing). Question Service requires the option text
-            // to be exactly "True"/"False", so it's normalized here regardless of
-            // what casing the model returned.
-            var isTrueFalse = rawOptions.Count == 2
-                && rawOptions.Select(o => o.Text.Trim().ToLowerInvariant()).OrderBy(t => t)
-                    .SequenceEqual(["false", "true"]);
-
-            var isMultiSelect = !isTrueFalse && allowMultiSelect && correctLetters.Count >= 2;
-            var effectiveCorrectLetters = isMultiSelect ? correctLetters : correctLetters.Take(1).ToList();
-
-            return new DraftQuestion
-            {
-                QuestionType = isTrueFalse ? "TrueFalse" : isMultiSelect ? "MultiSelect" : "MultipleChoice",
-                QuestionText = item.QuestionText,
-                Marks = 1,
-                Difficulty = fallbackDifficulty,
-                Options = rawOptions
-                    .Select(option => new DraftQuestionOption
-                    {
-                        OptionText = isTrueFalse
-                            ? (string.Equals(option.Text.Trim(), "true", StringComparison.OrdinalIgnoreCase) ? "True" : "False")
-                            : option.Text,
-                        IsCorrect = effectiveCorrectLetters.Contains(option.Letter, StringComparer.OrdinalIgnoreCase),
-                    })
-                    .ToList(),
-            };
-        }).ToList();
+        return items
+            .Select(item => TryBuildDraft(item, allowMultipleChoice, allowMultiSelect, allowTrueFalse, fallbackDifficulty))
+            .Where(draft => draft is not null)
+            .Select(draft => draft!)
+            .Take(request.QuestionCount)
+            .ToList();
     }
 
+    private static DraftQuestion? TryBuildDraft(
+        N8nGeneratedItem item,
+        bool allowMultipleChoice,
+        bool allowMultiSelect,
+        bool allowTrueFalse,
+        string fallbackDifficulty)
+    {
+        var rawOptions = ExtractOptions(item.ExtensionData);
+        if (rawOptions.Count < 2)
+        {
+            // Not enough real options to be any kind of question - drop rather than
+            // create a broken single/zero-option question.
+            return null;
+        }
+
+        // The workflow can return items with several correct letters
+        // (e.g. CorrectOption: ["A","B","D"]) - these become MultiSelect drafts when
+        // requested; otherwise only the first listed correct letter is kept.
+        var correctLetters = ExtractCorrectLetters(item.CorrectOption);
+
+        // A True/False question is a two-option item whose option texts are
+        // "true"/"false" (any casing). Question Service requires the option text
+        // to be exactly "True"/"False", so it's normalized here regardless of
+        // what casing the model returned.
+        var isTrueFalseShaped = rawOptions.Count == 2
+            && rawOptions.Select(o => o.Text.Trim().ToLowerInvariant()).OrderBy(t => t)
+                .SequenceEqual(["false", "true"]);
+        var isMultiSelectShaped = !isTrueFalseShaped && correctLetters.Count >= 2;
+
+        // Pick the question type from what was actually requested, preferring an exact
+        // shape match and falling back to a compatible downgrade (a True/False-shaped
+        // item becomes a two-option MultipleChoice when only MultipleChoice was
+        // requested; a several-correct item collapses to its first correct letter the
+        // same way) - never a type nobody asked for.
+        string questionType;
+        if (isTrueFalseShaped && allowTrueFalse)
+        {
+            questionType = "TrueFalse";
+        }
+        else if (isMultiSelectShaped && allowMultiSelect)
+        {
+            questionType = "MultiSelect";
+        }
+        else if (allowMultipleChoice)
+        {
+            questionType = "MultipleChoice";
+        }
+        else
+        {
+            return null;
+        }
+
+        var isTrueFalse = questionType == "TrueFalse";
+        var isMultiSelect = questionType == "MultiSelect";
+        var effectiveCorrectLetters = isMultiSelect ? correctLetters : correctLetters.Take(1).ToList();
+
+        return new DraftQuestion
+        {
+            QuestionType = questionType,
+            QuestionText = item.QuestionText,
+            Marks = 1,
+            Difficulty = fallbackDifficulty,
+            Options = rawOptions
+                .Select(option => new DraftQuestionOption
+                {
+                    OptionText = isTrueFalse
+                        ? (string.Equals(option.Text.Trim(), "true", StringComparison.OrdinalIgnoreCase) ? "True" : "False")
+                        : option.Text,
+                    IsCorrect = effectiveCorrectLetters.Contains(option.Letter, StringComparer.OrdinalIgnoreCase),
+                })
+                .ToList(),
+        };
+    }
+
+    // Sent verbatim to the n8n workflow as the "Question format(s) requested" line - must
+    // give the model a distinct label per requested type. This used to collapse
+    // MultipleChoice (single correct answer - labelled "Single Choice" everywhere else in
+    // the admin UI) and MultiSelect (2+ correct answers - labelled "Multiple Choice"
+    // everywhere else) into the SAME string ("Multiple Choice"), so a request for only
+    // MultiSelect looked identical to the model as a request for only MultipleChoice. The
+    // model then mostly generated ordinary single-correct questions either way, and (since
+    // TryBuildDraft correctly drops anything that doesn't match what was actually
+    // requested) a "Multiple Choice" request would come back with only the handful of
+    // items that happened to have several correct answers - eg. 2 of 10. Matching the
+    // admin UI's own QUESTION_TYPE_LABELS here removes the ambiguity at the source.
     private static string FormatQuestionTypeLabel(string type) => type switch
     {
-        "MultipleChoice" => "Multiple Choice",
+        "MultipleChoice" => "Single Choice",
         "MultiSelect" => "Multiple Choice",
         "TrueFalse" => "True/False",
         _ => type,
     };
+
+    // Reads every "Option<letter>" property the workflow returned (OptionA, OptionB, ...
+    // OptionZ) rather than a fixed OptionA-D - same "don't hardcode a max" fix as the CSV
+    // import's own option-column discovery, so a question with more than four real
+    // options isn't silently truncated. Sorted by letter so option order is stable
+    // regardless of the JSON property order the workflow happens to emit.
+    private static List<(string Letter, string Text)> ExtractOptions(Dictionary<string, JsonElement>? extensionData)
+    {
+        if (extensionData is null)
+        {
+            return [];
+        }
+
+        return extensionData
+            .Where(kv => kv.Key.Length == 7
+                && kv.Key.StartsWith("option", StringComparison.OrdinalIgnoreCase)
+                && char.IsLetter(kv.Key[6])
+                && kv.Value.ValueKind == JsonValueKind.String)
+            .Select(kv => (Letter: char.ToUpperInvariant(kv.Key[6]).ToString(), Text: kv.Value.GetString() ?? string.Empty))
+            .Where(option => !string.IsNullOrWhiteSpace(option.Text))
+            .OrderBy(option => option.Letter, StringComparer.Ordinal)
+            .ToList();
+    }
 
     private static List<string> ExtractCorrectLetters(JsonElement correctOption)
     {
@@ -137,11 +225,13 @@ public class N8nQuestionGenerator : IAiQuestionGenerator
     private sealed class N8nGeneratedItem
     {
         public string QuestionText { get; init; } = string.Empty;
-        public string OptionA { get; init; } = string.Empty;
-        public string OptionB { get; init; } = string.Empty;
-        public string OptionC { get; init; } = string.Empty;
-        public string OptionD { get; init; } = string.Empty;
         public JsonElement CorrectOption { get; init; }
         public string QuestionType { get; init; } = string.Empty;
+
+        // Catches OptionA, OptionB, OptionC, ... - any "Option<letter>" property not
+        // otherwise declared above - so ExtractOptions can read as many as the workflow
+        // sends instead of being limited to a fixed set of declared properties.
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtensionData { get; init; }
     }
 }

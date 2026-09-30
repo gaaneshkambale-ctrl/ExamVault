@@ -27,8 +27,7 @@ using OnlineExamSystem.Notification.Application.Notifications.Mine.GetUnreadCoun
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAllAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.MarkAsRead;
 using OnlineExamSystem.Notification.Application.Notifications.Mine.Preferences;
-using OnlineExamSystem.Notification.Application.Settings.GetSystemSettings;
-using OnlineExamSystem.Notification.Application.Settings.UpdateSystemSettings;
+using OnlineExamSystem.Notification.Application.SystemLogs.ErrorSpike;
 using OnlineExamSystem.Notification.Application.SystemLogs.ListSystemErrorLogs;
 using OnlineExamSystem.Notification.Application.SystemLogs.RecordSystemErrorLog;
 using OnlineExamSystem.Notification.Application.SystemLogs.ResolveSystemErrorLog;
@@ -48,6 +47,26 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // Real client IP: every request arrives via a proxy (Traefik -> Gateway ->
+        // service), so Connection.RemoteIpAddress is otherwise the proxy container's
+        // Docker IP (172.18.x.x) - which is what audit logs, sessions, System Logs
+        // and the per-IP auth rate limiter were all recording/keying on. Only the
+        // last hop is honoured (ForwardLimit 1), and only when that hop is a
+        // private-network proxy: Traefik appends the real client IP last, so any
+        // X-Forwarded-For a client sends itself is never the value used (prod only
+        // exposes the Gateway through Traefik).
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Clear();
+            foreach (var (prefix, length) in new[] { ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16), ("127.0.0.0", 8) })
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse(prefix), length));
+            }
+        });
+
         // Add services to the container.
 
         builder.Services.AddControllers();
@@ -58,27 +77,33 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<NotificationDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationDb")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("NotificationDb"),
+                // Same transient-failure resiliency as every other service's
+                // DbContext registration - see ExamService's Program.cs for
+                // the real incident that prompted this across all of them.
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<NotificationDbContext>("database");
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
         builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
-        builder.Services.AddScoped<ISystemSettingsRepository, SystemSettingsRepository>();
         builder.Services.AddScoped<ISystemErrorLogRepository, SystemErrorLogRepository>();
+        builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
+        builder.Services.AddScoped<INewsletterSubscriberRepository, NewsletterSubscriberRepository>();
         builder.Services.AddScoped<RecordAuditLogHandler>();
         builder.Services.AddScoped<ListAuditLogsHandler>();
-        builder.Services.AddScoped<GetSystemSettingsHandler>();
-        builder.Services.AddScoped<IValidator<UpdateSystemSettingsCommand>, UpdateSystemSettingsValidator>();
-        builder.Services.AddScoped<UpdateSystemSettingsHandler>();
         builder.Services.AddScoped<RecordSystemErrorLogHandler>();
         builder.Services.AddScoped<ListSystemErrorLogsHandler>();
         builder.Services.AddScoped<ResolveSystemErrorLogHandler>();
-        builder.Services.AddHostedService<AuditLogRetentionCleanupService>();
         builder.Services.AddHostedService<SystemErrorLogRetentionCleanupService>();
+        builder.Services.AddScoped<ErrorSpikeCheck>();
+        builder.Services.AddHostedService<ErrorSpikeAlertService>();
 
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
+        builder.Services.AddSingleton<INotificationDispatchQueue, NotificationDispatchQueue>();
+        builder.Services.AddHostedService<NotificationDispatchBackgroundService>();
         builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
 
         // Trailing slash is required: HttpClient/Uri combine a relative request path against
@@ -88,10 +113,18 @@ public class Program
             ?? throw new InvalidOperationException("Missing \"Services:UserServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IUserDirectoryClient, UserDirectoryClient>(client =>
             client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<INotificationDefaultsClient, NotificationDefaultsClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = new Uri(userServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var examServiceBaseUrl = builder.Configuration["Services:ExamServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:ExamServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IExamAssignmentLookupClient, ExamAssignmentLookupClient>(client =>
+            client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
+        builder.Services.AddHttpClient<IExamLookupClient, ExamServiceClient>(client =>
             client.BaseAddress = new Uri(examServiceBaseUrl.TrimEnd('/') + "/"));
 
         builder.Services.AddScoped<GetMyNotificationsHandler>();
@@ -140,9 +173,14 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
+        app.UseForwardedHeaders();
 
         using (var scope = app.Services.CreateScope())
         {
@@ -180,7 +218,8 @@ public class Program
                         exception.StackTrace,
                         context.Request.Path,
                         context.Request.Method,
-                        currentTenant.IsAuthenticated ? currentTenant.TenantId : null));
+                        currentTenant.IsAuthenticated ? currentTenant.TenantId : null,
+                        IpAddress: context.Connection.RemoteIpAddress?.ToString()));
                 }
                 catch (Exception recordEx)
                 {

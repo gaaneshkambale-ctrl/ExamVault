@@ -3,6 +3,7 @@ import { Alert, Button, Modal } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { activateUser, deactivateUser } from '../api/userApi';
+import { useAuth } from '../hooks/useAuth';
 
 interface ToggleUserActiveButtonProps {
   userId: string;
@@ -12,6 +13,8 @@ interface ToggleUserActiveButtonProps {
 export default function ToggleUserActiveButton({ userId, isActive }: ToggleUserActiveButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
+  const isSelf = currentUser?.id === userId;
 
   const toggleMutation = useMutation({
     mutationFn: () => (isActive ? deactivateUser(userId) : activateUser(userId)),
@@ -24,6 +27,19 @@ export default function ToggleUserActiveButton({ userId, isActive }: ToggleUserA
   const errorMessage = isAxiosError(toggleMutation.error)
     ? (toggleMutation.error.response?.data as { message?: string } | undefined)?.message
     : undefined;
+
+  // The backend already rejects deactivating your own account (you'd sign
+  // yourself out and, if you're the only Admin, lock the org out of Admin
+  // access) - disable it here too instead of letting the click fail with a
+  // modal error. Reactivate has no such self-case in practice: you can't be
+  // both logged in and Inactive at the same time.
+  if (isSelf && isActive) {
+    return (
+      <Button variant="outline-danger" size="sm" disabled title="You cannot deactivate your own account.">
+        Deactivate
+      </Button>
+    );
+  }
 
   return (
     <>

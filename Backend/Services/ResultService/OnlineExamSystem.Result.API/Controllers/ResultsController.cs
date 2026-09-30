@@ -1,10 +1,13 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OnlineExamSystem.Result.Application.GetExamReport;
 using OnlineExamSystem.Result.Application.GetResult;
 using OnlineExamSystem.Result.Domain;
+using OnlineExamSystem.Shared.Common.Multitenancy;
 using OnlineExamSystem.Shared.Contracts.Responses.Result;
 using static OnlineExamSystem.Result.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Result.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Result.API.Controllers;
 
@@ -28,6 +31,7 @@ public class ResultsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = ResultsView)]
     public async Task<IActionResult> Get([FromQuery] Guid examId, CancellationToken cancellationToken)
     {
         if (examId == Guid.Empty)
@@ -37,8 +41,9 @@ public class ResultsController : ControllerBase
 
         var authorizationHeader = Request.Headers["Authorization"].ToString();
         var bearerToken = authorizationHeader["Bearer ".Length..];
+        var tenantId = Guid.Parse(User.FindFirstValue(TenantClaimTypes.TenantId)!);
 
-        var result = await _getResultHandler.HandleAsync(new GetResultQuery(examId, bearerToken), cancellationToken);
+        var result = await _getResultHandler.HandleAsync(new GetResultQuery(examId, bearerToken, tenantId), cancellationToken);
 
         if (result.IsProviderFailure)
         {
@@ -73,8 +78,9 @@ public class ResultsController : ControllerBase
     }
 
     [HttpGet("by-exam/{examId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Instructor")]
     [Authorize(Policy = ResultsOrReports)]
+    [Authorize(Policy = ResultsView)]
     public async Task<IActionResult> ByExam(Guid examId, CancellationToken cancellationToken)
     {
         if (examId == Guid.Empty)
@@ -126,7 +132,14 @@ public class ResultsController : ControllerBase
             attempt.CopyPasteCount,
             attempt.RightClickCount,
             attempt.MultipleMonitorsCount,
-            attempt.HasPendingGrading);
+            attempt.HasPendingGrading,
+            attempt.CorrectCount,
+            attempt.IncorrectCount,
+            attempt.SkippedCount,
+            attempt.Accuracy,
+            attempt.Rank,
+            attempt.Percentile,
+            attempt.TotalParticipants);
 
     private static ResultSummaryResponse ToResponse(ExamResultSummary summary) =>
         new(
@@ -139,7 +152,15 @@ public class ResultsController : ControllerBase
             summary.Passed,
             summary.SubmittedAtUtc,
             summary.Questions?.Select(ToResponse).ToList(),
-            summary.HasPendingGrading);
+            summary.HasPendingGrading,
+            summary.CorrectCount,
+            summary.IncorrectCount,
+            summary.SkippedCount,
+            summary.Accuracy,
+            summary.Rank,
+            summary.Percentile,
+            summary.TotalParticipants,
+            summary.AverageAccuracy);
 
     private static QuestionResultResponse ToResponse(QuestionResult question) =>
         new(

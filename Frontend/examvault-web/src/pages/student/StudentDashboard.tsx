@@ -6,11 +6,14 @@ import StudentLayout from '../../layouts/StudentLayout';
 import PercentageRing from '../../components/PercentageRing';
 import NotificationTypeIcon from '../../components/notifications/NotificationTypeIcon';
 import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useExams } from '../../hooks/useExams';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { useMyNotifications, useUnreadCount } from '../../hooks/useNotifications';
 import { getMyResult } from '../../api/resultApi';
 import { getMyAttempt } from '../../api/submissionApi';
+import { getMyAssignmentForExam } from '../../api/assignmentApi';
+import { getExamOffer, type ExamOffer } from '../../utils/studentExamAvailability';
 import type { ResultSummaryResponse } from '../../types/result';
 import type { CreationMethod } from '../../types/exam';
 
@@ -186,6 +189,8 @@ const RECENT_NOTIFICATIONS_COUNT = 3;
 
 export default function StudentDashboard() {
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canViewResults = hasPermission('Results - View');
   const { data: exams, isLoading } = useExams();
   const { data: unread } = useUnreadCount();
   const { data: recentNotifications, isLoading: isLoadingNotifications } = useMyNotifications(
@@ -196,17 +201,13 @@ export default function StudentDashboard() {
 
   const now = new Date();
 
-  const upcomingExamsAll = (exams ?? []).filter(isUpcoming);
-  const upcomingExams = upcomingExamsAll.slice(0, UPCOMING_LIST_COUNT);
-  const questionCounts = useQuestionCountsByExam(upcomingExams.map((e) => e.id));
-
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
 
   const resultQueries = useQueries({
     queries: publishedExams.map((exam) => ({
       queryKey: ['results', 'mine', exam.id],
       queryFn: () => getMyResult(exam.id),
-      enabled: !!exams,
+      enabled: !!exams && canViewResults,
     })),
   });
 
@@ -220,6 +221,30 @@ export default function StudentDashboard() {
       enabled: !!exams,
     })),
   });
+
+  const assignmentQueries = useQueries({
+    queries: publishedExams.map((exam) => ({
+      queryKey: ['assignments', 'mine', exam.id],
+      queryFn: () => getMyAssignmentForExam(exam.id),
+      enabled: !!exams,
+    })),
+  });
+
+  // What each exam can still offer this student (start / continue / retake / nothing) -
+  // a completed exam with no attempts left must not sit under "Upcoming" with a Start button.
+  const offerByExam: Record<string, ExamOffer> = {};
+  publishedExams.forEach((exam, index) => {
+    const assignment = assignmentQueries[index]?.data;
+    offerByExam[exam.id] = getExamOffer({
+      attempt: attemptQueries[index]?.data?.attempt,
+      maxAttempts: assignment?.maxAttempts ?? exam.maxAttempts,
+      endAtUtc: assignment?.endAtUtc ?? exam.endAtUtc,
+    });
+  });
+
+  const upcomingExamsAll = publishedExams.filter((exam) => isUpcoming(exam) && offerByExam[exam.id] !== 'none');
+  const upcomingExams = upcomingExamsAll.slice(0, UPCOMING_LIST_COUNT);
+  const questionCounts = useQuestionCountsByExam(upcomingExams.map((e) => e.id));
 
   const isLoadingResults = publishedExams.length > 0 && resultQueries.some((q) => q.isLoading);
   const isLoadingAttempts = publishedExams.length > 0 && attemptQueries.some((q) => q.isLoading);
@@ -364,7 +389,7 @@ export default function StudentDashboard() {
                           </div>
                         )}
                         <Link to={`/exams/${exam.id}`} className="btn btn-outline-primary btn-sm">
-                          Start Exam
+                          {offerByExam[exam.id] === 'continue' ? 'Continue Exam' : offerByExam[exam.id] === 'retake' ? 'Retake Exam' : 'Start Exam'}
                         </Link>
                       </div>
                     </div>
@@ -378,9 +403,11 @@ export default function StudentDashboard() {
             <Card.Body className={recentResults.length === 0 ? '' : 'p-0'}>
               <div className="d-flex justify-content-between align-items-center p-4 pb-3">
                 <h2 className="h6 fw-bold mb-0">Recent Results</h2>
-                <Link to="/results" className="small">
-                  View All
-                </Link>
+                {canViewResults && (
+                  <Link to="/results" className="small">
+                    View All
+                  </Link>
+                )}
               </div>
 
               {isLoadingResults && (
@@ -399,7 +426,7 @@ export default function StudentDashboard() {
                 <>
                   <div className="table-responsive">
                     <table className="table mb-0 align-middle">
-                      <thead className="text-muted small text-uppercase bg-light">
+                      <thead className="text-muted small text-uppercase bg-body-tertiary">
                         <tr>
                           <th className="ps-4">Exam Title</th>
                           <th>Score</th>
@@ -448,9 +475,11 @@ export default function StudentDashboard() {
             <Card.Body>
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2 className="h6 fw-bold mb-0">Performance Overview</h2>
-                <Link to="/results" className="small">
-                  View Details
-                </Link>
+                {canViewResults && (
+                  <Link to="/results" className="small">
+                    View Details
+                  </Link>
+                )}
               </div>
 
               {isLoadingResults || isLoadingAttempts ? (
@@ -502,7 +531,9 @@ export default function StudentDashboard() {
               <h2 className="h6 fw-bold mb-3">Quick Links</h2>
               <Row className="g-2">
                 <QuickLink to="/exams" label="My Exams" subtitle="View and attempt exams" icon={<ExamsIcon />} variant="primary" />
-                <QuickLink to="/results" label="My Results" subtitle="Check your results" icon={<ResultsIcon />} variant="success" />
+                {canViewResults && (
+                  <QuickLink to="/results" label="My Results" subtitle="Check your results" icon={<ResultsIcon />} variant="success" />
+                )}
                 <QuickLink
                   to="/notifications"
                   label="Notifications"

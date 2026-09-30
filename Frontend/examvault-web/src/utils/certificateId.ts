@@ -28,10 +28,19 @@ export function getCertificateId(result: ResultSummaryResponse): string {
   return `EV-${examCode(result.examTitle)}-${year}-${sequence}`;
 }
 
-export const CERTIFICATE_MIN_PERCENTAGE = 80;
-
-// Passing isn't enough on its own - a certificate is only earned at 80%+.
-export function isCertificateEligible(result: ResultSummaryResponse): boolean {
+// Certificate eligibility is per-exam (Edit Exam's "Certificate Generation"
+// card) - an exam owner controls both whether it awards certificates at all
+// and the minimum score required, rather than a single fixed threshold
+// across every exam. `exam` is whatever the caller has loaded for the
+// result's own exam; missing/not-yet-loaded is treated as "no certificate"
+// rather than eligible, since that's the safe default while data is
+// loading. Passing isn't enough on its own even when enabled - the score
+// must also clear the exam's configured minimum.
+export function isCertificateEligible(
+  result: Pick<ResultSummaryResponse, 'totalScore' | 'totalMarks' | 'passed'>,
+  exam: { certificateEnabled: boolean; minimumCertificateScorePercent: number } | null | undefined,
+): boolean {
+  if (!exam?.certificateEnabled) return false;
   const percentage = result.totalMarks > 0 ? (result.totalScore / result.totalMarks) * 100 : 0;
-  return result.passed && percentage >= CERTIFICATE_MIN_PERCENTAGE;
+  return result.passed && percentage >= exam.minimumCertificateScorePercent;
 }

@@ -1,10 +1,12 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -12,10 +14,18 @@ using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Events.Publishing;
 using OnlineExamSystem.User.API.Authorization;
+using OnlineExamSystem.User.API.Jobs;
+using OnlineExamSystem.User.Application.AcademicLists.Create;
+using OnlineExamSystem.User.Application.AcademicLists.Delete;
+using OnlineExamSystem.User.Application.AcademicLists.List;
 using OnlineExamSystem.User.Application.Plans.Create;
 using OnlineExamSystem.User.Application.Plans.Delete;
 using OnlineExamSystem.User.Application.Plans.List;
 using OnlineExamSystem.User.Application.Plans.Update;
+using OnlineExamSystem.User.Application.OrganizationTypes.Create;
+using OnlineExamSystem.User.Application.OrganizationTypes.Delete;
+using OnlineExamSystem.User.Application.OrganizationTypes.List;
+using OnlineExamSystem.User.Application.OrganizationTypes.Update;
 using OnlineExamSystem.User.Application.Tenants.AssignPlan;
 using OnlineExamSystem.User.Application.Groups.AddMember;
 using OnlineExamSystem.User.Application.Groups.Create;
@@ -23,10 +33,14 @@ using OnlineExamSystem.User.Application.Groups.Delete;
 using OnlineExamSystem.User.Application.Groups.GetById;
 using OnlineExamSystem.User.Application.Groups.List;
 using OnlineExamSystem.User.Application.Groups.RemoveMember;
+using OnlineExamSystem.User.Application.Users.RolePermissions.GetAll;
+using OnlineExamSystem.User.Application.Users.RolePermissions.Update;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Application.Users.ChangePassword;
+using OnlineExamSystem.User.Application.Users.ConfirmEmail;
 using OnlineExamSystem.User.Application.Users.Create;
 using OnlineExamSystem.User.Application.Users.Delete;
+using OnlineExamSystem.User.Application.Users.ForgotPassword;
 using OnlineExamSystem.User.Application.Users.GetMyPreferences;
 using OnlineExamSystem.User.Application.Users.GetProfile;
 using OnlineExamSystem.User.Application.Users.Internal.GetUsersByIds;
@@ -37,14 +51,34 @@ using OnlineExamSystem.User.Application.Users.Logout;
 using OnlineExamSystem.User.Application.Users.Register;
 using OnlineExamSystem.User.Application.Users.GetMySessions;
 using OnlineExamSystem.User.Application.Users.ResetPassword;
+using OnlineExamSystem.User.Application.Users.ResetPasswordWithToken;
+using OnlineExamSystem.User.Application.Users.ResendConfirmationEmail;
 using OnlineExamSystem.User.Application.Users.RevokeOtherSessions;
 using OnlineExamSystem.User.Application.Users.RevokeSession;
 using OnlineExamSystem.User.Application.Users.SetActiveStatus;
 using OnlineExamSystem.User.Application.Tenants.Create;
 using OnlineExamSystem.User.Application.Tenants.CreateAdmin;
+using OnlineExamSystem.User.Application.Tenants.Delete;
 using OnlineExamSystem.User.Application.Tenants.GetBySlug;
+using OnlineExamSystem.User.Application.Tenants.GetPermissionVersion;
+using OnlineExamSystem.User.Application.Tenants.GetLimits;
+using OnlineExamSystem.User.Application.Tenants.GetOrganizationAcademicConfig;
+using OnlineExamSystem.User.Application.Tenants.GetOrganizationSettings;
+using OnlineExamSystem.User.Application.Tenants.GetRolePermissions;
+using OnlineExamSystem.User.Application.Tenants.UpdateOrganizationAcademicConfig;
 using OnlineExamSystem.User.Application.Tenants.List;
+using OnlineExamSystem.User.Application.Tenants.ResetAdminPassword;
 using OnlineExamSystem.User.Application.Tenants.SetActiveStatus;
+using OnlineExamSystem.User.Application.Tenants.SetTrial;
+using OnlineExamSystem.User.Application.Tenants.Update;
+using OnlineExamSystem.User.Application.Tenants.UpdateOrganizationAsset;
+using OnlineExamSystem.User.Application.Tenants.UpdateOrganizationSettings;
+using OnlineExamSystem.User.Application.Tenants.UpdateRolePermissions;
+using OnlineExamSystem.User.Application.Settings.GetEmailConnectionStatus;
+using OnlineExamSystem.User.Application.Settings.GetEmailSummary;
+using OnlineExamSystem.User.Application.Settings.GetPlatformSettings;
+using OnlineExamSystem.User.Application.Settings.UpdatePlatformSettings;
+using OnlineExamSystem.User.Application.Security;
 using OnlineExamSystem.User.Application.Users.TokenRefresh;
 using OnlineExamSystem.User.Application.Users.Update;
 using OnlineExamSystem.User.Application.Users.UpdateMyPhoto;
@@ -69,6 +103,26 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // Real client IP: every request arrives via a proxy (Traefik -> Gateway ->
+        // service), so Connection.RemoteIpAddress is otherwise the proxy container's
+        // Docker IP (172.18.x.x) - which is what audit logs, sessions, System Logs
+        // and the per-IP auth rate limiter were all recording/keying on. Only the
+        // last hop is honoured (ForwardLimit 1), and only when that hop is a
+        // private-network proxy: Traefik appends the real client IP last, so any
+        // X-Forwarded-For a client sends itself is never the value used (prod only
+        // exposes the Gateway through Traefik).
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Clear();
+            foreach (var (prefix, length) in new[] { ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16), ("127.0.0.0", 8) })
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse(prefix), length));
+            }
+        });
+
         // Add services to the container.
 
         builder.Services.AddControllers();
@@ -79,32 +133,72 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<UserDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("UserDb")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("UserDb"),
+                // Same transient-failure resiliency as every other service's
+                // DbContext registration - see ExamService's Program.cs for
+                // the real incident that prompted this across all of them.
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<UserDbContext>("database");
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<IGroupRepository, GroupRepository>();
+        builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
         builder.Services.AddScoped<ITenantRepository, TenantRepository>();
         builder.Services.AddScoped<IPlanRepository, PlanRepository>();
+        builder.Services.AddScoped<IOrganizationTypeRepository, OrganizationTypeRepository>();
+        builder.Services.AddScoped<IOrganizationAcademicConfigRepository, OrganizationAcademicConfigRepository>();
+        builder.Services.AddScoped<IAcademicListItemRepository, AcademicListItemRepository>();
+        builder.Services.AddScoped<IPlatformSettingsRepository, PlatformSettingsRepository>();
+        builder.Services.AddScoped<IPasswordPolicyProvider, PasswordPolicyProvider>();
+        builder.Services.AddScoped<IEmailDeliveryLogRepository, EmailDeliveryLogRepository>();
 
         builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
+        builder.Services.Configure<AppUrlSettings>(builder.Configuration.GetSection(AppUrlSettings.SectionName));
+        builder.Services.AddSingleton<ITenantUrlBuilder, TenantUrlBuilder>();
         builder.Services.Configure<N8nSettings>(builder.Configuration.GetSection("N8n"));
         builder.Services.AddHttpClient<IEmailDispatcher, N8nEmailDispatcher>();
+        // Short timeout - this backs a Super Admin "Check Connection" button
+        // click, it must fail fast rather than hang the request.
+        builder.Services.AddHttpClient<IEmailConnectionChecker, N8nConnectionChecker>(client =>
+            client.Timeout = TimeSpan.FromSeconds(5));
 
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
-            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            // Fire-and-forget audit write must fail fast, not hang on the default
+            // 100s HttpClient timeout - a down NotificationService would otherwise
+            // make every audited business action (exam/question/user create, etc.)
+            // multi-second-to-100s slow instead of merely un-audited. Same value
+            // as the "system-logs" client below.
+            client.Timeout = TimeSpan.FromSeconds(3);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            // HttpClient.Timeout alone measured ~7-12s against a stopped
+            // container in this environment (DNS-resolution-to-a-torn-down-
+            // endpoint overhead sits partly outside that timeout's reach).
+            // ConnectTimeout bounds the DNS+TCP-connect phase specifically,
+            // giving the fast-fail this client actually needs.
+            ConnectTimeout = TimeSpan.FromSeconds(2),
+        });
         builder.Services.AddHttpClient("system-logs", client =>
         {
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(3);
         });
+        builder.Services.AddHttpClient<IEmailDeliverySummaryClient, EmailDeliverySummaryClient>(client =>
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(5);
+        });
         builder.Services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserValidator>();
         builder.Services.AddScoped<RegisterUserHandler>();
         builder.Services.AddScoped<GetUserProfileHandler>();
         builder.Services.AddScoped<ListUsersHandler>();
+        builder.Services.AddScoped<ListStudentsHandler>();
         builder.Services.AddScoped<GetUsersByIdsHandler>();
         builder.Services.AddScoped<IValidator<CreateUserCommand>, CreateUserValidator>();
         builder.Services.AddScoped<CreateUserHandler>();
@@ -113,6 +207,14 @@ public class Program
         builder.Services.AddScoped<DeleteUserHandler>();
         builder.Services.AddScoped<IValidator<ResetPasswordCommand>, ResetPasswordValidator>();
         builder.Services.AddScoped<ResetPasswordHandler>();
+        builder.Services.AddScoped<IValidator<ForgotPasswordCommand>, ForgotPasswordValidator>();
+        builder.Services.AddScoped<ForgotPasswordHandler>();
+        builder.Services.AddScoped<IValidator<ResetPasswordWithTokenCommand>, ResetPasswordWithTokenValidator>();
+        builder.Services.AddScoped<ResetPasswordWithTokenHandler>();
+        builder.Services.AddScoped<IValidator<ConfirmEmailCommand>, ConfirmEmailValidator>();
+        builder.Services.AddScoped<ConfirmEmailHandler>();
+        builder.Services.AddScoped<IValidator<ResendConfirmationEmailCommand>, ResendConfirmationEmailValidator>();
+        builder.Services.AddScoped<ResendConfirmationEmailHandler>();
         builder.Services.AddScoped<IValidator<ChangePasswordCommand>, ChangePasswordValidator>();
         builder.Services.AddScoped<ChangePasswordHandler>();
         builder.Services.AddScoped<IValidator<LoginUserCommand>, LoginUserValidator>();
@@ -138,14 +240,45 @@ public class Program
         builder.Services.AddScoped<AddGroupMemberHandler>();
         builder.Services.AddScoped<RemoveGroupMemberHandler>();
 
+        builder.Services.AddScoped<GetAllRolePermissionsHandler>();
+        builder.Services.AddScoped<IValidator<UpdateRolePermissionsCommand>, UpdateRolePermissionsValidator>();
+        builder.Services.AddScoped<UpdateRolePermissionsHandler>();
+
         builder.Services.AddScoped<IValidator<CreateTenantCommand>, CreateTenantValidator>();
         builder.Services.AddScoped<CreateTenantHandler>();
         builder.Services.AddScoped<ListTenantsHandler>();
         builder.Services.AddScoped<SetTenantActiveStatusHandler>();
         builder.Services.AddScoped<GetTenantBySlugHandler>();
+        builder.Services.AddScoped<GetTenantPermissionVersionHandler>();
+        builder.Services.AddScoped<GetTenantLimitsHandler>();
         builder.Services.AddScoped<IValidator<CreateTenantAdminCommand>, CreateTenantAdminValidator>();
         builder.Services.AddScoped<CreateTenantAdminHandler>();
         builder.Services.AddScoped<AssignPlanToTenantHandler>();
+        builder.Services.AddScoped<IValidator<UpdateTenantCommand>, UpdateTenantValidator>();
+        builder.Services.AddScoped<UpdateTenantHandler>();
+        builder.Services.AddScoped<GetOrganizationSettingsHandler>();
+        builder.Services.AddScoped<IValidator<UpdateOrganizationSettingsCommand>, UpdateOrganizationSettingsValidator>();
+        builder.Services.AddScoped<UpdateOrganizationSettingsHandler>();
+        builder.Services.AddScoped<UpdateOrganizationAssetHandler>();
+        builder.Services.AddScoped<GetOrganizationAcademicConfigHandler>();
+        builder.Services.AddScoped<IValidator<UpdateOrganizationAcademicConfigCommand>, UpdateOrganizationAcademicConfigValidator>();
+        builder.Services.AddScoped<UpdateOrganizationAcademicConfigHandler>();
+        builder.Services.AddScoped<ListAcademicListItemsHandler>();
+        builder.Services.AddScoped<IValidator<CreateAcademicListItemCommand>, CreateAcademicListItemValidator>();
+        builder.Services.AddScoped<CreateAcademicListItemHandler>();
+        builder.Services.AddScoped<DeleteAcademicListItemHandler>();
+        builder.Services.AddScoped<DeleteTenantHandler>();
+        builder.Services.AddScoped<ResetTenantAdminPasswordHandler>();
+        builder.Services.AddScoped<SetTenantTrialHandler>();
+        builder.Services.AddScoped<GetTenantRolePermissionsHandler>();
+        builder.Services.AddScoped<UpdateTenantRolePermissionsHandler>();
+        builder.Services.AddHostedService<TrialExpiryCheckService>();
+
+        builder.Services.AddScoped<GetPlatformSettingsHandler>();
+        builder.Services.AddScoped<IValidator<UpdatePlatformSettingsCommand>, UpdatePlatformSettingsValidator>();
+        builder.Services.AddScoped<UpdatePlatformSettingsHandler>();
+        builder.Services.AddScoped<GetEmailConnectionStatusHandler>();
+        builder.Services.AddScoped<GetEmailSummaryHandler>();
 
         builder.Services.AddScoped<IValidator<CreatePlanCommand>, CreatePlanValidator>();
         builder.Services.AddScoped<CreatePlanHandler>();
@@ -153,6 +286,13 @@ public class Program
         builder.Services.AddScoped<UpdatePlanHandler>();
         builder.Services.AddScoped<DeletePlanHandler>();
         builder.Services.AddScoped<ListPlansHandler>();
+
+        builder.Services.AddScoped<IValidator<CreateOrganizationTypeCommand>, CreateOrganizationTypeValidator>();
+        builder.Services.AddScoped<CreateOrganizationTypeHandler>();
+        builder.Services.AddScoped<IValidator<UpdateOrganizationTypeCommand>, UpdateOrganizationTypeValidator>();
+        builder.Services.AddScoped<UpdateOrganizationTypeHandler>();
+        builder.Services.AddScoped<DeleteOrganizationTypeHandler>();
+        builder.Services.AddScoped<ListOrganizationTypesHandler>();
 
         if (builder.Configuration["Messaging:Provider"] == "ServiceBus")
         {
@@ -185,9 +325,55 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
+
+        // Throttles the unauthenticated, abuse-prone entry points
+        // (Register/Login/ForgotPassword all reach here before any JWT
+        // exists) - Login already has its own per-account lockout
+        // (LoginUserHandler's FailedLoginAttempts), but nothing previously
+        // stopped high-volume credential-stuffing or account-enumeration
+        // traffic hitting these three at all. QueueLimit 0 means an
+        // over-limit request is rejected immediately (429) rather than held
+        // and retried server-side.
+        //
+        // Two layers, because a college lab / hostel puts many students
+        // behind ONE public IP (real client IPs since the forwarded-headers +
+        // Cloudflare work): the "auth" policy is per IP + email being tried
+        // (AuthRateLimitKey), so classmates never share a bucket; the global
+        // limiter caps each IP across ALL of these endpoints so one source
+        // still can't spray many accounts.
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: AuthRateLimitKey.PartitionKey(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    httpContext.Items[AuthRateLimitKey.EmailItemKey] as string),
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+                AuthRateLimitKey.IsAuthRequest(httpContext.Request.Method, httpContext.Request.Path.Value)
+                    ? RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 300,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        })
+                    : RateLimitPartition.GetNoLimiter("not-auth"));
+        });
 
         var app = builder.Build();
+        app.UseForwardedHeaders();
 
         using (var scope = app.Services.CreateScope())
         {
@@ -246,6 +432,31 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
+        // Feeds the "auth" rate-limit key: peeks at the email in the JSON
+        // body of the auth endpoints only (buffered, capped, then rewound so
+        // model binding still reads it). Must run before UseRateLimiter.
+        app.Use(async (context, next) =>
+        {
+            if (AuthRateLimitKey.IsAuthRequest(context.Request.Method, context.Request.Path.Value)
+                && context.Request.ContentLength is null or <= AuthRateLimitKey.MaxBodyBytes)
+            {
+                context.Request.EnableBuffering();
+                var buffer = new byte[AuthRateLimitKey.MaxBodyBytes + 1];
+                var read = 0;
+                int count;
+                while (read < buffer.Length
+                    && (count = await context.Request.Body.ReadAsync(buffer.AsMemory(read), context.RequestAborted)) > 0)
+                {
+                    read += count;
+                }
+                context.Request.Body.Position = 0;
+                context.Items[AuthRateLimitKey.EmailItemKey] = AuthRateLimitKey.ExtractEmail(buffer.AsSpan(0, read));
+            }
+
+            await next();
+        });
+        app.UseRateLimiter();
+
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealthCheckResponse });
         app.MapControllers();
 
@@ -268,7 +479,8 @@ public class Program
                 exception.StackTrace,
                 context.Request.Path,
                 context.Request.Method,
-                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null);
+                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null,
+                IpAddress: context.Connection.RemoteIpAddress?.ToString());
 
             var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("system-logs");
             await client.PostAsJsonAsync("api/system-logs", request);

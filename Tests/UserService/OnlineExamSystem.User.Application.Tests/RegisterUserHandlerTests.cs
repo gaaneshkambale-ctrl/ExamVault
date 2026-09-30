@@ -9,8 +9,21 @@ namespace OnlineExamSystem.User.Application.Tests;
 
 public class RegisterUserHandlerTests
 {
-    private static RegisterUserHandler CreateHandler(FakeUserRepository repository, FakeEventPublisher? eventPublisher = null) =>
-        new(repository, new RegisterUserValidator(), new PasswordHasher<AppUser>(), eventPublisher ?? new FakeEventPublisher());
+    private static RegisterUserHandler CreateHandler(
+        FakeUserRepository repository,
+        FakeEventPublisher? eventPublisher = null,
+        FakePlatformSettingsRepository? platformSettingsRepository = null,
+        FakeEmailDispatcher? emailDispatcher = null) =>
+        new(
+            repository,
+            new RegisterUserValidator(new FakePasswordPolicyProvider()),
+            new PasswordHasher<AppUser>(),
+            eventPublisher ?? new FakeEventPublisher(),
+            platformSettingsRepository ?? new FakePlatformSettingsRepository(),
+            JwtTestHelper.CreateService(),
+            emailDispatcher ?? new FakeEmailDispatcher(),
+            new FakeTenantUrlBuilder(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<RegisterUserHandler>.Instance);
 
     [Fact]
     public async Task Valid_registration_creates_user_with_hashed_password()
@@ -25,6 +38,29 @@ public class RegisterUserHandlerTests
         Assert.NotNull(result.User);
         Assert.Equal("jane@example.com", result.User!.Email);
         Assert.NotEqual("Passw0rd!", result.User!.PasswordHash);
+    }
+
+    [Fact]
+    public async Task Valid_registration_leaves_email_unconfirmed_and_sends_a_confirmation_email()
+    {
+        // Unlike CreateUserHandler/CreateTenantAdminHandler (an Admin
+        // already vetted the email by typing it in), nobody vetted this one
+        // - LoginUserHandler must keep this account locked out until the
+        // ConfirmEmail link is used.
+        var repository = new FakeUserRepository();
+        var emailDispatcher = new FakeEmailDispatcher();
+        var handler = CreateHandler(repository, emailDispatcher: emailDispatcher);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.User!.EmailConfirmed);
+        var sent = Assert.Single(emailDispatcher.SentEmails);
+        Assert.Equal("jane@example.com", sent.ToEmail);
+        Assert.Contains("confirm-email?token=", sent.Body);
+        var token = Assert.Single(repository.EmailConfirmationTokens);
+        Assert.Equal(result.User!.Id, token.UserId);
+        Assert.True(token.IsValid);
     }
 
     [Fact]
@@ -70,5 +106,59 @@ public class RegisterUserHandlerTests
 
         Assert.False(result.Success);
         Assert.True(result.EmailAlreadyExists);
+    }
+
+    [Fact]
+    public async Task Concurrent_duplicate_registration_returns_conflict_instead_of_throwing()
+    {
+        // Simulates two requests for the same email racing past the
+        // existingUser pre-check before either commits - the loser should
+        // still get a clean Conflict result, not an unhandled 500 (the
+        // real bug this regression test guards against).
+        var repository = new FakeUserRepository { ThrowDuplicateKeyOnNextSaveChanges = true };
+        var handler = CreateHandler(repository);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.True(result.EmailAlreadyExists);
+    }
+
+    [Fact]
+    public async Task Registration_is_rejected_when_self_registration_is_disabled()
+    {
+        var repository = new FakeUserRepository();
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { AllowSelfRegistration = false },
+        };
+        var handler = CreateHandler(repository, platformSettingsRepository: platformSettings);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.Success);
+        Assert.Null(await repository.GetByEmailAsync("jane@example.com"));
+    }
+
+    [Fact]
+    public async Task Registration_with_email_verification_off_starts_confirmed_and_sends_no_email()
+    {
+        var repository = new FakeUserRepository();
+        var emailDispatcher = new FakeEmailDispatcher();
+        var platformSettings = new FakePlatformSettingsRepository
+        {
+            Settings = new PlatformSettings { RequireEmailVerification = false },
+        };
+        var handler = CreateHandler(repository, platformSettingsRepository: platformSettings, emailDispatcher: emailDispatcher);
+        var command = new RegisterUserCommand("Jane Doe", "jane@example.com", "Passw0rd!");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        Assert.True(result.User!.EmailConfirmed);
+        Assert.Empty(emailDispatcher.SentEmails);
+        Assert.Empty(repository.EmailConfirmationTokens);
     }
 }

@@ -21,6 +21,19 @@ public class GetAssignmentHandler
             return null;
         }
 
+        // Instructor is restricted to assignments on exams they created
+        // themselves - same "return null / effectively 404" treatment
+        // GetExamHandler's own OwnedOnly scope already uses for an exam
+        // outside scope, rather than a distinct 403.
+        if (query.OwnerUserId is { } ownerUserId)
+        {
+            var exam = await _examRepository.GetByIdAsync(assignment.ExamId, cancellationToken);
+            if (exam is null || exam.CreatedByUserId != ownerUserId)
+            {
+                return null;
+            }
+        }
+
         var targets = await _examRepository.GetAssignmentTargetUserIdsAsync(assignment.Id, cancellationToken);
         return new AssignmentWithTargets(assignment, targets);
     }

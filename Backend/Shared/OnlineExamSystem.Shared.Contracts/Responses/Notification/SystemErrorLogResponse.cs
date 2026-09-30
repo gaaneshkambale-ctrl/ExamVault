@@ -13,4 +13,5 @@ public record SystemErrorLogResponse(
     Guid? TenantId,
     bool IsResolved,
     DateTime? ResolvedAtUtc,
-    Guid? ResolvedByUserId);
+    Guid? ResolvedByUserId,
+    string? IpAddress = null);

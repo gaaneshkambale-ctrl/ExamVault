@@ -1,19 +1,29 @@
 using FluentValidation;
+using OnlineExamSystem.User.Application.Interfaces;
 
 namespace OnlineExamSystem.User.Application.Users.ChangePassword;
 
 public class ChangePasswordValidator : AbstractValidator<ChangePasswordCommand>
 {
-    public ChangePasswordValidator()
+    public ChangePasswordValidator(IPasswordPolicyProvider passwordPolicyProvider)
     {
         RuleFor(x => x.CurrentPassword)
             .NotEmpty();
 
-        RuleFor(x => x.NewPassword)
-            .NotEmpty()
-            .MinimumLength(8)
-            .Matches("[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
-            .Matches("[a-z]").WithMessage("Password must contain at least one lowercase letter.")
-            .Matches("[0-9]").WithMessage("Password must contain at least one digit.");
+        RuleFor(x => x.NewPassword).NotEmpty();
+
+        RuleFor(x => x)
+            .CustomAsync(async (command, context, cancellationToken) =>
+            {
+                if (string.IsNullOrEmpty(command.NewPassword))
+                {
+                    return;
+                }
+                var policy = await passwordPolicyProvider.GetPolicyAsync(cancellationToken);
+                foreach (var error in policy.Validate(command.NewPassword))
+                {
+                    context.AddFailure(nameof(command.NewPassword), error);
+                }
+            });
     }
 }

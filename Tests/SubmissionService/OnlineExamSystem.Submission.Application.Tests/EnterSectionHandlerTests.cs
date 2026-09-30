@@ -157,7 +157,8 @@ public class EnterSectionHandlerTests
         var result = await handler.HandleAsync(new EnterSectionCommand(attempt.Id, Section1Id, UserId, "token"));
 
         Assert.False(result.Success);
-        Assert.True(result.IsSectionLocked);
+        Assert.True(result.IsSectionAlreadyCompleted);
+        Assert.False(result.IsSectionLocked);
     }
 
     [Fact]

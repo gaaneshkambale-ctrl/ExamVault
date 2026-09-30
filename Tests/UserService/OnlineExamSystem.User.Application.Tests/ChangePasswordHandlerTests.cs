@@ -9,7 +9,12 @@ namespace OnlineExamSystem.User.Application.Tests;
 public class ChangePasswordHandlerTests
 {
     private static ChangePasswordHandler CreateHandler(FakeUserRepository repository) =>
-        new(repository, new ChangePasswordValidator(), new PasswordHasher<AppUser>());
+        new(
+            repository,
+            new FakeTenantRepository(),
+            new ChangePasswordValidator(new FakePasswordPolicyProvider()),
+            new PasswordHasher<AppUser>(),
+            JwtTestHelper.CreateService());
 
     private static async Task<AppUser> SeedUser(
         FakeUserRepository repository,
@@ -82,5 +87,36 @@ public class ChangePasswordHandlerTests
         var result = await handler.HandleAsync(new ChangePasswordCommand(Guid.NewGuid(), "TempPass1", "NewPassw0rd"));
 
         Assert.True(result.IsNotFound);
+    }
+    [Fact]
+    public async Task Changing_password_signs_out_every_other_session_but_keeps_the_callers()
+    {
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(repository, "OldPassw0rd", isActive: true, mustChangePassword: false);
+        var jwt = JwtTestHelper.CreateService();
+        var currentRaw = jwt.GenerateRefreshToken();
+        await repository.AddRefreshTokenAsync(new RefreshToken { UserId = user.Id, TokenHash = jwt.HashToken(currentRaw), ExpiresAtUtc = DateTime.UtcNow.AddDays(7) });
+        await repository.AddRefreshTokenAsync(new RefreshToken { UserId = user.Id, TokenHash = "other-device", ExpiresAtUtc = DateTime.UtcNow.AddDays(7) });
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new ChangePasswordCommand(user.Id, "OldPassw0rd", "NewPassw0rd!", currentRaw));
+
+        Assert.True(result.Success);
+        Assert.True(repository.RefreshTokens.Single(t => t.TokenHash == jwt.HashToken(currentRaw)).IsActive);
+        Assert.False(repository.RefreshTokens.Single(t => t.TokenHash == "other-device").IsActive);
+    }
+
+    [Fact]
+    public async Task Changing_password_without_identifying_the_session_signs_out_everywhere()
+    {
+        var repository = new FakeUserRepository();
+        var user = await SeedUser(repository, "OldPassw0rd", isActive: true, mustChangePassword: false);
+        await repository.AddRefreshTokenAsync(new RefreshToken { UserId = user.Id, TokenHash = "x", ExpiresAtUtc = DateTime.UtcNow.AddDays(7) });
+        var handler = CreateHandler(repository);
+
+        var result = await handler.HandleAsync(new ChangePasswordCommand(user.Id, "OldPassw0rd", "NewPassw0rd!"));
+
+        Assert.True(result.Success);
+        Assert.All(repository.RefreshTokens, t => Assert.False(t.IsActive));
     }
 }

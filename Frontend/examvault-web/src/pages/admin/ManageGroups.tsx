@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, Form, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Button, Card, Col, Form, InputGroup, Modal, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import AdminLayout from '../../layouts/AdminLayout';
 import DeleteGroupButton from '../../components/DeleteGroupButton';
+import { getPaginationRange } from '../../utils/paginationRange';
+import ReportStatCard from '../../components/reports/ReportStatCard';
+import { CheckCircleIcon, MinusCircleIcon } from '../../components/reports/ReportIcons';
 import { UsersIcon } from '../../components/icons/ActionIcons';
 import { useGroups } from '../../hooks/useGroups';
 import { createGroup } from '../../api/groupApi';
@@ -16,7 +19,24 @@ function extractError(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-const PAGE_SIZE = 5;
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function PersonIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+const PAGE_SIZE_OPTIONS = [5, 25, 50];
 
 export default function ManageGroups() {
   const { data: groups, isLoading, isError } = useGroups();
@@ -24,6 +44,7 @@ export default function ManageGroups() {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
@@ -43,11 +64,11 @@ export default function ManageGroups() {
     setPage(1);
   }, [searchText]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedGroups = filteredGroups.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = filteredGroups.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filteredGroups.length);
+  const pagedGroups = filteredGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredGroups.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredGroups.length);
 
   const openCreate = () => {
     createMutation.reset();
@@ -55,18 +76,74 @@ export default function ManageGroups() {
     setShowCreate(true);
   };
 
+  const totalGroups = groups?.length ?? 0;
+  const totalMembers = groups?.reduce((sum, g) => sum + g.memberCount, 0) ?? 0;
+  const groupsWithMembers = groups?.filter((g) => g.memberCount > 0).length ?? 0;
+  const emptyGroups = groups?.filter((g) => g.memberCount === 0).length ?? 0;
+
   return (
-    <AdminLayout active="User Groups">
+    <AdminLayout active="Users">
       <div className="d-flex justify-content-between align-items-center mb-1">
-        <div>
-          <p className="text-muted small mb-1">Users / User Groups</p>
-          <h1 className="h4 fw-bold mb-1 text-primary">User Groups</h1>
-          <p className="text-muted mb-0">Create and manage groups to organize users.</p>
+        <div className="d-flex align-items-center gap-3">
+          <div
+            className="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+            style={{ width: 44, height: 44, background: '#eef2ff', color: '#4f46e5' }}
+          >
+            <UsersIcon />
+          </div>
+          <div>
+            <p className="text-muted small mb-1">Users / User Groups</p>
+            <h1 className="h4 fw-bold mb-1 text-primary">User Groups</h1>
+            <p className="text-muted mb-0">Create and manage groups to organize users.</p>
+          </div>
         </div>
         <Button variant="primary" onClick={openCreate}>
           + Create Group
         </Button>
       </div>
+
+      <Row className="g-3 mt-1">
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<UsersIcon />}
+            label="Total Groups"
+            value={String(totalGroups)}
+            caption="Groups in system"
+            iconBg="#eef2ff"
+            iconColor="#4f46e5"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<PersonIcon />}
+            label="Total Members"
+            value={String(totalMembers)}
+            caption="Across all groups"
+            iconBg="#ecfdf5"
+            iconColor="#059669"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<CheckCircleIcon />}
+            label="Groups with Members"
+            value={String(groupsWithMembers)}
+            caption="Actively used groups"
+            iconBg="#ede9fe"
+            iconColor="#7c3aed"
+          />
+        </Col>
+        <Col xs={6} md={3}>
+          <ReportStatCard
+            icon={<MinusCircleIcon />}
+            label="Empty Groups"
+            value={String(emptyGroups)}
+            caption="No members yet"
+            iconBg="#fff7ed"
+            iconColor="#d97706"
+          />
+        </Col>
+      </Row>
 
       <Modal show={showCreate} onHide={() => setShowCreate(false)} centered>
         <Modal.Header closeButton>
@@ -95,12 +172,17 @@ export default function ManageGroups() {
 
       <Row className="g-2 mb-3 mt-3">
         <Col md={6}>
-          <Form.Control
-            type="search"
-            placeholder="Search groups..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
+          <InputGroup>
+            <InputGroup.Text>
+              <SearchIcon />
+            </InputGroup.Text>
+            <Form.Control
+              type="search"
+              placeholder="Search groups..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+          </InputGroup>
         </Col>
       </Row>
 
@@ -126,7 +208,7 @@ export default function ManageGroups() {
 
           {!isLoading && !isError && pagedGroups.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Group Name</th>
                   <th>Users</th>
@@ -167,18 +249,38 @@ export default function ManageGroups() {
           <div className="text-muted small">
             Showing {rangeStart} to {rangeEnd} of {filteredGroups.length} groups
           </div>
-          <Pagination className="mb-0">
-            <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                {p}
-              </Pagination.Item>
-            ))}
-            <Pagination.Next
-              disabled={currentPage === totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            />
-          </Pagination>
+          <div className="d-flex align-items-center gap-3">
+            <Pagination className="mb-0">
+              <Pagination.First disabled={currentPage === 1} onClick={() => setPage(1)} />
+              <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+              {getPaginationRange(currentPage, totalPages).map((p, i) =>
+                p === 'ellipsis' ? (
+                  <Pagination.Ellipsis key={`ellipsis-${i}`} disabled />
+                ) : (
+                  <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                    {p}
+                  </Pagination.Item>
+                ),
+              )}
+              <Pagination.Next
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              />
+              <Pagination.Last disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} />
+            </Pagination>
+            <Form.Select
+              size="sm"
+              style={{ width: 100 }}
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </Form.Select>
+          </div>
         </div>
       )}
     </AdminLayout>

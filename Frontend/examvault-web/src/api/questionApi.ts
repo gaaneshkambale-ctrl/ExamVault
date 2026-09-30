@@ -1,8 +1,14 @@
 import apiClient from './axiosClient';
-import type { CreateQuestionRequest, QuestionResponse, UpdateQuestionRequest } from '../types/question';
+import type { CreateQuestionRequest, QuestionResponse, TenantQuestionCount, UpdateQuestionRequest } from '../types/question';
 
 export async function createQuestion(request: CreateQuestionRequest): Promise<QuestionResponse> {
   const { data } = await apiClient.post<QuestionResponse>('/api/questions', request);
+  return data;
+}
+
+// Super Admin only - per-organization question counts (usage), never question content.
+export async function getTenantQuestionCounts(): Promise<TenantQuestionCount[]> {
+  const { data } = await apiClient.get<TenantQuestionCount[]>('/api/questions/counts-by-tenant');
   return data;
 }
 

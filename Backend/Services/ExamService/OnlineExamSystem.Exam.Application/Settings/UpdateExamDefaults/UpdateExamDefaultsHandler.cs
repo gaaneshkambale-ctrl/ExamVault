@@ -27,6 +27,8 @@ public class UpdateExamDefaultsHandler
         settings.AutoSubmitEnabled = command.AutoSubmitEnabled;
         settings.QuestionNavigationMode = Enum.Parse<QuestionNavigationMode>(command.QuestionNavigationMode, ignoreCase: true);
         settings.ResultPublishingMode = Enum.Parse<ResultPublishingMode>(command.ResultPublishingMode, ignoreCase: true);
+        settings.CertificateEnabled = command.CertificateEnabled;
+        settings.MinimumCertificateScorePercent = command.MinimumCertificateScorePercent;
         settings.UpdatedAtUtc = DateTime.UtcNow;
 
         await _examRepository.SaveChangesAsync(cancellationToken);

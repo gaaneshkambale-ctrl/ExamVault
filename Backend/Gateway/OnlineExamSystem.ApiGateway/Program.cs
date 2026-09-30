@@ -15,6 +15,39 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // Real client IP: every request arrives via a proxy (Traefik -> Gateway ->
+        // service), so Connection.RemoteIpAddress is otherwise the proxy container's
+        // Docker IP (172.18.x.x) - which is what audit logs, sessions, System Logs
+        // and the per-IP auth rate limiter were all recording/keying on. Only the
+        // last hop is honoured (ForwardLimit 1), and only when that hop is a
+        // private-network proxy: Traefik appends the real client IP last, so any
+        // X-Forwarded-For a client sends itself is never the value used (prod only
+        // exposes the Gateway through Traefik).
+        //
+        // ForwardedHeaders:ClientIpHeader picks which header carries that IP.
+        // Behind Cloudflare the last X-Forwarded-For hop is a Cloudflare edge,
+        // so prod switches this to "CF-Connecting-IP" (a single value Cloudflare
+        // always overwrites) - only safe once the origin firewall admits
+        // Cloudflare's ranges alone (ActionPlan.txt, Cloudflare plan Phase 4).
+        // Gateway-only: YARP still sends the resolved IP downstream as
+        // X-Forwarded-For, so the services' own config never changes.
+        var clientIpHeader = builder.Configuration["ForwardedHeaders:ClientIpHeader"];
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            if (!string.IsNullOrWhiteSpace(clientIpHeader))
+            {
+                options.ForwardedForHeaderName = clientIpHeader;
+            }
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Clear();
+            foreach (var (prefix, length) in new[] { ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16), ("127.0.0.0", 8) })
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse(prefix), length));
+            }
+        });
+
         builder.Services.AddReverseProxy()
             .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
@@ -88,8 +121,7 @@ public class Program
         });
 
         // Allowed frontend origins come from config (Cors:AllowedOrigins, comma-separated)
-        // so each environment (local dev, Azure dev/qa/prod) can allow its own frontend
-        // URL without a code change. Falls back to the local Vite dev server only.
+        // plus dynamic support for any *.localhost subdomain in local dev and *.examvaults.in in production.
         var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "http://localhost:5173")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -97,12 +129,34 @@ public class Program
         builder.Services.AddCors(options =>
         {
             options.AddPolicy(frontendCorsPolicy, policy =>
-                policy.WithOrigins(allowedOrigins)
-                    .AllowAnyHeader()
-                    .AllowAnyMethod());
+                policy.SetIsOriginAllowed(origin =>
+                {
+                    if (string.IsNullOrWhiteSpace(origin)) return false;
+                    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+
+                    // Allow localhost and any *.localhost on any port in local dev
+                    if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                        uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    // Allow explicitly configured origins, the bare apex domains
+                    // themselves (examvaults.in/examvault.com - EndsWith(".x") alone
+                    // misses the apex since it has no leading dot), and any subdomain.
+                    return allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase) ||
+                           uri.Host.Equals("examvaults.in", StringComparison.OrdinalIgnoreCase) ||
+                           uri.Host.EndsWith(".examvaults.in", StringComparison.OrdinalIgnoreCase) ||
+                           uri.Host.Equals("examvault.com", StringComparison.OrdinalIgnoreCase) ||
+                           uri.Host.EndsWith(".examvault.com", StringComparison.OrdinalIgnoreCase);
+                })
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials());
         });
 
         var app = builder.Build();
+        app.UseForwardedHeaders();
 
         // First, so it wraps every later middleware/controller. Reuses the
         // "notification-api" named client already registered above for
@@ -127,7 +181,8 @@ public class Program
                         exception.StackTrace,
                         context.Request.Path,
                         context.Request.Method,
-                        TenantId: null);
+                        TenantId: null,
+                        IpAddress: context.Connection.RemoteIpAddress?.ToString());
 
                     var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("notification-api");
                     await client.PostAsJsonAsync("api/system-logs", request);
@@ -144,6 +199,22 @@ public class Program
         }));
 
         app.UseHttpsRedirection();
+
+        // Every public API response goes through here - Traefik (the
+        // production TLS-terminating proxy) doesn't add these on its own,
+        // and unlike the frontend's nginx.conf this is a pure JSON API, so
+        // no Content-Security-Policy (nothing here renders HTML for a CSP
+        // to protect).
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+            context.Response.Headers.Append("X-Frame-Options", "DENY");
+            context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+            // Same policy the frontend's nginx.conf sends; browsers ignore it
+            // on plain-http responses, so local http://localhost:5000 is fine.
+            context.Response.Headers.Append("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+            await next();
+        });
 
         app.UseCors(frontendCorsPolicy);
 

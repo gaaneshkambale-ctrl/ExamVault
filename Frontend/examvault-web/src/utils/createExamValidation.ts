@@ -37,5 +37,9 @@ export function validateCreateExam(
     errors.instructions = 'Instructions must be 2000 characters or fewer.';
   }
 
+  if (!form.examTypeId) {
+    errors.examTypeId = 'Exam type is required.';
+  }
+
   return errors;
 }

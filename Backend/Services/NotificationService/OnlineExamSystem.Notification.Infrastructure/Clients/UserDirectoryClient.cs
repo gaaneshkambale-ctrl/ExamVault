@@ -35,11 +35,37 @@ public class UserDirectoryClient : IUserDirectoryClient
             .ToList();
     }
 
+    public async Task<IReadOnlyList<UserDirectoryEntry>> GetStudentsAsync(
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/users/students");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var students = await response.Content.ReadFromJsonAsync<List<StudentSummaryApiResponse>>(
+            JsonOptions,
+            cancellationToken) ?? [];
+
+        return students
+            .Select(s => new UserDirectoryEntry(s.Id, s.Email, s.FullName, "Student"))
+            .ToList();
+    }
+
     private sealed class UserListItemApiResponse
     {
         public Guid Id { get; init; }
         public string FullName { get; init; } = string.Empty;
         public string Email { get; init; } = string.Empty;
         public string Role { get; init; } = string.Empty;
+    }
+
+    private sealed class StudentSummaryApiResponse
+    {
+        public Guid Id { get; init; }
+        public string FullName { get; init; } = string.Empty;
+        public string Email { get; init; } = string.Empty;
     }
 }

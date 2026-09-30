@@ -1,19 +1,25 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
+import TablePagination from '../../components/reports/TablePagination';
 import LineTrendChart from '../../components/charts/LineTrendChart';
 import { ViewIcon } from '../../components/icons/ActionIcons';
 import { BookIcon, PulseIcon, TargetIcon, CheckCircleIcon, FlagIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
+import { useStudents } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { useAttemptsByExam } from '../../hooks/useSubmissions';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import type { CreationMethod } from '../../types/exam';
 import { bucketByDay, computeDelta, getDefaultRange, getPriorPeriod, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
+import { buildExamSummaries } from '../../utils/examSummary';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function avgPercent(rows: { totalScore: number; totalMarks: number }[]): number {
   if (rows.length === 0) return 0;
@@ -26,10 +32,17 @@ export default function AdminReports() {
   const { data: allResults, isLoading: isLoadingResults } = useAdminResultsForAllExams(exams);
   const examIds = useMemo(() => (exams ?? []).map((e) => e.id), [exams]);
   const { attemptsByExam, isLoading: isLoadingAttempts } = useAttemptsByExam(examIds);
+  // Instructor-safe endpoint (no "Users - View" permission needed) - same
+  // reason ExamResults.tsx/ResultAnalytics.tsx use it for their own
+  // Attempted/Absent, since Exam Reports is on both the Admin and
+  // Instructor sidebars.
+  const { data: students } = useStudents();
 
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [category, setCategory] = useState('All');
   const [creationMethod, setCreationMethod] = useState<'All' | CreationMethod>('All');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const loading = isLoadingExams || isLoadingResults || isLoadingAttempts;
 
@@ -105,8 +118,29 @@ export default function AdminReports() {
     [perExamStats],
   );
 
+  // Export-only - the on-screen "Exam Summary" table above keeps its own
+  // perExamStats/Completion Rate (built from attemptsByExam's InProgress
+  // status, the same Live Monitoring-style data this export deliberately
+  // doesn't use). includeExamsWithNoSubmissions matches perExamStats' own
+  // behavior of listing every exam matching the category/creation-method
+  // filters, not just ones with a submission in the current window.
+  const examSummaries = useMemo(
+    () => buildExamSummaries(current.results, allResults, filteredExams, students ?? [], { includeExamsWithNoSubmissions: true }),
+    [current.results, allResults, filteredExams, students],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [category, creationMethod, range]);
+
+  const totalPages = Math.max(1, Math.ceil(perExamStats.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedExamStats = perExamStats.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = perExamStats.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, perExamStats.length);
+
   return (
-    <AdminLayout active="Exam Reports">
+    <RoleAwareLayout active="Exam Reports">
       <h1 className="h4 fw-bold mb-1 text-primary">Exam Reports</h1>
       <p className="text-muted mb-4">Detailed insights and analytics about exams.</p>
 
@@ -119,15 +153,40 @@ export default function AdminReports() {
           setCreationMethod('All');
         }}
         exportFilename="exam-reports"
-        exportHeaders={['Exam', 'Category', 'Total Attempts', 'Average Score %', 'Pass %', 'Completion Rate %']}
+        exportHeaders={[
+          'Exam',
+          'Exam Code',
+          'Exam Type',
+          'Exam Date',
+          'Category',
+          'Total Candidates',
+          'Submitted',
+          'Not Submitted',
+          'Submitted Attempts',
+          'Passed',
+          'Failed',
+          'Pass %',
+          'Average %',
+          'Highest %',
+          'Lowest %',
+        ]}
         exportRows={() =>
-          perExamStats.map((s) => [
-            s.exam.title,
-            s.exam.category,
-            s.attempts,
-            Math.round(s.averageScore),
-            Math.round(s.passPercent),
-            Math.round(s.completionRate),
+          examSummaries.map((s) => [
+            s.examTitle,
+            s.examCode ?? '',
+            s.examType ?? '',
+            s.examDate ? new Date(s.examDate).toLocaleDateString() : '',
+            s.category ?? '',
+            s.totalCandidates,
+            s.submitted,
+            s.notSubmitted,
+            s.submittedAttempts,
+            s.passed,
+            s.failed,
+            s.passPercent,
+            s.averagePercent,
+            s.highestPercent,
+            s.lowestPercent,
           ])
         }
       >
@@ -209,7 +268,7 @@ export default function AdminReports() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Exam Attempts Overview</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><PulseIcon /></span>} title="Exam Attempts Overview" />
                   <LineTrendChart
                     series={[{ name: 'Attempts', color: '#4f46e5', data: attemptsOverview.map((b) => ({ label: b.label, value: b.count })) }]}
                   />
@@ -219,7 +278,9 @@ export default function AdminReports() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className="p-0">
-                  <h2 className="h6 fw-bold p-3 pb-2 mb-0">Top 5 Exams by Attempts</h2>
+                  <div className="p-3 pb-0">
+                    <SectionHeader icon={<span className="text-primary d-flex"><FlagIcon /></span>} title="Top 5 Exams by Attempts" />
+                  </div>
                   {top5.length === 0 ? (
                     <div className="text-center text-muted py-5">No attempts yet.</div>
                   ) : (
@@ -253,12 +314,14 @@ export default function AdminReports() {
 
           <Card className="border-0 shadow-sm">
             <Card.Body className="p-0">
-              <h2 className="h6 fw-bold p-3 pb-2 mb-0">Exam Summary</h2>
+              <div className="p-3 pb-0">
+                <SectionHeader icon={<span className="text-primary d-flex"><BookIcon /></span>} title="Exam Summary" />
+              </div>
               {perExamStats.length === 0 ? (
                 <div className="text-center text-muted py-5">No exams match your filters.</div>
               ) : (
                 <Table responsive hover className="mb-0 align-middle">
-                  <thead className="text-muted small text-uppercase bg-light">
+                  <thead className="text-muted small text-uppercase bg-body-tertiary">
                     <tr>
                       <th className="ps-4">Exam Name</th>
                       <th>Category</th>
@@ -270,7 +333,7 @@ export default function AdminReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {perExamStats.map((s) => (
+                    {pagedExamStats.map((s) => (
                       <tr key={s.exam.id}>
                         <td className="ps-4 fw-medium">{s.exam.title}</td>
                         <td>{s.exam.category}</td>
@@ -294,10 +357,25 @@ export default function AdminReports() {
                   </tbody>
                 </Table>
               )}
+              {perExamStats.length > 0 && (
+                <div className="p-3">
+                  <TablePagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    totalCount={perExamStats.length}
+                    onPageChange={setPage}
+                    pageSize={pageSize}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageSizeChange={setPageSize}
+                  />
+                </div>
+              )}
             </Card.Body>
           </Card>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

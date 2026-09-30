@@ -1,3 +1,4 @@
+using OnlineExamSystem.Exam.Application.Exams;
 using OnlineExamSystem.Exam.Application.Exams.GetById;
 using OnlineExamSystem.Exam.Application.Tests.Fakes;
 using OnlineExamSystem.Exam.Domain.Entities;
@@ -9,6 +10,8 @@ namespace OnlineExamSystem.Exam.Application.Tests;
 public class GetExamHandlerTests
 {
     private static readonly Guid StudentId = Guid.NewGuid();
+    private static readonly Guid InstructorId = Guid.NewGuid();
+    private static readonly Guid OtherInstructorId = Guid.NewGuid();
 
     [Fact]
     public async Task Admin_can_see_any_exam_regardless_of_status_or_assignment()
@@ -18,7 +21,7 @@ public class GetExamHandlerTests
         await repository.AddAsync(exam);
         var handler = new GetExamHandler(repository);
 
-        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, Guid.NewGuid(), IsAdmin: true));
+        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, Guid.NewGuid(), ExamAccessScope.All));
 
         Assert.NotNull(result);
         Assert.Equal("Draft Exam", result!.Title);
@@ -30,7 +33,7 @@ public class GetExamHandlerTests
         var repository = new FakeExamRepository();
         var handler = new GetExamHandler(repository);
 
-        var result = await handler.HandleAsync(new GetExamQuery(Guid.NewGuid(), Guid.NewGuid(), IsAdmin: true));
+        var result = await handler.HandleAsync(new GetExamQuery(Guid.NewGuid(), Guid.NewGuid(), ExamAccessScope.All));
 
         Assert.Null(result);
     }
@@ -44,7 +47,7 @@ public class GetExamHandlerTests
         repository.SeedAssignment(new ExamAssignment { ExamId = exam.Id }, [StudentId]);
         var handler = new GetExamHandler(repository);
 
-        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, StudentId, IsAdmin: false));
+        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, StudentId, ExamAccessScope.AssignedPublishedOnly));
 
         Assert.NotNull(result);
         Assert.Equal("C# Fundamentals", result!.Title);
@@ -58,7 +61,7 @@ public class GetExamHandlerTests
         await repository.AddAsync(exam);
         var handler = new GetExamHandler(repository);
 
-        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, StudentId, IsAdmin: false));
+        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, StudentId, ExamAccessScope.AssignedPublishedOnly));
 
         Assert.Null(result);
     }
@@ -72,7 +75,34 @@ public class GetExamHandlerTests
         repository.SeedAssignment(new ExamAssignment { ExamId = exam.Id }, [StudentId]);
         var handler = new GetExamHandler(repository);
 
-        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, StudentId, IsAdmin: false));
+        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, StudentId, ExamAccessScope.AssignedPublishedOnly));
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task Instructor_can_see_their_own_exam_regardless_of_status()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "My Draft Exam", Status = ExamStatus.Draft, CreatedByUserId = InstructorId };
+        await repository.AddAsync(exam);
+        var handler = new GetExamHandler(repository);
+
+        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, InstructorId, ExamAccessScope.OwnedOnly));
+
+        Assert.NotNull(result);
+        Assert.Equal("My Draft Exam", result!.Title);
+    }
+
+    [Fact]
+    public async Task Instructor_cannot_see_another_instructors_exam()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "Someone Else's Exam", Status = ExamStatus.Published, CreatedByUserId = OtherInstructorId };
+        await repository.AddAsync(exam);
+        var handler = new GetExamHandler(repository);
+
+        var result = await handler.HandleAsync(new GetExamQuery(exam.Id, InstructorId, ExamAccessScope.OwnedOnly));
 
         Assert.Null(result);
     }

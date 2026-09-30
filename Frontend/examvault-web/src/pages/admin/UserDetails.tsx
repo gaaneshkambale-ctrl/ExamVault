@@ -8,13 +8,15 @@ import ToggleUserActiveButton from '../../components/ToggleUserActiveButton';
 import { useExams } from '../../hooks/useExams';
 import { useUserAttempts } from '../../hooks/useSubmissions';
 import { useUser, useUserSessions } from '../../hooks/useUsers';
-import { ADMIN_PERMISSIONS, STUDENT_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
+import { useRolePermissions } from '../../hooks/useRolePermissions';
+import { ADMIN_PERMISSIONS, STUDENT_PERMISSIONS, INSTRUCTOR_PERMISSIONS } from '../../constants/cosmeticRolePermissions';
 import type { UserListItem, UserRole, UserSession, UserSessionStatus } from '../../types/user';
 import type { ExamAttemptResponse } from '../../types/submission';
 
 const roleVariant: Record<UserRole, string> = {
   Admin: 'primary',
   Student: 'secondary',
+  Instructor: 'info',
 };
 
 const sessionStatusVariant: Record<UserSessionStatus, string> = {
@@ -104,6 +106,7 @@ export default function UserDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: user, isLoading, isError } = useUser(id);
+  const { data: liveRolePermissions } = useRolePermissions();
   const [activeTab, setActiveTab] = useState<Tab>('Profile Information');
   const { data: sessions, isLoading: sessionsLoading, isError: sessionsError } = useUserSessions(id);
   const {
@@ -123,7 +126,10 @@ export default function UserDetails() {
     (a, b) => new Date(b.issuedAtUtc).getTime() - new Date(a.issuedAtUtc).getTime(),
   )[0];
 
-  const permissions = user?.role === 'Admin' ? ADMIN_PERMISSIONS : STUDENT_PERMISSIONS;
+  const defaultPermissions =
+    user?.role === 'Admin' ? ADMIN_PERMISSIONS : user?.role === 'Instructor' ? INSTRUCTOR_PERMISSIONS : STUDENT_PERMISSIONS;
+  const permissions =
+    liveRolePermissions?.find((r) => r.role === user?.role)?.permissions ?? defaultPermissions;
 
   return (
     <AdminLayout active="Users">
@@ -233,8 +239,9 @@ export default function UserDetails() {
                       <span className="text-muted small">is this user's only assigned role.</span>
                     </div>
                     <p className="text-muted small">
-                      Permissions below reflect a static preview of what {user.role} grants - ExamVault doesn't
-                      have a granular, per-permission enforcement system yet, only the Admin/Student role check.
+                      Permissions below reflect {user.role}'s current permission set, editable from Roles &amp;
+                      Permissions - ExamVault doesn't have a granular, per-permission enforcement system yet,
+                      only the Admin/Student role check.
                     </p>
                     <Row>
                       {permissions.map((perm) => (

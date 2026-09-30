@@ -18,4 +18,8 @@ public record UpdateAssignmentCommand(
     bool AutoSubmitOnTimeOver,
     bool EnableProctoring,
     bool EnableLiveVideo,
-    string BearerToken);
+    string BearerToken,
+    // Instructor is restricted to assignments on exams they created
+    // themselves; Admin/SuperAdmin remain unrestricted (null = no
+    // ownership check).
+    Guid? OwnerUserId = null);

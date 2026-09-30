@@ -25,7 +25,10 @@ public class AddGroupMemberHandler
             return AddGroupMemberResult.GroupNotFound();
         }
 
-        var user = await _userRepository.GetByIdAsync(command.UserId, cancellationToken);
+        // Tenant-scoped: the group lookup above is (query filter), but AppUser
+        // isn't filtered - the unscoped lookup let an Admin add another
+        // tenant's student by id and then see them in the member list.
+        var user = await _userRepository.GetByIdForTenantAsync(command.UserId, cancellationToken);
         if (user is null)
         {
             return AddGroupMemberResult.UserNotFound();

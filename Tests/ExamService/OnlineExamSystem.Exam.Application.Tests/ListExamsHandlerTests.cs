@@ -1,3 +1,4 @@
+using OnlineExamSystem.Exam.Application.Exams;
 using OnlineExamSystem.Exam.Application.Exams.List;
 using OnlineExamSystem.Exam.Application.Tests.Fakes;
 using OnlineExamSystem.Exam.Domain.Entities;
@@ -10,6 +11,8 @@ public class ListExamsHandlerTests
 {
     private static readonly Guid StudentId = Guid.NewGuid();
     private static readonly Guid OtherStudentId = Guid.NewGuid();
+    private static readonly Guid InstructorId = Guid.NewGuid();
+    private static readonly Guid OtherInstructorId = Guid.NewGuid();
 
     [Fact]
     public async Task Admin_sees_every_exam_regardless_of_status_or_assignment()
@@ -21,7 +24,7 @@ public class ListExamsHandlerTests
         await repository.AddAsync(published);
         var handler = new ListExamsHandler(repository);
 
-        var result = await handler.HandleAsync(new ListExamsQuery(Guid.NewGuid(), IsAdmin: true));
+        var result = await handler.HandleAsync(new ListExamsQuery(Guid.NewGuid(), ExamAccessScope.All));
 
         Assert.Equal(2, result.Count);
         Assert.Equal("Published Exam", result[0].Title);
@@ -43,10 +46,26 @@ public class ListExamsHandlerTests
         repository.SeedAssignment(new ExamAssignment { ExamId = unassignedPublished.Id }, [OtherStudentId]);
         var handler = new ListExamsHandler(repository);
 
-        var result = await handler.HandleAsync(new ListExamsQuery(StudentId, IsAdmin: false));
+        var result = await handler.HandleAsync(new ListExamsQuery(StudentId, ExamAccessScope.AssignedPublishedOnly));
 
         Assert.Single(result);
         Assert.Equal("Assigned Published", result[0].Title);
+    }
+
+    [Fact]
+    public async Task Instructor_only_sees_exams_they_created()
+    {
+        var repository = new FakeExamRepository();
+        var mine = new ExamPaper { Title = "My Exam", Status = ExamStatus.Draft, CreatedByUserId = InstructorId };
+        var theirs = new ExamPaper { Title = "Their Exam", Status = ExamStatus.Published, CreatedByUserId = OtherInstructorId };
+        await repository.AddAsync(mine);
+        await repository.AddAsync(theirs);
+        var handler = new ListExamsHandler(repository);
+
+        var result = await handler.HandleAsync(new ListExamsQuery(InstructorId, ExamAccessScope.OwnedOnly));
+
+        Assert.Single(result);
+        Assert.Equal("My Exam", result[0].Title);
     }
 
     [Fact]
@@ -55,7 +74,7 @@ public class ListExamsHandlerTests
         var repository = new FakeExamRepository();
         var handler = new ListExamsHandler(repository);
 
-        var result = await handler.HandleAsync(new ListExamsQuery(Guid.NewGuid(), IsAdmin: true));
+        var result = await handler.HandleAsync(new ListExamsQuery(Guid.NewGuid(), ExamAccessScope.All));
 
         Assert.Empty(result);
     }

@@ -19,4 +19,11 @@ public record AdminAttemptResultResponse(
     int CopyPasteCount,
     int RightClickCount,
     int MultipleMonitorsCount,
-    bool HasPendingGrading = false);
+    bool HasPendingGrading = false,
+    int CorrectCount = 0,
+    int IncorrectCount = 0,
+    int SkippedCount = 0,
+    double Accuracy = 0,
+    int? Rank = null,
+    double? Percentile = null,
+    int? TotalParticipants = null);

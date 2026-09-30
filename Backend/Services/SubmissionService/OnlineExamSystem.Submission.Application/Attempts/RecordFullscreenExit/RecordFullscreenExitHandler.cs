@@ -1,4 +1,5 @@
 using OnlineExamSystem.Submission.Application.Interfaces;
+using OnlineExamSystem.Submission.Domain.Entities;
 using OnlineExamSystem.Submission.Domain.Enums;
 
 namespace OnlineExamSystem.Submission.Application.Attempts.RecordFullscreenExit;
@@ -33,6 +34,20 @@ public class RecordFullscreenExitHandler
         }
 
         attempt.FullscreenExitCount++;
+
+        // Also persisted as a ViolationEvent (same as every other proctoring
+        // signal) so it shows up in Live Monitoring's Security Violations
+        // feed instead of only existing as a running count on the attempt.
+        await _repository.AddViolationEventAsync(
+            new ViolationEvent
+            {
+                AttemptId = attempt.Id,
+                Type = ProctoringViolationType.FullscreenExit,
+                Severity = ViolationSeverity.Medium,
+                DetectedAtUtc = DateTime.UtcNow,
+            },
+            cancellationToken);
+
         await _repository.SaveChangesAsync(cancellationToken);
 
         return RecordFullscreenExitResult.Ok(attempt.FullscreenExitCount);

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using OnlineExamSystem.User.Application.Interfaces;
 using OnlineExamSystem.User.Domain.Enums;
@@ -32,6 +33,23 @@ public class UpdateUserHandler
             return UpdateUserResult.NotFound();
         }
 
+        var roleIsChanging = !string.Equals(user.Role.ToString(), command.Role, StringComparison.OrdinalIgnoreCase);
+
+        if (command.CallerUserId == user.Id && roleIsChanging)
+        {
+            return UpdateUserResult.SelfRoleChangeBlocked();
+        }
+
+        // Only a Super Admin creates additional Admins for a tenant (see
+        // RolePermissionCatalog.UserCreatableRoles) - a tenant Admin editing
+        // someone else can still change roles among Student/Instructor/
+        // Admin freely EXCEPT promoting into Admin. An already-Admin user's
+        // other fields stay fully editable since the role isn't changing.
+        if (roleIsChanging && string.Equals(command.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+        {
+            return UpdateUserResult.AdminRoleAssignmentBlocked();
+        }
+
         var existingUser = await _userRepository.GetByEmailAsync(command.Email, user.TenantId, cancellationToken);
         if (existingUser is not null && existingUser.Id != command.Id)
         {
@@ -43,8 +61,22 @@ public class UpdateUserHandler
         user.Role = Enum.Parse<UserRole>(command.Role, ignoreCase: true);
         user.PhoneNumber = string.IsNullOrWhiteSpace(command.PhoneNumber) ? null : command.PhoneNumber.Trim();
         user.RollNumber = string.IsNullOrWhiteSpace(command.RollNumber) ? null : command.RollNumber.Trim();
+        if (command.AcademicFields is not null)
+        {
+            user.AcademicFieldsJson = command.AcademicFields.Count > 0 ? JsonSerializer.Serialize(command.AcademicFields) : null;
+        }
 
-        await _userRepository.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _userRepository.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateKeyException)
+        {
+            // The existingUser check above has the same check-then-write race
+            // window as RegisterUserHandler/CreateUserHandler - see
+            // DuplicateKeyException's own comment.
+            return UpdateUserResult.Conflict();
+        }
 
         return UpdateUserResult.Ok(user);
     }

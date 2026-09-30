@@ -1,3 +1,3 @@
 namespace OnlineExamSystem.Submission.Application.Attempts.ListByExam;
 
-public record ListAttemptsByExamQuery(Guid ExamId);
+public record ListAttemptsByExamQuery(Guid ExamId, string BearerToken, Guid? OwnerUserId = null);

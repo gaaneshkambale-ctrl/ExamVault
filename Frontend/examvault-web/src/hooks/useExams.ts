@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   getExam,
   getExamDefaults,
-  getGeneralSettings,
   getProctoringSettings,
   getReminderSettings,
   listExams,
@@ -36,13 +35,6 @@ export function useProctoringSettings() {
   return useQuery({
     queryKey: ['settings', 'proctoring'],
     queryFn: getProctoringSettings,
-  });
-}
-
-export function useGeneralSettings() {
-  return useQuery({
-    queryKey: ['settings', 'general'],
-    queryFn: getGeneralSettings,
   });
 }
 

@@ -9,7 +9,10 @@ import { useQuestions } from '../../hooks/useQuestions';
 import { useSections } from '../../hooks/useSections';
 import { useMyAssignmentForExam } from '../../hooks/useAssignments';
 import { useMyAttempt } from '../../hooks/useSubmissions';
+import { usePermissions } from '../../hooks/usePermissions';
+import ResumeSessionCard from '../../components/ResumeSessionCard';
 import { startAttempt } from '../../api/submissionApi';
+import { getAssignmentStatus } from '../../types/assignment';
 import type { CreationMethod } from '../../types/exam';
 
 function extractStartError(error: unknown): string {
@@ -85,6 +88,8 @@ export default function ExamDetails() {
   const { data: sections } = useSections(id, Boolean(exam?.containsSections));
   const { data: assignment } = useMyAssignmentForExam(id);
   const { data: myAttempt } = useMyAttempt(id);
+  const { hasPermission } = usePermissions();
+  const canViewResults = hasPermission('Results - View');
 
   const attemptsUsed = myAttempt?.attempt.attemptNumber ?? 0;
   const isAttemptInProgress = myAttempt?.attempt.status === 'InProgress';
@@ -94,6 +99,16 @@ export default function ExamDetails() {
   const maxAttempts = assignment?.maxAttempts ?? exam?.maxAttempts ?? 0;
   const remainingAttempts = exam ? maxAttempts - attemptsUsed : 0;
   const canStartNewAttempt = remainingAttempts > 0;
+  // A per-question or per-section penalty exists even when the exam-level switch is off.
+  const hasPerItemPenalty =
+    (questions?.some((q) => (q.negativeMarks ?? 0) > 0) ?? false) ||
+    (sections?.some((s) => s.negativeMarkingEnabled && s.negativeMarks > 0) ?? false);
+  // No assignment window at all means nothing to wait for - it's available now.
+  const isBeforeStart =
+    attemptsUsed === 0 &&
+    !isAttemptInProgress &&
+    !!assignment &&
+    getAssignmentStatus(assignment.startAtUtc, assignment.endAtUtc) === 'Upcoming';
 
   const [mode, setMode] = useState<'details' | 'check'>('details');
   const [checks, setChecks] = useState<Record<CheckKey, CheckStatus>>({
@@ -221,6 +236,23 @@ export default function ExamDetails() {
         <div className="text-center text-danger py-5">Couldn't load this exam. Please try again.</div>
       )}
 
+      {!isLoading && !isError && exam && mode === 'details' && isAttemptInProgress && myAttempt && (
+        <ResumeSessionCard
+          examTitle={exam.title}
+          to={`/exams/${id}/take`}
+          startedAtUtc={myAttempt.attempt.startedAtUtc}
+          durationMinutes={exam.durationMinutes}
+          expiresAtUtc={myAttempt.attempt.expiresAtUtc}
+          lastActivityAtUtc={myAttempt.attempt.lastActivityAtUtc}
+          answeredCount={
+            myAttempt.answers.filter(
+              (a) => a.selectedOptionId || a.answerText || (a.selectedOptionIds?.length ?? 0) > 0,
+            ).length
+          }
+          totalQuestions={questions?.length ?? exam.totalQuestions}
+        />
+      )}
+
       {!isLoading && !isError && exam && mode === 'details' && (
         <Row className="g-3">
           <Col xs={12} lg={6}>
@@ -232,7 +264,9 @@ export default function ExamDetails() {
                     isAttemptInProgress
                       ? 'warning'
                       : attemptsUsed === 0
-                        ? 'primary'
+                        ? isBeforeStart
+                          ? 'primary'
+                          : 'info'
                         : canStartNewAttempt
                           ? 'info'
                           : 'success'
@@ -242,7 +276,9 @@ export default function ExamDetails() {
                   {isAttemptInProgress
                     ? 'In Progress'
                     : attemptsUsed === 0
-                      ? 'Upcoming'
+                      ? isBeforeStart
+                        ? 'Upcoming'
+                        : 'Live'
                       : canStartNewAttempt
                         ? 'Retake Available'
                         : 'Completed'}
@@ -293,40 +329,57 @@ export default function ExamDetails() {
                   )}
                   <li className="mb-2">
                     {exam.negativeMarkingEnabled
-                      ? `Negative marking is enabled (${exam.negativeMarks} marks per wrong answer).`
-                      : 'There is no negative marking.'}
+                      ? `Negative marking is enabled (${exam.negativeMarks} marks per wrong answer${
+                          hasPerItemPenalty ? '; some questions or sections use their own penalty' : ''
+                        }).`
+                      : hasPerItemPenalty
+                        ? 'Some questions or sections carry negative marking - a wrong answer there loses marks. Unanswered questions are never penalised.'
+                        : 'There is no negative marking.'}
                   </li>
                   <li className="mb-2">You cannot pause or resume the exam.</li>
                   <li className="mb-2">Make sure you have a stable internet connection.</li>
                   <li className="mb-2">Do not refresh or close the browser window.</li>
                 </ol>
 
-                <Alert variant={canStartNewAttempt || isAttemptInProgress ? 'warning' : 'secondary'} className="small">
+                <Alert
+                  variant={isBeforeStart ? 'secondary' : canStartNewAttempt || isAttemptInProgress ? 'warning' : 'secondary'}
+                  className="small"
+                >
                   {isAttemptInProgress
                     ? 'You have an exam in progress. Resume it to continue where you left off.'
-                    : attemptsUsed === 0
-                      ? maxAttempts === 1
-                        ? 'You can start the exam only once. Make sure you are ready.'
-                        : `You can attempt this exam up to ${maxAttempts} times. Make sure you are ready.`
-                      : canStartNewAttempt
-                        ? `You've used ${attemptsUsed} of ${maxAttempts} attempts. You have ${remainingAttempts} attempt${
-                            remainingAttempts === 1 ? '' : 's'
-                          } remaining.`
-                        : `You have used all ${maxAttempts} of your allowed attempts for this exam.`}
+                    : isBeforeStart
+                      ? `This exam will become available on ${new Date(assignment!.startAtUtc).toLocaleString()}. Come back then to start.`
+                      : attemptsUsed === 0
+                        ? maxAttempts === 1
+                          ? 'You can start the exam only once. Make sure you are ready.'
+                          : `You can attempt this exam up to ${maxAttempts} times. Make sure you are ready.`
+                        : canStartNewAttempt
+                          ? `You've used ${attemptsUsed} of ${maxAttempts} attempts. You have ${remainingAttempts} attempt${
+                              remainingAttempts === 1 ? '' : 's'
+                            } remaining.`
+                          : `You have used all ${maxAttempts} of your allowed attempts for this exam.`}
                 </Alert>
 
                 {isAttemptInProgress ? (
                   <Link to={`/exams/${id}/take`} className="btn btn-warning w-100">
-                    Resume Exam
+                    Continue Exam
                   </Link>
+                ) : isBeforeStart ? (
+                  <Button variant="outline-secondary" className="w-100" disabled>
+                    Not Started Yet
+                  </Button>
                 ) : canStartNewAttempt ? (
                   <Button variant="primary" className="w-100" onClick={beginSystemCheck}>
                     {attemptsUsed === 0 ? 'Start Exam Now' : 'Retake Exam'}
                   </Button>
-                ) : (
+                ) : canViewResults ? (
                   <Link to={`/results/${id}`} className="btn btn-outline-secondary w-100">
                     View Result
                   </Link>
+                ) : (
+                  <Button variant="outline-secondary" className="w-100" disabled>
+                    Results Unavailable
+                  </Button>
                 )}
               </Card.Body>
             </Card>
@@ -361,7 +414,7 @@ export default function ExamDetails() {
               })}
             </div>
 
-            <Card className="border bg-light mb-4">
+            <Card className="border bg-body-tertiary mb-4">
               <Card.Body>
                 <h2 className="h6 fw-bold mb-3">Exam Rules</h2>
                 <Form.Check

@@ -21,6 +21,26 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // Real client IP: every request arrives via a proxy (Traefik -> Gateway ->
+        // service), so Connection.RemoteIpAddress is otherwise the proxy container's
+        // Docker IP (172.18.x.x) - which is what audit logs, sessions, System Logs
+        // and the per-IP auth rate limiter were all recording/keying on. Only the
+        // last hop is honoured (ForwardLimit 1), and only when that hop is a
+        // private-network proxy: Traefik appends the real client IP last, so any
+        // X-Forwarded-For a client sends itself is never the value used (prod only
+        // exposes the Gateway through Traefik).
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Clear();
+            foreach (var (prefix, length) in new[] { ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16), ("127.0.0.0", 8) })
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse(prefix), length));
+            }
+        });
+
         // Add services to the container.
 
         builder.Services.AddControllers();
@@ -68,6 +88,14 @@ public class Program
         var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
             ?? throw new InvalidOperationException("Missing \"Jwt:SigningKey\" configuration.");
 
+        builder.Services.Configure<JwtSettings>(options =>
+        {
+            options.Issuer = jwtIssuer;
+            options.Audience = jwtAudience;
+            options.SigningKey = jwtSigningKey;
+        });
+        builder.Services.AddSingleton<ISystemTokenProvider, SystemTokenProvider>();
+
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -83,9 +111,14 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
+        app.UseForwardedHeaders();
 
         // Configure the HTTP request pipeline.
         if (app.Environment.IsDevelopment())
@@ -138,7 +171,8 @@ public class Program
                 exception.StackTrace,
                 context.Request.Path,
                 context.Request.Method,
-                TenantId: null);
+                TenantId: null,
+                IpAddress: context.Connection.RemoteIpAddress?.ToString());
 
             var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("system-logs");
             await client.PostAsJsonAsync("api/system-logs", request);

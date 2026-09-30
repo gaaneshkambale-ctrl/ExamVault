@@ -94,7 +94,7 @@ export default function MonitoringOverview() {
   const isSystemHealthy = health?.database === 'Healthy' && health?.messageQueue === 'Healthy';
 
   return (
-    <PlatformLayout active="mon-active-orgs">
+    <PlatformLayout active="mon-overview">
       <p className="text-muted small mb-1">Platform Admin / System Monitoring</p>
       <h1 className="h4 fw-bold mb-1 text-primary">System Monitoring</h1>
       <p className="text-muted mb-3">Monitor platform activity and system health in real-time.</p>

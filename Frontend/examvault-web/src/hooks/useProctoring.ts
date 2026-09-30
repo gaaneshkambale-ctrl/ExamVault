@@ -39,6 +39,10 @@ const emptyCounts: Record<ProctoringViolationType, number> = {
   CopyPaste: 0,
   RightClick: 0,
   MultipleMonitors: 0,
+  // Fullscreen exits go through recordFullscreenExit (a separate counter on
+  // the attempt itself), not reportViolation below, so this map entry only
+  // exists to satisfy Record<ProctoringViolationType, number>.
+  FullscreenExit: 0,
 };
 
 // Runs the whole client-side proctoring layer for an active exam attempt:

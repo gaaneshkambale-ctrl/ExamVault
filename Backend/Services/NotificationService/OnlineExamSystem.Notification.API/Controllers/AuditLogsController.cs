@@ -8,6 +8,7 @@ using OnlineExamSystem.Notification.Domain.Enums;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Shared.Contracts.Responses.Notification;
 using static OnlineExamSystem.Notification.API.Authorization.FeaturePolicies;
+using static OnlineExamSystem.Notification.API.Authorization.PermissionPolicies;
 
 namespace OnlineExamSystem.Notification.API.Controllers;
 
@@ -43,7 +44,8 @@ public class AuditLogsController : ControllerBase
             request.EntityId,
             request.UserId,
             request.UserName,
-            request.IpAddress);
+            request.IpAddress,
+            request.IsSuperAdminActor);
 
         await _recordAuditLogHandler.HandleAsync(command, cancellationToken);
         return NoContent();
@@ -59,6 +61,7 @@ public class AuditLogsController : ControllerBase
     [HttpGet]
     [Authorize(Roles = "Admin,SuperAdmin")]
     [Authorize(Policy = Reports)]
+    [Authorize(Policy = ReportsView)]
     public async Task<IActionResult> List(
         [FromQuery] DateTime fromUtc,
         [FromQuery] DateTime toUtc,
@@ -73,7 +76,19 @@ public class AuditLogsController : ControllerBase
         var items = await _listAuditLogsHandler.HandleAsync(
             new ListAuditLogsQuery(fromUtc, toUtc, parsedModule, userId), cancellationToken);
 
-        return Ok(items.Select(ToResponse).ToList());
+        // A regular Admin's own tenant can legitimately contain audit rows
+        // where the actor was a Platform Super Admin acting on their org
+        // (see AuditLog.IsSuperAdminActor's own comment) - real event, but
+        // the tenant Admin shouldn't see it at all: a masked "who did this"
+        // label was tried first and rejected (the tenant Admin still saw a
+        // row they didn't recognize) - dropped entirely instead. A SuperAdmin
+        // viewing the same endpoint (Platform console's own Audit Reports)
+        // still sees every row, real actor included.
+        if (!User.IsInRole("SuperAdmin"))
+        {
+            items = items.Where(log => !log.IsSuperAdminActor).ToList();
+        }
+        return Ok(items.Select(log => ToResponse(log)).ToList());
     }
 
     // Self-service Activity Log for the Profile page - reuses the same
@@ -98,7 +113,7 @@ public class AuditLogsController : ControllerBase
         var items = await _listAuditLogsHandler.HandleAsync(
             new ListAuditLogsQuery(resolvedFromUtc, resolvedToUtc, parsedModule, UserId: userId), cancellationToken);
 
-        return Ok(items.Select(ToResponse).ToList());
+        return Ok(items.Select(log => ToResponse(log)).ToList());
     }
 
     private static AuditLogResponse ToResponse(AuditLog log) => new(

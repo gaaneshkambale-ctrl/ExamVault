@@ -1,10 +1,11 @@
 using FluentValidation;
+using OnlineExamSystem.User.Application.Interfaces;
 
 namespace OnlineExamSystem.User.Application.Users.Register;
 
 public class RegisterUserValidator : AbstractValidator<RegisterUserCommand>
 {
-    public RegisterUserValidator()
+    public RegisterUserValidator(IPasswordPolicyProvider passwordPolicyProvider)
     {
         RuleFor(x => x.FullName)
             .NotEmpty()
@@ -15,11 +16,23 @@ public class RegisterUserValidator : AbstractValidator<RegisterUserCommand>
             .EmailAddress()
             .MaximumLength(256);
 
-        RuleFor(x => x.Password)
-            .NotEmpty()
-            .MinimumLength(8)
-            .Matches("[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
-            .Matches("[a-z]").WithMessage("Password must contain at least one lowercase letter.")
-            .Matches("[0-9]").WithMessage("Password must contain at least one digit.");
+        RuleFor(x => x.Password).NotEmpty();
+
+        // The live Security Settings > Password Policy, not hardcoded rules -
+        // one failure per violated rule, same messages the old .Matches() calls
+        // produced, so existing frontend error handling doesn't need to change.
+        RuleFor(x => x)
+            .CustomAsync(async (command, context, cancellationToken) =>
+            {
+                if (string.IsNullOrEmpty(command.Password))
+                {
+                    return;
+                }
+                var policy = await passwordPolicyProvider.GetPolicyAsync(cancellationToken);
+                foreach (var error in policy.Validate(command.Password))
+                {
+                    context.AddFailure(nameof(command.Password), error);
+                }
+            });
     }
 }

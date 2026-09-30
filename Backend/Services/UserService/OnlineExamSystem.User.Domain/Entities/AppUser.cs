@@ -18,6 +18,17 @@ public class AppUser : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public UserRole Role { get; set; } = UserRole.Student;
     public bool IsActive { get; set; } = true;
+
+    // Independent of IsActive (which is Admin-controlled: deactivated, or
+    // "not yet set its own password" for CreateUserHandler's flow) - this
+    // is the self-service email-ownership check instead. Defaults true so
+    // every creation path an Admin/Super Admin drives (CreateUserHandler,
+    // CreateTenantAdminHandler, the bootstrap Super Admin) needs no code
+    // change - a human already vetted that email by typing it in
+    // themselves. Only RegisterUserHandler (public self-registration, no
+    // human vetting it) explicitly sets this false and requires the
+    // ConfirmEmail flow before LoginUserHandler will issue a token.
+    public bool EmailConfirmed { get; set; } = true;
     public string? PhoneNumber { get; set; }
     public bool MustChangePassword { get; set; }
     public byte[]? PhotoData { get; set; }
@@ -33,10 +44,37 @@ public class AppUser : BaseEntity
     public DateTime? DateOfBirth { get; set; }
     public string? Location { get; set; }
     public string? Department { get; set; }
+    public string? Designation { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
+
+    // Account lockout (Security Settings > Password Policy's "Maximum Login
+    // Attempts") - incremented on each wrong-password login by LoginUserHandler,
+    // reset to 0 on a successful login. LockoutEndUtc is null while unlocked;
+    // set to UtcNow + PlatformSettings.LockoutMinutes once the attempt count hits
+    // PlatformSettings.MaxLoginAttempts, and checked (not just relied on the
+    // counter) so the lockout actually expires on its own.
+    public int FailedLoginAttempts { get; set; }
+    public DateTime? LockoutEndUtc { get; set; }
 
     // Real auto-increment counter (same UseIdentityColumn() pattern as
     // ExamAssignment.AssignmentNumber) powering the "EV-ADM-0001"-style
     // formatted user id shown on the profile page - not stored as a string.
     public int UserNumber { get; set; }
+
+    // Which Admin/SuperAdmin created this account - real accountability for
+    // who added a user to the system. Null for self-registered accounts
+    // (RegisterUserHandler - there's no admin creator, the user created
+    // themselves) and for pre-existing accounts that predate this field.
+    public Guid? CreatedByUserId { get; set; }
+
+    // Organization-type-specific fields captured at Add/Edit User time -
+    // eg. a College student's Enrollment No./PRN/Semester, a Coaching
+    // Institute student's Batch/Test Series. JSON-serialized
+    // Dictionary<string,string>, same flexible-schema approach as
+    // OrganizationAcademicConfig.AcademicFieldsJson and for the same
+    // reason: which fields matter varies entirely by the tenant's
+    // Organization Type, so this deliberately isn't a fixed set of new
+    // columns. Null/empty for every user created before this existed, and
+    // for non-Student roles where these fields aren't shown.
+    public string? AcademicFieldsJson { get; set; }
 }

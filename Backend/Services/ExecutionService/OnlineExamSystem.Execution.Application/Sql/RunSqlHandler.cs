@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using OnlineExamSystem.Execution.Application.Interfaces;
 using OnlineExamSystem.Execution.Domain;
@@ -13,9 +12,6 @@ namespace OnlineExamSystem.Execution.Application.Sql;
 // with the schema.
 public class RunSqlHandler
 {
-    private const string PistonLanguage = "sqlite3";
-    private const string PistonVersion = "3.36.0";
-
     private readonly IQuestionServiceClient _questionServiceClient;
     private readonly IPistonClient _pistonClient;
     private readonly ILogger<RunSqlHandler> _logger;
@@ -47,91 +43,33 @@ public class RunSqlHandler
         var outcomes = new List<TestCaseExecutionOutcome>(question.TestCaseSetupSql.Count);
         foreach (var setupSql in question.TestCaseSetupSql)
         {
-            PistonExecutionResult expectedExec;
-            try
-            {
-                expectedExec = await ExecuteQueryAsync(setupSql, question.ReferenceQuery, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Reference query execution failed for question {QuestionId}.", command.QuestionId);
-                outcomes.Add(new TestCaseExecutionOutcome(
-                    false, string.Empty, string.Empty, "Unable to grade this test case. Please contact your instructor."));
-                continue;
-            }
-
-            if (expectedExec.RunExitCode != 0)
+            var expected = await SqlReferenceRunner.ExecuteAsync(
+                _pistonClient, setupSql, question.ReferenceQuery, cancellationToken);
+            if (!expected.Success)
             {
                 _logger.LogError(
-                    "Reference query returned a non-zero exit code for question {QuestionId}: {Stderr}",
+                    "Reference query execution failed for question {QuestionId}: {Error}",
                     command.QuestionId,
-                    expectedExec.RunStderr);
+                    expected.Error);
                 outcomes.Add(new TestCaseExecutionOutcome(
                     false, string.Empty, string.Empty, "Unable to grade this test case. Please contact your instructor."));
                 continue;
             }
 
-            var expectedRows = CanonicalRowSet(expectedExec.RunStdout);
+            var expectedRows = expected.Output;
 
-            PistonExecutionResult actualExec;
-            try
+            var actual = await SqlReferenceRunner.ExecuteAsync(
+                _pistonClient, setupSql, command.StudentQuery, cancellationToken);
+            if (!actual.Success)
             {
-                actualExec = await ExecuteQueryAsync(setupSql, command.StudentQuery, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Piston execution failed for Sql student query.");
-                outcomes.Add(new TestCaseExecutionOutcome(
-                    false, string.Empty, expectedRows, "Execution service unavailable. Please try again."));
+                outcomes.Add(new TestCaseExecutionOutcome(false, string.Empty, expectedRows, actual.Error));
                 continue;
             }
 
-            if (actualExec.RunExitCode != 0)
-            {
-                outcomes.Add(new TestCaseExecutionOutcome(
-                    false,
-                    string.Empty,
-                    expectedRows,
-                    string.IsNullOrWhiteSpace(actualExec.RunStderr)
-                        ? "The query failed to run."
-                        : actualExec.RunStderr.Trim()));
-                continue;
-            }
-
-            var actualRows = CanonicalRowSet(actualExec.RunStdout);
+            var actualRows = actual.Output;
             outcomes.Add(new TestCaseExecutionOutcome(actualRows == expectedRows, actualRows, expectedRows, null));
         }
 
         return RunSqlResult.Ok(outcomes);
-    }
-
-    private Task<PistonExecutionResult> ExecuteQueryAsync(
-        string setupSql,
-        string query,
-        CancellationToken cancellationToken)
-    {
-        var script = ".mode json\n" + setupSql + "\n" + query;
-        return _pistonClient.ExecuteAsync(
-            PistonLanguage, PistonVersion, [new PistonFile("main.sql", script)], cancellationToken);
-    }
-
-    // A zero-row result prints nothing (not "[]") - Piston-verified. Each
-    // row's own key order is preserved (column order matters for grading);
-    // only the ACROSS-rows order is normalized, matching the "unordered set
-    // comparison" decision - a query that returns the same rows in a
-    // different order still passes.
-    private static string CanonicalRowSet(string stdout)
-    {
-        var trimmed = stdout.Trim();
-        if (trimmed.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        using var document = JsonDocument.Parse(trimmed);
-        var rows = document.RootElement.EnumerateArray()
-            .Select(row => row.GetRawText())
-            .OrderBy(row => row, StringComparer.Ordinal);
-        return string.Join("\n", rows);
     }
 }

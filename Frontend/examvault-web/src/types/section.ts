@@ -26,3 +26,19 @@ export interface SectionOrderItem {
   sectionId: string;
   displayOrder: number;
 }
+
+// Super Admin platform-wide Sections browse only - separate shape from
+// SectionResponse (adds examTitle/tenantId, drops the per-exam-only fields
+// a cross-tenant browse has no use for).
+export interface PlatformSectionResponse {
+  id: string;
+  examId: string;
+  examTitle: string;
+  tenantId: string;
+  name: string;
+  displayOrder: number;
+  questionCount: number;
+  marks: number;
+  durationMinutes: number;
+  createdAtUtc: string;
+}

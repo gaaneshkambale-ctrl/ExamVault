@@ -1,3 +1,5 @@
+using System.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using OnlineExamSystem.Exam.Application.Assignments;
 using OnlineExamSystem.Exam.Application.Interfaces;
@@ -29,11 +31,70 @@ public class ExamRepository : IExamRepository
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public Task<int> CountByTenantAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        _dbContext.Exams.CountAsync(e => e.TenantId == tenantId, cancellationToken);
+
+    // SQL Server's "deadlock victim" error - the one real failure mode a
+    // Serializable transaction can hit (the other outcome, a concurrent
+    // transaction's count query blocking until this one commits, isn't an
+    // exception at all - it's just a wait, the whole point of this
+    // isolation level).
+    private const int DeadlockVictimErrorNumber = 1205;
+
+    public async Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken = default)
+    {
+        // ExamDbContext has EnableRetryOnFailure() on (Program.cs). EF Core
+        // requires the WHOLE unit of work - begin, every operation run
+        // against the transaction, commit - to run inside one
+        // CreateExecutionStrategy().ExecuteAsync delegate once a retrying
+        // strategy is active; wrapping only the BeginTransactionAsync call
+        // (an earlier, incomplete version of this fix) satisfies that check
+        // for the begin call but NOT the SaveChangesAsync call the caller's
+        // operation makes afterward - confirmed live on UserService's
+        // identical method: Add User crashed with "does not support
+        // user-initiated transactions" on every call until operation()
+        // moved inside this same delegate. See this method's own interface
+        // doc-comment (IExamRepository) for the full story.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                var result = await operation(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: DeadlockVictimErrorNumber })
+            {
+                throw new TransientConcurrencyException(
+                    "This request lost a race with a concurrent one over the same limit check. Please try again.", ex);
+            }
+            catch (SqlException ex) when (ex.Number == DeadlockVictimErrorNumber)
+            {
+                throw new TransientConcurrencyException(
+                    "This request lost a race with a concurrent one over the same limit check. Please try again.", ex);
+            }
+        });
+    }
+
     public Task RemoveAsync(ExamPaper exam, CancellationToken cancellationToken = default)
     {
         _dbContext.Exams.Remove(exam);
         return Task.CompletedTask;
     }
+
+    public async Task<IReadOnlyList<ExamPaper>> GetOwnedAsync(
+        Guid createdByUserId,
+        CancellationToken cancellationToken = default) =>
+        await _dbContext.Exams
+            .Include(e => e.ExamType)
+            .Where(e => e.CreatedByUserId == createdByUserId)
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
 
     public Task AddSectionAsync(Section section, CancellationToken cancellationToken = default) =>
         _dbContext.Sections.AddAsync(section, cancellationToken).AsTask();
@@ -48,6 +109,18 @@ public class ExamRepository : IExamRepository
             .Where(s => s.ExamId == examId)
             .OrderBy(s => s.DisplayOrder)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<SectionWithExamTitle>> GetAllSectionsAsync(CancellationToken cancellationToken = default)
+    {
+        var sections = await _dbContext.Sections
+            .OrderBy(s => s.DisplayOrder)
+            .ToListAsync(cancellationToken);
+        var examTitles = await _dbContext.Exams.ToDictionaryAsync(e => e.Id, e => e.Title, cancellationToken);
+
+        return sections
+            .Select(s => new SectionWithExamTitle(s, examTitles.GetValueOrDefault(s.ExamId, "Unknown Exam")))
+            .ToList();
+    }
 
     public async Task<bool> RemoveSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
     {
@@ -123,13 +196,25 @@ public class ExamRepository : IExamRepository
     public async Task AddAssignmentAsync(
         ExamAssignment assignment,
         IReadOnlyList<Guid> targetUserIds,
+        IReadOnlySet<Guid>? overriddenUserIds = null,
+        string? overrideReason = null,
         CancellationToken cancellationToken = default)
     {
         await _dbContext.ExamAssignments.AddAsync(assignment, cancellationToken);
 
         var targets = targetUserIds
             .Distinct()
-            .Select(userId => new ExamAssignmentTarget { ExamAssignmentId = assignment.Id, UserId = userId })
+            .Select(userId =>
+            {
+                var isOverride = overriddenUserIds?.Contains(userId) ?? false;
+                return new ExamAssignmentTarget
+                {
+                    ExamAssignmentId = assignment.Id,
+                    UserId = userId,
+                    IsEligibilityOverride = isOverride,
+                    OverrideReason = isOverride ? overrideReason : null,
+                };
+            })
             .ToList();
         await _dbContext.ExamAssignmentTargets.AddRangeAsync(targets, cancellationToken);
     }
@@ -173,21 +258,30 @@ public class ExamRepository : IExamRepository
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<AssignmentWithExamTitle>> GetAllAssignmentsAsync(
+        Guid? ownerUserId = null,
         CancellationToken cancellationToken = default)
     {
         var assignments = await _dbContext.ExamAssignments
             .OrderByDescending(a => a.CreatedAtUtc)
             .ToListAsync(cancellationToken);
-        var examTitles = await _dbContext.Exams.ToDictionaryAsync(e => e.Id, e => e.Title, cancellationToken);
+        var examInfo = await _dbContext.Exams
+            .ToDictionaryAsync(e => e.Id, e => new { e.Title, e.CreatedByUserId }, cancellationToken);
         var targetCounts = await _dbContext.ExamAssignmentTargets
             .GroupBy(t => t.ExamAssignmentId)
             .Select(g => new { AssignmentId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(g => g.AssignmentId, g => g.Count, cancellationToken);
 
+        if (ownerUserId is { } owner)
+        {
+            assignments = assignments
+                .Where(a => examInfo.TryGetValue(a.ExamId, out var info) && info.CreatedByUserId == owner)
+                .ToList();
+        }
+
         return assignments
             .Select(a => new AssignmentWithExamTitle(
                 a,
-                examTitles.GetValueOrDefault(a.ExamId, "Unknown Exam"),
+                examInfo.TryGetValue(a.ExamId, out var info) ? info.Title : "Unknown Exam",
                 targetCounts.GetValueOrDefault(a.Id)))
             .ToList();
     }
@@ -328,19 +422,6 @@ public class ExamRepository : IExamRepository
         {
             settings = new ProctoringSettings();
             await _dbContext.ProctoringSettings.AddAsync(settings, cancellationToken);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        return settings;
-    }
-
-    public async Task<GeneralSettings> GetOrCreateGeneralSettingsAsync(CancellationToken cancellationToken = default)
-    {
-        var settings = await _dbContext.GeneralSettings.FirstOrDefaultAsync(cancellationToken);
-        if (settings is null)
-        {
-            settings = new GeneralSettings();
-            await _dbContext.GeneralSettings.AddAsync(settings, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 

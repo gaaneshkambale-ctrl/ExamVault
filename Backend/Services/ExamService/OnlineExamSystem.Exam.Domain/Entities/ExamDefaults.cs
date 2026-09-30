@@ -4,8 +4,12 @@ using OnlineExamSystem.Shared.Common.Multitenancy;
 namespace OnlineExamSystem.Exam.Domain.Entities;
 
 /// <summary>One row per tenant of default values shown on the Exam Settings card.
-/// Not yet wired into CreateExam's actual prefill values (deferred) - this round
-/// only makes the values real and editable in Settings.</summary>
+/// DefaultMaxAttempts/NegativeMarkingEnabled/NegativeMarkingValue/AutoSubmitEnabled
+/// seed a newly created exam's matching ExamPaper fields (see CreateExamHandler).
+/// DefaultDurationMinutes/PassingScorePercent prefill the Create Exam form
+/// client-side instead (CreateExam.tsx), since those are collected directly on
+/// that form. AutoSaveEnabled/QuestionNavigationMode/ResultPublishingMode have no
+/// corresponding ExamPaper field yet - stay deferred.</summary>
 public class ExamDefaults : TenantScopedEntity
 {
     public int DefaultDurationMinutes { get; set; } = 60;
@@ -17,5 +21,12 @@ public class ExamDefaults : TenantScopedEntity
     public bool AutoSubmitEnabled { get; set; } = true;
     public QuestionNavigationMode QuestionNavigationMode { get; set; } = QuestionNavigationMode.Free;
     public ResultPublishingMode ResultPublishingMode { get; set; } = ResultPublishingMode.Manual;
+    // Tenant-wide defaults for the new per-exam Certificate Generation
+    // toggle/threshold (see ExamPaper.cs) - seed a newly created exam's
+    // matching fields, same as every other Default*/NegativeMarking* field
+    // here. CertificateEnabled defaults to false (opt-in only) since this is
+    // a brand-new toggle with no prior tenant-level setting to inherit from.
+    public bool CertificateEnabled { get; set; }
+    public int MinimumCertificateScorePercent { get; set; } = 80;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

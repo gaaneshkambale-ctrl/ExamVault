@@ -19,4 +19,14 @@ public class AuditLog : TenantScopedEntity
     public Guid? UserId { get; set; }
     public string? UserName { get; set; }
     public string? IpAddress { get; set; }
+
+    // True only for the handful of Platform Admin console actions where a
+    // SuperAdmin acts ON another org (TenantsController.RecordSecurityEventAsync -
+    // deactivate/reactivate/delete org, assign plan, admin password reset,
+    // trial/role-permission changes). AuditLogsController's tenant-facing
+    // List endpoint uses this to mask the real actor identity from that
+    // org's own Admin - they shouldn't see which platform staff member (or
+    // that staff exists at all) touched their account, even though the
+    // event itself legitimately belongs to their tenant's audit trail.
+    public bool IsSuperAdminActor { get; set; }
 }

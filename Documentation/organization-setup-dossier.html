@@ -1,0 +1,705 @@
+<title>Organization Setup Dossier</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #eef1ee;
+    --surface: #ffffff;
+    --surface-2: #f6f7f3;
+    --ink: #17212b;
+    --muted: #5c6773;
+    --border: #d9ddd3;
+    --border-strong: #c3c9bb;
+    --accent: #a9762e;
+    --accent-ink: #6e4c1c;
+    --accent-soft: #f1e4cd;
+
+    --status-required-fg: #7a3b34;
+    --status-required-bg: #f4e2df;
+    --status-recommended-fg: #2f5872;
+    --status-recommended-bg: #e2ecf1;
+    --status-optional-fg: #4e6459;
+    --status-optional-bg: #e5ece7;
+    --status-platform-fg: #4a4f74;
+    --status-platform-bg: #e6e6f0;
+
+    --enf-blocks-fg: #8a2a20;
+    --enf-blocks-bg: #f6d9d5;
+    --enf-blocks-edge: #c1493c;
+    --enf-warns-fg: #7a5710;
+    --enf-warns-bg: #f3e2b4;
+    --enf-warns-edge: #c99a2e;
+    --enf-silent-fg: #565f58;
+    --enf-silent-bg: #e6e8e2;
+    --enf-silent-edge: #b9bfb2;
+
+    --shadow: 0 1px 2px rgba(23,33,43,0.06);
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10161d;
+      --surface: #161d25;
+      --surface-2: #1a222b;
+      --ink: #e7ebee;
+      --muted: #9aa7b2;
+      --border: #2a333d;
+      --border-strong: #384250;
+      --accent: #d3a355;
+      --accent-ink: #e7c384;
+      --accent-soft: #2c2416;
+
+      --status-required-fg: #e6a099;
+      --status-required-bg: #3a2422;
+      --status-recommended-fg: #9dc7e2;
+      --status-recommended-bg: #1f2f38;
+      --status-optional-fg: #a8cdba;
+      --status-optional-bg: #1c2a23;
+      --status-platform-fg: #c1c4e6;
+      --status-platform-bg: #262a3f;
+
+      --enf-blocks-fg: #f0958a;
+      --enf-blocks-bg: #3a2320;
+      --enf-blocks-edge: #c1493c;
+      --enf-warns-fg: #e8c377;
+      --enf-warns-bg: #362c14;
+      --enf-warns-edge: #c99a2e;
+      --enf-silent-fg: #b7bfc6;
+      --enf-silent-bg: #212a32;
+      --enf-silent-edge: #3c4650;
+
+      --shadow: 0 1px 2px rgba(0,0,0,0.35);
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10161d;
+    --surface: #161d25;
+    --surface-2: #1a222b;
+    --ink: #e7ebee;
+    --muted: #9aa7b2;
+    --border: #2a333d;
+    --border-strong: #384250;
+    --accent: #d3a355;
+    --accent-ink: #e7c384;
+    --accent-soft: #2c2416;
+
+    --status-required-fg: #e6a099;
+    --status-required-bg: #3a2422;
+    --status-recommended-fg: #9dc7e2;
+    --status-recommended-bg: #1f2f38;
+    --status-optional-fg: #a8cdba;
+    --status-optional-bg: #1c2a23;
+    --status-platform-fg: #c1c4e6;
+    --status-platform-bg: #262a3f;
+
+    --enf-blocks-fg: #f0958a;
+    --enf-blocks-bg: #3a2320;
+    --enf-blocks-edge: #c1493c;
+    --enf-warns-fg: #e8c377;
+    --enf-warns-bg: #362c14;
+    --enf-warns-edge: #c99a2e;
+    --enf-silent-fg: #b7bfc6;
+    --enf-silent-bg: #212a32;
+    --enf-silent-edge: #3c4650;
+
+    --shadow: 0 1px 2px rgba(0,0,0,0.35);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.6;
+    padding-inline: max(16px, calc((100vw - 980px) / 2));
+    padding-block: 40px 80px;
+  }
+
+  h1, h2, h3 { font-family: 'Fraunces', ui-serif, Georgia, serif; text-wrap: balance; margin: 0; }
+
+  .wrap { max-width: 980px; margin-inline: auto; }
+
+  a { color: var(--accent-ink); }
+
+  code, .mono { font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; }
+
+  /* ---------- Cover / letterhead ---------- */
+  .cover {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 36px clamp(20px, 5vw, 56px) 30px;
+    text-align: center;
+  }
+  .cover .mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    margin-bottom: 18px;
+  }
+  .mark::before, .mark::after {
+    content: "";
+    width: 22px;
+    height: 1px;
+    background: var(--accent);
+  }
+  .cover h1 {
+    font-size: clamp(1.9rem, 4vw, 2.7rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .cover .sub {
+    max-width: 46ch;
+    margin: 14px auto 0;
+    color: var(--muted);
+    font-size: 1rem;
+  }
+  .doc-meta {
+    margin-top: 26px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 22px 34px;
+  }
+  .doc-meta div { text-align: left; }
+  .doc-meta dt {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  .doc-meta dd { margin: 0; font-weight: 600; font-size: 0.9rem; }
+
+  /* ---------- Generic section header ---------- */
+  .section-head { margin-top: 56px; margin-bottom: 20px; }
+  .section-head .eyebrow {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    margin-bottom: 6px;
+  }
+  .section-head h2 { font-size: clamp(1.35rem, 2.6vw, 1.7rem); font-weight: 600; }
+  .section-head p { margin: 8px 0 0; color: var(--muted); max-width: 62ch; }
+
+  /* ---------- Workflow stepper ---------- */
+  .stepper {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    counter-reset: step;
+  }
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 14px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .step .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step .name { font-weight: 700; font-size: 0.92rem; }
+  .step .cap { color: var(--muted); font-size: 0.8rem; line-height: 1.45; }
+
+  /* ---------- Config record cards ---------- */
+  .records { display: flex; flex-direction: column; gap: 14px; }
+  .record {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--enf-silent-edge);
+    border-radius: 3px;
+    padding: 18px 20px 20px;
+    box-shadow: var(--shadow);
+  }
+  .record[data-enforcement="blocks"] { border-left-color: var(--enf-blocks-edge); }
+  .record[data-enforcement="warns"]  { border-left-color: var(--enf-warns-edge); }
+
+  .record-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .record-head h3 { font-family: 'Public Sans', sans-serif; font-size: 1.05rem; font-weight: 700; margin-right: auto; }
+
+  .chip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .chip.status-required    { color: var(--status-required-fg); background: var(--status-required-bg); }
+  .chip.status-recommended { color: var(--status-recommended-fg); background: var(--status-recommended-bg); }
+  .chip.status-optional    { color: var(--status-optional-fg); background: var(--status-optional-bg); }
+  .chip.status-platform    { color: var(--status-platform-fg); background: var(--status-platform-bg); }
+
+  .chip.enf-blocks { color: var(--enf-blocks-fg); background: var(--enf-blocks-bg); }
+  .chip.enf-warns  { color: var(--enf-warns-fg); background: var(--enf-warns-bg); }
+  .chip.enf-silent { color: var(--enf-silent-fg); background: var(--enf-silent-bg); }
+
+  .fields {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 24px;
+  }
+  .field dt {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  .field dd { margin: 0; font-size: 0.9rem; }
+  .field.span2 { grid-column: 1 / -1; }
+
+  @media (max-width: 620px) {
+    .fields { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Checklist ---------- */
+  .checklist {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px clamp(16px, 4vw, 28px) 20px;
+  }
+  .check-row {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-row input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    min-width: 20px;
+    margin-top: 2px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    cursor: pointer;
+    position: relative;
+  }
+  .check-row input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+  .check-row input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute; left: 6px; top: 2px;
+    width: 5px; height: 10px;
+    border: solid var(--surface);
+    border-width: 0 2px 2px 0;
+    transform: rotate(40deg);
+  }
+  .check-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .check-row label { font-weight: 700; cursor: pointer; }
+  .check-row.done label { text-decoration: line-through; color: var(--muted); }
+  .check-row .body { flex: 1; }
+  .check-row .desc { margin: 4px 0 0; color: var(--muted); font-size: 0.87rem; }
+  .check-row .step-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent-ink);
+    margin-right: 6px;
+  }
+
+  .progress-wrap {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 0 14px;
+  }
+  .progress-track { flex: 1; height: 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .25s ease; }
+  .progress-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.82rem;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+
+<div class="wrap">
+
+  <div class="cover">
+    <span class="mark">ExamVault Platform</span>
+    <h1>New Organization &mdash; Admin Setup &amp; Readiness Checklist</h1>
+    <p class="sub">Everything a newly created college, university, coaching institute or school needs configured before its Admin can run the full workflow &mdash; create, schedule, conduct, grade and publish an exam &mdash; without a missing setting quietly breaking a step.</p>
+    <dl class="doc-meta">
+      <div><dt>Prepared for</dt><dd>ExamVault Admin, new tenant</dd></div>
+      <div><dt>Scope</dt><dd>16 configuration surfaces</dd></div>
+      <div><dt>Workflow covered</dt><dd>Org creation &rarr; Published result</dd></div>
+      <div><dt>Status key</dt><dd>Required &middot; Recommended &middot; Optional &middot; Platform-managed</dd></div>
+    </dl>
+  </div>
+
+  <div class="section-head">
+    <span class="eyebrow">01 &middot; The pipeline</span>
+    <h2>The ten-step path from a blank tenant to a published result</h2>
+    <p>Every configuration item below exists to keep one or more of these steps from stalling. The stepper is the map; the dossier after it is the detail.</p>
+  </div>
+  <div class="stepper" id="stepper"></div>
+
+  <div class="section-head">
+    <span class="eyebrow">02 &middot; The dossier</span>
+    <h2>Sixteen configuration surfaces, field by field</h2>
+    <p>Grouped the way an Admin actually encounters them. Each entry names where it lives, what breaks without it, and whether ExamVault blocks you, warns you, or just quietly falls back to a default.</p>
+  </div>
+  <div id="sections"></div>
+
+  <div class="section-head">
+    <span class="eyebrow">03 &middot; Sign-off</span>
+    <h2>Final Admin readiness checklist</h2>
+    <p>One line per pipeline step. Check them off as you go &mdash; your progress is saved in this browser, so you can leave and come back mid-setup.</p>
+  </div>
+  <div class="checklist">
+    <div class="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <span class="progress-label" id="progressLabel">0 / 10 complete</span>
+    </div>
+    <div id="checklist"></div>
+  </div>
+
+  <footer>
+    <span>ExamVault &middot; Organization Setup Dossier</span>
+    <span>Checklist state is stored only in this browser</span>
+  </footer>
+
+</div>
+
+<script>
+  // ---------------------------------------------------------------
+  // Data: the 16 configuration surfaces, and the 10-step pipeline.
+  // Sourced from a direct read of ExamVault's own settings pages and
+  // backend entities (Tenant, Plan, ExamDefaults, ProctoringSettings,
+  // ReminderSettings, StudentSummaryResponse, examResultScheme, etc.)
+  // ---------------------------------------------------------------
+
+  const SECTIONS = [
+    {
+      id: 'identity',
+      title: 'Identity &amp; Branding',
+      desc: 'What the organization is, and what its documents look like.',
+      items: ['org-profile', 'org-type', 'branding']
+    },
+    {
+      id: 'academic',
+      title: 'Academic &amp; Results',
+      desc: 'How students are classified, how exams are scored, and what appears on the paperwork.',
+      items: ['academic-config', 'grading', 'result-pdf', 'certificates', 'exam-defaults']
+    },
+    {
+      id: 'people',
+      title: 'People &amp; Operations',
+      desc: 'Who can do what, who is actually in the system, and what protects an exam in progress.',
+      items: ['roles', 'people-setup', 'notifications', 'exam-security', 'proctoring']
+    },
+    {
+      id: 'platform',
+      title: 'Platform &amp; Growth',
+      desc: 'Ceilings and wiring that sit above any single Admin &mdash; mostly Super Admin or infrastructure territory.',
+      items: ['subscription', 'report-settings', 'integrations']
+    }
+  ];
+
+  const ITEMS = {
+    'org-profile': {
+      name: 'Organization Profile &amp; Basic Information',
+      status: 'recommended',
+      enforcement: 'silent',
+      where: 'Settings &rarr; Organization Settings &rarr; General',
+      dependsOn: 'PDF report letterhead (name, address, contact line), portal display name',
+      default: 'Institution Name &amp; Organization Code are set once by Super Admin at creation and locked; every other field (short name, website, contact, registration/tax no., time zone) starts blank',
+      ifMissing: 'Generated PDFs simply omit the blank contact/address line &mdash; nothing errors, the letterhead just looks sparse'
+    },
+    'org-type': {
+      name: 'Organization Type',
+      status: 'recommended',
+      enforcement: 'silent',
+      where: 'Set by Super Admin at organization creation; shown read-only under General (&ldquo;contact Super Admin to change&rdquo;)',
+      dependsOn: 'Which academic/student/result fields and which report types (Certificate, Detailed Exam Report, &hellip;) are treated as relevant to this institution',
+      default: 'Unset &rarr; falls back to a generic, safe default field &amp; report catalog',
+      ifMissing: 'Admin still gets a full working field/report set &mdash; just not tailored (e.g. a coaching institute sees university-shaped labels)'
+    },
+    'branding': {
+      name: 'Branding &amp; Logo',
+      status: 'optional',
+      enforcement: 'silent',
+      where: 'Organization Settings &rarr; General (Logo &amp; Visual Identity, Branding Colors, Authorized Signatory)',
+      dependsOn: 'PDF report header/footer and the in-app report preview. Does <em>not</em> reach Certificates &mdash; those are always ExamVault-branded, see below',
+      default: 'No logo/favicon/signature; brand colors default to ExamVault&rsquo;s own palette',
+      ifMissing: 'PDFs fall back to an auto-generated initials badge in place of a logo, and the signatory line prints blank'
+    },
+    'academic-config': {
+      name: 'Academic Configuration <span class="mono" style="font-size:.72em;font-weight:500;color:var(--muted)">(Program / Department / Semester / Division)</span>',
+      status: 'optional',
+      enforcement: 'silent',
+      where: 'Organization Settings &rarr; Academic Configuration (type-specific fields, managed Program/Department/Semester/Division lists, Result Fields checklist)',
+      dependsOn: 'Program/Department/Semester/Division columns on Create/Edit User and on the Student Reports export; which result fields print on generated reports',
+      default: 'Empty; an unset Result Fields checklist is treated as &ldquo;show everything&rdquo; rather than hiding data',
+      ifMissing: 'Student records show a blank cell for the missing field &mdash; never a fabricated value'
+    },
+    'grading': {
+      name: 'Grading System &amp; Passing Criteria',
+      status: 'required',
+      enforcement: 'blocks',
+      where: 'Tenant default: Settings &rarr; Exam Settings (Passing Score %). Actual value: Create Exam form, per exam',
+      dependsOn: 'Pass/Fail on every result; certificate eligibility (fixed at 80%+ and passed, not configurable); letter grade A+/A/B/C/F (fixed thresholds, not configurable)',
+      default: 'Tenant default 40%, pre-filled on Create Exam',
+      ifMissing: 'Create Exam cannot be submitted without a Passing Marks value &mdash; the form and the server both reject it'
+    },
+    'result-pdf': {
+      name: 'Result &amp; PDF Configuration',
+      status: 'optional',
+      enforcement: 'silent',
+      where: 'Organization Settings &rarr; Reports &amp; Documents (QR verification, contact details, page numbers, brand colors in header, watermark)',
+      dependsOn: 'Cosmetic layout of every generated Student Result / Exam Result / Detailed Exam Report PDF',
+      default: 'QR code, contact details and page numbers ON; watermark OFF',
+      ifMissing: 'Reports generate fine with ExamVault&rsquo;s stock layout defaults'
+    },
+    'certificates': {
+      name: 'Certificate Configuration',
+      status: 'platform',
+      enforcement: 'silent',
+      where: '<em>No settings screen exists &mdash; there is nothing to configure.</em>',
+      dependsOn: 'Whether a given Exam Type awards certificates at all, and whether this Organization Type&rsquo;s report catalog includes &ldquo;Certificate&rdquo;',
+      default: 'Always ExamVault-branded (not the tenant&rsquo;s own logo); fixed 80%-and-passed eligibility threshold',
+      ifMissing: 'N/A &mdash; a student either qualifies by score, or does not; nothing an Admin sets up changes this'
+    },
+    'exam-defaults': {
+      name: 'Exam Defaults &amp; Preferences',
+      status: 'recommended',
+      enforcement: 'silent',
+      where: 'Settings &rarr; Exam Settings (Duration, Passing Score, Max Attempts, Negative Marking, Auto Submit)',
+      dependsOn: 'Pre-filled values on Create Exam, and the attempt/marking/auto-submit rules copied onto every new exam',
+      default: '60 min &middot; 40% &middot; 3 attempts &middot; negative marking on (&minus;0.25) &middot; auto-submit on &mdash; auto-seeded the moment the tenant exists',
+      ifMissing: 'Nothing to fix &mdash; sensible defaults are already active before the Admin opens this screen'
+    },
+    'roles': {
+      name: 'User Roles &amp; Permissions',
+      status: 'optional',
+      enforcement: 'silent',
+      where: 'Users &rarr; Roles &amp; Permissions (Instructor and Student rows are editable; Admin/Super Admin are not shown here)',
+      dependsOn: 'Which sidebar actions an Instructor or Student can reach; a subset of permissions are genuinely server-enforced, the rest remain informational until their backend policy ships',
+      default: 'A sensible per-role permission set is seeded automatically, mirrored server-side',
+      ifMissing: 'Default permissions apply with no action needed &mdash; only touch this to restrict or expand a role'
+    },
+    'people-setup': {
+      name: 'Student / Instructor Setup',
+      status: 'required',
+      enforcement: 'blocks',
+      where: 'Users &rarr; Add User (one at a time) or Import Users (bulk CSV)',
+      dependsOn: 'Literally everything past this point &mdash; assigning exams, taking exams, and every result/report has to have real people to act on',
+      default: 'A brand-new organization starts with zero students and zero instructors',
+      ifMissing: 'The pipeline has nobody to schedule, examine or grade &mdash; it cannot proceed past &ldquo;Create Exam&rdquo;'
+    },
+    'notifications': {
+      name: 'Notification &amp; Email Configuration',
+      status: 'platform',
+      enforcement: 'silent',
+      where: 'Reminder windows: Settings (tenant-wide). Channel per notification type: each user&rsquo;s own preferences, not an org setting. Delivery itself: a platform-level integration (see Required Integrations)',
+      dependsOn: 'Exam reminder pings and result/notification delivery',
+      default: '24h &amp; 1h reminder windows both on; in-app &amp; email both on per user by default',
+      ifMissing: 'Reminders keep firing on sensible defaults &mdash; there is no per-org email setup screen to leave incomplete'
+    },
+    'exam-security': {
+      name: 'Exam Security Settings',
+      status: 'optional',
+      enforcement: 'silent',
+      where: 'Settings &rarr; Security Settings (Fullscreen Enforcement, Tab Switching Detection, Copy/Paste Restriction, Right-Click Restriction, Session Timeout)',
+      dependsOn: 'Which anti-cheat checks run during any proctored exam &mdash; shares one backend table with Proctoring Settings below',
+      default: 'Every protection ON, 30-minute session timeout',
+      ifMissing: 'Protections are already active before the Admin ever opens this screen'
+    },
+    'proctoring': {
+      name: 'Proctoring Settings <span class="mono" style="font-size:.72em;font-weight:500;color:var(--muted)">(if applicable)</span>',
+      status: 'optional',
+      enforcement: 'silent',
+      where: 'Settings &rarr; Proctoring Settings (master switch, Face Detection, Multiple Person Detection, Screen Monitoring, Multiple Monitor Detection)',
+      dependsOn: 'Only activates on an exam <em>assignment</em> that itself has &ldquo;Enable Proctoring&rdquo; checked &mdash; this screen is a ceiling, not a trigger',
+      default: 'Every detector ON',
+      ifMissing: 'Detectors stay available; the per-assignment checkbox still gates whether any exam actually uses them'
+    },
+    'subscription': {
+      name: 'Subscription Plan &amp; Usage Limits',
+      status: 'platform',
+      enforcement: 'blocks',
+      where: 'Assigned by Super Admin at organization creation (Plans &rarr; Assign Plan) &mdash; not editable from the Admin console',
+      dependsOn: 'Hard ceiling on Admins, Instructors, Students and Exams this organization can create',
+      default: '&ldquo;Full Access&rdquo; plan (effectively unlimited) unless Super Admin assigns otherwise',
+      ifMissing: 'N/A &mdash; a plan is always attached. Once a real ceiling <em>is</em> reached, creating another user or exam is flatly refused, not just warned about'
+    },
+    'report-settings': {
+      name: 'Organization-specific Report Settings',
+      status: 'optional',
+      enforcement: 'silent',
+      where: 'Derived entirely from Organization Type (above) &mdash; there is no separate report settings screen',
+      dependsOn: 'Which report types (Certificate, Detailed Exam Report, &hellip;) are offered at all for this institution',
+      default: 'Unset Organization Type &rarr; a generic, safe report catalog',
+      ifMissing: 'The report picker just uses the generic set &mdash; nothing is hidden that shouldn&rsquo;t be'
+    },
+    'integrations': {
+      name: 'Required Integrations',
+      status: 'platform',
+      enforcement: 'silent',
+      where: 'A single workflow-automation webhook, configured once at deployment &mdash; outside any Admin or Super Admin screen',
+      dependsOn: 'Every outbound email (reminders, notifications, password reset) and AI-assisted question generation',
+      default: 'N/A &mdash; either wired up by whoever hosts ExamVault, or not',
+      ifMissing: 'Email sends fail silently and are only visible in the delivery log &mdash; the in-app notification itself is unaffected; AI question generation returns an error instead of questions'
+    }
+  };
+
+  const STATUS_LABEL = { required: 'Required', recommended: 'Recommended', optional: 'Optional', platform: 'Platform-managed' };
+  const ENF_LABEL = { blocks: 'Blocks', warns: 'Warns', silent: 'Silent fallback' };
+
+  const sectionsEl = document.getElementById('sections');
+  SECTIONS.forEach(section => {
+    const head = document.createElement('div');
+    head.className = 'section-head';
+    head.innerHTML = `<h2>${section.title}</h2><p>${section.desc}</p>`;
+    sectionsEl.appendChild(head);
+
+    const list = document.createElement('div');
+    list.className = 'records';
+    section.items.forEach(id => {
+      const it = ITEMS[id];
+      const rec = document.createElement('article');
+      rec.className = 'record';
+      rec.dataset.enforcement = it.enforcement;
+      rec.innerHTML = `
+        <div class="record-head">
+          <h3>${it.name}</h3>
+          <span class="chip status-${it.status}">${STATUS_LABEL[it.status]}</span>
+          <span class="chip enf-${it.enforcement}">${ENF_LABEL[it.enforcement]}</span>
+        </div>
+        <dl class="fields">
+          <div class="field"><dt>Where it&rsquo;s configured</dt><dd>${it.where}</dd></div>
+          <div class="field"><dt>What depends on it</dt><dd>${it.dependsOn}</dd></div>
+          <div class="field"><dt>Default value</dt><dd>${it.default}</dd></div>
+          <div class="field"><dt>If left unconfigured</dt><dd>${it.ifMissing}</dd></div>
+        </dl>`;
+      list.appendChild(rec);
+    });
+    sectionsEl.appendChild(list);
+  });
+
+  // ---------------------------------------------------------------
+  // The ten-step pipeline
+  // ---------------------------------------------------------------
+  const STEPS = [
+    { name: 'Create Organization', cap: 'Super Admin sets Name, Org Type &amp; Subscription Plan' },
+    { name: 'Admin Setup', cap: 'Forced first password change activates the tenant' },
+    { name: 'Add Users / Students', cap: 'Single add or bulk CSV import' },
+    { name: 'Configure Academic Data', cap: 'Program/Department/Semester/Division, branding' },
+    { name: 'Create Exam', cap: 'Needs Passing Marks; can&rsquo;t publish with 0 questions' },
+    { name: 'Schedule Exam', cap: 'Assign to students, set the window' },
+    { name: 'Conduct Exam', cap: 'Security &amp; Proctoring settings apply automatically' },
+    { name: 'Generate Results', cap: 'Pass/Fail from Passing Marks; grade from fixed bands' },
+    { name: 'Generate Reports / PDFs', cap: 'Uses Branding &amp; Result Field settings' },
+    { name: 'Publish Results', cap: 'Gated by Result Publishing Mode (default: Manual)' }
+  ];
+
+  const stepperEl = document.getElementById('stepper');
+  STEPS.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'step';
+    el.innerHTML = `<span class="num mono">${i + 1}</span><span class="name">${s.name}</span><span class="cap">${s.cap}</span>`;
+    stepperEl.appendChild(el);
+  });
+
+  // ---------------------------------------------------------------
+  // Sign-off checklist, persisted per-browser via localStorage
+  // ---------------------------------------------------------------
+  const CHECKS = [
+    { id: 'c1', label: 'Organization created', desc: 'Name, Org Type and Subscription Plan confirmed with Super Admin.' },
+    { id: 'c2', label: 'Admin logged in &amp; password changed', desc: 'This is what actually activates the tenant.' },
+    { id: 'c3', label: 'Branding &amp; profile filled in', desc: 'Logo, colors, signatory, contact &amp; address &mdash; optional, but every skipped field is a blank line on real PDFs.' },
+    { id: 'c4', label: 'Academic data configured', desc: 'Program/Department/Semester/Division lists and Result Fields, if this institution type uses them.' },
+    { id: 'c5', label: 'Exam Settings reviewed', desc: 'Default duration, passing score, attempts and negative marking match this institution&rsquo;s policy.' },
+    { id: 'c6', label: 'Security &amp; Proctoring reviewed', desc: 'Confirm the anti-cheat defaults, or adjust the session timeout.' },
+    { id: 'c7', label: 'Students &amp; Instructors added', desc: 'At least one of each, via Add User or bulk import.' },
+    { id: 'c8', label: 'Roles &amp; Permissions reviewed', desc: 'Only needed if the default Instructor/Student permission set isn&rsquo;t right for this org.' },
+    { id: 'c9', label: 'First exam created, scheduled &amp; conducted', desc: 'Confirms Passing Marks, question bank and assignment all actually work together.' },
+    { id: 'c10', label: 'Results generated, reported &amp; published', desc: 'The full pipeline, end to end, on real data.' }
+  ];
+
+  const STORAGE_KEY = 'examvault-org-setup-checklist';
+  function loadState() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* private mode etc. - ignore */ }
+  }
+
+  const state = loadState();
+  const checklistEl = document.getElementById('checklist');
+  const fillEl = document.getElementById('progressFill');
+  const labelEl = document.getElementById('progressLabel');
+
+  function updateProgress() {
+    const done = CHECKS.filter(c => state[c.id]).length;
+    fillEl.style.width = (done / CHECKS.length * 100) + '%';
+    labelEl.textContent = done + ' / ' + CHECKS.length + ' complete';
+  }
+
+  CHECKS.forEach((c, i) => {
+    const row = document.createElement('div');
+    row.className = 'check-row' + (state[c.id] ? ' done' : '');
+    row.innerHTML = `
+      <input type="checkbox" id="${c.id}" ${state[c.id] ? 'checked' : ''}>
+      <div class="body">
+        <label for="${c.id}"><span class="step-num mono">${String(i + 1).padStart(2, '0')}</span>${c.label}</label>
+        <p class="desc">${c.desc}</p>
+      </div>`;
+    const input = row.querySelector('input');
+    input.addEventListener('change', () => {
+      state[c.id] = input.checked;
+      row.classList.toggle('done', input.checked);
+      saveState(state);
+      updateProgress();
+    });
+    checklistEl.appendChild(row);
+  });
+  updateProgress();
+</script>

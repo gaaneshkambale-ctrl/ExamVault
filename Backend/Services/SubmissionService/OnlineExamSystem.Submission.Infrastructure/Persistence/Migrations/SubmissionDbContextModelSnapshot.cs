@@ -130,8 +130,14 @@ namespace OnlineExamSystem.Submission.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ExamId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("FullscreenExitCount")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastActivityAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("LiveWatchEnabled")
                         .HasColumnType("bit");

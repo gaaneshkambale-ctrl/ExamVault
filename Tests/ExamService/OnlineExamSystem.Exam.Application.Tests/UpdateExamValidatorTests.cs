@@ -61,6 +61,31 @@ public class UpdateExamValidatorTests
         Assert.False(result.IsValid);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(101)]
+    public void Minimum_certificate_score_percent_out_of_0_to_100_range_fails(int value)
+    {
+        var command = ValidCommand() with { MinimumCertificateScorePercent = value };
+
+        var result = _validator.Validate(command);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(80)]
+    [InlineData(100)]
+    public void Minimum_certificate_score_percent_within_0_to_100_range_passes(int value)
+    {
+        var command = ValidCommand() with { MinimumCertificateScorePercent = value };
+
+        var result = _validator.Validate(command);
+
+        Assert.True(result.IsValid);
+    }
+
     [Fact]
     public void End_date_before_start_date_fails()
     {

@@ -1,25 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card, Col, Form, Pagination, Row, Spinner, Table } from 'react-bootstrap';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import AdminLayout from '../../../layouts/AdminLayout';
+import RoleAwareLayout from '../../../layouts/RoleAwareLayout';
 import UserAvatar from '../../../components/UserAvatar';
+import { useAuth } from '../../../hooks/useAuth';
 import { useExams } from '../../../hooks/useExams';
-import { useUsers } from '../../../hooks/useUsers';
+import { useStudents } from '../../../hooks/useUsers';
 import { useViolationsByExam } from '../../../hooks/useSubmissions';
 import { updateViolationStatus } from '../../../api/submissionApi';
 import { severityVariant, violationDescription, violationLabel } from '../../../utils/proctoring';
+import { getPaginationRange } from '../../../utils/paginationRange';
 import type { ViolationEventResponse, ViolationSeverity, ViolationStatus } from '../../../types/submission';
 
 // "Live monitoring" - same polling mechanism the other Live Monitoring pages use.
 const POLL_INTERVAL_MS = 15000;
 const RESOLVED_WINDOW_MS = 60 * 60 * 1000;
-const PAGE_SIZE = 8;
+const PAGE_SIZE_OPTIONS = [8, 25, 50];
 
 function formatTime(value: string): string {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function StatusAction({ violation }: { violation: ViolationEventResponse }) {
+const STATUS_BADGE: Record<ViolationStatus, { bg: string; text: string; label: string }> = {
+  Open: { bg: 'danger-subtle', text: 'danger-emphasis', label: 'Open' },
+  UnderInvestigation: { bg: 'warning-subtle', text: 'warning-emphasis', label: 'Under Investigation' },
+  Resolved: { bg: 'success-subtle', text: 'success-emphasis', label: 'Resolved' },
+};
+
+// Updating a violation's status stays an Admin-only action server-side
+// (UpdateViolationStatus) - the spec grants Instructor "Security Violations
+// ✅ Own Exams" as a view, not a triage workflow, so Instructor sees the
+// same status as a plain badge instead of a button that would 403.
+function StatusAction({ violation, canManage }: { violation: ViolationEventResponse; canManage: boolean }) {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (status: ViolationStatus) => updateViolationStatus(violation.id, status),
@@ -28,10 +40,11 @@ function StatusAction({ violation }: { violation: ViolationEventResponse }) {
     },
   });
 
-  if (violation.status === 'Resolved') {
+  if (!canManage || violation.status === 'Resolved') {
+    const badge = STATUS_BADGE[violation.status];
     return (
-      <Badge bg="success-subtle" text="success-emphasis">
-        Resolved
+      <Badge bg={badge.bg} text={badge.text}>
+        {badge.label}
       </Badge>
     );
   }
@@ -57,13 +70,16 @@ function StatusAction({ violation }: { violation: ViolationEventResponse }) {
 }
 
 export default function SecurityViolations() {
+  const { user: currentUser } = useAuth();
+  const canManage = currentUser?.role === 'Admin';
   const { data: exams, isLoading: isLoadingExams, isError: isExamsError } = useExams();
-  const { data: users } = useUsers();
+  const { data: users } = useStudents();
   const [searchText, setSearchText] = useState('');
   const [examFilter, setExamFilter] = useState('All');
   const [severityFilter, setSeverityFilter] = useState<'All' | ViolationSeverity>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | ViolationStatus>('All');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
   const publishedExamIds = useMemo(
     () => (exams ?? []).filter((exam) => exam.status === 'Published').map((exam) => exam.id),
@@ -128,16 +144,16 @@ export default function SecurityViolations() {
     setPage(1);
   }, [searchText, examFilter, severityFilter, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(sortedViolations.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(sortedViolations.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedViolations = sortedViolations.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const rangeStart = sortedViolations.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, sortedViolations.length);
+  const pagedViolations = sortedViolations.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = sortedViolations.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, sortedViolations.length);
 
   const loading = isLoadingExams || isLoadingViolations;
 
   return (
-    <AdminLayout active="Security Violations">
+    <RoleAwareLayout active="Security Violations">
       <h1 className="h4 fw-bold mb-1 text-primary">Security Violations</h1>
       <p className="text-muted mb-4">Live feed of proctoring violations across all active exams.</p>
 
@@ -233,7 +249,7 @@ export default function SecurityViolations() {
 
           {!loading && !isExamsError && pagedViolations.length > 0 && (
             <Table responsive hover className="mb-0 align-middle">
-              <thead className="text-muted small text-uppercase bg-light">
+              <thead className="text-muted small text-uppercase bg-body-tertiary">
                 <tr>
                   <th className="ps-4">Student</th>
                   <th>Violation Details</th>
@@ -273,7 +289,7 @@ export default function SecurityViolations() {
                       </td>
                       <td>{formatTime(violation.detectedAtUtc)}</td>
                       <td className="pe-4">
-                        <StatusAction violation={violation} />
+                        <StatusAction violation={violation} canManage={canManage} />
                       </td>
                     </tr>
                   );
@@ -289,20 +305,40 @@ export default function SecurityViolations() {
           <div className="text-muted small">
             Showing {rangeStart} to {rangeEnd} of {sortedViolations.length} entries
           </div>
+          <div className="d-flex align-items-center gap-3">
           <Pagination className="mb-0">
+            <Pagination.First disabled={currentPage === 1} onClick={() => setPage(1)} />
             <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
-                {p}
-              </Pagination.Item>
-            ))}
+            {getPaginationRange(currentPage, totalPages).map((p, i) =>
+              p === 'ellipsis' ? (
+                <Pagination.Ellipsis key={`ellipsis-${i}`} disabled />
+              ) : (
+                <Pagination.Item key={p} active={p === currentPage} onClick={() => setPage(p)}>
+                  {p}
+                </Pagination.Item>
+              ),
+            )}
             <Pagination.Next
               disabled={currentPage === totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             />
+            <Pagination.Last disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} />
           </Pagination>
+            <Form.Select
+              size="sm"
+              style={{ width: 100 }}
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </Form.Select>
+          </div>
         </div>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

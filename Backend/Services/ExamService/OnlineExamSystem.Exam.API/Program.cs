@@ -10,6 +10,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Exam.API.Authorization;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
+using OnlineExamSystem.Exam.Application.Assignments.Cancel;
 using OnlineExamSystem.Exam.Application.Assignments.Create;
 using OnlineExamSystem.Exam.Application.Assignments.Delete;
 using OnlineExamSystem.Exam.Application.Assignments.GetById;
@@ -25,6 +26,8 @@ using OnlineExamSystem.Exam.Application.Exams.Update;
 using OnlineExamSystem.Exam.Application.ExamTypes.Create;
 using OnlineExamSystem.Exam.Application.ExamTypes.Delete;
 using OnlineExamSystem.Exam.Application.ExamTypes.List;
+using OnlineExamSystem.Exam.Application.ExamTypes.SetStatus;
+using OnlineExamSystem.Exam.Application.ExamTypes.Update;
 using OnlineExamSystem.Exam.API.Jobs;
 using OnlineExamSystem.Exam.Application.Interfaces;
 using OnlineExamSystem.Exam.Application.Proctoring.GetProctoringSettings;
@@ -32,14 +35,13 @@ using OnlineExamSystem.Exam.Application.Proctoring.UpdateProctoringSettings;
 using OnlineExamSystem.Exam.Application.Reminders.GetReminderSettings;
 using OnlineExamSystem.Exam.Application.Reminders.UpdateReminderSettings;
 using OnlineExamSystem.Exam.Application.Settings.GetExamDefaults;
-using OnlineExamSystem.Exam.Application.Settings.GetGeneralSettings;
 using OnlineExamSystem.Exam.Application.Settings.UpdateExamDefaults;
-using OnlineExamSystem.Exam.Application.Settings.UpdateGeneralSettings;
 using OnlineExamSystem.Exam.Application.Sections.Create;
 using OnlineExamSystem.Exam.Application.Sections.Delete;
 using OnlineExamSystem.Exam.Application.Sections.GetById;
 using OnlineExamSystem.Exam.Application.Sections.GetOrCreateDefault;
 using OnlineExamSystem.Exam.Application.Sections.List;
+using OnlineExamSystem.Exam.Application.Sections.ListAll;
 using OnlineExamSystem.Exam.Application.Sections.Reorder;
 using OnlineExamSystem.Exam.Application.Sections.Update;
 using OnlineExamSystem.Exam.Infrastructure;
@@ -58,6 +60,26 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // Real client IP: every request arrives via a proxy (Traefik -> Gateway ->
+        // service), so Connection.RemoteIpAddress is otherwise the proxy container's
+        // Docker IP (172.18.x.x) - which is what audit logs, sessions, System Logs
+        // and the per-IP auth rate limiter were all recording/keying on. Only the
+        // last hop is honoured (ForwardLimit 1), and only when that hop is a
+        // private-network proxy: Traefik appends the real client IP last, so any
+        // X-Forwarded-For a client sends itself is never the value used (prod only
+        // exposes the Gateway through Traefik).
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownNetworks.Clear();
+            foreach (var (prefix, length) in new[] { ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16), ("127.0.0.0", 8) })
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse(prefix), length));
+            }
+        });
+
         // Add services to the container.
 
         builder.Services.AddControllers();
@@ -68,7 +90,17 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
         builder.Services.AddDbContext<ExamDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("ExamDb")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("ExamDb"),
+                // Retries a handful of transient failures (brief connection
+                // drops, deadlocks) with backoff before giving up - this is
+                // literally what surfaced as an unhandled
+                // InvalidOperationException in ExamReminderCheckService's
+                // background poll (the exception message names this exact
+                // fix). The poll loop already retries on its own 5-minute
+                // cadence either way, but this stops a one-off blip from
+                // needing that full extra cycle.
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<ExamDbContext>("database");
         builder.Services.AddScoped<IExamRepository, ExamRepository>();
@@ -76,7 +108,23 @@ public class Program
         var notificationServiceBaseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:NotificationServiceBaseUrl\" configuration.");
         builder.Services.AddHttpClient<IAuditClient, AuditClient>(client =>
-            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/"));
+        {
+            client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
+            // Fire-and-forget audit write must fail fast, not hang on the default
+            // 100s HttpClient timeout - a down NotificationService would otherwise
+            // make every audited business action (exam/question/user create, etc.)
+            // multi-second-to-100s slow instead of merely un-audited. Same value
+            // as the "system-logs" client below.
+            client.Timeout = TimeSpan.FromSeconds(3);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            // HttpClient.Timeout alone measured ~7-12s against a stopped
+            // container in this environment (DNS-resolution-to-a-torn-down-
+            // endpoint overhead sits partly outside that timeout's reach).
+            // ConnectTimeout bounds the DNS+TCP-connect phase specifically,
+            // giving the fast-fail this client actually needs.
+            ConnectTimeout = TimeSpan.FromSeconds(2),
+        });
         builder.Services.AddHttpClient("system-logs", client =>
         {
             client.BaseAddress = new Uri(notificationServiceBaseUrl.TrimEnd('/') + "/");
@@ -93,6 +141,12 @@ public class Program
             client.BaseAddress = userServiceBaseUri);
         builder.Services.AddHttpClient<IInternalUserLookupClient, InternalUserServiceClient>(client =>
             client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddHttpClient<ITenantLimitsClient, TenantLimitsClient>(client =>
+            client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddHttpClient<IPermissionVersionClient, PermissionVersionClient>(client =>
+            client.BaseAddress = userServiceBaseUri);
+        builder.Services.AddMemoryCache();
+        builder.Services.AddScoped<IPermissionVersionGuard, PermissionVersionGuard>();
 
         var questionServiceBaseUrl = builder.Configuration["Services:QuestionServiceBaseUrl"]
             ?? throw new InvalidOperationException("Missing \"Services:QuestionServiceBaseUrl\" configuration.");
@@ -113,6 +167,9 @@ public class Program
         builder.Services.AddScoped<CreateExamTypeHandler>();
         builder.Services.AddScoped<ListExamTypesHandler>();
         builder.Services.AddScoped<DeleteExamTypeHandler>();
+        builder.Services.AddScoped<IValidator<UpdateExamTypeCommand>, UpdateExamTypeValidator>();
+        builder.Services.AddScoped<UpdateExamTypeHandler>();
+        builder.Services.AddScoped<SetExamTypeStatusHandler>();
 
         builder.Services.AddScoped<IValidator<CreateSectionCommand>, CreateSectionValidator>();
         builder.Services.AddScoped<CreateSectionHandler>();
@@ -121,6 +178,7 @@ public class Program
         builder.Services.AddScoped<DeleteSectionHandler>();
         builder.Services.AddScoped<GetSectionHandler>();
         builder.Services.AddScoped<ListSectionsHandler>();
+        builder.Services.AddScoped<ListAllSectionsHandler>();
         builder.Services.AddScoped<ReorderSectionsHandler>();
         builder.Services.AddScoped<GetOrCreateDefaultSectionHandler>();
 
@@ -132,14 +190,13 @@ public class Program
         builder.Services.AddScoped<ListAssignmentsForExamHandler>();
         builder.Services.AddScoped<GetAssignmentHandler>();
         builder.Services.AddScoped<DeleteAssignmentHandler>();
+        builder.Services.AddScoped<CancelAssignmentHandler>();
         builder.Services.AddScoped<GetMyAssignmentForExamHandler>();
 
         builder.Services.AddScoped<GetReminderSettingsHandler>();
         builder.Services.AddScoped<UpdateReminderSettingsHandler>();
         builder.Services.AddScoped<GetProctoringSettingsHandler>();
         builder.Services.AddScoped<UpdateProctoringSettingsHandler>();
-        builder.Services.AddScoped<GetGeneralSettingsHandler>();
-        builder.Services.AddScoped<UpdateGeneralSettingsHandler>();
         builder.Services.AddScoped<GetExamDefaultsHandler>();
         builder.Services.AddScoped<UpdateExamDefaultsHandler>();
 
@@ -177,9 +234,14 @@ public class Program
                     ClockSkew = TimeSpan.Zero,
                 };
             });
-        builder.Services.AddAuthorization(options => options.AddFeaturePolicies());
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddFeaturePolicies();
+            options.AddPermissionPolicies();
+        });
 
         var app = builder.Build();
+        app.UseForwardedHeaders();
 
         using (var scope = app.Services.CreateScope())
         {
@@ -236,7 +298,8 @@ public class Program
                 exception.StackTrace,
                 context.Request.Path,
                 context.Request.Method,
-                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null);
+                currentTenant?.IsAuthenticated == true ? currentTenant.TenantId : null,
+                IpAddress: context.Connection.RemoteIpAddress?.ToString());
 
             var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("system-logs");
             await client.PostAsJsonAsync("api/system-logs", request);

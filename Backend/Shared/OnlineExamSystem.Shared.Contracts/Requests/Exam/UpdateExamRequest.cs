@@ -24,4 +24,8 @@ public record UpdateExamRequest(
     bool AutoSubmitOnTimeEnd,
     bool ConfirmBeforeSubmit,
     string? ExamCode = null,
-    Guid? ExamTypeId = null);
+    Guid? ExamTypeId = null,
+    Dictionary<string, string>? AcademicFields = null,
+    bool CertificateEnabled = false,
+    int MinimumCertificateScorePercent = 80,
+    bool RestrictToAcademicScope = true);

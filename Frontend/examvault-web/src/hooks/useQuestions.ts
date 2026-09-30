@@ -5,6 +5,7 @@ import {
   listQuestionsBySection,
   listUnassignedQuestions,
 } from '../api/questionApi';
+import type { QuestionResponse } from '../types/question';
 
 export function useQuestions(examId: string | undefined) {
   return useQuery({
@@ -50,10 +51,38 @@ export function useQuestionCountsByExam(examIds: string[] | undefined) {
   return counts;
 }
 
+// Same fan-out as useQuestionCountsByExam, but keeps the full per-exam
+// question list (with each question's sectionId) instead of just a count -
+// used by Exam Type Wise Report's Section Performance page to join scored
+// questions back to the section they belong to. Same query key as
+// useQuestions/useQuestionCountsByExam, so it shares their cache entry
+// instead of re-fetching.
+export function useQuestionsByExamIds(examIds: string[] | undefined) {
+  const ids = examIds ?? [];
+  const queries = useQueries({
+    queries: ids.map((examId) => ({
+      queryKey: ['questions', 'byExam', examId],
+      queryFn: () => listQuestions(examId),
+    })),
+  });
+
+  const questionsByExam: Record<string, QuestionResponse[]> = {};
+  ids.forEach((examId, index) => {
+    questionsByExam[examId] = queries[index]?.data ?? [];
+  });
+  const isLoading = queries.some((q) => q.isLoading);
+  return { questionsByExam, isLoading };
+}
+
+// refetchOnWindowFocus is off by default here - EditQuestion.tsx holds live,
+// unsaved form edits keyed off this query's data, and a silent background
+// refetch (eg. from alt-tabbing) would otherwise blow away in-progress typing
+// the moment the new object reference flows through its populate-form effect.
 export function useQuestion(id: string | undefined) {
   return useQuery({
     queryKey: ['questions', id],
     queryFn: () => getQuestion(id!),
     enabled: !!id,
+    refetchOnWindowFocus: false,
   });
 }

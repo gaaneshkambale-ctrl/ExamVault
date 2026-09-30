@@ -12,4 +12,11 @@ public class QuestionSqlTestCase : BaseEntity
     public Guid QuestionId { get; set; }
     public string SetupSql { get; set; } = string.Empty;
     public int DisplayOrder { get; set; }
+
+    // Precomputed by running the reference query (ExamQuestion.SampleAnswer)
+    // against SetupSql when the admin saves the question - shown to students
+    // up front, before they run anything. Null when it hasn't been computed
+    // yet or the reference query failed to run (never a stale/hand-typed
+    // value - a save always recomputes it fresh).
+    public string? ExpectedOutput { get; set; }
 }

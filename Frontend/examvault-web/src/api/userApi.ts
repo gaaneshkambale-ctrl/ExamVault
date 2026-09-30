@@ -1,14 +1,19 @@
 import apiClient, { getRefreshToken } from './axiosClient';
 import type {
   ChangePasswordRequest,
+  ConfirmEmailRequest,
   CreateUserRequest,
+  ForgotPasswordRequest,
   LoginRequest,
   LoginResponse,
   RefreshTokenResponse,
   RegisterRequest,
   RegisterResponse,
+  ResendConfirmationEmailRequest,
   ResetPasswordRequest,
+  ResetPasswordWithTokenRequest,
   PlatformUserListItem,
+  StudentSummary,
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UserListItem,
@@ -25,6 +30,22 @@ export async function registerUser(request: RegisterRequest): Promise<RegisterRe
 export async function loginUser(request: LoginRequest): Promise<LoginResponse> {
   const { data } = await apiClient.post<LoginResponse>('/api/users/login', request);
   return data;
+}
+
+export async function forgotPassword(request: ForgotPasswordRequest): Promise<void> {
+  await apiClient.post('/api/users/forgot-password', request);
+}
+
+export async function resetPasswordWithToken(request: ResetPasswordWithTokenRequest): Promise<void> {
+  await apiClient.post('/api/users/reset-password-with-token', request);
+}
+
+export async function confirmEmail(request: ConfirmEmailRequest): Promise<void> {
+  await apiClient.post('/api/users/confirm-email', request);
+}
+
+export async function resendConfirmationEmail(request: ResendConfirmationEmailRequest): Promise<void> {
+  await apiClient.post('/api/users/resend-confirmation-email', request);
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<RefreshTokenResponse> {
@@ -112,6 +133,11 @@ export async function listAllUsers(): Promise<PlatformUserListItem[]> {
   return data;
 }
 
+export async function listStudents(): Promise<StudentSummary[]> {
+  const { data } = await apiClient.get<StudentSummary[]>('/api/users/students');
+  return data;
+}
+
 export async function getUser(id: string): Promise<UserListItem> {
   const { data } = await apiClient.get<UserListItem>(`/api/users/${id}`);
   return data;
@@ -132,7 +158,9 @@ export async function resetUserPassword(id: string, request: ResetPasswordReques
 }
 
 export async function changeMyPassword(request: ChangePasswordRequest): Promise<void> {
-  await apiClient.put('/api/users/me/password', request);
+  // This tab's own refresh token lets the server keep THIS session while
+  // signing out every other one after the password change.
+  await apiClient.put('/api/users/me/password', { ...request, refreshToken: getRefreshToken() });
 }
 
 export async function deleteUser(id: string): Promise<void> {

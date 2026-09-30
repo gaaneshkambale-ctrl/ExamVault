@@ -1,29 +1,32 @@
 import { useMemo, useState } from 'react';
 import { Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap';
-import AdminLayout from '../../layouts/AdminLayout';
+import RoleAwareLayout from '../../layouts/RoleAwareLayout';
+import SectionHeader from '../../components/SectionHeader';
 import ReportFilters from '../../components/reports/ReportFilters';
 import ReportStatCard from '../../components/reports/ReportStatCard';
 import LineTrendChart from '../../components/charts/LineTrendChart';
 import DonutChart from '../../components/charts/DonutChart';
 import ScoreDistributionChart from '../../components/ScoreDistributionChart';
-import { TargetIcon, CheckCircleIcon, UserCheckIcon, ArrowUpIcon, ArrowDownIcon, ActivityIcon } from '../../components/reports/ReportIcons';
+import { TargetIcon, CheckCircleIcon, UserCheckIcon, ArrowUpIcon, ArrowDownIcon, ActivityIcon, BookIcon } from '../../components/reports/ReportIcons';
 import { useExams } from '../../hooks/useExams';
+import { useStudents } from '../../hooks/useUsers';
 import { useAdminResultsForAllExams } from '../../hooks/useAdminResults';
 import { EXAM_CATEGORIES } from '../../types/exam';
 import { SCORE_BUCKETS } from '../../utils/scoreBuckets';
 import { bucketByDay, getDefaultRange, isWithinRange } from '../../utils/dateRange';
 import type { DateRange } from '../../utils/dateRange';
+import { buildExamSummaries, percentOf } from '../../utils/examSummary';
 import type { AdminAttemptResultResponse } from '../../types/result';
 
 const CATEGORY_COLORS = ['#4f46e5', '#f59e0b', '#22c55e', '#ef4444', '#06b6d4', '#8b5cf6'];
 
-function percentOf(r: AdminAttemptResultResponse): number {
-  return r.totalMarks > 0 ? (r.totalScore / r.totalMarks) * 100 : 0;
-}
-
 export default function ResultAnalytics() {
   const { data: exams } = useExams();
   const { data: allResults, isLoading } = useAdminResultsForAllExams(exams);
+  // Instructor-safe endpoint (no "Users - View" permission needed) - same
+  // reason ExamResults.tsx uses it for Exam Result's own Attempted/Absent,
+  // since Result Analytics is on both the Admin and Instructor sidebars.
+  const { data: students } = useStudents();
 
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [examFilter, setExamFilter] = useState('All');
@@ -113,8 +116,20 @@ export default function ResultAnalytics() {
       .sort((a, b) => b.value - a.value);
   }, [filteredResults, examById]);
 
+  // Export-only - the on-screen "Top Performing Exams" widget above keeps
+  // its own topPerformingExams (top 5 by average, 5 columns); this is the
+  // full exam-level summary (every exam with a result in the current
+  // filters, 14 columns including the authoritative Total Candidates/
+  // Attempted/Absent) the CSV export actually needs, per architecture:
+  // Result Analytics -> exam-level summary export, kept distinct from Exam
+  // Result's per-student roster and Detailed Exam Report's deep analytics.
+  const examSummaries = useMemo(
+    () => buildExamSummaries(filteredResults, allResults, exams ?? [], students ?? []),
+    [filteredResults, allResults, exams, students],
+  );
+
   return (
-    <AdminLayout active="Result Analytics">
+    <RoleAwareLayout active="Result Analytics">
       <h1 className="h4 fw-bold mb-1 text-primary">Result Analytics</h1>
       <p className="text-muted mb-4">Detailed analytics and insights of results.</p>
 
@@ -127,14 +142,38 @@ export default function ResultAnalytics() {
           setCategoryFilter('All');
         }}
         exportFilename="result-analytics"
-        exportHeaders={['Exam', 'Average %', 'Highest %', 'Pass %', 'Completed']}
+        exportHeaders={[
+          'Exam',
+          'Exam Code',
+          'Exam Type',
+          'Exam Date',
+          'Total Candidates',
+          'Submitted',
+          'Not Submitted',
+          'Submitted Attempts',
+          'Passed',
+          'Failed',
+          'Pass %',
+          'Average %',
+          'Highest %',
+          'Lowest %',
+        ]}
         exportRows={() =>
-          topPerformingExams.map((p) => [
-            p.exam?.title ?? p.examId,
-            Math.round(p.averageScore),
-            Math.round(p.highestScore),
-            Math.round(p.passPercent),
-            p.completed,
+          examSummaries.map((s) => [
+            s.examTitle,
+            s.examCode ?? '',
+            s.examType ?? '',
+            s.examDate ? new Date(s.examDate).toLocaleDateString() : '',
+            s.totalCandidates,
+            s.submitted,
+            s.notSubmitted,
+            s.submittedAttempts,
+            s.passed,
+            s.failed,
+            s.passPercent,
+            s.averagePercent,
+            s.highestPercent,
+            s.lowestPercent,
           ])
         }
       >
@@ -193,7 +232,7 @@ export default function ResultAnalytics() {
             <Col lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Score Distribution</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><TargetIcon /></span>} title="Score Distribution" />
                   <ScoreDistributionChart data={scoreDistribution} />
                 </Card.Body>
               </Card>
@@ -201,7 +240,7 @@ export default function ResultAnalytics() {
             <Col lg={6}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Pass/Fail Trend</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><ActivityIcon /></span>} title="Pass/Fail Trend" />
                   <LineTrendChart
                     series={[
                       { name: 'Pass %', color: '#22c55e', data: passFailTrend.passSeries, isPercent: true },
@@ -217,7 +256,9 @@ export default function ResultAnalytics() {
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body className="p-0">
-                  <h2 className="h6 fw-bold p-3 pb-2 mb-0">Top Performing Exams</h2>
+                  <div className="p-3 pb-0">
+                    <SectionHeader icon={<span className="text-primary d-flex"><UserCheckIcon /></span>} title="Top Performing Exams" />
+                  </div>
                   {topPerformingExams.length === 0 ? (
                     <div className="text-center text-muted py-5">No attempts match your filters.</div>
                   ) : (
@@ -250,7 +291,7 @@ export default function ResultAnalytics() {
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
                 <Card.Body>
-                  <h2 className="h6 fw-bold mb-3">Category-wise Performance</h2>
+                  <SectionHeader icon={<span className="text-primary d-flex"><BookIcon /></span>} title="Category-wise Performance" />
                   <DonutChart data={categoryPerformance} centerLabel="Attempts" />
                 </Card.Body>
               </Card>
@@ -258,6 +299,6 @@ export default function ResultAnalytics() {
           </Row>
         </>
       )}
-    </AdminLayout>
+    </RoleAwareLayout>
   );
 }

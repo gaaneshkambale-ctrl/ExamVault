@@ -42,6 +42,7 @@ public class UpdateMyProfileHandler
         user.DateOfBirth = command.DateOfBirth;
         user.Location = string.IsNullOrWhiteSpace(command.Location) ? null : command.Location.Trim();
         user.Department = string.IsNullOrWhiteSpace(command.Department) ? null : command.Department.Trim();
+        user.Designation = string.IsNullOrWhiteSpace(command.Designation) ? null : command.Designation.Trim();
 
         await _userRepository.SaveChangesAsync(cancellationToken);
 

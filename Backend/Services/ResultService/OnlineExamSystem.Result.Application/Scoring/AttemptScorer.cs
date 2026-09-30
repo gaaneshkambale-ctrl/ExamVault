@@ -83,10 +83,14 @@ public static class AttemptScorer
             }
             else if (isOptionAnswered)
             {
+                // A question's own negative marks (set when it was copied in from the
+                // Question Bank) win over the section/exam setting - even over "off".
                 var (negativeMarkingEnabled, negativeMarks) =
-                    question.SectionId is { } sectionId && sectionsById.TryGetValue(sectionId, out var section)
-                        ? (section.NegativeMarkingEnabled, section.NegativeMarks)
-                        : (examNegativeMarkingEnabled, examNegativeMarks);
+                    question.NegativeMarks is { } ownNegativeMarks
+                        ? (true, ownNegativeMarks)
+                        : question.SectionId is { } sectionId && sectionsById.TryGetValue(sectionId, out var section)
+                            ? (section.NegativeMarkingEnabled, section.NegativeMarks)
+                            : (examNegativeMarkingEnabled, examNegativeMarks);
                 optionMarksAwarded = negativeMarkingEnabled ? -negativeMarks : 0;
             }
             else
