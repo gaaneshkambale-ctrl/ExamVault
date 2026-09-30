@@ -55,13 +55,6 @@ const groupIcons: Record<string, ReactNode> = {
       <line x1="16" y1="17" x2="8" y2="17" />
     </>
   ),
-  questions: (
-    <>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </>
-  ),
   submissions: (
     <>
       <path d="M9 11l3 3L22 4" />
@@ -177,13 +170,6 @@ const childIcons: Record<string, ReactNode> = {
       <polygon points="12 2 2 7 12 12 22 7 12 2" />
       <polyline points="2 17 12 22 22 17" />
       <polyline points="2 12 12 17 22 12" />
-    </>
-  ),
-  database: (
-    <>
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
     </>
   ),
   link: (
@@ -358,11 +344,9 @@ const navGroups: NavGroup[] = [
       { key: 'exams-all', label: 'All Exams', path: '/platform/exams', icon: childIcons.list },
       { key: 'exams-categories', label: 'Exam Categories', path: '/platform/exams/categories', icon: childIcons.tag },
       { key: 'exams-sections', label: 'Sections', path: '/platform/exams/sections', icon: childIcons.layers },
-      { key: 'exams-question-bank', label: 'Question Bank', path: '/platform/exams/question-bank', icon: childIcons.database },
       { key: 'exams-tags', label: 'Tags', path: '/platform/exams/tags', icon: childIcons.tag },
     ],
   },
-  { key: 'questions', label: 'Questions', path: '/platform/questions', icon: groupIcons.questions },
   { key: 'submissions', label: 'Submissions', path: '/platform/submissions', icon: groupIcons.submissions },
   {
     key: 'subscriptions',

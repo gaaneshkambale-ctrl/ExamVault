@@ -24,12 +24,10 @@ public interface IQuestionRepository
         bool unassignedOnly = false,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Every question across every tenant/exam - Super Admin platform-wide
-    /// browse only. Relies on QuestionDbContext's own IsSuperAdmin query-filter bypass
-    /// for cross-tenant scoping. No exam titles here - QuestionService has no Exams
-    /// table of its own (different database/service); the frontend joins ExamId
-    /// against the platform's own already-fetched cross-tenant exam list instead.</summary>
-    Task<IReadOnlyList<ExamQuestion>> GetAllQuestionsAsync(CancellationToken cancellationToken = default);
+    /// <summary>Per-tenant question counts (exam questions + Question Bank questions) - Super Admin
+    /// usage view. Relies on QuestionDbContext's own IsSuperAdmin query-filter bypass for
+    /// cross-tenant scoping; returns counts only, never question content.</summary>
+    Task<IReadOnlyList<TenantQuestionCount>> GetQuestionCountsByTenantAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Sets SectionId on every given question. Pass a null sectionId to unassign.</summary>
     Task BulkSetSectionIdAsync(
@@ -98,3 +96,5 @@ public interface IQuestionRepository
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }
+
+public record TenantQuestionCount(Guid TenantId, int ExamQuestionCount, int BankQuestionCount);

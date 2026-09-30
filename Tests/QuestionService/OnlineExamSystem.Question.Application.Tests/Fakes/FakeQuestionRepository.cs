@@ -62,8 +62,12 @@ public class FakeQuestionRepository : IQuestionRepository
             query.OrderByDescending(q => q.CreatedAtUtc).ToList());
     }
 
-    public Task<IReadOnlyList<ExamQuestion>> GetAllQuestionsAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<ExamQuestion>>(_questions.OrderByDescending(q => q.CreatedAtUtc).ToList());
+    // Exam questions only - the fake has no Question Bank, so the bank count is always 0.
+    public Task<IReadOnlyList<TenantQuestionCount>> GetQuestionCountsByTenantAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TenantQuestionCount>>(_questions
+            .GroupBy(q => q.TenantId)
+            .Select(g => new TenantQuestionCount(g.Key, g.Count(), 0))
+            .ToList());
 
     public Task BulkSetSectionIdAsync(
         Guid? sectionId,

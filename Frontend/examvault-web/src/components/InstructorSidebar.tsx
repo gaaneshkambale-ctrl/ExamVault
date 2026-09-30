@@ -6,6 +6,11 @@ import BrandMark from './BrandMark';
 export type InstructorNavItem =
   | 'Dashboard'
   | 'Exams'
+  | 'Question Bank'
+  | 'All Questions'
+  | 'My Questions'
+  | 'Subjects & Topics'
+  | 'Tags'
   | 'Scheduled Exams'
   | 'Live Monitoring'
   | 'Active Exams'
@@ -48,6 +53,16 @@ const navItems: NavItem[] = [
     label: 'Exams',
     path: '/admin/exams',
     children: [{ label: 'Scheduled Exams', path: '/admin/exams/scheduled' }],
+  },
+  {
+    label: 'Question Bank',
+    path: '/admin/question-bank',
+    children: [
+      { label: 'All Questions', path: '/admin/question-bank' },
+      { label: 'My Questions', path: '/admin/question-bank/mine' },
+      { label: 'Subjects & Topics', path: '/admin/question-bank/subjects' },
+      { label: 'Tags', path: '/admin/question-bank/tags' },
+    ],
   },
   {
     label: 'Live Monitoring',
@@ -103,6 +118,13 @@ const iconPaths: Partial<Record<InstructorNavItem, ReactNode>> = {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
+    </>
+  ),
+  'Question Bank': (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </>
   ),
   'Scheduled Exams': (

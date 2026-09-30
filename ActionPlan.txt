@@ -16951,3 +16951,453 @@ IMPLEMENTED 2026-09-26 (user approved A-D):
     all compose services + traefik running. Failure -> GitHub emails.
  Tests: +6 ErrorSpikeCheckTests.
  B (external uptime monitor) and E (GitHub failure emails) are user steps.
+
+========================================================================
+PLAN (2026-09-30) - Admin-side Question Bank (moves ownership platform -> org)
+========================================================================
+FINDINGS (what exists today)
+ - Question Service stores ONLY per-exam questions (ExamQuestion: ExamId,
+   SectionId, type, text, marks, difficulty, options, code/SQL test cases).
+   There is NO reusable bank: a question cannot exist outside an exam, and
+   cannot be reused across exams. So the "Question Bank" is a NEW entity,
+   not a rename.
+ - Super Admin "Question Bank" (/platform/exams/question-bank) and
+   "Questions" (/platform/questions) are read-only cross-tenant browsers
+   over GET /api/questions/all (SuperAdmin). They are NOT a bank.
+ - Already have: CSV import (CsvImportPanel/csvQuestionImport), AI generate
+   (AiGenerateQuestion + preview), 8 question types, Easy/Med/Hard, marks,
+   sections, ExamType, groups, bulk student import, audit log, proctoring
+   settings, notifications, results/analytics/reports, org settings.
+ - NOT present: Program/Department/Semester/Division/Subject/Topic/Tags,
+   question status (Draft/Active/Archived), usage count, duplicate,
+   bulk archive, random selection rules, negative marks per question,
+   feature flags, global search, action center.
+ - Snapshot problem is already solved by design: exam questions are COPIES
+   (ExamQuestion rows). Bank -> exam must keep copying, never linking, and
+   store SourceBankQuestionId only for usage count / traceability.
+
+DECISIONS (adopting the proposed architecture)
+ - New BankQuestion aggregate (TenantScoped): SubjectId (required),
+   TopicId (optional), type, text, explanation, difficulty, DefaultMarks,
+   NegativeMarks, Status (Draft/Active/Archived), CreatedBy/UpdatedBy/At,
+   + same option/test-case child tables as ExamQuestion (reuse shapes).
+   NO Program/Semester/Division on the question.
+ - Subject/Topic/Tag are tenant tables owned by Question Service (lightweight
+   Subject list first; the full Program->Department->Semester->Division
+   academic structure is a SEPARATE later track, see Track 2). Subject gets
+   optional ProgramId/DepartmentId/SemesterId nullable columns later - no
+   rework of questions needed.
+ - Copy-on-add: "Add to exam" copies bank question -> ExamQuestion
+   (+ SourceBankQuestionId). Editing bank later never changes an exam.
+ - Existing per-exam "Create Question" keeps working (unchanged) so nothing
+   regresses; "Save to bank" checkbox can come in Q6.
+ - SuperAdmin: remove sidebar entries + routes for platform Question Bank /
+   Questions ONLY AFTER Q1-Q3 ship. Keep GET /api/questions/all endpoint
+   until then. No data deleted (ExamQuestion rows are live exam content).
+   Tenant-isolation: every bank query filtered by TenantId (global filter
+   like the other entities) + test.
+
+TRACK 1 - QUESTION BANK (implement one at a time; each independently
+verifiable; each ends with build + tests + browser check per standing rule)
+ Q1  Backend foundation: Subject, Topic, Tag, BankQuestion (+options,
+     test cases) entities + migration + repo + CRUD endpoints
+     /api/question-bank/** (Admin,Instructor; delete Admin) with
+     permission policies, audit log entries, tenant-isolation tests.
+ Q2  Admin UI: sidebar "Question Bank" group -> All Questions, My Questions,
+     Subjects, Topics, Tags. List w/ search, pagination, filters (subject,
+     topic, type, difficulty, status, tags). Create/Edit/Preview/Details
+     reusing CreateQuestionModal + validation.
+ Q3  Add-to-exam: in exam/section builder "Add from Question Bank" picker
+     (filter by subject/topic/difficulty, multi-select, copy into exam,
+     backend re-validates marks/type). Usage count shown on bank list.
+ Q4  Lifecycle & bulk: Draft/Active/Archived, duplicate, bulk archive,
+     only Active selectable for exams.
+ Q5  Import into bank: reuse CSV import + add XLSX; validate -> preview ->
+     import with per-row errors. AI Generate saves into bank (Draft).
+ Q6  Random selection: per-exam rules (topic + difficulty + count) plus
+     fixed+random mix; resolved to concrete copied questions at publish
+     time (so each exam is still a snapshot). Negative marks per question.
+ Q7  SuperAdmin cleanup: remove platform Question Bank/Questions pages,
+     routes, sidebar links, and GET /all (after confirming Q1-Q3 live).
+     Keep a per-tenant question COUNT on Tenant details (usage).
+
+TRACK 2 - ACADEMIC STRUCTURE (prereq for Program/Dept/Semester filters and
+eligibility; big, separate ask - plan on its own before starting)
+ A1 Program, Department, Semester, Division, Subject master data (Admin UI)
+ A2 Student academic profile (program/dept/semester/division/roll/year)
+ A3 Exam academic scope -> auto-eligible students; backend re-validates
+ A4 Wire Question Bank subject filter to Subject master.
+
+TRACK 3 - OTHER FEATURES FROM THE SUGGESTION LIST (coverage check)
+ Already covered (verify only when touched): exam wizard, sections,
+   proctoring/security settings, shuffle, scheduling+states, assignments,
+   attempt auto-save/resume, results+rank+publish, analytics/reports (PDF),
+   attendance, notifications, audit log, org settings + branding,
+   user mgmt + bulk import, usage/limits.
+ To ADD (new, in priority order; each needs its own plan before code):
+   T1 Per-question analytics (correct/incorrect/unanswered %)
+   T2 Excel export of reports (PDF/CSV partly exist)
+   T3 Admin dashboard "Action Center"
+   T4 Feature flags per tenant (AI, coding, random questions, ...)
+   T5 Global search
+   T6 Excel (XLSX) student import if only CSV exists today - verify first
+ Not adding now: WhatsApp/SMS channels, certificates, full proctoring.
+
+Status: PLANNED - awaiting user OK. Suggested start: Q1 (backend).
+Open questions for user: (1) Instructor sees/edits ALL tenant questions or
+only own ("My Questions" = filter, not a permission boundary)? default:
+all tenant questions visible, edit own + Admin edits any. (2) Subject master
+now as a simple list (Q1) and academic hierarchy later (Track 2)? default: yes.
+
+Q1 DONE (2026-09-30) - Question Bank backend (uncommitted, awaiting review):
+ - Question Service: new tables BankSubjects/Topics/Tags/Questions/
+   QuestionOptions/QuestionTags (migration AddQuestionBank, purely additive;
+   per-tenant unique names; tenant query filter on every table; Restrict FKs
+   so a subject/topic/tag can't vanish under questions).
+ - API /api/question-bank/{subjects,topics,tags,questions} (Admin+Instructor
+   + Feature:Exams; create=Questions-Create, edit=Questions-Edit; deletes
+   Admin-only). Instructor edits only own questions, Admin any; "mine=true"
+   is a filter only. List: search, subject/topic/type/difficulty/status/tag,
+   mine, pagination (page size capped 100). Audit-logged ("Question Bank").
+   Students cannot reach it (403) - exams will get COPIES in Q3.
+ - Gateway: new question-bank-route -> questions-cluster (appsettings.json
+   only; Docker/bicep override clusters, not routes - no other target).
+ - Types bankable in Q1: Single Choice, Multiple Choice, True/False
+   (Code/Programming deferred - needs test-case/driver shapes; do with Q3).
+ - Also fixed: Question API appsettings.Development.json lacked
+   Services:UserServiceBaseUrl (service wouldn't start locally).
+ - Creator-name lookup (User Service) is best-effort: if down, names are
+   omitted, never a 500 (found by test - a write had succeeded then 500'd).
+ - Verified: full sln build 0 warn/0 err; all test projects pass (Question
+   68, +14 new QuestionBankServiceTests); live smoke against local SQL:
+   33/33 checks incl. cross-tenant isolation (tenant B cannot see/edit/
+   delete/file under tenant A), student 403, anonymous 401, ownership 403.
+   NOT verified: through the Gateway/browser (no UI yet), Docker/prod.
+ NEXT: Q2 (Admin UI).
+
+Q2 CODE COMPLETE (2026-09-30) - Question Bank Admin UI (uncommitted; NOT yet
+verified in a real browser):
+ - Sidebar (Admin + Instructor): new "Question Bank" group -> All Questions
+   (/admin/question-bank), My Questions (/mine), Subjects & Topics
+   (/subjects), Tags (/tags). Topics live inside the Subjects page (expand a
+   subject) instead of a separate page - simpler than the original 5-item plan.
+ - Pages: QuestionBank (search debounced, subject/topic/type/difficulty/
+   status/tag filters, clear, pagination w/ page size, view modal, delete
+   Admin-only, edit = own for Instructor / any for Admin), QuestionBankSubjects
+   (subject + topic CRUD, server 409 reasons shown), QuestionBankTags.
+   QuestionBankFormModal = create/edit (subject/topic, type, options editor,
+   marks/negative marks, status, tags, explanation, shuffle; client
+   validation mirrors the server's).
+ - Verified: npm run build (tsc -b + vite) OK, oxlint no new warnings,
+   vitest 221/221. Backend API already smoke-tested in Q1.
+ - NOT verified: real-browser click-through through the Gateway (needs the
+   full local stack + a login). No frontend unit tests added for the new pages.
+
+Q2 VERIFIED IN A REAL BROWSER (2026-09-30, Chrome extension; still uncommitted):
+ Stack: throwaway User(:15010)+Question(:15030) APIs on separate Verify DBs
+ behind the real Gateway(:5000) + vite(:5173); Docker Desktop's containers on
+ 5010/5030 etc. were left untouched. Torn down + Verify DBs dropped after.
+ Clicked through as Admin: login -> sidebar "Question Bank" group -> All
+ Questions / My Questions / Subjects & Topics / Tags all navigate; add subject,
+ add topic (counts update, subject stays open), add tag; Add Question (empty
+ submit shows validation list; remove-option; tag toggle; marks/negative);
+ list row shows subject/topic/tag/marks(-0.5)/status/creator; View modal;
+ Edit prefilled -> saved (Hard/Archived); filters (subject enables topic,
+ status, combined, empty state, Clear); delete-subject blocked with the
+ server's 409 message shown in the dialog; delete-question confirm dialog.
+ As Instructor: dashboard sidebar has the group; sees Admin's question with
+ View only; adds a True/False question (correct=False stored correctly) and
+ then gets View+Edit (no delete) on it, View only on the Admin's.
+ Found+fixed: "Archived" badge was dark-on-dark (now warning).
+ Not clicked through: actual question delete (dialog only; API delete was
+ tested in Q1), Instructor 403 UI paths beyond hidden buttons, pagination
+ beyond 1 page (2 rows total), rename topic/edit subject dialogs.
+ Env notes: on a brand-new DB the first request burst can hit a SQL
+ connect timeout (retry works); saves take ~3-5 s locally when
+ Notification Service is down (audit call waits on its connect timeout);
+ Gateway Development config lacks Jwt:Issuer/Audience/SigningKey - needed
+ env vars to start it locally.
+ NEXT: Q3 (add-from-bank picker in exam/section builder).
+
+Q3 DONE + VERIFIED IN A REAL BROWSER (2026-09-30; uncommitted) - Add from Question Bank:
+ - Backend: ExamQuestion.SourceBankQuestionId (nullable, indexed, NOT a FK;
+   migration AddExamQuestionSourceBankQuestion, additive). POST
+   /api/question-bank/add-to-exam {examId, sectionId?, bankQuestionIds[<=100]}
+   (Admin/Instructor + Feature:Exams + Questions-Create): COPIES each Active
+   bank question (+options) into an ExamQuestion; skips (with reason) Draft/
+   Archived/missing/already-in-that-exam ones; returns {added, skipped,
+   createdQuestionIds}; audit-logged. Bank list gains usageCount (exam
+   questions copied from it, tenant-wide) and, when listed with ?examId=,
+   inExam. Editing/deleting a bank question never touches exam copies.
+ - Frontend: AddFromBankModal (search, subject/topic/type/difficulty filters,
+   Active-only, paging, multi-select, "Already in this exam" disabled rows,
+   "Used" count) wired into the section builder's Question Assignment step
+   ("+ From Question Bank"); copies land in the exam's unassigned pool and are
+   pre-selected so they attach to the section on save. Bank list gets a
+   "Used In" column.
+ - Tests: +5 service tests (copy fields/options/section, edit-after-copy
+   independence, skip reasons, other-exam reuse, input limits); Question 73,
+   full sln build 0 warn/0 err, all test projects green, vitest 221, oxlint
+   clean for touched files.
+ - Browser (throwaway User/Exam/Question APIs + Gateway + vite on shifted
+   ports, Verify DBs, all torn down/dropped): picker shows only the 2 Active
+   questions (Draft hidden) -> select both -> "Add 2 to Exam" -> they appear
+   pre-selected in Available Questions -> reopening shows "Already in this
+   exam"/disabled/"1x" -> Save Section -> sections list shows 2 questions,
+   4 marks; DB confirms both copies have the SectionId, SourceBankQuestionId
+   and 2 options each; bank list shows "1 exam question(s)" on both.
+ - Known gaps / decisions:
+   * Code/Programming bank questions NOT done here (need test-case/driver
+     shapes + Execution-service expected-output plumbing) -> new step Q3b.
+   * Bank NegativeMarks is not carried to the exam copy: ExamQuestion has no
+     per-question negative marks and grading doesn't read one -> lands in Q6.
+   * Exam id isn't verified against Exam Service (same as POST /api/questions
+     today; adding a lookup would add a new Services:ExamServiceBaseUrl config
+     to 3 targets - see three-config-targets). Rows are still tenant-scoped.
+   * Not clicked: adding from an Instructor login, picker pagination >1 page,
+     the exam-level (non-section) entry point - there is none yet.
+ NEXT: Q4 (lifecycle & bulk: duplicate, bulk archive) - or Q3b first if you
+ want code questions in the bank before moving on.
+
+Q3b DONE + VERIFIED IN A REAL BROWSER (2026-09-30; uncommitted) - Code/Programming
+questions in the Question Bank:
+ - Storage: BankQuestion.CodeSpecJson (nvarchar(max), nullable; migration
+   AddBankQuestionCodeSpec, additive). One JSON document holds language,
+   starter/sample code, function signature, parameters, test cases (stored in
+   the exact ExamQuestion child-row shapes) and Sql setups + precomputed
+   expected output. Chosen over 3 mirror tables: nobody queries inside it.
+ - Validation REUSES CreateQuestionValidator (the exam-question rules) by
+   mapping the bank command onto CreateQuestionCommand, so language /
+   signature / test-case-arity / Sql-reference-query rules cannot drift.
+   Code details are required on CodeProgram and rejected on other types;
+   options must be empty for code.
+ - Sql expected output is precomputed on save with the caller's own token via
+   the existing SqlExpectedOutputPopulator (best-effort: saves without it if
+   Execution Service is unreachable/no token) and carried into exam copies.
+ - Add-to-exam copies a code bank question into ExamQuestion + parameters +
+   test cases + Sql test cases (ExamCopy record; repo AddExamCopiesAsync now
+   takes it). API request/response reuse the flat exam-question code fields.
+ - Frontend: bank form gains "Code / Programming" (BankCodeFields reusing
+   FunctionSignatureEditor + SqlTestCaseEditor; utils/bankCode.ts holds the
+   form<->request conversions), Edit prefills, view dialog shows language /
+   signature / test-case count, picker lists code questions.
+ - Tests: +8 service tests (round-trip, rule reuse, code-required/rejected,
+   Sql precompute w/ token + no-token, copy of function question incl. params/
+   test cases, copy of Sql question incl. expected output, code->choice switch
+   drops spec; obsolete "not bankable" test removed) -> Question 80; +4 vitest
+   (bankCode conversions) -> 225; full sln build 0 warn/0 err, all projects
+   green, npm build OK, oxlint clean for touched files.
+ - Browser (throwaway stack, Verify DBs, torn down): created a Python
+   function question via the form (language, starter, sample answer, signature
+   arr:IntArray -> Int, test case 12,35,1,10,34,1 -> 34); Edit re-opened with
+   every field/param/test case intact; created a Sql question (reference
+   query + setup SQL); both listed as "Code / Programming"; picker -> select
+   all -> Add 2 -> Save Section; DB shows both copies in the section with
+   SourceBankQuestionId, function/return type/AllowLanguageChange, 1 parameter,
+   1 test case ([[12,35,1,10,34,1]] -> 34) and 1 Sql test case; the copied
+   Sql question renders in the existing exam question detail page.
+ - NOT verified: Sql expected-output precompute against a REAL Execution
+   Service (not in the throwaway stack - only the no-service fallback was
+   exercised live; the with-token path is unit-tested with a fake client);
+   a student actually running/auto-grading a copied code question; Instructor
+   creating code bank questions; view dialog for a code question (opened the
+   exam-side detail page instead).
+ - Note: CodeFormState conversions now exist in utils/bankCode.ts AND inline in
+   CreateQuestionModal/EditQuestion - a later cleanup could point those two at
+   the shared helpers (left alone to avoid regressing verified flows).
+ NEXT: Q4 (duplicate, bulk archive; also natural home for "archive instead of
+ delete").
+
+Q4 DONE + VERIFIED IN A REAL BROWSER (2026-09-30; uncommitted) - Duplicate + bulk status:
+ - Status Draft/Active/Archived and "only Active is addable to an exam" already
+   existed (Q1/Q3); Q4 adds the remaining lifecycle actions. No migration.
+ - POST /api/question-bank/questions/{id}/duplicate (Questions-Create): Draft
+   copy OWNED BY THE CALLER (an Instructor can copy a colleague's question
+   and edit their own version), text + " (copy)" (truncated so it still fits
+   2000), same options/tags/marks/negative marks/explanation/code spec (Sql
+   expected output carried over). Original untouched. Audit-logged.
+ - POST /api/question-bank/questions/bulk-status {ids<=100, status}
+   (Questions-Edit): Archived/Active/Draft; per item an Instructor may only
+   change their own - others come back in `skipped` with a reason, missing ids
+   likewise, the batch never fails on them; bad status/empty/oversize -> 400.
+ - UI (QuestionBank page): row checkboxes + select-all-on-page (only rows the
+   caller may edit are selectable), bulk bar "N selected: Archive / Set Active
+   / Move to Draft / Clear", result notice (with skipped count), Duplicate
+   icon on every row that opens the copy in the edit dialog. Selection clears
+   on any filter/page change.
+ - Tests: +10 service tests (duplicate fields/owner/tags/code spec/truncation/
+   not-found, bulk update + editor stamp, Instructor skip vs Admin, missing ids,
+   validation, archived-not-addable-until-reactivated) -> Question 90; full
+   sln build 0 warn/0 err, all projects green, vitest 225, npm build OK,
+   oxlint clean for touched files.
+ - Browser (throwaway User+Question APIs, Gateway, vite; Verify DBs dropped):
+   Admin selected 2 rows -> Archive -> notice + badges; Duplicate -> Draft
+   "(copy)" row, edit dialog opened (2 of 3 tries - see gap); Instructor:
+   select-all picked ONLY their own 2 rows, admin rows unselectable, no
+   Edit on foreign rows, Duplicate of Admin's question made a copy created
+   by the Instructor, bulk Archive of own 2 worked and the Admin's stayed
+   Active. API check as Instructor: bulk-status on an Admin question ->
+   updated=0 skipped=1 ("You can only change questions you created.") and the
+   row stayed Active; status "Deleted" -> 400.
+ - Gaps: on ONE of three Duplicate clicks the copy + success notice appeared but
+   the edit dialog did NOT auto-open (could not reproduce; the other two and the
+   Instructor one opened it) - cause unknown, worth a glance if seen again.
+   Not tested: bulk on >1 page, "Move to Draft"/"Set Active" clicked in the UI
+   (same code path as Archive), Set Active on a code question.
+ NEXT: Q5 (import into the bank: CSV + XLSX with preview; AI Generate saving
+ into the bank as Drafts).
+
+Q5 DONE + VERIFIED IN A REAL BROWSER (2026-09-30; uncommitted) - Import + AI Generate into the bank:
+ - NO backend change and NO new dependency: import creates questions through
+   the existing POST /api/question-bank/questions (so the server's validation
+   applies per row); read-excel-file was already a dependency (bulk user
+   import, f8d4a1b) - same '/browser' entry point. npm audit --omit=dev
+   --audit-level=high (CI's gate): 0 vulnerabilities.
+ - Import (Question Bank > "Import"): BankImportModal picks Subject (required),
+   Topic (optional) and "Import as" Draft/Active ONCE for the file, then the
+   existing CsvImportPanel (generalised with a `bank` destination; exam use
+   unchanged) does upload -> per-row validation -> preview -> select ->
+   import. Accepts .csv AND .xlsx (first sheet -> rowsToCsv -> the same
+   parsers; real Excel booleans become "True"/"False"; .xls rejected with a
+   clear message). Standard and Code/Programming formats both supported.
+   Bank import runs in batches of 5; rows that already imported are removed
+   from the preview on partial failure so a retry can't duplicate them.
+   Changing subject/topic/status resets the panel (a file is never imported
+   under the wrong choices).
+ - AI Generate (Question Bank > "AI Generate", route
+   /admin/question-bank/ai-generate): Subject (required) + Topic + free-text
+   "what to cover" (defaults to subject/topic name), count 1-50, types,
+   difficulty, extra instructions -> existing POST /api/ai/generate-questions
+   with source TopicText and examId null (AI service already allowed this) ->
+   the existing preview page, now with a `bank` branch: approved drafts are
+   saved to the bank as DRAFTS in that subject/topic, button reads "Add
+   Selected to Bank as Drafts (n)", returns to the bank. Exam flow untouched.
+ - Tests: +6 vitest (rowsToCsv quoting/booleans/dates + output accepted by the
+   real CSV parser; the 3 bank request mappings) -> 231; full sln build 0
+   warn/0 err, all dotnet projects green (Question 90); npm build OK; oxlint
+   clean for touched files.
+ - Browser (throwaway User+Question APIs, Gateway, vite, plus a STUB for the AI
+   endpoint on :15040; Verify DBs dropped): uploaded a real .xlsx (4 rows) ->
+   preview 2 valid / 2 invalid with per-row reasons -> imported the 2 as Draft
+   (DB: topic Normalization, status Draft, correct options incl. True/False
+   from boolean cells) and rows left the preview; uploaded a .csv (quoted
+   comma) -> imported as Active (status Active); AI page validation error,
+   generate -> preview of 3 drafts -> unticked one -> "Add Selected ... (2)" ->
+   2 Draft rows in the bank (topic + marks correct); the stub log showed the
+   request was source TopicText with examId null.
+ - NOT verified: the REAL AI generation (the throwaway stack used a stub - the
+   real one calls an external n8n webhook; that code is unchanged); Code/
+   Programming CSV import into the bank in the browser (mapping unit-tested;
+   the parsing path is the existing one); an Instructor doing import/AI; very
+   large files; .xlsx with multiple sheets (only the first is read).
+ - Observed, unexplained: right after approving AI drafts one tab-context read
+   showed /admin/live-monitoring/active-exams for a moment; the final page was
+   /admin/question-bank with the new rows (likely a stale reading, not seen again).
+ - Pre-existing CSV-format quirks noticed (not changed): "Multiple Choice" is an
+   alias for single choice and multi-select cannot be imported via CSV at all.
+ NEXT: Q6 (random selection rules for exams + per-question negative marks);
+ Q7 (remove the Super Admin Question Bank/Questions pages + GET /all).
+
+Q6 DONE + VERIFIED (2026-09-30; uncommitted) - Random draw + per-question negative marks:
+ A. PER-QUESTION NEGATIVE MARKS
+  - ExamQuestion.NegativeMarks decimal(5,2)? (migration AddExamQuestionNegativeMarks,
+    additive/nullable). Null = inherit the section/exam setting. Set when a bank
+    question is copied into an exam: bank NegativeMarks > 0 -> copied; 0 -> null
+    ("none set"), so a bank question left at 0 still inherits the exam's setting
+    (a bank question can therefore not force "no penalty" inside an exam that
+    penalises - intentional simplification).
+  - Flows through QuestionResponse.NegativeMarks (also the internal answer-key
+    the Result service fetches) -> AnswerKeyQuestion.NegativeMarks -> AttemptScorer:
+    for a WRONG ANSWERED choice question, the question's own value wins over the
+    section's and the exam's (even over "negative marking off"); unanswered and
+    code questions are never penalised; total still floors at 0. Old<->new
+    service versions during a rolling deploy are safe (field is optional both ways).
+  - UI: QuestionDetails shows "Negative marks: -x" when set. There is still no
+    field to type it on a hand-made exam question - it only comes from the bank.
+ B. RANDOM DRAW
+  - POST /api/question-bank/random-preview {examId, rules[]} -> per rule
+    {requested, available}; POST /api/question-bank/add-random-to-exam
+    {examId, sectionId?, rules[]} (Questions-Create). Rule = subject (required)
+    + optional topic/type/difficulty + count. <=10 rules, <=100 questions total.
+    Candidates = ACTIVE bank questions matching the rule that are NOT already in
+    the exam (anti-join in SQL); questions are shuffled, each handed out once
+    across rules, then copied through the same path as a hand-picked add (so they
+    are fixed ExamQuestion snapshots - every student gets the same paper; this is
+    NOT per-student randomisation). ALL-OR-NOTHING: if any rule cannot be filled,
+    nothing is added and each shortfall is reported ("Rule 2: only 2 matching
+    Active question(s) available, 5 requested."). Audit-logged.
+  - UI: AddFromBankModal gets tabs "Pick questions" | "Random draw"; RandomDrawPanel
+    has one row per rule (subject/topic/type/difficulty/count), live "N available"
+    badges (green/red), total, and a "Draw & Add N to Exam" button disabled when a
+    rule is short/incomplete/over 100. Drawn questions land in the exam pool
+    pre-selected, exactly like the manual picker, so fixed + random mix freely.
+ - Tests: +13 Question service tests (draw count/distinct, filters, only Active,
+   never re-picks, atomic shortfall, overlapping rules, section + mix with picked,
+   validation, preview, negative-marks copy rule) -> Question 103; +6 Result scorer
+   tests (override beats exam-off / bigger exam value / section; inherit when null;
+   unanswered never penalised; mix) -> Result 41. Full sln build 0 warn/0 err,
+   all dotnet green, vitest 231, npm build OK, oxlint clean for touched files.
+ - Browser + real SQL (throwaway User/Exam/Question APIs + Gateway + vite; Verify
+   DBs dropped): Random draw tab -> rule 1 DBMS/Easy/4 (badge "6 available"), rule
+   2 DBMS/Hard/5 (badge red "3 available", warning shown) -> lowered to 3 ->
+   "Draw & Add 7" -> 7 questions (4 random of 6 Easy + all 3 Hard) appeared
+   pre-selected -> saved section (7 questions/14 marks). DB: all 7 copies in the
+   section; NegativeMarks 0.50 on the two Easy ones whose bank value was 0.5, NULL
+   on the two whose bank value was 0, 0.25 on all Hard. Internal answer-key JSON
+   returned the same negativeMarks per question. Afterwards: preview = Easy 2 /
+   Hard 0 / any 2 available (anti-join works); an oversize draw -> 400 with one
+   message per short rule and NOTHING added (still 7 questions); bad difficulty
+   -> 400.
+ - NOT verified: a real student attempt scored end-to-end through Submission +
+   Result services (the throwaway stack didn't include them - the scorer is unit
+   tested and the data feeding it was checked on the wire); the Random draw tab
+   as an Instructor; a draw into a specific section from an existing section's
+   edit page; multi-rule with topic/type filters in the browser (unit-tested).
+ NEXT: Q7 - remove the Super Admin "Question Bank" / "Questions" pages, routes,
+ sidebar links and GET /api/questions/all (keep a per-tenant question count on
+ Tenant details).
+
+Q7 DONE (2026-09-30; uncommitted) - Super Admin question pages removed, per-org counts kept.
+ REMOVED
+  - Frontend: pages/platform/PlatformQuestionBank.tsx + PlatformQuestions.tsx,
+    their sidebar entries (Exams > "Question Bank", top-level "Questions") and the
+    two now-unused icons, api listAllQuestions, type PlatformQuestionResponse.
+    Routes /platform/exams/question-bank and /platform/questions now redirect
+    (<Navigate replace>) to /platform/exams so old bookmarks don't 404.
+  - Backend: GET /api/questions/all, ListAllQuestionsHandler/Query,
+    IQuestionRepository.GetAllQuestionsAsync, PlatformQuestionResponse contract,
+    and the QuestionsController's IInternalUserLookupClient (only that endpoint
+    used it). No data deleted - exam questions and the bank are untouched.
+ ADDED (replacement, counts only - the platform console can no longer read any
+ organization's question CONTENT)
+  - GET /api/questions/counts-by-tenant (SuperAdmin only) -> [{tenantId,
+    examQuestionCount, bankQuestionCount}] via GetTenantQuestionCountsHandler +
+    IQuestionRepository.GetQuestionCountsByTenantAsync (group-by on the
+    SuperAdmin query-filter bypass). Routed by the Gateway's existing
+    /api/questions/** route - no config change.
+  - OrganizationDetails: "Exam Questions" and "Question Bank" in the header
+    strip and Quick Stats ("-" while loading).
+ VERIFIED
+  - Tests: +2 (GetTenantQuestionCountsHandlerTests) -> Question 105; full sln
+    build 0 warn/0 err, all dotnet projects green (Result 41), vitest 231, npm
+    build OK, oxlint clean for touched files, npm audit (CI gate) 0 vulns.
+  - Real SQL + Gateway (throwaway stack, 2 orgs seeded: Default 2 exam/3 bank,
+    Org B 0/1): super admin -> 200 with exactly those numbers per tenant; tenant
+    Admin -> 403; anonymous -> 401; old GET /api/questions/all -> 404.
+  - Browser (Super Admin): platform sidebar has no "Questions" item and the
+    Exams group lists only All Exams / Exam Categories / Sections / Tags; the
+    Default organization's details page shows Exam Questions 2 and Question
+    Bank 3 in both the header and Quick Stats (matches the DB).
+ NOT VERIFIED
+  - Org B's page in the browser (the automated browser session closed; its
+    numbers were verified through the API), and the two redirect routes in the
+    browser (a hard navigation drops the in-memory session, so it lands on
+    login; they are plain <Navigate> entries).
+  - "exam questions" here counts ExamQuestion rows in the Question service; the
+    legacy exam.totalQuestions field is still not used.
+ Q1-Q7 ARE NOW ALL DONE. Everything from Q1 through Q7 is still UNCOMMITTED
+ (per the standing instruction: no commits until Q7 - now finished; wait for the
+ user before committing). Remaining backlog from the original plan: Track 2
+ (academic structure: Program/Department/Semester/Division/Subject master,
+ student profile, eligibility) and Track 3 (per-question analytics, Excel export,
+ Action Center, feature flags, global search).

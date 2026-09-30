@@ -91,6 +91,11 @@ export default function QuestionDetails() {
               <div className="d-flex gap-4 text-muted small mb-4">
                 <div>Type: {questionTypeLabel[question.questionType]}</div>
                 <div>Marks: {question.marks}</div>
+                {question.negativeMarks != null && (
+                  <div title="This question's own penalty overrides the section/exam negative-marking setting">
+                    Negative marks: -{question.negativeMarks}
+                  </div>
+                )}
                 <div>Shuffle Options: {question.shuffleOptions ? 'Yes' : 'No'}</div>
                 <div>Created: {new Date(question.createdOn).toLocaleString()}</div>
               </div>

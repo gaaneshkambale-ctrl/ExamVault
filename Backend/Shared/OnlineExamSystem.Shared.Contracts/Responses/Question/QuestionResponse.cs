@@ -48,4 +48,10 @@ public record QuestionResponse(
     // FunctionName (unlike SampleAnswer, which is admin-only).
     string? SampleInput = null,
     string? SampleOutput = null,
-    string? Constraints = null);
+    string? Constraints = null,
+    // Per-question negative-marks override (null = inherit the section/exam setting).
+    decimal? NegativeMarks = null);
+
+// Super Admin usage view: per organization, how many questions sit in its exams
+// and in its Question Bank. Counts only.
+public record TenantQuestionCountResponse(Guid TenantId, int ExamQuestionCount, int BankQuestionCount);

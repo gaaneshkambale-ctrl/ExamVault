@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react';
 import { Alert, Badge, Button, Form, Table } from 'react-bootstrap';
 import { createQuestion } from '../api/questionApi';
+import { createBankQuestion } from '../api/questionBankApi';
+import { bankRequestFromCodeRow, bankRequestFromStandardRow } from '../utils/bankImportMapping';
+import type { BankDestination } from '../utils/bankImportMapping';
+import { IMPORT_FILE_ACCEPT, importFileToCsvText } from '../utils/importFile';
 import {
   buildCodeCsvTemplate,
   buildCsvTemplate,
@@ -33,10 +37,12 @@ type AnyRow =
   | { kind: 'standard'; row: CsvImportRow }
   | { kind: 'code'; row: CsvCodeImportRow };
 
-interface CsvImportPanelProps {
-  examId: string;
-  onImported: (questions: QuestionResponse[]) => void;
-}
+// Two destinations: an exam (creates exam questions, the original use) or the
+// organization's Question Bank (creates bank questions under one chosen
+// subject/topic/status). Same parsing, validation and preview either way.
+type CsvImportPanelProps =
+  | { examId: string; onImported: (questions: QuestionResponse[]) => void; bank?: undefined }
+  | { bank: { destination: BankDestination; onImported: (importedCount: number) => void }; examId?: undefined; onImported?: undefined };
 
 function downloadTemplate(kind: ImportKind) {
   const content = kind === 'code' ? buildCodeCsvTemplate() : buildCsvTemplate();
@@ -52,7 +58,7 @@ function downloadTemplate(kind: ImportKind) {
   URL.revokeObjectURL(url);
 }
 
-export default function CsvImportPanel({ examId, onImported }: CsvImportPanelProps) {
+export default function CsvImportPanel({ examId, onImported, bank }: CsvImportPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importKind, setImportKind] = useState<ImportKind>('standard');
   const [fileName, setFileName] = useState('');
@@ -79,7 +85,15 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
 
     setImportError('');
     setFileName(file.name);
-    const text = await file.text();
+    let text: string;
+    try {
+      text = await importFileToCsvText(file);
+    } catch (error) {
+      setRows([]);
+      setSelectedRows(new Set());
+      setImportError(error instanceof Error ? error.message : 'That file could not be read.');
+      return;
+    }
     const parsed: AnyRow[] =
       importKind === 'code'
         ? parseCodeQuestionImportCsv(text).map((row) => ({ kind: 'code' as const, row }))
@@ -112,11 +126,22 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
     setImporting(true);
     setImportError('');
 
-    const results = await Promise.allSettled(
-      toImport.map((entry) =>
-        entry.kind === 'code'
+    // Exam import keeps its original fire-everything-at-once behaviour; bank
+    // import goes in small batches so a big file does not open hundreds of
+    // simultaneous requests (each one is an audited write).
+    const saveEntry = (entry: AnyRow): Promise<unknown> =>
+      bank
+        ? createBankQuestion(
+            entry.kind === 'code'
+              ? bankRequestFromCodeRow(entry.row, bank.destination)
+              : bankRequestFromStandardRow(entry.row, bank.destination),
+          )
+        : saveExamEntry(entry);
+
+    const saveExamEntry = (entry: AnyRow): Promise<QuestionResponse> =>
+      entry.kind === 'code'
           ? createQuestion({
-              examId,
+              examId: examId!,
               questionType: 'CodeProgram',
               questionText: entry.row.questionText,
               marks: entry.row.marks,
@@ -137,19 +162,23 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
               constraints: entry.row.constraints || null,
             })
           : createQuestion({
-              examId,
+              examId: examId!,
               questionType: entry.row.questionType,
               questionText: entry.row.questionText,
               marks: entry.row.marks,
               difficulty: entry.row.difficulty,
               shuffleOptions: entry.row.shuffleOptions,
               options: entry.row.options,
-            }),
-      ),
-    );
+            });
+
+    const batchSize = bank ? 5 : toImport.length;
+    const results: PromiseSettledResult<unknown>[] = [];
+    for (let start = 0; start < toImport.length; start += batchSize) {
+      results.push(...(await Promise.allSettled(toImport.slice(start, start + batchSize).map(saveEntry))));
+    }
 
     const created = results
-      .filter((r): r is PromiseFulfilledResult<QuestionResponse> => r.status === 'fulfilled')
+      .filter((r): r is PromiseFulfilledResult<unknown> => r.status === 'fulfilled')
       .map((r) => r.value);
     const failed = results.filter((r) => r.status === 'rejected');
 
@@ -162,8 +191,22 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
       );
     }
 
+    if (bank) {
+      // Drop the rows that already made it in, so fixing the file's problem
+      // rows and retrying can never create the successful ones twice.
+      const importedRowNumbers = new Set(
+        toImport.filter((_, i) => results[i].status === 'fulfilled').map((entry) => entry.row.rowNumber),
+      );
+      if (importedRowNumbers.size > 0) {
+        setRows((prev) => prev.filter((entry) => !importedRowNumbers.has(entry.row.rowNumber)));
+        setSelectedRows((prev) => new Set([...prev].filter((n) => !importedRowNumbers.has(n))));
+        bank.onImported(importedRowNumbers.size);
+      }
+      return;
+    }
+
     if (created.length > 0) {
-      onImported(created);
+      onImported!(created as QuestionResponse[]);
     }
   };
 
@@ -193,7 +236,7 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <Form.Label className="fw-bold mb-1">Upload CSV</Form.Label>
+          <Form.Label className="fw-bold mb-1">Upload CSV or Excel (.xlsx)</Form.Label>
           <div className="text-muted small">
             {importKind === 'code' ? (
               <>
@@ -227,7 +270,7 @@ export default function CsvImportPanel({ examId, onImported }: CsvImportPanelPro
       <Form.Control
         ref={fileInputRef}
         type="file"
-        accept=".csv,text/csv"
+        accept={IMPORT_FILE_ACCEPT}
         onChange={(e) => void handleFileChange(e as React.ChangeEvent<HTMLInputElement>)}
       />
 

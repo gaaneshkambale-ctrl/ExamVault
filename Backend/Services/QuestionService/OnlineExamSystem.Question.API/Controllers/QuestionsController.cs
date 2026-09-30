@@ -8,7 +8,7 @@ using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
-using OnlineExamSystem.Question.Application.Questions.ListAll;
+using OnlineExamSystem.Question.Application.Questions.TenantCounts;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Application.Interfaces;
@@ -29,12 +29,11 @@ public class QuestionsController : ControllerBase
     private readonly CreateQuestionHandler _createQuestionHandler;
     private readonly GetQuestionHandler _getQuestionHandler;
     private readonly ListQuestionsHandler _listQuestionsHandler;
-    private readonly ListAllQuestionsHandler _listAllQuestionsHandler;
+    private readonly GetTenantQuestionCountsHandler _tenantQuestionCountsHandler;
     private readonly UpdateQuestionHandler _updateQuestionHandler;
     private readonly DeleteQuestionHandler _deleteQuestionHandler;
     private readonly BulkAssignSectionHandler _bulkAssignSectionHandler;
     private readonly UnassignSectionHandler _unassignSectionHandler;
-    private readonly IInternalUserLookupClient _userLookupClient;
     private readonly IAuditClient _auditClient;
     private readonly ILogger<QuestionsController> _logger;
 
@@ -42,24 +41,22 @@ public class QuestionsController : ControllerBase
         CreateQuestionHandler createQuestionHandler,
         GetQuestionHandler getQuestionHandler,
         ListQuestionsHandler listQuestionsHandler,
-        ListAllQuestionsHandler listAllQuestionsHandler,
+        GetTenantQuestionCountsHandler tenantQuestionCountsHandler,
         UpdateQuestionHandler updateQuestionHandler,
         DeleteQuestionHandler deleteQuestionHandler,
         BulkAssignSectionHandler bulkAssignSectionHandler,
         UnassignSectionHandler unassignSectionHandler,
-        IInternalUserLookupClient userLookupClient,
         IAuditClient auditClient,
         ILogger<QuestionsController> logger)
     {
         _createQuestionHandler = createQuestionHandler;
         _getQuestionHandler = getQuestionHandler;
         _listQuestionsHandler = listQuestionsHandler;
-        _listAllQuestionsHandler = listAllQuestionsHandler;
+        _tenantQuestionCountsHandler = tenantQuestionCountsHandler;
         _updateQuestionHandler = updateQuestionHandler;
         _deleteQuestionHandler = deleteQuestionHandler;
         _bulkAssignSectionHandler = bulkAssignSectionHandler;
         _unassignSectionHandler = unassignSectionHandler;
-        _userLookupClient = userLookupClient;
         _auditClient = auditClient;
         _logger = logger;
     }
@@ -144,26 +141,15 @@ public class QuestionsController : ControllerBase
             ToResponse(q.Question, q.Options, q.Parameters, q.TestCases, q.SqlTestCases, RevealAnswersFor(q.Question))));
     }
 
-    // Super Admin platform-wide Question Bank browse across every tenant's
-    // exams, not one exam's own questions.
-    [HttpGet("all")]
+    // Super Admin usage view: how many questions each organization has (in its
+    // exams and in its Question Bank). Counts only - the platform console no
+    // longer browses other organizations' question content at all.
+    [HttpGet("counts-by-tenant")]
     [Authorize(Roles = "SuperAdmin")]
-    public async Task<IActionResult> ListAll(CancellationToken cancellationToken)
+    public async Task<IActionResult> CountsByTenant(CancellationToken cancellationToken)
     {
-        var questions = await _listAllQuestionsHandler.HandleAsync(new ListAllQuestionsQuery(), cancellationToken);
-        var names = await ActorNameResolver.ResolveAsync(_userLookupClient, questions.Select(q => (Guid?)q.CreatedByUserId), cancellationToken);
-        return Ok(questions.Select(q => new PlatformQuestionResponse(
-            q.Id,
-            q.ExamId,
-            q.SectionId,
-            q.TenantId,
-            q.QuestionType.ToString(),
-            q.QuestionText,
-            q.Marks,
-            q.Difficulty.ToString(),
-            q.CreatedAtUtc,
-            q.CreatedByUserId,
-            names.GetValueOrDefault(q.CreatedByUserId))));
+        var counts = await _tenantQuestionCountsHandler.HandleAsync(cancellationToken);
+        return Ok(counts.Select(c => new TenantQuestionCountResponse(c.TenantId, c.ExamQuestionCount, c.BankQuestionCount)));
     }
 
     [HttpPut("bulk-assign-section")]
@@ -386,5 +372,6 @@ public class QuestionsController : ControllerBase
                 .ToList(),
             question.SampleInput,
             question.SampleOutput,
-            question.Constraints);
+            question.Constraints,
+            question.NegativeMarks);
 }

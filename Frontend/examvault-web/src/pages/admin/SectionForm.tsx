@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import RoleAwareLayout from '../../layouts/RoleAwareLayout';
 import TablePagination from '../../components/reports/TablePagination';
 import CreateQuestionModal from '../../components/CreateQuestionModal';
+import AddFromBankModal from '../../components/AddFromBankModal';
 import DeleteQuestionButton from '../../components/DeleteQuestionButton';
 import QuestionPreviewModal from '../../components/QuestionPreviewModal';
 import { EditIcon, ViewIcon } from '../../components/icons/ActionIcons';
@@ -319,6 +320,7 @@ export default function SectionForm() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showCreateQuestion, setShowCreateQuestion] = useState(false);
+  const [showBankPicker, setShowBankPicker] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState('');
@@ -482,6 +484,16 @@ export default function SectionForm() {
       return next;
     });
     setShowCreateQuestion(false);
+  };
+
+  // Bank copies land in the exam's unassigned pool; pre-select them so they
+  // are assigned to this section on save, same as a freshly created question.
+  const handleBankQuestionsAdded = (createdQuestionIds: string[]) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      createdQuestionIds.forEach((id) => next.add(id));
+      return next;
+    });
   };
 
   const invalidateAll = () => {
@@ -1017,6 +1029,11 @@ export default function SectionForm() {
                             : '+ Create Question'}
                         </Button>
                       )}
+                      {canCreateQuestions && (
+                        <Button variant="outline-primary" size="sm" onClick={() => setShowBankPicker(true)}>
+                          + From Question Bank
+                        </Button>
+                      )}
                       {useAiGenerate && canCreateQuestions && (
                         <Button variant="outline-secondary" size="sm" onClick={openManualQuestion}>
                           + Manual Question
@@ -1189,6 +1206,15 @@ export default function SectionForm() {
             </div>
           </div>
         </>
+      )}
+
+      {examId && (
+        <AddFromBankModal
+          show={showBankPicker}
+          examId={examId}
+          onHide={() => setShowBankPicker(false)}
+          onAdded={handleBankQuestionsAdded}
+        />
       )}
 
       {examId && (

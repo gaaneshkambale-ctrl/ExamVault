@@ -137,22 +137,15 @@ export interface QuestionResponse {
   sampleInput?: string | null;
   sampleOutput?: string | null;
   constraints?: string | null;
+  // Per-question negative-marks override (null/absent = inherits the section/exam
+  // setting). Set when the question was copied in from the Question Bank.
+  negativeMarks?: number | null;
 }
 
-// Super Admin platform-wide Question Bank browse only - separate shape
-// from QuestionResponse (no options/test-cases/answer-masking concerns,
-// adds tenantId). No examTitle - QuestionService has no Exams table of
-// its own; join examId against the platform's own cross-tenant exam list.
-export interface PlatformQuestionResponse {
-  id: string;
-  examId: string;
-  sectionId: string | null;
+// Super Admin usage view: how many questions an organization has - in its exams and in
+// its Question Bank. Counts only; the platform console never browses question content.
+export interface TenantQuestionCount {
   tenantId: string;
-  questionType: QuestionType;
-  questionText: string;
-  marks: number;
-  difficulty: QuestionDifficulty;
-  createdAtUtc: string;
-  createdByUserId: string;
-  createdByName: string | null;
+  examQuestionCount: number;
+  bankQuestionCount: number;
 }

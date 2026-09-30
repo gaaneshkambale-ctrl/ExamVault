@@ -12,6 +12,7 @@ import OrgAvatar from '../../components/OrgAvatar';
 import SegmentDonutChart from '../../components/SegmentDonutChart';
 import { useTenants } from '../../hooks/useTenants';
 import { useQuestionCountsByExam } from '../../hooks/useQuestions';
+import { getTenantQuestionCounts } from '../../api/questionApi';
 import {
   createTenantAdmin,
   deleteTenant,
@@ -358,6 +359,12 @@ export default function OrganizationDetails() {
   // instead of trusting it.
   const questionCounts = useQuestionCountsByExam(tab === 'Exams' ? tenantExams.map((e) => e.id) : undefined);
 
+  // Per-organization totals for the header/Quick Stats - counts only (the platform console
+  // no longer browses any organization's question content).
+  const { data: questionCountsByTenant } = useQuery({ queryKey: ['platform-question-counts'], queryFn: getTenantQuestionCounts });
+  const tenantQuestionCount = questionCountsByTenant?.find((c) => c.tenantId === tenant?.id);
+  const showCount = (n: number | undefined) => (questionCountsByTenant ? String(n ?? 0) : '—');
+
   const examStatusCounts = useMemo(
     () => ({
       Published: tenantExams.filter((e) => e.status === 'Published').length,
@@ -628,6 +635,14 @@ export default function OrganizationDetails() {
             <div>
               <div>Total Exams</div>
               <div className="text-body">{tenantExams.length}</div>
+            </div>
+            <div>
+              <div>Exam Questions</div>
+              <div className="text-body">{showCount(tenantQuestionCount?.examQuestionCount)}</div>
+            </div>
+            <div>
+              <div>Question Bank</div>
+              <div className="text-body">{showCount(tenantQuestionCount?.bankQuestionCount)}</div>
             </div>
           </div>
         </Card.Body>
@@ -1319,6 +1334,14 @@ export default function OrganizationDetails() {
               <div className="d-flex justify-content-between small py-1">
                 <span className="text-muted">Total Exams</span>
                 <span>{tenantExams.length}</span>
+              </div>
+              <div className="d-flex justify-content-between small py-1">
+                <span className="text-muted">Exam Questions</span>
+                <span>{showCount(tenantQuestionCount?.examQuestionCount)}</span>
+              </div>
+              <div className="d-flex justify-content-between small py-1">
+                <span className="text-muted">Question Bank</span>
+                <span>{showCount(tenantQuestionCount?.bankQuestionCount)}</span>
               </div>
               <div className="d-flex justify-content-between small py-1">
                 <span className="text-muted">Total Submissions</span>

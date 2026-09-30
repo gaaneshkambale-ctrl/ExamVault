@@ -11,13 +11,14 @@ using Microsoft.IdentityModel.Tokens;
 using OnlineExamSystem.Question.API.Authorization;
 using OnlineExamSystem.Shared.Contracts.Requests.Notification;
 using OnlineExamSystem.Question.Application.Interfaces;
+using OnlineExamSystem.Question.Application.QuestionBank;
 using OnlineExamSystem.Question.Application.Questions.BulkAssignSection;
 using OnlineExamSystem.Question.Application.Questions.Create;
 using OnlineExamSystem.Question.Application.Questions.Delete;
 using OnlineExamSystem.Question.Application.Questions.DeleteForExam;
 using OnlineExamSystem.Question.Application.Questions.GetById;
 using OnlineExamSystem.Question.Application.Questions.List;
-using OnlineExamSystem.Question.Application.Questions.ListAll;
+using OnlineExamSystem.Question.Application.Questions.TenantCounts;
 using OnlineExamSystem.Question.Application.Questions.UnassignSection;
 using OnlineExamSystem.Question.Application.Questions.Update;
 using OnlineExamSystem.Question.Infrastructure.Clients;
@@ -73,12 +74,15 @@ public class Program
         builder.Services.AddHealthChecks()
             .AddDbContextCheck<QuestionDbContext>("database");
         builder.Services.AddScoped<IQuestionRepository, QuestionRepository>();
+        builder.Services.AddScoped<IQuestionBankRepository, QuestionBankRepository>();
+        builder.Services.AddScoped<IValidator<SaveBankQuestionCommand>, SaveBankQuestionValidator>();
+        builder.Services.AddScoped<QuestionBankService>();
 
         builder.Services.AddScoped<IValidator<CreateQuestionCommand>, CreateQuestionValidator>();
         builder.Services.AddScoped<CreateQuestionHandler>();
         builder.Services.AddScoped<GetQuestionHandler>();
         builder.Services.AddScoped<ListQuestionsHandler>();
-        builder.Services.AddScoped<ListAllQuestionsHandler>();
+        builder.Services.AddScoped<GetTenantQuestionCountsHandler>();
         builder.Services.AddScoped<IValidator<UpdateQuestionCommand>, UpdateQuestionValidator>();
         builder.Services.AddScoped<UpdateQuestionHandler>();
         builder.Services.AddScoped<DeleteQuestionHandler>();

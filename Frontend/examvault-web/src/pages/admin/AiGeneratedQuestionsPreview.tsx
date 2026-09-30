@@ -7,6 +7,9 @@ import DraftEditorModal from '../../components/DraftEditorModal';
 import { EditIcon, TrashIcon, ViewIcon } from '../../components/icons/ActionIcons';
 import { generateQuestions } from '../../api/aiApi';
 import { bulkAssignSection, createQuestion } from '../../api/questionApi';
+import { createBankQuestion } from '../../api/questionBankApi';
+import { bankRequestFromAiDraft } from '../../utils/bankImportMapping';
+import type { BankDestination } from '../../utils/bankImportMapping';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import type { DraftQuestion, GenerateDifficulty, GenerateQuestionsRequest, GenerateQuestionType } from '../../types/ai';
@@ -36,6 +39,10 @@ interface PreviewState {
   // silently invisible to students (a sectioned exam only ever shows
   // students the questions actually attached to a section).
   sectionId?: string | null;
+  // Present when the questions are destined for the Question Bank instead of
+  // an exam (examId is then empty): approved drafts are saved to the bank in
+  // the given subject/topic, as Drafts, and nothing is assigned to a section.
+  bank?: BankDestination;
 }
 
 
@@ -75,7 +82,7 @@ export default function AiGeneratedQuestionsPreview() {
     );
   }
 
-  const { examId, request, backTo, returnTo, sectionId } = initialState;
+  const { examId, request, backTo, returnTo, sectionId, bank } = initialState;
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -130,7 +137,7 @@ export default function AiGeneratedQuestionsPreview() {
 
     const results = await Promise.allSettled(
       selectedDrafts.map((draft) =>
-        createQuestion({
+        bank ? createBankQuestion(bankRequestFromAiDraft(draft, bank)) : createQuestion({
           examId,
           questionType: draft.questionType,
           questionText: draft.questionText,
@@ -155,6 +162,12 @@ export default function AiGeneratedQuestionsPreview() {
       setDrafts((prev) => prev.filter((d) => failedIds.has(d.id) || !selectedIds.has(d.id)));
       setSelectedIds(failedIds);
       setIsApproving(false);
+      return;
+    }
+
+    if (bank) {
+      queryClient.invalidateQueries({ queryKey: ['questionBank'] });
+      navigate(returnTo ?? '/admin/question-bank');
       return;
     }
 
@@ -186,7 +199,7 @@ export default function AiGeneratedQuestionsPreview() {
   };
 
   return (
-    <AdminLayout active="Exams">
+    <AdminLayout active={bank ? 'Question Bank' : 'Exams'}>
       <div className="mb-4">
         <h1 className="h4 fw-bold mb-0 text-primary">AI Generated Questions Preview</h1>
       </div>
@@ -346,7 +359,7 @@ export default function AiGeneratedQuestionsPreview() {
                   Adding...
                 </>
               ) : (
-                `Add Selected to Exam (${selectedIds.size})`
+                bank ? `Add Selected to Bank as Drafts (${selectedIds.size})` : `Add Selected to Exam (${selectedIds.size})`
               )}
             </Button>
           )}

@@ -95,7 +95,8 @@ public class InternalController : ControllerBase
             options
                 .Select(o => new QuestionOptionResponse(o.Id, o.OptionText, o.IsCorrect, o.DisplayOrder))
                 .ToList(),
-            question.CreatedAtUtc);
+            question.CreatedAtUtc,
+            NegativeMarks: question.NegativeMarks);
 
     private static QuestionResponse ToFullResponse(
         ExamQuestion question,

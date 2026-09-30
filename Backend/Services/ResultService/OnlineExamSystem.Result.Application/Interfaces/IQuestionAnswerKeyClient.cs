@@ -8,7 +8,9 @@ public record AnswerKeyQuestion(
     int Marks,
     Guid? SectionId,
     IReadOnlyList<AnswerKeyOption> Options,
-    string QuestionType = "MultipleChoice");
+    string QuestionType = "MultipleChoice",
+    // Per-question negative-marks override; null = use the section's/exam's setting.
+    decimal? NegativeMarks = null);
 
 public interface IQuestionAnswerKeyClient
 {

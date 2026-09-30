@@ -55,6 +55,10 @@ import ExamTypePerformanceAnalysis from '../pages/admin/ExamTypePerformanceAnaly
 import ExamTypeStudentPerformance from '../pages/admin/ExamTypeStudentPerformance';
 import ExamTypeComparison from '../pages/admin/ExamTypeComparison';
 import ExamTypeQuestionAnalysis from '../pages/admin/ExamTypeQuestionAnalysis';
+import QuestionBank from '../pages/admin/QuestionBank';
+import QuestionBankSubjects from '../pages/admin/QuestionBankSubjects';
+import QuestionBankTags from '../pages/admin/QuestionBankTags';
+import QuestionBankAiGenerate from '../pages/admin/QuestionBankAiGenerate';
 import ExamTypeSectionPerformance from '../pages/admin/ExamTypeSectionPerformance';
 import AdminSettings from '../pages/admin/AdminSettings';
 import OrganizationSettings from '../pages/admin/OrganizationSettings';
@@ -121,9 +125,7 @@ import SystemLogs from '../pages/platform/SystemLogs';
 import PlatformAllExams from '../pages/platform/PlatformAllExams';
 import PlatformExamCategories from '../pages/platform/PlatformExamCategories';
 import PlatformSections from '../pages/platform/PlatformSections';
-import PlatformQuestionBank from '../pages/platform/PlatformQuestionBank';
 import PlatformExamTags from '../pages/platform/PlatformExamTags';
-import PlatformQuestions from '../pages/platform/PlatformQuestions';
 import PlatformSubmissions from '../pages/platform/PlatformSubmissions';
 import PlatformComingSoon from '../pages/platform/PlatformComingSoon';
 import { platformComingSoonRoutes } from './platformComingSoonRoutes';
@@ -575,6 +577,46 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/admin/question-bank"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <QuestionBank />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/question-bank/mine"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <QuestionBank mine />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/question-bank/subjects"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <QuestionBankSubjects />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/question-bank/ai-generate"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <QuestionBankAiGenerate />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/question-bank/tags"
+        element={
+          <ProtectedRoute roles={['Admin', 'Instructor']}>
+            <QuestionBankTags />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/questions/:id"
         element={
           <ProtectedRoute roles={['Admin', 'Instructor']}>
@@ -910,14 +952,9 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/platform/exams/question-bank"
-        element={
-          <ProtectedRoute roles={['SuperAdmin']}>
-            <PlatformQuestionBank />
-          </ProtectedRoute>
-        }
-      />
+      {/* Question content is organization-owned now (each org manages its own Question Bank) - the platform
+          console no longer browses it. Old links go to the exam list. */}
+      <Route path="/platform/exams/question-bank" element={<Navigate to="/platform/exams" replace />} />
       <Route
         path="/platform/exams/tags"
         element={
@@ -926,14 +963,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/platform/questions"
-        element={
-          <ProtectedRoute roles={['SuperAdmin']}>
-            <PlatformQuestions />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/platform/questions" element={<Navigate to="/platform/exams" replace />} />
       <Route
         path="/platform/submissions"
         element={
