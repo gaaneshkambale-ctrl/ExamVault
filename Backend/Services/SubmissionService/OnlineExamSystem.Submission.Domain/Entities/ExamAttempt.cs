@@ -16,6 +16,9 @@ public class ExamAttempt : TenantScopedEntity
     // so this single field is always the right deadline regardless of sections).
     // Null only for attempts started before this field existed.
     public DateTime? ExpiresAtUtc { get; set; }
+    // Bumped at Start and on every saved answer; lets the resume prompt show
+    // "last activity". Null only for attempts that predate this field.
+    public DateTime? LastActivityAtUtc { get; set; }
     public AttemptStatus Status { get; set; } = AttemptStatus.InProgress;
     public int FullscreenExitCount { get; set; }
     public int NoFaceDetectedCount { get; set; }

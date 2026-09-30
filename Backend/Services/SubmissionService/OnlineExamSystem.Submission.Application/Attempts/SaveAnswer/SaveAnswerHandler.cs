@@ -93,6 +93,9 @@ public class SaveAnswerHandler
             DateTime.UtcNow,
             cancellationToken);
 
+        attempt.LastActivityAtUtc = answer.AnsweredAtUtc;
+        await _repository.SaveChangesAsync(cancellationToken);
+
         return SaveAnswerResult.Ok(answer);
     }
 

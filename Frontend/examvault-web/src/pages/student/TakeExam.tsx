@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,6 +24,7 @@ import { PROGRAMMING_LANGUAGES } from '../../types/question';
 import { runCode, runSql } from '../../api/executionApi';
 import type { RunCodeResponse } from '../../types/execution';
 import { formatTypedValue } from '../../utils/typedValue';
+import { AnswerSyncQueue, type SyncStatus } from '../../utils/answerSyncQueue';
 import { parseSqlSetup, parseSqlRowSet, toSqlTableRows } from '../../utils/sqlSetupParser';
 import DataTable from '../../components/DataTable';
 
@@ -372,7 +373,15 @@ export default function TakeExam() {
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [sectionRemainingSeconds, setSectionRemainingSeconds] = useState<number | null>(null);
   const [navFilter, setNavFilter] = useState<NavFilter>('all');
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ pending: 0, syncing: false, lastSavedAt: null, error: null });
+  const [syncBlocked, setSyncBlocked] = useState(false);
+  const syncQueueRef = useRef<AnswerSyncQueue | null>(null);
+  // The "could not submit" warning is stale as soon as everything has synced.
+  useEffect(() => {
+    if (syncStatus.pending === 0) {
+      setSyncBlocked(false);
+    }
+  }, [syncStatus.pending]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
   const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
@@ -628,7 +637,13 @@ export default function TakeExam() {
     if (!attemptId) {
       return;
     }
-    saveAnswerMutation.mutate({ questionId, answer });
+    syncQueueRef.current?.enqueue({
+      questionId,
+      selectedOptionId: answer.selectedOptionId,
+      isMarkedForReview: answer.isMarkedForReview,
+      textAnswer: answer.textAnswer,
+      selectedOptionIds: answer.selectedOptionIds,
+    });
   };
 
   // Enters a section (records/refreshes its per-section deadline server-side
@@ -753,14 +768,31 @@ export default function TakeExam() {
     onError: (error) => setAttemptError(extractError(error)),
   });
 
-  const { mutate: runSubmit } = submitMutation;
+  // Every submit path first pushes any unsynced answers. A manual submit is
+  // refused if they still can't sync (so the student doesn't lose them);
+  // an auto-submit at time-up always goes ahead after that one attempt.
+  const submitMutate = submitMutation.mutate;
+  const runSubmit = useCallback(
+    (isAutoSubmitted: boolean) => {
+      void (async () => {
+        const synced = syncQueueRef.current ? await syncQueueRef.current.flush() : true;
+        if (!synced && !isAutoSubmitted) {
+          setSyncBlocked(true);
+          return;
+        }
+        setSyncBlocked(false);
+        submitMutate(isAutoSubmitted);
+      })();
+    },
+    [submitMutate],
+  );
 
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const requestSubmit = () => {
     if (exam?.confirmBeforeSubmit) {
       setShowSubmitConfirm(true);
     } else {
-      submitMutation.mutate(false);
+      runSubmit(false);
     }
   };
 
@@ -830,17 +862,59 @@ export default function TakeExam() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, currentGroup?.section?.id, sectionStates]);
 
-  const saveAnswerMutation = useMutation({
-    mutationFn: (payload: { questionId: string; answer: AnswerState }) =>
-      saveAnswer(attemptId!, {
-        questionId: payload.questionId,
-        selectedOptionId: payload.answer.selectedOptionId,
-        isMarkedForReview: payload.answer.isMarkedForReview,
-        answerText: payload.answer.textAnswer,
-        selectedOptionIds: payload.answer.selectedOptionIds,
-      }),
-    onSuccess: () => setLastSavedAt(new Date()),
-  });
+  // Offline-safe auto-save: answers go through a retrying, localStorage-backed
+  // queue (see utils/answerSyncQueue.ts) instead of a fire-and-forget request.
+  useEffect(() => {
+    if (!attemptId) {
+      return;
+    }
+    const queue = new AnswerSyncQueue({
+      attemptId,
+      save: (pending) =>
+        saveAnswer(attemptId, {
+          questionId: pending.questionId,
+          selectedOptionId: pending.selectedOptionId,
+          isMarkedForReview: pending.isMarkedForReview,
+          answerText: pending.textAnswer,
+          selectedOptionIds: pending.selectedOptionIds,
+        }),
+      onChange: setSyncStatus,
+      describeError: extractError,
+    });
+    syncQueueRef.current = queue;
+
+    // Answers a previous page load never got to sync (offline when the tab
+    // closed / the laptop died) are newer than what the server has.
+    const leftover = queue.getPending();
+    if (leftover.length > 0) {
+      setAnswers((prev) => {
+        const next = { ...prev };
+        for (const pending of leftover) {
+          next[pending.questionId] = {
+            selectedOptionId: pending.selectedOptionId,
+            isMarkedForReview: pending.isMarkedForReview,
+            textAnswer: pending.textAnswer,
+            selectedOptionIds: pending.selectedOptionIds,
+          };
+        }
+        return next;
+      });
+      setVisited((prev) => {
+        const next = new Set(prev);
+        leftover.forEach((pending) => next.add(pending.questionId));
+        return next;
+      });
+      queue.retryNow();
+    }
+
+    const onOnline = () => queue.retryNow();
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      queue.dispose();
+      syncQueueRef.current = null;
+    };
+  }, [attemptId]);
 
   const updateAnswer = (questionId: string, updates: Partial<AnswerState>) => {
     setAnswers((prev) => {
@@ -968,6 +1042,14 @@ export default function TakeExam() {
   const isLoading = mode === 'loading' || isLoadingExam || isLoadingQuestions || (mode === 'take' && !sectionInitialized);
   const currentQuestion = displayQuestions[currentIndex];
   const currentAnswer = currentQuestion ? (answers[currentQuestion.id] ?? EMPTY_ANSWER) : null;
+  // Code questions have their own reset-to-starter flow, and a Locked section
+  // rejects any edit to an already-saved answer server-side, so neither offers Clear.
+  const canClearAnswer =
+    !!currentQuestion &&
+    !!currentAnswer &&
+    currentQuestion.questionType !== 'CodeProgram' &&
+    navigationType !== 'Locked' &&
+    Boolean(currentAnswer.selectedOptionId || currentAnswer.textAnswer || currentAnswer.selectedOptionIds?.length);
 
   // Never carry a maximized editor (or the previous question's Messages tab
   // selection) over to a different question.
@@ -1353,6 +1435,7 @@ export default function TakeExam() {
               </div>
               <Badge bg={isOnline ? 'success' : 'danger'} className="fw-normal py-2 px-3">
                 {isOnline ? 'Connected' : 'Offline'}
+                {syncStatus.pending > 0 ? ` · ${syncStatus.pending} unsynced` : ''}
               </Badge>
               {proctoringActive && (
                 <Badge
@@ -1379,6 +1462,14 @@ export default function TakeExam() {
       )}
 
       {attemptError && <Alert variant="danger">{attemptError}</Alert>}
+
+      {syncBlocked && (mode === 'take' || mode === 'review') && (
+        <Alert variant="warning" className="small">
+          {syncStatus.pending} answer{syncStatus.pending === 1 ? '' : 's'} could not be saved yet, so the exam
+          was not submitted. Check your connection - answers are kept on this device and sync automatically - then
+          submit again.
+        </Alert>
+      )}
 
       {isLoading && !attemptError && (
         <div className="d-flex justify-content-center py-5">
@@ -1988,19 +2079,29 @@ export default function TakeExam() {
                   )}
 
                   <div className="mt-2" style={{ minHeight: 20 }}>
-                    {saveAnswerMutation.isPending && <span className="small text-muted">Saving...</span>}
-                    {!saveAnswerMutation.isPending && lastSavedAt && (
+                    {syncStatus.pending > 0 && (
+                      <span className={`small ${isOnline ? 'text-muted' : 'text-danger'}`}>
+                        {syncStatus.syncing && isOnline
+                          ? 'Saving...'
+                          : `${syncStatus.pending} answer${syncStatus.pending === 1 ? '' : 's'} waiting to sync - ${
+                              isOnline ? 'retrying...' : 'will sync automatically when you are back online'
+                            }`}
+                      </span>
+                    )}
+                    {syncStatus.error && <div className="small text-danger">{syncStatus.error}</div>}
+                    {syncStatus.pending === 0 && syncStatus.lastSavedAt && (
                       <div
                         className="small text-success rounded-3 px-3 py-2 d-inline-flex align-items-center gap-2"
                         style={{ background: '#f0fdf4' }}
                       >
                         <TestCaseStatusIcon passed={true} />
-                        Answer saved &nbsp;|&nbsp; Last saved: {lastSavedAt.toLocaleTimeString()}
+                        Answer saved &nbsp;|&nbsp; Last saved: {syncStatus.lastSavedAt.toLocaleTimeString()}
                       </div>
                     )}
                   </div>
 
-                  <div className="d-flex justify-content-between mt-3">
+
+                  <div className="d-flex justify-content-between align-items-center mt-3">
                     <Button
                       variant="outline-secondary"
                       disabled={currentIndex === 0 || !canNavigateToIndex(currentIndex - 1)}
@@ -2008,6 +2109,21 @@ export default function TakeExam() {
                     >
                       &larr; Save &amp; Previous
                     </Button>
+                    {canClearAnswer && (
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() =>
+                          updateAnswer(currentQuestion.id, {
+                            selectedOptionId: null,
+                            selectedOptionIds: null,
+                            textAnswer: null,
+                          })
+                        }
+                      >
+                        Clear Answer
+                      </Button>
+                    )}
                     <Button
                       variant="primary"
                       disabled={sectionEntering}
@@ -2188,7 +2304,7 @@ export default function TakeExam() {
             disabled={submitMutation.isPending}
             onClick={() => {
               setShowSubmitConfirm(false);
-              submitMutation.mutate(false);
+              runSubmit(false);
             }}
           >
             {submitMutation.isPending ? 'Submitting...' : 'Submit'}

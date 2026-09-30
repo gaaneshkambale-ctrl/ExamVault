@@ -17401,3 +17401,84 @@ Q7 DONE (2026-09-30; uncommitted) - Super Admin question pages removed, per-org 
  (academic structure: Program/Department/Semester/Division/Subject master,
  student profile, eligibility) and Track 3 (per-question analytics, Excel export,
  Action Center, feature flags, global search).
+
+================================================================================
+ STUDENT EXAM-ATTEMPT GAPS (S1-S4)  -  planned 2026-09-30
+================================================================================
+ Audit of "6. Exam Attempt / Student Experience" and "7. Attempt Recovery":
+ already done = timer, auto-submit, navigator, answered/unanswered/marked
+ states, mark for review, per-answer server auto-save, Connected/Offline badge,
+ resume of the existing InProgress attempt (StartAttemptHandler returns it, the
+ timer runs off the server deadline). GAPS fixed here:
+ S1 Clear answer
+  - TakeExam: "Clear Answer" button for the current question (single/multi
+    choice + text/code). Sets selection/text empty, keeps the mark-for-review
+    flag, saves through the same path. Disabled when the question has no
+    answer. Server already accepts an all-empty upsert; a Locked-section
+    question keeps being rejected server-side (QuestionLocked) and surfaces its
+    error.
+ S2 Connection recovery (offline-safe auto-save)
+  - New utils/answerSyncQueue.ts (pure, unit-tested): pending answers keyed by
+    questionId (latest wins), mirrored to localStorage per attempt, flushed
+    serially with exponential-backoff retry, flush on the browser 'online'
+    event; a confirmed save only removes the entry if it wasn't overwritten
+    meanwhile; non-retryable server rejections (4xx) drop the entry and report
+    the error instead of looping forever.
+  - TakeExam uses it instead of the fire-and-forget mutation: status line shows
+    Saving / Saved / "N answers waiting to sync"; on load, pending local answers
+    newer than the server's are re-applied (browser crash / reload while
+    offline); manual Submit flushes first and refuses (with a message) if some
+    answers still cannot sync; auto-submit at time-up always proceeds after one
+    flush attempt (the deadline wins).
+ S3 Resume prompt
+  - ExamDetails (and My Exams row action): for an InProgress, unexpired attempt
+    show "Existing exam session found" card - exam, time remaining, last
+    activity - with [Continue Exam]. No new attempt is ever created.
+ S4 Session fields
+  - ExamAttempt.LastActivityAtUtc (migration; set at Start and on every saved
+    answer). ExamAttemptResponse gains ExpiresAtUtc + LastActivityAtUtc so the
+    resume card can show remaining time from the server deadline.
+ TESTS: xUnit (SaveAnswer sets LastActivity), vitest (queue: retry, latest-wins,
+ persistence, 4xx drop, flush-on-online). Then browser verification on the
+ Docker app (needs the Chrome extension connected).
+ S1-S4 DONE (uncommitted) - 2026-09-30
+  - Backend: ExamAttempt.LastActivityAtUtc + migration AddExamAttemptLastActivity;
+    set at Start and in SaveAnswerHandler; ExamAttemptResponse gains
+    ExpiresAtUtc/LastActivityAtUtc (optional trailing params).
+  - Frontend: utils/answerSyncQueue.ts (+9 vitest), TakeExam wired to it (status
+    line, "N unsynced" badge, submit flushes first / manual submit refused while
+    unsynced, leftover local answers re-applied on load, 'online' retry), Clear
+    Answer button (not for code questions or Locked sections), ResumeSessionCard
+    on ExamDetails, "Continue Exam" labels; utils/formatRemaining (+3 vitest).
+  - VERIFIED: dotnet test whole sln green (Submission 109), vitest 243, tsc,
+    npm run build OK, oxlint clean for touched files.
+  - NOT VERIFIED: anything in a real browser (Chrome extension was not
+    connected) - offline->online recovery, Clear Answer, resume card. The Docker
+    stack also still runs the pre-change images and needs a rebuild to apply
+    the migration.
+ S1-S4 BROWSER VERIFICATION (Docker stack, Test Org tenant, 2026-09-30)
+  - Rebuilt submission-api + frontend; migration applied (LastActivityAtUtc column).
+  - Admin (qa.exam.admin, test.localhost:5173): created exam via wizard, added 3
+    questions via "From Question Bank" pick (usage count + "Already in this exam"
+    shown afterwards) and drew 2 via Random draw (asking for 5 when 2 exist was
+    refused: "only 2 matching Active question(s) available, 5 requested"), published,
+    assigned to the QA student.
+  - Student: Clear Answer works (server row nulled, navigator 5->0 answered, last
+    activity bumped). Real connection loss (gateway container stopped): answers stayed
+    selected, badge "Connected - N unsynced", "N answers waiting to sync - retrying...";
+    manual submit while offline was refused (nothing lost); gateway restored -> all 5
+    answers on the server within seconds, then submit OK.
+  - Result: 5.5/10 = 3 correct (+6) - 0.5 (wrong, neg 0.5) + 0 (wrong, no penalty).
+    Per-question negative marks confirmed end to end (Submission -> Result -> UI).
+  - FOUND+FIXED: (a) blocked-submit warning only rendered on the question screen, not
+    the Review screen (silent no-op) - now shown in both, and cleared when sync drains;
+    (b) ExamDetails said "There is no negative marking." when questions/sections carry
+    a penalty - now says so. (a) is NOT re-verified in a browser (needs a 2nd offline
+    attempt); (b) verified.
+  - NOT VERIFIED: ResumeSessionCard in a browser (max attempts 1 -> no in-progress
+    attempt left; unit test only covers formatRemaining); reload-while-offline restore.
+  - OPEN OBSERVATIONS (not changed): assignment was stored with EnableProctoring=1 /
+    EnableLiveVideo=1 although the wizard's step 3 toggles looked off (cause not
+    found; test row set to 0 by hand); dashboard "Upcoming Exams" still lists a
+    completed 1-attempt exam with a Start Exam button; "N unsynced" also counts the
+    blank row written when a question is only visited.

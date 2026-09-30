@@ -388,7 +388,7 @@ export default function MyExams() {
                         {exam.rowStatus === 'In Progress' && (
                           <div>
                             <Link to={`/exams/${exam.id}/take`} className="btn btn-warning btn-sm">
-                              Resume Exam
+                              Continue Exam
                             </Link>
                             <div className="text-muted small mt-1">
                               Time Left: {timeLeftLabel(exam.attemptStartedAtUtc, exam.durationMinutes)}

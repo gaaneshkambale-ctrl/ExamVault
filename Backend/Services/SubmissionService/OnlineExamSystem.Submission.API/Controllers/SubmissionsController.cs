@@ -850,7 +850,9 @@ public class SubmissionsController : ControllerBase
             attempt.CopyPasteCount,
             attempt.RightClickCount,
             attempt.MultipleMonitorsCount,
-            attempt.LiveWatchEnabled);
+            attempt.LiveWatchEnabled,
+            attempt.ExpiresAtUtc,
+            attempt.LastActivityAtUtc);
 
     private static ViolationEventResponse ToResponse(ViolationEvent violationEvent, Guid examId, Guid userId) =>
         new(

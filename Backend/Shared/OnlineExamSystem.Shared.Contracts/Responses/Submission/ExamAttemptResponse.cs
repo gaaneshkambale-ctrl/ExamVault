@@ -16,4 +16,6 @@ public record ExamAttemptResponse(
     int CopyPasteCount,
     int RightClickCount,
     int MultipleMonitorsCount,
-    bool LiveWatchEnabled);
+    bool LiveWatchEnabled,
+    DateTime? ExpiresAtUtc = null,
+    DateTime? LastActivityAtUtc = null);

@@ -29,6 +29,8 @@ export interface ExamAttemptResponse {
   rightClickCount: number;
   multipleMonitorsCount: number;
   liveWatchEnabled: boolean;
+  expiresAtUtc?: string | null;
+  lastActivityAtUtc?: string | null;
 }
 
 export type ProctoringViolationType =

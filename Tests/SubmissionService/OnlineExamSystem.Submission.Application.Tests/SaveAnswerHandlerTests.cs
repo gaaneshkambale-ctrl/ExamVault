@@ -52,6 +52,41 @@ public class SaveAnswerHandlerTests
     }
 
     [Fact]
+    public async Task Saving_an_answer_bumps_the_attempts_last_activity()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = InProgressAttempt();
+        attempt.LastActivityAtUtc = DateTime.UtcNow.AddHours(-1);
+        repository.SeedAttempt(attempt);
+        var before = attempt.LastActivityAtUtc;
+
+        var result = await CreateHandler(repository).HandleAsync(
+            new SaveAnswerCommand(attempt.Id, QuestionId, OptionId, IsMarkedForReview: false, UserId, BearerToken));
+
+        Assert.True(result.Success);
+        Assert.True(attempt.LastActivityAtUtc > before);
+    }
+
+    [Fact]
+    public async Task Clearing_an_answer_with_no_selection_or_text_is_accepted_and_kept_as_a_visited_row()
+    {
+        var repository = new FakeSubmissionRepository();
+        var attempt = InProgressAttempt();
+        repository.SeedAttempt(attempt);
+        var handler = CreateHandler(repository);
+        await handler.HandleAsync(
+            new SaveAnswerCommand(attempt.Id, QuestionId, OptionId, IsMarkedForReview: true, UserId, BearerToken));
+
+        var result = await handler.HandleAsync(
+            new SaveAnswerCommand(attempt.Id, QuestionId, null, IsMarkedForReview: true, UserId, BearerToken));
+
+        Assert.True(result.Success);
+        Assert.Null(result.Answer!.SelectedOptionId);
+        Assert.True(result.Answer.IsMarkedForReview);
+        Assert.Single(repository.Answers);
+    }
+
+    [Fact]
     public async Task Valid_request_updates_existing_answer()
     {
         var repository = new FakeSubmissionRepository();
