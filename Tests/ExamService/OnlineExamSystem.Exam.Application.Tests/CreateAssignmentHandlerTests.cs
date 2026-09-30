@@ -44,6 +44,26 @@ public class CreateAssignmentHandlerTests
         CreatedByUserId: Guid.NewGuid());
 
     [Fact]
+    public async Task Proctoring_flags_are_stored_exactly_as_requested_and_live_video_needs_proctoring()
+    {
+        var repository = new FakeExamRepository();
+        var exam = new ExamPaper { Title = "C# Fundamentals", Status = ExamStatus.Published };
+        await repository.AddAsync(exam);
+        var handler = CreateHandler(repository);
+        var student = Guid.NewGuid();
+
+        await handler.HandleAsync(StudentsCommand(exam.Id, student));
+        await handler.HandleAsync(StudentsCommand(exam.Id, Guid.NewGuid()) with { EnableLiveVideo = true });
+        await handler.HandleAsync(StudentsCommand(exam.Id, Guid.NewGuid()) with { EnableProctoring = true, EnableLiveVideo = true });
+
+        Assert.Collection(
+            repository.Assignments,
+            a => Assert.False(a.EnableProctoring || a.EnableLiveVideo),
+            a => Assert.False(a.EnableProctoring || a.EnableLiveVideo),
+            a => Assert.True(a.EnableProctoring && a.EnableLiveVideo));
+    }
+
+    [Fact]
     public async Task Valid_students_request_assigns_every_selected_student()
     {
         var repository = new FakeExamRepository();

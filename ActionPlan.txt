@@ -17482,3 +17482,60 @@ Q7 DONE (2026-09-30; uncommitted) - Super Admin question pages removed, per-org 
     found; test row set to 0 by hand); dashboard "Upcoming Exams" still lists a
     completed 1-attempt exam with a Start Exam button; "N unsynced" also counts the
     blank row written when a question is only visited.
+
+================================================================================
+ STUDENT EXAM HARDENING (H1-H6)  -  planned 2026-09-30
+================================================================================
+ Follow-ups from the S1-S4 browser run. Test-Org QA data (2 users, question bank,
+ exam, assignment, attempt) is KEPT until this passes, then cleaned up.
+ H1 Completed exam listed as "Upcoming" on the student dashboard
+  - StudentDashboard.isUpcoming only looked at status + end date. Now uses the
+    student's attempts + assignment (same data My Exams uses): hide when the attempt
+    limit is used up or the window has closed; show "Continue Exam" for an
+    in-progress attempt, "Retake Exam" when retakes remain. New shared helper
+    utils/studentExamAvailability.ts (+ vitest). Backend is already authoritative
+    (StartAttemptHandler: MaxAttemptsExceeded / OutsideSchedulingWindow, tested).
+ H2 Proctoring ON in DB while the wizard showed OFF
+  - Code trace: no server default (CreateAssignmentHandler copies the request;
+    AssignExam state starts false; only a switch onChange sets true). Cause not
+    visible in code -> reproduce in the H6 run while capturing the real request
+    payload (read_network_requests) and the DB row; fix where true is introduced.
+ H3 "Unsynced" counted visited-only questions
+  - Navigation (goToIndex / section switches) re-saved the current answer even when
+    blank, creating empty rows that also served as the "visited" memory on reload.
+    Now: navigation saves nothing except a still-pending debounced text answer;
+    "visited" is kept locally (localStorage per attempt) and merged with server rows
+    on resume. Only real answer changes (select / clear / mark / text) reach the
+    queue, so "N answers waiting to sync" means N real answers.
+ H4 Resume card, H5 offline reload, H6 blocked-submit on Review: browser-verify in
+    one regression run (Admin create exam [bank pick + random] -> publish -> assign
+    -> student: clear answer -> gateway down -> answer -> RELOAD -> answers still
+    there -> gateway up -> sync -> leave & come back (resume card) -> Review with
+    gateway down (blocked-submit message) -> up -> submit -> result -> dashboard
+    shows Completed and no Start button).
+ H1-H6 DONE + BROWSER-VERIFIED (Docker, Test Org, 2026-09-30; uncommitted)
+  - H1 dashboard: completed 1/1 exam -> Upcoming 0 / "No upcoming exams"; after a
+    3-attempt assignment -> "Retake Exam"; in-progress -> "Continue Exam".
+    (utils/studentExamAvailability + 7 vitest.)
+  - H2 proctoring: NOT reproducible. Clean wizard run: request payload
+    enableProctoring:false/enableLiveVideo:false -> DB 0/0 (ASG-15013). The earlier 1/1
+    row most likely came from a stray automation click. Added a server guard
+    (EnableLiveVideo stored only when EnableProctoring, create + update) + 1 test.
+  - H3 blank rows: visiting Q1..Q3 sent zero saves (only /start); one real answer sent
+    exactly one PUT; badge "1 unsynced" = 1 real answer. Visited state kept in
+    localStorage (examvault.visited.<attempt>).
+  - H4 resume card: "Existing exam session found / Time remaining / Answered 2 / 5 /
+    Last activity / Continue Exam" (answered count added this round).
+  - H5 offline reload: answer made while the gateway was down survived a page reload
+    (localStorage), and synced after re-login + Continue Exam; queue emptied; timer
+    kept running.
+  - H6 blocked submit on Review: warning banner shown ("1 answer could not be saved
+    yet, so the exam was not submitted...").
+  - Regression: 2nd attempt scored 4/10 (2 correct; 3 unanswered incl. penalised
+    questions = 0, never penalised). Full sln + vitest (250) + npm build green.
+  - OBSERVATIONS (unchanged): My Results / dashboard "Completed" show only the LATEST
+    attempt per exam (the 5.5 result disappeared from the list while attempt 2 was in
+    progress); the take screen has no sidebar so leaving mid-exam is via back.
+  - QA data still in Test Org (2 users, question bank subject "QA Negative Marking"
+    + 5 questions, exam, assignments 15012/15013, 3 attempts - #3 in progress).
+    Platform maintenance mode was toggled off for testing and restored to ON.

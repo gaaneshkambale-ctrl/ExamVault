@@ -12,6 +12,8 @@ import { useQuestionCountsByExam } from '../../hooks/useQuestions';
 import { useMyNotifications, useUnreadCount } from '../../hooks/useNotifications';
 import { getMyResult } from '../../api/resultApi';
 import { getMyAttempt } from '../../api/submissionApi';
+import { getMyAssignmentForExam } from '../../api/assignmentApi';
+import { getExamOffer, type ExamOffer } from '../../utils/studentExamAvailability';
 import type { ResultSummaryResponse } from '../../types/result';
 import type { CreationMethod } from '../../types/exam';
 
@@ -199,10 +201,6 @@ export default function StudentDashboard() {
 
   const now = new Date();
 
-  const upcomingExamsAll = (exams ?? []).filter(isUpcoming);
-  const upcomingExams = upcomingExamsAll.slice(0, UPCOMING_LIST_COUNT);
-  const questionCounts = useQuestionCountsByExam(upcomingExams.map((e) => e.id));
-
   const publishedExams = useMemo(() => (exams ?? []).filter((exam) => exam.status === 'Published'), [exams]);
 
   const resultQueries = useQueries({
@@ -223,6 +221,30 @@ export default function StudentDashboard() {
       enabled: !!exams,
     })),
   });
+
+  const assignmentQueries = useQueries({
+    queries: publishedExams.map((exam) => ({
+      queryKey: ['assignments', 'mine', exam.id],
+      queryFn: () => getMyAssignmentForExam(exam.id),
+      enabled: !!exams,
+    })),
+  });
+
+  // What each exam can still offer this student (start / continue / retake / nothing) -
+  // a completed exam with no attempts left must not sit under "Upcoming" with a Start button.
+  const offerByExam: Record<string, ExamOffer> = {};
+  publishedExams.forEach((exam, index) => {
+    const assignment = assignmentQueries[index]?.data;
+    offerByExam[exam.id] = getExamOffer({
+      attempt: attemptQueries[index]?.data?.attempt,
+      maxAttempts: assignment?.maxAttempts ?? exam.maxAttempts,
+      endAtUtc: assignment?.endAtUtc ?? exam.endAtUtc,
+    });
+  });
+
+  const upcomingExamsAll = publishedExams.filter((exam) => isUpcoming(exam) && offerByExam[exam.id] !== 'none');
+  const upcomingExams = upcomingExamsAll.slice(0, UPCOMING_LIST_COUNT);
+  const questionCounts = useQuestionCountsByExam(upcomingExams.map((e) => e.id));
 
   const isLoadingResults = publishedExams.length > 0 && resultQueries.some((q) => q.isLoading);
   const isLoadingAttempts = publishedExams.length > 0 && attemptQueries.some((q) => q.isLoading);
@@ -367,7 +389,7 @@ export default function StudentDashboard() {
                           </div>
                         )}
                         <Link to={`/exams/${exam.id}`} className="btn btn-outline-primary btn-sm">
-                          Start Exam
+                          {offerByExam[exam.id] === 'continue' ? 'Continue Exam' : offerByExam[exam.id] === 'retake' ? 'Retake Exam' : 'Start Exam'}
                         </Link>
                       </div>
                     </div>

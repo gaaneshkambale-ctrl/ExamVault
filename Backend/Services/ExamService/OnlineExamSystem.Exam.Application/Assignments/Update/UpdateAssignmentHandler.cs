@@ -100,7 +100,8 @@ public class UpdateAssignmentHandler
         assignment.AllowReviewAfterSubmit = command.AllowReviewAfterSubmit;
         assignment.AutoSubmitOnTimeOver = command.AutoSubmitOnTimeOver;
         assignment.EnableProctoring = command.EnableProctoring;
-        assignment.EnableLiveVideo = command.EnableLiveVideo;
+        // Live video is only meaningful under proctoring - never stored on its own.
+        assignment.EnableLiveVideo = command.EnableProctoring && command.EnableLiveVideo;
 
         await _examRepository.ReplaceAssignmentTargetsAsync(assignment.Id, targetUserIds, cancellationToken);
         await _examRepository.SaveChangesAsync(cancellationToken);

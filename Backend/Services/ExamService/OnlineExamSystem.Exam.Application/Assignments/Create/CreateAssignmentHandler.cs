@@ -162,7 +162,8 @@ public class CreateAssignmentHandler
             AllowReviewAfterSubmit = command.AllowReviewAfterSubmit,
             AutoSubmitOnTimeOver = command.AutoSubmitOnTimeOver,
             EnableProctoring = command.EnableProctoring,
-            EnableLiveVideo = command.EnableLiveVideo,
+            // Live video is only meaningful under proctoring - never stored on its own.
+            EnableLiveVideo = command.EnableProctoring && command.EnableLiveVideo,
             CreatedByUserId = command.CreatedByUserId,
         };
 

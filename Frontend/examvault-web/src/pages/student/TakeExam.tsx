@@ -280,6 +280,25 @@ const EMPTY_ANSWER: AnswerState = {
   selectedOptionIds: null,
 };
 
+const visitedStorageKey = (attemptId: string) => `examvault.visited.${attemptId}`;
+
+function readVisited(attemptId: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(visitedStorageKey(attemptId)) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeVisited(attemptId: string, visited: Set<string>) {
+  try {
+    localStorage.setItem(visitedStorageKey(attemptId), JSON.stringify([...visited]));
+  } catch {
+    // storage blocked/full - the nav grid just forgets "visited" after a reload
+  }
+}
+
 // Small always-visible preview of the proctoring camera feed, so the student
 // can see exactly what's being watched instead of a camera silently running
 // in the background. Same MediaStream the detection hook reads from - a
@@ -499,6 +518,11 @@ export default function TakeExam() {
             };
             visitedIds.add(answer.questionId);
           }
+          // Visited-but-unanswered questions have no server row (only real answers are
+          // saved), so their "visited" state is remembered on this device.
+          for (const visitedId of readVisited(result.attempt.id)) {
+            visitedIds.add(visitedId);
+          }
           setAnswers(restored);
           setVisited(visitedIds);
           setMode('take');
@@ -657,7 +681,7 @@ export default function TakeExam() {
 
     const current = displayQuestions[currentIndex];
     if (current) {
-      persistAnswer(current.id, answers[current.id] ?? EMPTY_ANSWER);
+      flushPendingTextSave(current.id);
     }
 
     if (!targetGroup.section || !attemptId) {
@@ -711,7 +735,7 @@ export default function TakeExam() {
     } else {
       const current = displayQuestions[currentIndex];
       if (current) {
-        persistAnswer(current.id, answers[current.id] ?? EMPTY_ANSWER);
+        flushPendingTextSave(current.id);
       }
       if (reviewAllowed) {
         setMode('review');
@@ -754,6 +778,12 @@ export default function TakeExam() {
       setVisited((prev) => new Set(prev).add(question.id));
     }
   }, [mode, displayQuestions, currentIndex]);
+
+  useEffect(() => {
+    if (attemptId && (mode === 'take' || mode === 'review')) {
+      writeVisited(attemptId, visited);
+    }
+  }, [attemptId, mode, visited]);
 
   const submitMutation = useMutation({
     mutationFn: (isAutoSubmitted: boolean) => submitAttempt(attemptId!, isAutoSubmitted),
@@ -949,11 +979,24 @@ export default function TakeExam() {
         clearTimeout(textAnswerSaveTimers.current[questionId]);
       }
       textAnswerSaveTimers.current[questionId] = setTimeout(() => {
+        delete textAnswerSaveTimers.current[questionId];
         persistAnswer(questionId, merged);
       }, 800);
 
       return { ...prev, [questionId]: merged };
     });
+  };
+
+  // Navigating away must not lose a text/code answer still inside its 800 ms
+  // debounce - but it must NOT save anything else: a question that was only
+  // visited has no answer, so it produces no save (and no "unsynced" item).
+  const flushPendingTextSave = (questionId: string) => {
+    if (!textAnswerSaveTimers.current[questionId]) {
+      return;
+    }
+    clearTimeout(textAnswerSaveTimers.current[questionId]);
+    delete textAnswerSaveTimers.current[questionId];
+    persistAnswer(questionId, answers[questionId] ?? EMPTY_ANSWER);
   };
 
   // Only ticks while there's an actual cooldown to count down, rather than
@@ -1016,7 +1059,7 @@ export default function TakeExam() {
     }
     const current = displayQuestions[currentIndex];
     if (current) {
-      persistAnswer(current.id, answers[current.id] ?? EMPTY_ANSWER);
+      flushPendingTextSave(current.id);
     }
     setMode('take');
     setCurrentIndex(index);

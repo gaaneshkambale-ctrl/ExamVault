@@ -244,6 +244,12 @@ export default function ExamDetails() {
           durationMinutes={exam.durationMinutes}
           expiresAtUtc={myAttempt.attempt.expiresAtUtc}
           lastActivityAtUtc={myAttempt.attempt.lastActivityAtUtc}
+          answeredCount={
+            myAttempt.answers.filter(
+              (a) => a.selectedOptionId || a.answerText || (a.selectedOptionIds?.length ?? 0) > 0,
+            ).length
+          }
+          totalQuestions={questions?.length ?? exam.totalQuestions}
         />
       )}
 

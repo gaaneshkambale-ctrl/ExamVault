@@ -10,6 +10,8 @@ interface ResumeSessionCardProps {
   durationMinutes: number;
   expiresAtUtc?: string | null;
   lastActivityAtUtc?: string | null;
+  answeredCount?: number;
+  totalQuestions?: number;
 }
 
 // Shown instead of silently dropping the student back into the exam: an
@@ -21,6 +23,8 @@ export default function ResumeSessionCard({
   durationMinutes,
   expiresAtUtc,
   lastActivityAtUtc,
+  answeredCount,
+  totalQuestions,
 }: ResumeSessionCardProps) {
   const deadline = expiresAtUtc
     ? new Date(expiresAtUtc).getTime()
@@ -49,6 +53,12 @@ export default function ResumeSessionCard({
             {timeUp ? 'Time is up' : formatRemaining(remaining)}
           </span>
         </div>
+        {answeredCount !== undefined && totalQuestions !== undefined && totalQuestions > 0 && (
+          <div className="small mb-1">
+            <span className="text-muted">Answered: </span>
+            {answeredCount} / {totalQuestions}
+          </div>
+        )}
         {lastActivityAtUtc && (
           <div className="small mb-3">
             <span className="text-muted">Last activity: </span>
