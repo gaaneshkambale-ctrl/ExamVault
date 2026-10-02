@@ -24,7 +24,7 @@ jobs:
           chmod 644 "${{ github.workspace }}/deploy_key"
 
       - name: Run checks over SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
