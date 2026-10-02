@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.31" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <ProjectReference Include="..\OnlineExamSystem.Shared.Common\OnlineExamSystem.Shared.Common.csproj" />
   </ItemGroup>
 
